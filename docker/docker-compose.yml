@@ -1,9 +1,90 @@
 version: "3.9"
+
+# Local infrastructure for development.
+#
+#   docker compose -f docker/docker-compose.yml up -d             # mysql/redis/etcd
+#   docker compose -f docker/docker-compose.yml --profile app up  # + monolith
+#
+# DTM is intentionally not part of the default stack: the project defaults to
+# local transactions and integration tests never depend on DTM. If you run DTM
+# elsewhere (VM/another compose file), set TRANSACTION_MODE=dtm and
+# DTM_ADDRESS, and ensure it is reachable from this host.
 services:
-  user-service:
-    build: ./docker
-    ports:
-      - "8080:8080"
-      - "50051:50051"
+  mysql:
+    image: mysql:8.4
     environment:
-      - DATABASE_DSN=sqlite.db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: gin_kratos
+    ports:
+      - "3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.17
+    command:
+      - etcd
+      - --name=etcd
+      - --data-dir=/etcd-data
+      - --advertise-client-urls=http://0.0.0.0:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+    ports:
+      - "2379:2379"
+    volumes:
+      - etcd-data:/etcd-data
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  server:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: prod
+      HTTP_ADDR: 0.0.0.0:8000
+      GRPC_ADDR: 0.0.0.0:9000
+      DATABASE_DRIVER: mysql
+      DATABASE_SOURCE: root:root@tcp(mysql:3306)/gin_kratos?parseTime=True&loc=Local&charset=utf8mb4
+      DATABASE_AUTO_MIGRATE: "true"
+      DATABASE_SEED: "true"
+      DATABASE_MAX_OPEN_CONNS: "20"
+      DATABASE_MAX_IDLE_CONNS: "5"
+      JWT_SECRET: change-me-in-production-32-characters
+      TRANSACTION_MODE: local
+      ETCD_ENDPOINTS: etcd:2379
+    ports:
+      - "8000:8000"
+      - "9000:9000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+    volumes:
+      - ../configs:/data/conf:ro
+
+volumes:
+  mysql-data:
+  etcd-data:

@@ -1,22 +1,36 @@
 //go:build wireinject
 // +build wireinject
 
-// The build tag makes sure the stub is not built in the final build.
-
 package main
 
 import (
-	"gin-kratos-gorm/internal/product/data"
-	"gin-kratos-gorm/internal/product/pkg"
-	"gin-kratos-gorm/internal/product/server"
-	"gin-kratos-gorm/internal/product/service"
+	"gin-kratos-gorm/internal/biz"
+	"gin-kratos-gorm/internal/data"
+	"gin-kratos-gorm/internal/data/persistence"
+	"gin-kratos-gorm/internal/pkg"
+	"gin-kratos-gorm/internal/pkg/registry"
+	"gin-kratos-gorm/internal/server"
+	httpServerHandler "gin-kratos-gorm/internal/server/http/handler"
+	"gin-kratos-gorm/internal/service"
 
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
 )
 
-// wireApp init kratos application.
 func wireApp(string, log.Logger) (*kratos.App, func(), error) {
-	panic(wire.Build(pkg.InfraSet, server.TransportSet, data.RepoSet, service.ServiceSet, newApp))
+	panic(wire.Build(
+		pkg.InfraSet,
+		registry.New,
+		persistence.NewData,
+		persistence.NewProductRepo,
+		data.NewEnforcer,
+		wire.Bind(new(biz.ProductRepository), new(*persistence.ProductRepo)),
+		biz.NewProductUsecase,
+		service.NewProductService,
+		httpServerHandler.NewProductHandler,
+		server.NewProductHTTPServer,
+		server.NewProductGRPCServer,
+		newApp,
+	))
 }

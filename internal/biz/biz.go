@@ -1,15 +1,45 @@
 package biz
 
 import (
-	"context"
+	"time"
+
+	"gin-kratos-gorm/internal/conf"
+	"gin-kratos-gorm/internal/pkg/idgen"
 
 	"github.com/google/wire"
 )
 
-// BizSet is biz providers.
-var BizSet = wire.NewSet(NewGreeterUsecase)
+// ProviderSet wires domain use cases and the small amount of configuration they
+// need. Transaction/Saga implementations are provided by each composition root
+// because they differ between the monolith and split deployments.
+var ProviderSet = wire.NewSet(
+	NewUserUsecase,
+	NewProductUsecase,
+	NewOrderUsecase,
+	NewClock,
+	NewOrderSNGenerator,
+	NewOrderConfig,
+)
 
-// Transaction 事务管理器接口 (由 data 层实现)
-type Transaction interface {
-	InTx(context.Context, func(ctx context.Context) error) error
+// Transaction is kept as an alias for the original repository API.
+type Transaction = Transactor
+
+func NewClock() Clock { return RealClock{} }
+
+func NewOrderSNGenerator() *idgen.OrderSN { return idgen.NewOrderSN("") }
+
+func NewOrderConfig(c *conf.Bootstrap) OrderConfig {
+	cfg := OrderConfig{
+		PaymentTimeout:        30 * time.Minute,
+		ShippingFee:           10,
+		FreeShippingThreshold: 99,
+	}
+	if c != nil && c.Order != nil {
+		if c.Order.PaymentTimeout != nil && c.Order.PaymentTimeout.AsDuration() > 0 {
+			cfg.PaymentTimeout = c.Order.PaymentTimeout.AsDuration()
+		}
+		cfg.ShippingFee = c.Order.ShippingFee
+		cfg.FreeShippingThreshold = c.Order.FreeShippingThreshold
+	}
+	return cfg
 }

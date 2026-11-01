@@ -3,28 +3,9 @@
 
 openapi: 3.0.3
 info:
-    title: ""
+    title: User API
     version: 0.0.1
 paths:
-    /helloworld/{name}:
-        get:
-            tags:
-                - Greeter
-            description: Sends a greeting
-            operationId: Greeter_SayHello
-            parameters:
-                - name: name
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/helloworld.v1.HelloReply'
     /v1/users:
         post:
             tags:
@@ -102,15 +83,9 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/user.v1.SimpleResponse'
+                                $ref: '#/components/schemas/user.v1.UserReply'
 components:
     schemas:
-        helloworld.v1.HelloReply:
-            type: object
-            properties:
-                message:
-                    type: string
-            description: The response message containing the greetings
         user.v1.LoginRequest:
             type: object
             properties:
@@ -123,10 +98,9 @@ components:
             properties:
                 name:
                     type: string
-        user.v1.SimpleResponse:
-            type: object
-            properties:
-                msg:
+                password:
+                    type: string
+                nickname:
                     type: string
         user.v1.UpdateRoleRequest:
             type: object
@@ -148,7 +122,16 @@ components:
                     type: array
                     items:
                         type: string
+                token:
+                    type: string
+                    description: Populated by Login/Register; never persisted.
+                nickname:
+                    type: string
+                roleCodes:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
 tags:
-    - name: Greeter
-      description: The greeting service definition.
     - name: User

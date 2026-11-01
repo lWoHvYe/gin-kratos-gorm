@@ -2,106 +2,206 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"gin-kratos-gorm/internal/biz"
-	"gin-kratos-gorm/internal/biz/model"
-	"gin-kratos-gorm/internal/data/persistence"
-	"strconv"
 	"time"
 
 	pb "gin-kratos-gorm/api/order/v1"
+	"gin-kratos-gorm/internal/biz"
+	"gin-kratos-gorm/internal/biz/model"
+	"gin-kratos-gorm/internal/conf"
+	"gin-kratos-gorm/internal/pkg/apperr"
+	"gin-kratos-gorm/internal/pkg/auth"
 )
 
 type OrderService struct {
 	pb.UnimplementedOrderServer
-	orderRepo   *persistence.OrderRepo
-	productRepo *persistence.ProductRepo // 需要调用商品 Repo 扣库存
-	tx          biz.Transaction
+	uc  *biz.OrderUsecase
+	cfg *conf.Bootstrap
+	dtm *DtmCoordinator
 }
 
-func NewOrderService(or *persistence.OrderRepo, pr *persistence.ProductRepo, tx biz.Transaction) *OrderService {
-	return &OrderService{orderRepo: or, productRepo: pr, tx: tx}
+func NewOrderService(uc *biz.OrderUsecase, cfg *conf.Bootstrap, dtm *DtmCoordinator) *OrderService {
+	return &OrderService{uc: uc, cfg: cfg, dtm: dtm}
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, req *pb.CreateOrderReq) (*pb.CreateOrderReply, error) {
-	// 1. 获取当前用户 (从 JWT 中间件存入的 Context 获取)
-	userId := ctx.Value("userID").(uint64)
-
-	var orderSn string
-	var totalPayAmount float64
-
-	// 2. 执行业务逻辑 (使用事务封装)
-	err := s.tx.InTx(ctx, func(ctx context.Context) error {
-		// A. 扣减库存 (内部调用 ProductRepo 的 DB(ctx) 确保在事务内)
-		for _, item := range req.Items {
-			err := s.productRepo.ReduceStock(ctx, int64(item.SkuId), item.Num)
-			if err != nil {
-				return err // 失败自动回滚
-			}
+	userID := int64(req.GetUserId())
+	if id, ok := auth.UserID(ctx); ok {
+		userID = int64(id)
+	}
+	if userID <= 0 {
+		return nil, apperr.Unauthenticated("login required")
+	}
+	in := createOrderInput(req, userID)
+	if s.dtm != nil {
+		order, err := s.dtm.Create(ctx, in, req)
+		if err != nil {
+			return nil, err
 		}
-
-		// B. 预计算价格 (此处简化，实际应从数据库查 SKU 单价)
-		orderSn = fmt.Sprintf("%d%06d", time.Now().Unix(), userId%1000)
-
-		// C. 构建订单实体
-		orderEntity := &model.Order{
-			OrderSn:         orderSn,
-			UserID:          int64(userId),
-			TotalAmount:     319.0,
-			PayAmount:       99.0, // 示例数值
-			ReceiverName:    "张三",
-			ReceiverAddress: strconv.Itoa(int(req.AddressId)),
-			Remark:          req.Remark,
-			PayTime:         time.Now(),
-		}
-
-		orderItems := make([]*model.OrderItem, 0)
-		for _, item := range req.Items {
-			oi := &model.OrderItem{
-				Price: 99.0,
-				SpuID: 1,
-				SkuID: int64(item.SkuId),
-				Num:   item.Num,
-			}
-			orderItems = append(orderItems, oi)
-		}
-
-		// D. 写入订单表
-		return s.orderRepo.CreateOrder(ctx, orderEntity, orderItems)
-	})
-
+		return toCreateReply(order), nil
+	}
+	order, err := s.uc.Create(ctx, in)
 	if err != nil {
 		return nil, err
 	}
-
-	return &pb.CreateOrderReply{
-		OrderSn:     orderSn,
-		TotalAmount: totalPayAmount,
-	}, nil
+	return toCreateReply(order), nil
 }
 
-// 伪代码示例
-func (s *OrderService) sendDelayCancelMessage(orderSn string) {
-	// 使用 Redis ZSet 或 RocketMQ 延迟消息
-	// 30 分钟后检查该订单状态，若仍为“待支付”，则执行：
-	// 1. 修改订单状态为“已取消”
-	// 2. 调用 productRepo.AddStock 返还库存
+// CreateOrderInner is the DTM branch endpoint. Stock has already been deducted
+// by the DTM saga, so it must not deduct again.
+func (s *OrderService) CreateOrderInner(ctx context.Context, req *pb.CreateOrderReq) (*pb.CreateOrderReply, error) {
+	if req.GetUserId() <= 0 {
+		return nil, apperr.Invalid("user_id is required")
+	}
+	pre := &biz.PrecomputedAmounts{
+		TotalAmount:   req.GetTotalAmount(),
+		FreightAmount: req.GetFreightAmount(),
+		PayAmount:     req.GetPayAmount(),
+	}
+	order, err := s.uc.CreateInner(ctx, createOrderInput(req, int64(req.GetUserId())), pre)
+	if err != nil {
+		return nil, err
+	}
+	return toCreateReply(order), nil
+}
+
+// CancelOrder is the DTM compensation endpoint. Its payload type matches the
+// action payload (CreateOrderReq) as required by DTM.
+func (s *OrderService) CancelOrder(ctx context.Context, req *pb.CreateOrderReq) (*pb.CreateOrderReply, error) {
+	order, err := s.uc.Cancel(ctx, 0, req.GetOrderSn(), "dtm compensation", true)
+	if err != nil {
+		// Compensation is idempotent: if the action never created the order,
+		// there is nothing to undo.
+		if apperr.IsCode(err, apperr.CodeNotFound) {
+			return &pb.CreateOrderReply{}, nil
+		}
+		return nil, err
+	}
+	return toCreateReply(order), nil
+}
+
+func (s *OrderService) CancelOrderByUser(ctx context.Context, req *pb.CancelOrderReq) (*pb.GetOrderDetailReply, error) {
+	userID, admin, err := s.identity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	order, err := s.uc.Cancel(ctx, userID, req.GetOrderSn(), req.GetReason(), admin)
+	if err != nil {
+		return nil, err
+	}
+	return toOrderDetail(order), nil
+}
+
+func (s *OrderService) PayOrder(ctx context.Context, req *pb.PayOrderReq) (*pb.GetOrderDetailReply, error) {
+	userID, admin, err := s.identity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	order, err := s.uc.Pay(ctx, userID, req.GetOrderSn(), admin)
+	if err != nil {
+		return nil, err
+	}
+	return toOrderDetail(order), nil
 }
 
 func (s *OrderService) GetOrderDetail(ctx context.Context, req *pb.GetOrderDetailReq) (*pb.GetOrderDetailReply, error) {
-	order, err := s.orderRepo.GetOrderWithItems(ctx, req.OrderSn)
+	userID, admin, err := s.identity(ctx)
 	if err != nil {
 		return nil, err
 	}
+	order, err := s.uc.Get(ctx, userID, req.GetOrderSn(), admin)
+	if err != nil {
+		return nil, err
+	}
+	return toOrderDetail(order), nil
+}
+
+func (s *OrderService) ListOrders(ctx context.Context, req *pb.ListOrdersReq) (*pb.ListOrdersReply, error) {
+	userID, admin, err := s.identity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	filter := biz.OrderFilter{
+		Status:   req.Status,
+		OrderSN:  req.GetOrderSn(),
+		Page:     int(req.GetPage()),
+		PageSize: int(req.GetPageSize()),
+	}
+	orders, total, err := s.uc.List(ctx, userID, filter, admin)
+	if err != nil {
+		return nil, err
+	}
+	reply := &pb.ListOrdersReply{
+		Total:    total,
+		Page:     int32(filter.Page),
+		PageSize: int32(filter.PageSize),
+	}
+	for _, order := range orders {
+		reply.Orders = append(reply.Orders, toOrderSummary(order))
+	}
+	return reply, nil
+}
+
+func (s *OrderService) identity(ctx context.Context) (int64, bool, error) {
+	userID, ok := auth.UserID(ctx)
+	if !ok || userID == 0 {
+		return 0, false, apperr.Unauthenticated("login required")
+	}
+	return int64(userID), auth.HasRole(ctx, "admin"), nil
+}
+
+func createOrderInput(req *pb.CreateOrderReq, userID int64) biz.CreateOrderInput {
+	in := biz.CreateOrderInput{
+		UserID:          userID,
+		OrderSN:         req.GetOrderSn(),
+		ReceiverName:    req.GetReceiverName(),
+		ReceiverPhone:   req.GetReceiverPhone(),
+		ReceiverAddress: req.GetReceiverAddress(),
+		Remark:          req.GetRemark(),
+		ClientRequestID: req.GetClientRequestId(),
+	}
+	for _, item := range req.GetItems() {
+		in.Items = append(in.Items, biz.CreateOrderItem{SkuID: int64(item.GetSkuId()), Num: item.GetNum()})
+	}
+	return in
+}
+
+func toCreateReply(order *model.Order) *pb.CreateOrderReply {
+	reply := &pb.CreateOrderReply{
+		OrderSn:       order.OrderSn,
+		TotalAmount:   order.TotalAmount,
+		Status:        order.Status,
+		PayAmount:     order.PayAmount,
+		FreightAmount: order.FreightAmount,
+	}
+	if order.ExpireAt != nil {
+		reply.ExpireAt = order.ExpireAt.Format(time.RFC3339)
+	}
+	return reply
+}
+
+func toOrderDetail(order *model.Order) *pb.GetOrderDetailReply {
 	reply := &pb.GetOrderDetailReply{
 		OrderSn:         order.OrderSn,
+		Status:          uint32(order.Status),
+		StatusText:      biz.OrderStatusText(order.Status),
 		TotalAmount:     order.TotalAmount,
 		PayAmount:       order.PayAmount,
+		FreightAmount:   order.FreightAmount,
 		ReceiverName:    order.ReceiverName,
 		ReceiverPhone:   order.ReceiverPhone,
 		ReceiverAddress: order.ReceiverAddress,
+		Remark:          order.Remark,
+		CancelReason:    order.CancelReason,
 	}
-
+	if !order.CreatedAt.IsZero() {
+		reply.CreatedAt = order.CreatedAt.Format(time.RFC3339)
+	}
+	if order.PayTime != nil {
+		reply.PayTime = order.PayTime.Format(time.RFC3339)
+	}
+	if order.ExpireAt != nil {
+		reply.ExpireAt = order.ExpireAt.Format(time.RFC3339)
+	}
 	for _, item := range order.OrderItems {
 		reply.Items = append(reply.Items, &pb.OrderItemInfo{
 			SkuId:   uint32(item.SkuID),
@@ -111,6 +211,28 @@ func (s *OrderService) GetOrderDetail(ctx context.Context, req *pb.GetOrderDetai
 			Num:     item.Num,
 		})
 	}
+	return reply
+}
 
-	return reply, nil
+func toOrderSummary(order *model.Order) *pb.OrderSummary {
+	summary := &pb.OrderSummary{
+		OrderSn:      order.OrderSn,
+		Status:       uint32(order.Status),
+		StatusText:   biz.OrderStatusText(order.Status),
+		PayAmount:    order.PayAmount,
+		ReceiverName: order.ReceiverName,
+	}
+	if !order.CreatedAt.IsZero() {
+		summary.CreatedAt = order.CreatedAt.Format(time.RFC3339)
+	}
+	for _, item := range order.OrderItems {
+		summary.Items = append(summary.Items, &pb.OrderItemInfo{
+			SkuId:   uint32(item.SkuID),
+			SkuName: item.SkuName,
+			SkuPic:  item.SkuPic,
+			Price:   item.Price,
+			Num:     item.Num,
+		})
+	}
+	return summary
 }

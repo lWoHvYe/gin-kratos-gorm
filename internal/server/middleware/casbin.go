@@ -1,37 +1,53 @@
 package middleware
 
 import (
-	"gin-kratos-gorm/internal/pkg/utils"
-	"net/http"
-	"strconv"
+	"gin-kratos-gorm/internal/pkg/apperr"
+	"gin-kratos-gorm/internal/pkg/auth"
+	"gin-kratos-gorm/internal/pkg/httpx"
 
 	"github.com/casbin/casbin/v3"
 	"github.com/gin-gonic/gin"
 )
 
-func CasbinMiddleware(e *casbin.Enforcer) gin.HandlerFunc {
+// Casbin enforces RBAC using the role codes carried in the JWT. Policies use
+// subjects such as "r:admin" and "r:user"; per-user grouping is still supported
+// by the model but is not required for the common case.
+func Casbin(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 注意：sub 必须是字符串类型，对应 Casbin 策略中的主体
-		// 1. 获取当前用户标识（假设你之前在 JWT 中间件里设置了 "userID"）
-		val, _ := c.Get("claims")
-		claims := val.(*utils.CustomClaims)
-		sub := "u:" + strconv.FormatUint(claims.UID, 10) // 或者使用用户唯一 ID
-
-		// 2. 获取请求的资源 (对象) 和 操作 (动作)
-		obj := c.Request.URL.Path
-		act := c.Request.Method
-
-		// 3. 校验权限
-		ok, err := e.Enforce(sub, obj, act)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"msg": "权限校验出错"})
-			c.Abort()
+		if enforcer == nil {
+			c.Next()
 			return
 		}
-
+		claims, ok := auth.FromContext(c.Request.Context())
 		if !ok {
-			c.JSON(http.StatusForbidden, gin.H{"msg": "没有访问权限"})
-			c.Abort()
+			httpx.Error(c, apperr.Unauthenticated("login required"))
+			return
+		}
+		obj := c.FullPath()
+		if obj == "" {
+			obj = c.Request.URL.Path
+		}
+		act := c.Request.Method
+		for _, role := range claims.RoleCodes {
+			allowed, err := enforcer.Enforce("r:"+role, obj, act)
+			if err != nil {
+				httpx.Error(c, apperr.Internal("authorization check failed", err))
+				return
+			}
+			if allowed {
+				c.Next()
+				return
+			}
+		}
+		httpx.Error(c, apperr.Forbidden("you do not have permission to access this resource"))
+	}
+}
+
+// RequireRole is a lightweight fallback used when Casbin is disabled.
+func RequireRole(codes ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !auth.HasRole(c.Request.Context(), codes...) {
+			httpx.Error(c, apperr.Forbidden("insufficient role"))
 			return
 		}
 		c.Next()

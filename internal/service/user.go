@@ -2,56 +2,87 @@ package service
 
 import (
 	"context"
-	"errors"
+	"time"
+
 	pb "gin-kratos-gorm/api/user/v1"
+	"gin-kratos-gorm/internal/biz"
 	"gin-kratos-gorm/internal/biz/model"
-	"gin-kratos-gorm/internal/data/persistence"
-	"strconv"
+	"gin-kratos-gorm/internal/pkg/apperr"
+	"gin-kratos-gorm/internal/pkg/auth"
 )
 
 type UserService struct {
 	pb.UnimplementedUserServer
-	repo *persistence.UserRepo
+	uc  *biz.UserUsecase
+	jwt *auth.Manager
 }
 
-func NewUserService(repo *persistence.UserRepo) *UserService {
-	return &UserService{repo: repo}
+func NewUserService(uc *biz.UserUsecase, jwtManager *auth.Manager) *UserService {
+	return &UserService{uc: uc, jwt: jwtManager}
 }
 
 func (s *UserService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.UserReply, error) {
-	u := &model.User{Name: req.GetName()}
-	if err := s.repo.Create(ctx, u); err != nil {
-		return nil, err
-	}
-	return &pb.UserReply{Id: uint64(u.ID), Name: u.Name, RoleId: []uint64{1, 2}}, nil
-}
-func (s *UserService) GetByID(ctx context.Context, req *pb.SingleIDRequest) (*pb.UserReply, error) {
-	u, err := s.repo.FindByID(ctx, int32(req.GetId()))
+	user, err := s.uc.Register(ctx, req.GetName(), req.GetPassword(), req.GetNickname())
 	if err != nil {
 		return nil, err
 	}
-	roleIds := make([]uint64, 0)
-	for _, userRole := range u.UserRoles {
-		roleIds = append(roleIds, uint64(userRole.RoleID))
-	}
-	return &pb.UserReply{Id: uint64(u.ID), Name: u.Name, RoleId: roleIds}, nil
-}
-func (s *UserService) UpdateRoleByID(ctx context.Context, req *pb.UpdateRoleRequest) (*pb.SimpleResponse, error) {
-	err := s.repo.UpdateRoleByID(ctx, int32(req.Id), req.RoleId)
-	return &pb.SimpleResponse{Msg: strconv.FormatUint(req.RoleId[0], 10)}, err
+	return s.replyWithToken(user)
 }
 
 func (s *UserService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.UserReply, error) {
-	if req.Password == "" {
-		return nil, errors.New("password is empty")
-	}
-	u, err := s.repo.FindByName(ctx, req.GetName())
+	user, err := s.uc.Login(ctx, req.GetName(), req.GetPassword())
 	if err != nil {
 		return nil, err
 	}
-	roleIds := make([]uint64, 0)
-	for _, userRole := range u.UserRoles {
-		roleIds = append(roleIds, uint64(userRole.RoleID))
+	return s.replyWithToken(user)
+}
+
+func (s *UserService) GetByID(ctx context.Context, req *pb.SingleIDRequest) (*pb.UserReply, error) {
+	user, err := s.uc.Get(ctx, int32(req.GetId()))
+	if err != nil {
+		return nil, err
 	}
-	return &pb.UserReply{Id: uint64(u.ID), Name: u.Name, RoleId: roleIds}, nil
+	return toUserReply(user, ""), nil
+}
+
+func (s *UserService) UpdateRoleByID(ctx context.Context, req *pb.UpdateRoleRequest) (*pb.UserReply, error) {
+	if !auth.HasRole(ctx, "admin") {
+		return nil, apperr.Forbidden("admin role required")
+	}
+	roleIDs := make([]int32, 0, len(req.GetRoleId()))
+	for _, id := range req.GetRoleId() {
+		roleIDs = append(roleIDs, int32(id))
+	}
+	user, err := s.uc.UpdateRoles(ctx, int32(req.GetId()), roleIDs)
+	if err != nil {
+		return nil, err
+	}
+	return toUserReply(user, ""), nil
+}
+
+func (s *UserService) replyWithToken(user *model.User) (*pb.UserReply, error) {
+	token, _, err := s.jwt.Generate(uint64(user.ID), user.Name, biz.RoleIDs(user), biz.RoleCodes(user))
+	if err != nil {
+		return nil, err
+	}
+	reply := toUserReply(user, token)
+	return reply, nil
+}
+
+func toUserReply(user *model.User, token string) *pb.UserReply {
+	if user == nil {
+		return &pb.UserReply{}
+	}
+	reply := &pb.UserReply{
+		Id:        uint64(user.ID),
+		Name:      user.Name,
+		Nickname:  user.Nickname,
+		RoleId:    biz.RoleIDs(user),
+		RoleCodes: biz.RoleCodes(user),
+		Token:     token,
+	}
+	if !user.CreatedAt.IsZero() {
+		reply.CreatedAt = user.CreatedAt.Format(time.RFC3339)
+	}
+	return reply
 }

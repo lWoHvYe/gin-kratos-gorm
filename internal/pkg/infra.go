@@ -2,14 +2,16 @@ package pkg
 
 import (
 	"gin-kratos-gorm/internal/data/db"
+	"gin-kratos-gorm/internal/pkg/auth"
 	"gin-kratos-gorm/internal/pkg/config"
-	"gin-kratos-gorm/internal/pkg/logger"
 
 	"github.com/google/wire"
 )
 
+// InfraSet provides configuration, the database handle and the JWT manager.
 var InfraSet = wire.NewSet(
 	config.NewConfig,
-	logger.NewLogger,
+	config.NewAuth,
 	db.NewDB,
+	auth.NewManager,
 )

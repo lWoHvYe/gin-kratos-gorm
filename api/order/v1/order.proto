@@ -2,56 +2,111 @@ syntax = "proto3";
 
 package api.order.v1;
 
-import "google/api/annotations.proto";
-import "validate/validate.proto";
 
 option go_package = "gin-kratos-gorm/api/order/v1;v1";
 
 service Order {
-  // 创建订单 (下单)
+  // 创建订单（面向用户，JWT 身份优先于请求体 user_id）
   rpc CreateOrder (CreateOrderReq) returns (CreateOrderReply) {}
-  // 具体创建订单接口
+  // 内部创建订单（DTM 分支使用）
   rpc CreateOrderInner (CreateOrderReq) returns (CreateOrderReply) {}
-  // 取消订单
+  // DTM 补偿：取消订单（复用 CreateOrderReq 作为 payload）
   rpc CancelOrder (CreateOrderReq) returns (CreateOrderReply) {}
-  // 获取订单详情
+  // 用户取消订单（带原因）
+  rpc CancelOrderByUser (CancelOrderReq) returns (GetOrderDetailReply) {}
+  // 支付订单
+  rpc PayOrder (PayOrderReq) returns (GetOrderDetailReply) {}
+  // 订单详情
   rpc GetOrderDetail (GetOrderDetailReq) returns (GetOrderDetailReply) {}
+  // 我的订单/全部订单（管理员）
+  rpc ListOrders (ListOrdersReq) returns (ListOrdersReply) {}
 }
 
-// 下单请求
 message CreateOrderReq {
   uint64 user_id = 5;
-  string OrderSn = 1;
-  uint32 address_id = 2 [(validate.rules).uint32.gt = 0]; // 收货地址ID
-  string remark = 3; // 订单备注
+  string order_sn = 1;
+  uint32 address_id = 2;
+  string remark = 3;
   message CartItem {
     uint32 sku_id = 1;
     int32 num = 2;
   }
-  repeated CartItem items = 4 [(validate.rules).repeated.min_items = 1]; // 下单商品
+  repeated CartItem items = 4;
+  string client_request_id = 6;
+  string receiver_name = 7;
+  string receiver_phone = 8;
+  string receiver_address = 9;
+
+  // Optional pre-computed values used by the DTM inner call. When zero the
+  // order service recomputes them from the product catalog.
+  double total_amount = 10;
+  double freight_amount = 11;
+  double pay_amount = 12;
+  int64 expire_at_unix = 13;
 }
 
 message CreateOrderReply {
-  string order_sn = 1; // 订单号
-  double total_amount = 2; // 最终支付金额
+  string order_sn = 1;
+  double total_amount = 2;
+  int32 status = 3;
+  double pay_amount = 4;
+  double freight_amount = 5;
+  string expire_at = 6;
+}
+
+message PayOrderReq {
+  string order_sn = 1;
+}
+
+message CancelOrderReq {
+  string order_sn = 1;
+  string reason = 2;
 }
 
 message GetOrderDetailReq {
-  string order_sn = 1; // 订单号
+  string order_sn = 1;
 }
 
-// 订单详情响应
 message GetOrderDetailReply {
   string order_sn = 1;
-  uint32 status = 2; // 状态：1待支付 2待发货 3待收货 4已完成 5已取消
-  double total_amount = 3;
+  uint32 status = 2; // 1待支付 2待发货 3待收货 4已完成 5已取消 6已关闭
+  string status_text = 3;
+  double total_amount = 4;
+  double pay_amount = 5;
+  double freight_amount = 6;
+  string receiver_name = 7;
+  string receiver_phone = 8;
+  string receiver_address = 9;
+  repeated OrderItemInfo items = 10;
+  string created_at = 11;
+  string pay_time = 12;
+  string expire_at = 13;
+  string remark = 14;
+  string cancel_reason = 15;
+}
+
+message ListOrdersReq {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional int32 status = 3;
+  string order_sn = 4;
+}
+
+message OrderSummary {
+  string order_sn = 1;
+  uint32 status = 2;
+  string status_text = 3;
   double pay_amount = 4;
-  double freight_amount = 5; // 运费
-  string receiver_name = 6;
-  string receiver_phone = 7;
-  string receiver_address = 8;
-  repeated OrderItemInfo items = 9;
-  string created_at = 10;
+  string receiver_name = 5;
+  string created_at = 6;
+  repeated OrderItemInfo items = 7;
+}
+
+message ListOrdersReply {
+  repeated OrderSummary orders = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
 }
 
 message OrderItemInfo {

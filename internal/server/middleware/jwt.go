@@ -1,50 +1,53 @@
 package middleware
 
 import (
-	"errors"
-	"gin-kratos-gorm/internal/pkg/utils" // 替换为你的路径
-	"net/http"
 	"strings"
+
+	"gin-kratos-gorm/internal/pkg/apperr"
+	"gin-kratos-gorm/internal/pkg/auth"
+	"gin-kratos-gorm/internal/pkg/httpx"
 
 	"github.com/gin-gonic/gin"
 )
 
-// JWT Auth middleware
-func JWTAuth() gin.HandlerFunc {
+// JWTAuth authenticates a bearer token and injects the claims into both the Gin
+// context and the standard request context (used by services/handlers).
+func JWTAuth(manager *auth.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get the Authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+		header := c.GetHeader("Authorization")
+		if strings.TrimSpace(header) == "" {
+			httpx.Error(c, apperr.Unauthenticated("Authorization header is required"))
 			return
 		}
-
-		// Check if the header has the correct format
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format. Use 'Bearer TOKEN'"})
-			return
-		}
-
-		token := parts[1]
-		// Parse and validate the token
-		j := utils.NewJWT()
-		// 解析 token
-		claims, err := j.ParseToken(token)
+		claims, err := manager.ParseBearer(header)
 		if err != nil {
-			if errors.Is(err, utils.TokenExpired) {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"msg": "授权已过期"})
-				return
-			}
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"msg": err.Error()})
+			httpx.Error(c, err)
 			return
 		}
-
-		// 将解析出的信息存入上下文，方便后续 Service 层或 RBAC 中间件使用
+		ctx := auth.WithClaims(c.Request.Context(), claims)
+		c.Request = c.Request.WithContext(ctx)
 		c.Set("claims", claims)
-		c.Set("roleID", claims.AuthorityId) // 供 Casbin 使用
-		c.Set("userID", claims.UID)
+		c.Set("userID", claims.UserID)
+		c.Set("roleCodes", claims.RoleCodes)
+		c.Next()
+	}
+}
 
+// OptionalJWTAuth parses a token when present but never rejects the request.
+// Useful for endpoints whose behavior changes for logged-in users.
+func OptionalJWTAuth(manager *auth.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		header := c.GetHeader("Authorization")
+		if strings.TrimSpace(header) == "" {
+			c.Next()
+			return
+		}
+		claims, err := manager.ParseBearer(header)
+		if err == nil {
+			ctx := auth.WithClaims(c.Request.Context(), claims)
+			c.Request = c.Request.WithContext(ctx)
+			c.Set("claims", claims)
+		}
 		c.Next()
 	}
 }

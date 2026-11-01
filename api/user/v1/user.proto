@@ -1,11 +1,9 @@
-// api/user.proto
+// api/user/v1/user.proto
 syntax = "proto3";
 
 package user.v1;
 
-import "validate/validate.proto";
 import "google/api/annotations.proto";
-
 
 option go_package = "gin-kratos-gorm/api/user/v1;v1";
 option java_multiple_files = true;
@@ -26,12 +24,13 @@ service User {
     };
   }
 
-  rpc UpdateRoleByID (UpdateRoleRequest) returns (SimpleResponse) {
+  rpc UpdateRoleByID (UpdateRoleRequest) returns (UserReply) {
     option (google.api.http) = {
       put: "/v1/users/{id}/role"
       body: "*"
     };
   }
+
   rpc Login (LoginRequest) returns (UserReply) {
     option (google.api.http) = {
       post: "/v1/users/login"
@@ -47,6 +46,8 @@ message LoginRequest {
 
 message RegisterRequest {
   string name = 1;
+  string password = 2;
+  string nickname = 3;
 }
 
 message SingleIDRequest {
@@ -55,7 +56,7 @@ message SingleIDRequest {
 
 message UpdateRoleRequest {
   uint64 id = 1;
-  repeated uint64 role_id = 2 [(validate.rules).repeated.min_items = 1];
+  repeated uint64 role_id = 2;
 }
 
 message SimpleResponse {
@@ -66,4 +67,9 @@ message UserReply {
   uint64 id = 1;
   string name = 2;
   repeated uint64 role_id = 3;
+  // Populated by Login/Register; never persisted.
+  string token = 4;
+  string nickname = 5;
+  repeated string role_codes = 6;
+  string created_at = 7;
 }

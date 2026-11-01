@@ -3,23 +3,23 @@ package router
 import (
 	"gin-kratos-gorm/internal/server/http/handler"
 
-	"github.com/casbin/casbin/v3"
 	"github.com/gin-gonic/gin"
 )
 
 type ProductRouter struct {
 	productHandler *handler.ProductHandler
-	enforcer       *casbin.Enforcer
 }
 
-func NewProductRouter(e *casbin.Enforcer, productHandler *handler.ProductHandler) *ProductRouter {
-	return &ProductRouter{enforcer: e, productHandler: productHandler}
+func NewProductRouter(h *handler.ProductHandler) *ProductRouter {
+	return &ProductRouter{productHandler: h}
 }
 
-func (r *ProductRouter) RegisterProductRouter(private *gin.RouterGroup, public *gin.RouterGroup) {
-	productGroup := public.Group("product")
-	{
-		// 商品详情
-		productGroup.GET("/:id", r.productHandler.GetProductDetail)
-	}
+func (r *ProductRouter) RegisterProductRouter(public, admin *gin.RouterGroup) {
+	public.GET("/products", r.productHandler.ListProducts)
+	public.GET("/products/:id", r.productHandler.GetProductDetail)
+
+	admin.POST("/products", r.productHandler.CreateProduct)
+	admin.PUT("/products/:id", r.productHandler.UpdateProduct)
+	admin.PUT("/products/:id/status", r.productHandler.SetOnSale)
+	admin.PUT("/products/:id/stock", r.productHandler.AdjustStock)
 }

@@ -1,15 +1,16 @@
 package handler
 
 import (
-	pb "gin-kratos-gorm/api/user/v1"
-	"gin-kratos-gorm/internal/pkg/utils"
-	"gin-kratos-gorm/internal/service"
 	"net/http"
 	"strconv"
-	"time"
+
+	pb "gin-kratos-gorm/api/user/v1"
+	"gin-kratos-gorm/internal/pkg/apperr"
+	"gin-kratos-gorm/internal/pkg/auth"
+	"gin-kratos-gorm/internal/pkg/httpx"
+	"gin-kratos-gorm/internal/service"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 type UserHandler struct {
@@ -20,77 +21,78 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 	return &UserHandler{svc: svc}
 }
 
-func (h *UserHandler) Create(c *gin.Context) {
+func (h *UserHandler) Register(c *gin.Context) {
 	var req pb.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httpx.Error(c, apperr.Invalid("invalid request body: %v", err))
 		return
 	}
-	u, err := h.svc.Register(c.Request.Context(), &req)
+	reply, err := h.svc.Register(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpx.Error(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, u)
-}
-
-func (h *UserHandler) GetByID(c *gin.Context) {
-	idStr := c.Param("id")
-	id, _ := strconv.ParseInt(idStr, 10, 64)
-	var req = &pb.SingleIDRequest{Id: uint64(id)}
-	u, err := h.svc.GetByID(c.Request.Context(), req)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, u)
-}
-
-func (h *UserHandler) UpdateRoleById(c *gin.Context) {
-	var req pb.UpdateRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	u, err := h.svc.UpdateRoleByID(c.Request.Context(), &req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, u)
+	httpx.Created(c, reply)
 }
 
 func (h *UserHandler) Login(c *gin.Context) {
-	j := utils.NewJWT()
 	var req pb.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httpx.Error(c, apperr.Invalid("invalid request body: %v", err))
 		return
 	}
-	u, err := h.svc.Login(c.Request.Context(), &req)
+	reply, err := h.svc.Login(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpx.Error(c, err)
 		return
 	}
-	claims := &utils.CustomClaims{
-		BaseClaims: utils.BaseClaims{UID: u.Id, Username: u.Name, NickName: "power", AuthorityId: u.RoleId},
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			Issuer:    "kratos-auth",
-			Subject:   u.Name,
-		},
-	}
-	token, err := j.CreateToken(*claims)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"token":  token,
-		"userId": 1,
-	})
+	httpx.OK(c, reply)
 }
 
-func (h *UserHandler) GetUserInfo(context *gin.Context) {
+func (h *UserHandler) GetMe(c *gin.Context) {
+	userID, ok := auth.UserID(c.Request.Context())
+	if !ok {
+		httpx.Error(c, apperr.Unauthenticated("login required"))
+		return
+	}
+	reply, err := h.svc.GetByID(c.Request.Context(), &pb.SingleIDRequest{Id: userID})
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	httpx.OK(c, reply)
+}
 
+func (h *UserHandler) GetByID(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		httpx.Error(c, apperr.Invalid("invalid user id"))
+		return
+	}
+	reply, svcErr := h.svc.GetByID(c.Request.Context(), &pb.SingleIDRequest{Id: id})
+	if svcErr != nil {
+		httpx.Error(c, svcErr)
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *UserHandler) UpdateRoleByID(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		httpx.Error(c, apperr.Invalid("invalid user id"))
+		return
+	}
+	var req pb.UpdateRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httpx.Error(c, apperr.Invalid("invalid request body: %v", err))
+		return
+	}
+	req.Id = id
+	reply, svcErr := h.svc.UpdateRoleByID(c.Request.Context(), &req)
+	if svcErr != nil {
+		httpx.Error(c, svcErr)
+		return
+	}
+	c.JSON(http.StatusOK, reply)
 }

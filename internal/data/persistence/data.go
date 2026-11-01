@@ -2,6 +2,8 @@ package persistence
 
 import (
 	"context"
+	"time"
+
 	"gin-kratos-gorm/internal/biz/query"
 	"gin-kratos-gorm/internal/conf"
 
@@ -9,44 +11,66 @@ import (
 	"gorm.io/gorm"
 )
 
-// Data .
+type txKey struct{}
+
+// Data owns the database handle. Repositories obtain a transaction-aware
+// handle from the context, which keeps unit-of-work semantics without leaking
+// GORM types into the domain layer.
 type Data struct {
-	// TODO wrapped database client
 	db    *gorm.DB
-	Query *query.Query
+	query *query.Query
+	log   *log.Helper
 }
 
-// NewData .
 func NewData(c *conf.Bootstrap, logger log.Logger, db *gorm.DB) (*Data, func(), error) {
+	helper := log.NewHelper(logger)
+	d := &Data{db: db, query: query.Use(db), log: helper}
 	cleanup := func() {
-		log.NewHelper(logger).Info("closing the data resources")
+		helper.Info("closing the data resources")
+		if err := d.Close(); err != nil {
+			helper.Errorf("close database: %v", err)
+		}
 	}
-	return &Data{db: db, Query: query.Use(db)}, cleanup, nil
+	return d, cleanup, nil
 }
 
-// InTx 事务封装
+// InTx runs fn in a transaction. Nested calls reuse the existing transaction.
 func (d *Data) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		ctx = context.WithValue(ctx, "contextTxKey", tx) // 将事务对象注入 Context
+	if _, ok := ctx.Value(txKey{}).(*gorm.DB); ok {
 		return fn(ctx)
+	}
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(context.WithValue(ctx, txKey{}, tx))
 	})
 }
 
-// DB 获取连接（判断 Context 是否有事务）
+// DB returns the transaction bound to ctx, or the root connection.
 func (d *Data) DB(ctx context.Context) *gorm.DB {
-	tx, ok := ctx.Value("contextTxKey").(*gorm.DB)
-	if ok {
-		return tx
+	if tx, ok := ctx.Value(txKey{}).(*gorm.DB); ok {
+		return tx.WithContext(ctx)
 	}
 	return d.db.WithContext(ctx)
 }
 
-// 获取当前 Context 下的 Query 对象（自动判断是否在事务中）
+// Q returns a generated query bound to the current transaction.
 func (d *Data) Q(ctx context.Context) *query.Query {
-	tx, ok := ctx.Value("contextTxKey").(*gorm.DB)
-	if ok {
-		// 如果在事务中，基于事务 DB 重新生成 Query 映射
-		return query.Use(tx)
+	return query.Use(d.DB(ctx))
+}
+
+func (d *Data) Ping(ctx context.Context) error {
+	sqlDB, err := d.db.DB()
+	if err != nil {
+		return err
 	}
-	return d.Query
+	pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	return sqlDB.PingContext(pingCtx)
+}
+
+func (d *Data) Close() error {
+	sqlDB, err := d.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
 }

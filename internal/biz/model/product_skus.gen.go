@@ -14,11 +14,11 @@ const TableNameProductSku = "product_skus"
 
 // ProductSku mapped from table <product_skus>
 type ProductSku struct {
-	ID        int64          `gorm:"column:id;type:bigint unsigned;primaryKey;autoIncrement:true" json:"id"`
-	CreatedAt time.Time      `gorm:"column:created_at;type:datetime(3)" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"column:updated_at;type:datetime(3)" json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;type:datetime(3);index:idx_product_skus_deleted_at,priority:1" json:"deleted_at"`
-	SpuID     int64          `gorm:"column:spu_id;type:bigint unsigned;index:idx_product_skus_spu_id,priority:1;comment:所属SPU_ID" json:"spu_id"`        // 所属SPU_ID
+	ID        int64          `gorm:"column:id;;primaryKey;autoIncrement:true" json:"id"`
+	CreatedAt time.Time      `gorm:"column:created_at;" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"column:updated_at;" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;index:idx_product_skus_deleted_at,priority:1" json:"deleted_at"`
+	SpuID     int64          `gorm:"column:spu_id;;index:idx_product_skus_spu_id,priority:1;comment:所属SPU_ID" json:"spu_id"`                            // 所属SPU_ID
 	SkuCode   string         `gorm:"column:sku_code;type:varchar(64);uniqueIndex:idx_product_skus_sku_code,priority:1;comment:SKU唯一编码" json:"sku_code"` // SKU唯一编码
 	AttrValue string         `gorm:"column:attr_value;type:json;comment:属性组合JSON" json:"attr_value"`                                                    // 属性组合JSON
 	Price     float64        `gorm:"column:price;type:decimal(10,2);comment:售价" json:"price"`                                                           // 售价

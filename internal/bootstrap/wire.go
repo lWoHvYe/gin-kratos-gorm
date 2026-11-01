@@ -18,11 +18,12 @@ import (
 
 func InitApp(string, log.Logger) (*kratos.App, func(), error) {
 	panic(wire.Build(
-		biz.BizSet,
+		biz.ProviderSet,
 		pkg.InfraSet,
-		data.RepoSet,
-		service.ServiceSet,
+		data.ProviderSet,
+		service.ProviderSet,
 		server.TransportSet,
+		NewSaga,
 		NewApp,
 	))
 }

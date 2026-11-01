@@ -1,6 +1,15 @@
+// Command gorm_gen regenerates GORM query/model code from an existing MySQL
+// schema. It is a development tool; the application does not run it at startup.
+//
+// Usage:
+//
+//	GORM_GEN_DSN='root:root@tcp(127.0.0.1:3306)/gin_kratos?parseTime=True&loc=Local' go run cmd/gorm_gen.go
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"gorm.io/driver/mysql"
 	"gorm.io/gen"
 	"gorm.io/gen/field"
@@ -8,76 +17,44 @@ import (
 )
 
 func main() {
-	db, _ := gorm.Open(mysql.Open("root:root@tcp(10.211.55.29:3306)/unicorn?parseTime=True&loc=Local"))
+	dsn := os.Getenv("GORM_GEN_DSN")
+	if dsn == "" {
+		dsn = "root:root@tcp(127.0.0.1:3306)/gin_kratos?parseTime=True&loc=Local"
+	}
+	db, err := gorm.Open(mysql.Open(dsn))
+	if err != nil {
+		panic(fmt.Sprintf("connect database: %v", err))
+	}
 
 	g := gen.NewGenerator(gen.Config{
-		OutPath:           "internal/product/biz/query",
+		OutPath:           "internal/biz/query",
+		ModelPkgPath:      "internal/biz/model",
 		Mode:              gen.WithDefaultQuery | gen.WithQueryInterface,
 		FieldWithTypeTag:  true,
 		FieldWithIndexTag: true,
 	})
-
 	g.UseDB(db)
 
-	/*	// 1. 定义基本模型（不要在这里加关系，防止循环引用导致空指针）
-		u := g.GenerateModel("users")
-		r := g.GenerateModel("roles")
-		ur := g.GenerateModel("user_roles")
-
-		f_userId_tags := make(field.GormTag)
-		f_userId_tags.Append("foreignKey", "UserID")
-		f_roleId_tags := make(field.GormTag)
-		f_roleId_tags.Append("foreignKey", "RoleID")
-		// 2. 重新定义带关系的 UserRole (它需要引用 User 和 Role)
-		ur = g.GenerateModel("user_roles",
-			gen.FieldRelate(field.BelongsTo, "User", u, &field.RelateConfig{GORMTag: f_userId_tags}),
-			gen.FieldRelate(field.BelongsTo, "Role", r, &field.RelateConfig{GORMTag: f_roleId_tags}),
-		)
-
-		// 3. 重新定义带关系的 User 和 Role (它们需要引用已经带了关系的 UserRole)
-		u = g.GenerateModel("users",
-			gen.FieldRelate(field.HasMany, "UserRoles", ur, &field.RelateConfig{GORMTag: f_userId_tags}),
-		)
-		r = g.GenerateModel("roles",
-			gen.FieldRelate(field.HasMany, "UserRoles", ur, &field.RelateConfig{GORMTag: f_roleId_tags}),
-		)
-
-		// 4. 最后统一应用
-		g.ApplyBasic(u, r, ur)*/
-
-	sku := g.GenerateModel("product_skus")
-
-	product_tags := make(field.GormTag)
-	product_tags.Append("foreignKey", "SpuId")
-
-	spu := g.GenerateModel("product_spus",
-		gen.FieldRelate(
-			field.HasMany,
-			"Skus",
-			sku, &field.RelateConfig{GORMTag: product_tags},
-		),
+	user := g.GenerateModel("users")
+	role := g.GenerateModel("roles")
+	userRole := g.GenerateModel("user_roles",
+		gen.FieldRelate(field.BelongsTo, "User", user, &field.RelateConfig{}),
+		gen.FieldRelate(field.BelongsTo, "Role", role, &field.RelateConfig{}),
 	)
 
-	stock_logs := g.GenerateModel("stock_logs")
+	sku := g.GenerateModel("product_skus")
+	spu := g.GenerateModel("product_spus",
+		gen.FieldRelate(field.HasMany, "Skus", sku, &field.RelateConfig{GORMTag: field.GormTag{"foreignKey": []string{"SpuID"}}}),
+	)
 
-	g.ApplyBasic(spu, sku, stock_logs)
-	// 生成之前定义的商品和订单模型 这种直接根据结构体生成似乎也可以
-	//g.ApplyBasic(data.ProductSpu{}, data.ProductSku{}, data.Order{}, data.OrderItem{})
+	orderItem := g.GenerateModel("order_items")
+	order := g.GenerateModel("orders",
+		gen.FieldRelate(field.HasMany, "OrderItems", orderItem, &field.RelateConfig{GORMTag: field.GormTag{"foreignKey": []string{"OrderID"}}}),
+	)
 
-	/*	order_item := g.GenerateModel("order_items")
+	stockLog := g.GenerateModel("stock_logs")
+	outbox := g.GenerateModel("outbox_events")
 
-		order_tags := make(field.GormTag)
-		order_tags.Append("foreignKey", "OrderId")
-
-		order := g.GenerateModel("orders",
-			gen.FieldRelate(
-				field.HasMany,
-				"OrderItems",
-				order_item, &field.RelateConfig{GORMTag: order_tags},
-			),
-		)
-
-		g.ApplyBasic(order, order_item)*/
-
+	g.ApplyBasic(user, role, userRole, spu, sku, order, orderItem, stockLog, outbox)
 	g.Execute()
 }

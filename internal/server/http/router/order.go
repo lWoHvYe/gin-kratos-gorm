@@ -3,23 +3,24 @@ package router
 import (
 	"gin-kratos-gorm/internal/server/http/handler"
 
-	"github.com/casbin/casbin/v3"
 	"github.com/gin-gonic/gin"
 )
 
 type OrderRouter struct {
 	orderHandler *handler.OrderHandler
-	enforcer     *casbin.Enforcer
 }
 
-func NewOrderRouter(e *casbin.Enforcer, orderHandler *handler.OrderHandler) *OrderRouter {
-	return &OrderRouter{enforcer: e, orderHandler: orderHandler}
+func NewOrderRouter(h *handler.OrderHandler) *OrderRouter {
+	return &OrderRouter{orderHandler: h}
 }
 
-func (router *OrderRouter) RegisterRouter(private *gin.RouterGroup, public *gin.RouterGroup) {
-	orderGroup := private.Group("order")
+func (r *OrderRouter) RegisterRouter(private *gin.RouterGroup) {
+	orders := private.Group("/orders")
 	{
-		orderGroup.POST("/create", router.orderHandler.CreateOrder)
-		orderGroup.GET("/:orderSn", router.orderHandler.GetOrder)
+		orders.POST("", r.orderHandler.CreateOrder)
+		orders.GET("", r.orderHandler.ListOrders)
+		orders.GET("/:orderSn", r.orderHandler.GetOrder)
+		orders.POST("/:orderSn/pay", r.orderHandler.Pay)
+		orders.POST("/:orderSn/cancel", r.orderHandler.Cancel)
 	}
 }

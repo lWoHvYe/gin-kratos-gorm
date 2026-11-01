@@ -38,3 +38,7 @@ bin/
 *.swp
 *.pb.go
 *_gen.go
+.tmp
+# local databases / test artifacts
+*.db
+data/

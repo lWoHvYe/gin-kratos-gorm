@@ -1,0 +1,47 @@
+server:
+  http:
+    addr: 0.0.0.0:8001
+    timeout: 10s
+  grpc:
+    addr: 0.0.0.0:9001
+    timeout: 10s
+
+data:
+  database:
+    driver: sqlite
+    source: ./order.db
+    max_open_conns: 1
+    auto_migrate: true
+    seed: false
+  transaction:
+    mode: local
+    fallback_to_local: true
+  dtm:
+    address: discovery:///dtmservice
+    timeout: 5s
+    enabled: false
+
+auth:
+  jwt_secret: dev-only-change-me-32-characters
+  jwt_issuer: gin-kratos-gorm
+  access_token_ttl: 86400s
+  casbin_enabled: false
+
+order:
+  payment_timeout: 1800s
+  auto_cancel_interval: 30s
+  shipping_fee: 10
+  free_shipping_threshold: 99
+
+app:
+  env: dev
+  metrics_enabled: true
+  log_level: info
+
+services:
+  # direct address; use discovery:///product with registry.etcd configured
+  product_endpoint: 127.0.0.1:9002
+
+registry:
+  etcd:
+    endpoints: []

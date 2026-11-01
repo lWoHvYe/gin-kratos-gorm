@@ -1,0 +1,43 @@
+# Prometheus scrape configuration for the mall stack.
+#
+# All gRPC services expose /metrics on their health port (HTTP_ADDR, 910x).
+# Gateway/admin intentionally expose only /healthz, so they are not scraped.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: mall
+    environment: dev
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: mall-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - identity:9101
+          - catalog:9102
+          - inventory:9103
+          - cart:9104
+          - pricing:9105
+          - order:9106
+          - payment:9107
+          - fulfillment:9108
+          - aftersales:9109
+
+  - job_name: dtm
+    metrics_path: /api/metrics
+    static_configs:
+      - targets: ["dtm:36789"]
+
+  - job_name: nats
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["nats:8222"]
+
+  - job_name: etcd
+    static_configs:
+      - targets: ["etcd:2379"]

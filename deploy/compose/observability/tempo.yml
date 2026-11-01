@@ -1,0 +1,32 @@
+# Minimal single-binary Tempo configuration for the optional tracing profile.
+#
+# The Go services do not emit spans yet. When OpenTelemetry is wired in, point
+# the OTLP exporter at tempo:4317 (gRPC) or tempo:4318 (HTTP) and query traces
+# from Grafana's Tempo datasource.
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks

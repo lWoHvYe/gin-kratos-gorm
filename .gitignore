@@ -1,4 +1,5 @@
 # Reference https://github.com/github/gitignore/blob/master/Go.gitignore
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -8,37 +9,55 @@
 # Test binary, built with `go test -c`
 *.test
 
-# Output of the go coverage tool, specifically when used with LiteIDE
+# Coverage output
 *.out
+coverage.out
+*.coverprofile
+
+# Build output
+bin/
+dist/
+
+# Go workspace file
+go.work
+go.work.sum
 
 # Dependency directories (remove the comment below to include it)
 vendor/
 
-# Go workspace file
-go.work
+# Generated protobuf code is committed under api/gen for reproducible builds.
+*.pb.go
+*_gen.go
+!api/gen/**/*.pb.go
 
-# Compiled Object files, Static and Dynamic libs (Shared Objects)
+# Compiled object files, static and dynamic libraries
 *.o
 *.a
 *.so
 
-# OS General
-Thumbs.db
-.DS_Store
+# Local caches and temporary files
+.tmp/
+tmp/
+.gocache/
 
-# project
+# Local databases / test artifacts
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Logs
+*.log
+
+# Local configuration and secrets
+.env
+deploy/compose/.env
 *.cert
 *.key
-*.log
-bin/
 
-# Develop tools
+# OS / editor files
+Thumbs.db
+.DS_Store
 .vscode/
 .idea/
 *.swp
-*.pb.go
-*_gen.go
-.tmp
-# local databases / test artifacts
-*.db
-data/

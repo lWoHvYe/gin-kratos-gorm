@@ -1,0 +1,363 @@
+# Application services for the mall stack.
+#
+# This file intentionally has no infrastructure definitions. Always combine it
+# with infra.yml so the shared network and cross-file depends_on entries work:
+#
+#   docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml up -d --build
+#
+# The Makefile wraps that command for every target. No service publishes a host
+# port except gateway (:8080) and admin (:8081); everything else is reached
+# through Docker DNS names.
+name: mall
+
+networks:
+  mall:
+    name: mall
+
+# Shared environment for every Go service. MYSQL_DSN, GRPC_ADDR and HTTP_ADDR
+# are service specific and set per container.
+x-service-env: &service-env
+  APP_ENV: ${APP_ENV:-dev}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  NATS_URL: nats://nats:4222
+  REDIS_ADDR: redis:6379
+  ETCD_ENDPOINTS: etcd:2379
+  DTM_ADDRESS: dtm:36790
+  JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-32-characters}
+
+# Infrastructure every gRPC service relies on.
+x-deps-core: &deps-core
+  mysql:
+    condition: service_healthy
+  nats:
+    condition: service_healthy
+  etcd:
+    condition: service_healthy
+
+x-healthcheck: &healthcheck
+  interval: 10s
+  timeout: 3s
+  retries: 12
+  start_period: 30s
+
+x-service-base: &service-base
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 15s
+  networks: [mall]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-build: &build
+  context: ../..
+  dockerfile: Dockerfile
+
+services:
+  # ---------------------------------------------------------------- BFFs
+  gateway:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: gateway
+    image: mall/gateway:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+    ports:
+      - "8080:8080"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+    depends_on:
+      etcd:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+      cart:
+        condition: service_healthy
+      pricing:
+        condition: service_healthy
+      order:
+        condition: service_healthy
+      payment:
+        condition: service_healthy
+      fulfillment:
+        condition: service_healthy
+      aftersales:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.mall-gateway.rule: 'Host(`localhost`) && PathPrefix(`/api/v1`)'
+      traefik.http.routers.mall-gateway.entrypoints: web
+      traefik.http.routers.mall-gateway.priority: "10"
+      traefik.http.services.mall-gateway.loadbalancer.server.port: "8080"
+
+  admin:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: admin
+    image: mall/admin:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_admin?parseTime=true&loc=Local&charset=utf8mb4"
+    ports:
+      - "8081:8081"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz"]
+    depends_on:
+      etcd:
+        condition: service_healthy
+      catalog:
+        condition: service_healthy
+      inventory:
+        condition: service_healthy
+      order:
+        condition: service_healthy
+      fulfillment:
+        condition: service_healthy
+      aftersales:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.mall-admin.rule: 'Host(`localhost`) && PathPrefix(`/api/admin/v1`)'
+      traefik.http.routers.mall-admin.entrypoints: web
+      traefik.http.routers.mall-admin.priority: "100"
+      traefik.http.services.mall-admin.loadbalancer.server.port: "8081"
+
+  # ----------------------------------------------------------- gRPC services
+  identity:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: identity
+    image: mall/identity:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_identity?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9001"
+      GRPC_ENDPOINT: "grpc://identity:9001"
+      HTTP_ADDR: ":9101"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9101/healthz"]
+    depends_on:
+      <<: *deps-core
+
+  catalog:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: catalog
+    image: mall/catalog:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_catalog?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9002"
+      GRPC_ENDPOINT: "grpc://catalog:9002"
+      HTTP_ADDR: ":9102"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9102/healthz"]
+    depends_on:
+      <<: *deps-core
+
+  inventory:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: inventory
+    image: mall/inventory:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_inventory?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9003"
+      GRPC_ENDPOINT: "grpc://inventory:9003"
+      HTTP_ADDR: ":9103"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9103/healthz"]
+    depends_on:
+      <<: *deps-core
+
+  cart:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: cart
+    image: mall/cart:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_cart?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9004"
+      GRPC_ENDPOINT: "grpc://cart:9004"
+      HTTP_ADDR: ":9104"
+      CATALOG_ADDR: catalog:9002
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9104/healthz"]
+    depends_on:
+      <<: *deps-core
+      catalog:
+        condition: service_healthy
+
+  pricing:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: pricing
+    image: mall/pricing:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_pricing?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9005"
+      GRPC_ENDPOINT: "grpc://pricing:9005"
+      HTTP_ADDR: ":9105"
+      CATALOG_ADDR: catalog:9002
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9105/healthz"]
+    depends_on:
+      <<: *deps-core
+      catalog:
+        condition: service_healthy
+
+  order:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: order
+    image: mall/order:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_order?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9006"
+      GRPC_ENDPOINT: "grpc://order:9006"
+      HTTP_ADDR: ":9106"
+      PRICING_ADDR: pricing:9005
+      INVENTORY_ADDR: inventory:9003
+      # DTM resolves discovery:///... through etcd using dtm-driver-kratos.
+      INVENTORY_DTM_URL: "discovery:///inventory/mall.v1.InventoryService"
+      ORDER_DTM_URL: "discovery:///order/mall.v1.OrderService"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9106/healthz"]
+    depends_on:
+      <<: *deps-core
+      dtm:
+        condition: service_healthy
+      pricing:
+        condition: service_healthy
+      inventory:
+        condition: service_healthy
+
+  payment:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: payment
+    image: mall/payment:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_payment?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9007"
+      GRPC_ENDPOINT: "grpc://payment:9007"
+      HTTP_ADDR: ":9107"
+      ORDER_ADDR: order:9006
+      PAYMENT_SECRET: ${PAYMENT_SECRET:-}
+      PAYMENT_TCC_ENABLED: "true"
+      ORDER_TCC_URL: "discovery:///order/mall.v1.OrderService"
+      INVENTORY_TCC_URL: "discovery:///inventory/mall.v1.InventoryService"
+      PRICING_TCC_URL: "discovery:///pricing/mall.v1.PricingService"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9107/healthz"]
+    depends_on:
+      <<: *deps-core
+      dtm:
+        condition: service_healthy
+      order:
+        condition: service_healthy
+
+  fulfillment:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: fulfillment
+    image: mall/fulfillment:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_fulfillment?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9008"
+      GRPC_ENDPOINT: "grpc://fulfillment:9008"
+      HTTP_ADDR: ":9108"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9108/healthz"]
+    depends_on:
+      <<: *deps-core
+
+  aftersales:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: aftersales
+    image: mall/aftersales:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_aftersales?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9009"
+      GRPC_ENDPOINT: "grpc://aftersales:9009"
+      HTTP_ADDR: ":9109"
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9109/healthz"]
+    depends_on:
+      <<: *deps-core
+
+  # ---------------------------------------------------------------- ingress
+  # Optional Traefik ingress on :80. Enable with:
+  #   docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml \
+  #     --profile ingress up -d traefik
+  # Routes are declared on the gateway/admin containers via Docker labels.
+  traefik:
+    image: traefik:v3.1
+    profiles: ["ingress"]
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=mall
+      - --entrypoints.web.address=:80
+      - --log.level=INFO
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    networks: [mall]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

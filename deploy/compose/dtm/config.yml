@@ -1,0 +1,31 @@
+# DTM server configuration, mounted at /app/dtm/conf.yml.
+#
+# Store: MySQL is shared with the app stack and the `dtm` database holds the
+# global transaction state.
+#
+# MicroService: the kratos driver lets DTM register itself in etcd and resolve
+# the order service's discovery:///inventory/... branch URLs through the same
+# registry that the Go services use.
+Store:
+  Driver: mysql
+  Host: mysql
+  Port: 3306
+  User: root
+  Password: root
+  Db: dtm
+  MaxOpenConns: 100
+  MaxIdleConns: 20
+  ConnMaxLifeTime: 5
+
+MicroService:
+  Driver: dtm-driver-kratos
+  Target: etcd://etcd:2379/dtmservice
+  EndPoint: grpc://dtm:36790
+
+HttpPort: 36789
+GrpcPort: 36790
+LogLevel: info
+RetryInterval: 10
+TimeoutToFail: 35
+TransCronInterval: 3
+RequestTimeout: 3

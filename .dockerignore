@@ -1,6 +1,24 @@
+# Keep the build context small and reproducible.
 .git
+.github
 .idea
+.vscode
+.claude
+
+# Local caches and build output
 .tmp
 bin
+data
 *.db
+*.sqlite
+*.sqlite3
 *.log
+coverage.out
+
+# Local secrets
+.env
+deploy/compose/.env
+
+# Editors / OS
+.DS_Store
+Thumbs.db

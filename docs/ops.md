@@ -1,0 +1,331 @@
+# Operations guide
+
+This document covers running, resetting and observing the mall stack. API and
+schema conventions live in [contracts.md](contracts.md); DTM design lives in
+[dtm.md](dtm.md).
+
+## Prerequisites
+
+- Docker Engine with Compose v2.20+ (BuildKit, `docker compose --wait`,
+  profiles).
+- Go 1.27 for local builds/tests (`go.mod` pins the toolchain).
+- Roughly 4 GB of free RAM for the full stack, plus space for MySQL/NATS/
+  Prometheus volumes.
+- Generated gRPC code under `api/gen` (git-ignored). A clean checkout must run
+  the `protoc` command from [contracts.md](contracts.md) once before `make
+  build` or a Docker image build.
+
+## File map
+
+| Path | Purpose |
+|---|---|
+| `Dockerfile` | one multi-stage image; `--build-arg SERVICE=<name>` selects `./cmd/<name>` |
+| `Makefile` | build/test/fmt/vet, compose orchestration, `db-reset` |
+| `deploy/compose/infra.yml` | MySQL, Redis, NATS, etcd, DTM, optional observability |
+| `deploy/compose/services.yml` | gateway, admin and the 9 gRPC services |
+| `deploy/compose/init/mysql/00-databases.sql` | creates every `mall_*` database plus `dtm`/`dtm_barrier` |
+| `deploy/compose/init/mysql/01-schemas.sh` | applies `/migrations/*/*.sql` to `mall_<service>` |
+| `deploy/compose/init/mysql/02-dtm.sql` | DTM store tables (`dtm.*`) and the shared branch barrier |
+| `deploy/compose/dtm/config.yml` | DTM MySQL store + kratos/etcd discovery driver |
+| `deploy/compose/observability/` | Prometheus scrape config, Grafana datasource, Tempo config |
+
+## Compose model
+
+`infra.yml` and `services.yml` are two halves of one project (`name: mall`) on
+one explicitly named network (`mall`). Always pass both files so cross-file
+`depends_on` entries and the shared network resolve:
+
+```bash
+docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml up -d
+```
+
+The Makefile builds that command (plus `--env-file deploy/compose/.env` when
+the file exists), so prefer the make targets. Starting `services.yml` alone is
+not supported: it has no infrastructure definitions by design.
+
+No application container publishes a host port except:
+
+| Container | Host port | Why |
+|---|---|---|
+| gateway | 8080 | public HTTP BFF |
+| admin | 8081 | back-office HTTP BFF |
+| traefik | 80 | optional ingress profile |
+
+All internal traffic uses Docker DNS names (`mysql:3306`, `nats:4222`,
+`etcd:2379`, `dtm:36790`, `catalog:9002`, …). Do not replace them with
+`127.0.0.1` inside compose.
+
+## Quick start
+
+```bash
+cp deploy/compose/.env.example deploy/compose/.env
+make run-infra
+make run-all
+```
+
+Check readiness:
+
+```bash
+docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml ps
+curl http://localhost:8080/healthz
+curl http://localhost:8081/healthz
+```
+
+Expected health endpoints:
+
+- gateway: `GET http://localhost:8080/healthz`
+- admin: `GET http://localhost:8081/healthz`
+- each gRPC service: `GET http://<service>:910<1..9>/healthz`,
+  `/readyz` (pings MySQL) and `/metrics` (Prometheus).
+
+## Configuration
+
+All configuration is environment based (`internal/platform/config`).
+
+| Variable | Default | Notes |
+|---|---|---|
+| `APP_ENV` | `dev` | log field |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `GRPC_ADDR` | `:9000` | per-service compose value is `:900x` |
+| `HTTP_ADDR` | `:9100` | health/metrics, per-service `:910x` |
+| `MYSQL_DSN` | `root:root@tcp(127.0.0.1:3306)/mall?...` | per-service `mall_<service>` |
+| `REDIS_ADDR` | `127.0.0.1:6379` | reserved for cache/idempotency |
+| `NATS_URL` | `nats://127.0.0.1:4222` | JetStream is required (`-js`) |
+| `ETCD_ENDPOINTS` | `127.0.0.1:2379` | comma separated; empty disables discovery |
+| `DTM_ADDRESS` | `127.0.0.1:36790` | DTM gRPC endpoint |
+| `JWT_SECRET` | dev placeholder | **minimum 16 characters** |
+| `JWT_ISSUER` | `mall` | |
+| `PAYMENT_SECRET` | empty | empty = mock payments, unsigned callbacks accepted |
+| `CATALOG_ADDR` | `catalog:9002` | cart/pricing direct fallback |
+| `PRICING_ADDR` | `pricing:9005` | order direct fallback |
+| `INVENTORY_ADDR` | `inventory:9003` | order direct fallback |
+| `ORDER_ADDR` | `order:9006` | payment direct fallback |
+| `INVENTORY_DTM_URL` | `discovery:///inventory/mall.v1.InventoryService` | DTM branch base URL |
+| `ORDER_DTM_URL` | `discovery:///order/mall.v1.OrderService` | DTM branch base URL |
+
+Secrets live in `deploy/compose/.env` (git-ignored). Copy
+`.env.example` and rotate `JWT_SECRET`/`PAYMENT_SECRET` for any shared
+environment. MySQL credentials are intentionally `root`/`root` for local
+development only.
+
+## Database lifecycle
+
+MySQL runs `deploy/compose/init/mysql/*` **only when `/var/lib/mysql` is empty**.
+Order of execution:
+
+1. `00-databases.sql` creates:
+   `mall_identity`, `mall_catalog`, `mall_inventory`, `mall_cart`,
+   `mall_pricing`, `mall_order`, `mall_payment`, `mall_fulfillment`,
+   `mall_aftersales`, `mall_admin`, `dtm`, `dtm_barrier`.
+2. `01-schemas.sh` walks `/migrations/<service>/*.sql` (mounted read-only from
+   the repository), ensures `mall_<service>` exists, and applies files in
+   version order (`sort -V`) to that database.
+3. `02-dtm.sql` creates DTM's own store tables (`dtm.trans_global`,
+   `dtm.trans_branch_op`, `dtm.kv`) and the shared `dtm_barrier.barrier`
+   idempotency table.
+
+Adding a migration:
+
+```bash
+# create migrations/<service>/0002_<change>.sql, then re-apply
+docker compose -f deploy/compose/infra.yml exec mysql \
+  bash /docker-entrypoint-initdb.d/01-schemas.sh
+```
+
+The script is idempotent for `CREATE TABLE IF NOT EXISTS` migrations. Do not
+edit an already-applied migration; add a new numbered file.
+
+Reset everything (destroys all named volumes, including NATS/etcd/Prometheus):
+
+```bash
+make db-reset          # down -v, then start MySQL and re-run init
+make run-all           # start the application again
+```
+
+MySQL health becomes green only after the init scripts complete: during init
+the entrypoint uses a socket-only temporary server, while the healthcheck
+probes TCP.
+
+## Startup order
+
+The compose dependency graph is health based:
+
+```text
+mysql, redis, nats, etcd, dtm
+        │
+        ├── identity, catalog, inventory, fulfillment, aftersales
+        ├── catalog ──> cart, pricing
+        ├── pricing + inventory + dtm ──> order
+        ├── order ──> payment
+        ├── catalog/order/fulfillment/aftersales ──> admin
+        └── all services ──> gateway
+```
+
+Because `make run-gateway` starts the gateway's dependencies, it effectively
+brings up the full backend graph. Use `make run-service SERVICE=<name>` for a
+smaller loop; its dependencies (core infra plus upstream services) are started
+as needed.
+
+## DTM operations
+
+DTM uses `dtmphp/dtm:latest` with `deploy/compose/dtm/config.yml` mounted at
+`/app/dtm/conf.yml`:
+
+- store: MySQL `dtm` database on host `mysql`;
+- HTTP API `:36789`, gRPC `:36790`;
+- kratos driver registers DTM at `etcd://etcd:2379/dtmservice` and resolves the
+  order service's `discovery:///...` branch URLs through etcd.
+
+DTM state and branch barriers:
+
+- `dtm.trans_global`, `dtm.trans_branch_op`, `dtm.kv` — global transaction
+  state, created by `02-dtm.sql` during MySQL initialization;
+- `dtm_barrier.barrier` — branch idempotency barrier, also created by
+  `02-dtm.sql` (the order migration creates it defensively as well).
+
+The DTM server never drops these tables on restart. Only `dtm -r` resets them,
+which the compose stack does not invoke.
+
+Useful checks:
+
+```bash
+curl http://localhost:36789/api/dtmsvr/version
+curl 'http://localhost:36789/api/dtmsvr/query?gid=order-create:<order_no>'
+curl http://localhost:36789/api/metrics       # Prometheus exposition
+```
+
+Order creation, cancellation, payment confirmation and refunds require DTM.
+If DTM (or the etcd discovery it uses) is down, the services return
+`UNAVAILABLE`; they deliberately do not fall back to local transactions.
+
+## Observability
+
+Core metrics are exposed by each service on `/metrics`; Prometheus scrapes:
+
+- all nine gRPC services on `9101`–`9109`;
+- DTM on `dtm:36789/api/metrics`;
+- NATS on `nats:8222/metrics`;
+- etcd on `etcd:2379/metrics`;
+- itself on `localhost:9090`.
+
+Gateway/admin do not expose `/metrics`, only `/healthz`.
+
+```bash
+make run-observability
+# Prometheus http://localhost:9090
+# Grafana    http://localhost:3000  (admin/admin by default)
+```
+
+Grafana provisions Prometheus (default) and Tempo datasources. Tempo is
+optional and is not started by `make run-observability`; enable it with:
+
+```bash
+docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml \
+  --profile tracing up -d tempo
+```
+
+The Go services do not export traces yet; the Tempo OTLP endpoints (`4317`
+gRPC, `4318` HTTP) and Grafana datasource are ready for that work.
+
+Logs are JSON (`slog`) on stdout and are capped by the compose `json-file`
+driver (10 MB × 3 per container):
+
+```bash
+docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml logs -f --tail=200 order
+```
+
+## Ingress (optional)
+
+Traefik is included but disabled unless the `ingress` profile is enabled:
+
+```bash
+docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml \
+  --profile ingress up -d traefik
+
+curl http://localhost/api/v1/products
+curl http://localhost/api/admin/v1/...   # requires an admin bearer token
+```
+
+Routing is declared with labels on the gateway/admin containers
+(`/api/v1` → gateway `:8080`, `/api/admin/v1` → admin `:8081`). Traefik mounts
+the Docker socket read-only and must join the `mall` network.
+
+## Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---|---|
+| `service "mysql" is not defined` | `services.yml` was started without `infra.yml`; use the make targets |
+| `network mall declared as external` / label mismatch | remove a manually created `mall` network or the stale project: `docker network rm mall` |
+| service restarts with `dial tcp 127.0.0.1:3306` | an env address was overridden with localhost; use Docker DNS names |
+| service restarts with `jetstream` / `no responders` | NATS was started without `-js`; use the provided `nats` service |
+| `order` create fails with `UNAVAILABLE` | DTM/etcd not healthy, or DTM cannot resolve `discovery:///inventory/...`; check DTM logs and the `dtmservice` etcd registration |
+| tables missing | data volume was not empty, so init scripts were skipped; run `make db-reset` |
+| MySQL healthcheck red during first boot | init scripts still running; increase `start_period`/`retries` on slow hosts |
+| port 8080/8081/80/3306 already in use | stop the conflicting process or remap the host port in compose |
+| Grafana has no data | services not started yet, or Prometheus targets are down at `:9090/targets` |
+| Traefik returns 404 | ingress profile not enabled, or gateway/admin labels not loaded (`--providers.docker.exposedbydefault=false`) |
+
+Handy commands:
+
+```bash
+# status of the whole project
+docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml ps
+
+# validate the merged compose configuration without starting anything
+docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml config
+
+# logs for one service
+docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml logs -f identity
+
+# open a MySQL shell
+docker compose -f deploy/compose/infra.yml exec mysql mysql -uroot -proot
+
+# inspect databases/tables
+docker compose -f deploy/compose/infra.yml exec mysql mysql -uroot -proot -e 'SHOW DATABASES;'
+```
+
+## Build, test and CI
+
+```bash
+make build        # ./bin/<service> for every cmd
+make test         # unit tests only; no MySQL/NATS/etcd/DTM required
+make fmt-check    # gofmt gate
+make vet          # go vet ./...
+```
+
+The Dockerfile is cache-friendly (module layer before source) and builds a
+static binary (`CGO_ENABLED=0`) on `golang:1.27-alpine`, running as UID 10001 on
+`alpine:3.20` with `ca-certificates`, `tzdata` and `wget` for healthchecks. A
+missing `SERVICE` build argument fails the build with a clear message.
+
+## Security notes
+
+- `root`/`root` MySQL and the default `JWT_SECRET` are for local development
+  only. Never expose MySQL, Redis, NATS, etcd, DTM, Prometheus or Grafana
+  directly to the internet.
+- The gateway is the only public application surface; admin requires a JWT
+  with the `admin` role.
+- `PAYMENT_SECRET` must be set to enforce payment callback signatures;
+  otherwise the service logs a warning and runs in mock mode.
+- Traefik mounts the Docker socket read-only. Keep the ingress profile off on
+  hosts where that is not acceptable.
+
+## Readiness and DTM
+
+Every gRPC service exposes `/healthz` (process up) and `/readyz` (MySQL ping)
+on its 910x port. `order` and `payment` additionally probe `DTM_ADDRESS` from
+`/readyz`; they stay out of rotation when DTM is unreachable. Catalog/cart and
+the other read paths do not depend on DTM and remain ready.
+
+## Business metrics
+
+Each service exposes `/metrics` from the default Prometheus registry:
+
+- `mall_http_requests_total{method,path,status}` — BFF traffic.
+- `mall_http_request_duration_seconds{method,path}` — BFF latency histogram.
+- `mall_outbox_published_total` — successfully published outbox events.
+- `mall_outbox_publish_errors_total` — publish failures pending retry.
+- Plus Go/process metrics from the Prometheus client.
+
+Suggested alerts: outbox error rate, outbox publish stall, HTTP 5xx ratio, and
+order/payment readiness failures.

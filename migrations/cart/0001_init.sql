@@ -1,0 +1,42 @@
+CREATE TABLE IF NOT EXISTS carts (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_carts_user (user_id),
+  KEY idx_carts_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cart_items (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  cart_id BIGINT NOT NULL,
+  sku_id BIGINT NOT NULL,
+  name VARCHAR(255) NOT NULL DEFAULT '',
+  price_cent BIGINT NOT NULL DEFAULT 0,
+  quantity INT NOT NULL DEFAULT 1,
+  selected TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_cart_items_cart_sku (cart_id, sku_id),
+  KEY idx_cart_items_cart (cart_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS outbox_events (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  event_id VARCHAR(64) NOT NULL,
+  topic VARCHAR(128) NOT NULL,
+  aggregate_type VARCHAR(64) NOT NULL,
+  aggregate_id VARCHAR(64) NOT NULL,
+  event_type VARCHAR(64) NOT NULL,
+  payload JSON NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  last_error VARCHAR(1024) NOT NULL DEFAULT '',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  published_at DATETIME(3) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_outbox_event_id (event_id),
+  KEY idx_outbox_pending (published_at, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

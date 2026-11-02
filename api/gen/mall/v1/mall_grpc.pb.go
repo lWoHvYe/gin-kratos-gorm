@@ -1097,10 +1097,11 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	CartService_GetCart_FullMethodName    = "/mall.v1.CartService/GetCart"
-	CartService_AddItem_FullMethodName    = "/mall.v1.CartService/AddItem"
-	CartService_UpdateItem_FullMethodName = "/mall.v1.CartService/UpdateItem"
-	CartService_RemoveItem_FullMethodName = "/mall.v1.CartService/RemoveItem"
+	CartService_GetCart_FullMethodName       = "/mall.v1.CartService/GetCart"
+	CartService_AddItem_FullMethodName       = "/mall.v1.CartService/AddItem"
+	CartService_UpdateItem_FullMethodName    = "/mall.v1.CartService/UpdateItem"
+	CartService_RemoveItem_FullMethodName    = "/mall.v1.CartService/RemoveItem"
+	CartService_ClearSelected_FullMethodName = "/mall.v1.CartService/ClearSelected"
 )
 
 // CartServiceClient is the client API for CartService service.
@@ -1113,6 +1114,7 @@ type CartServiceClient interface {
 	AddItem(ctx context.Context, in *AddItemRequest, opts ...grpc.CallOption) (*Cart, error)
 	UpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*Cart, error)
 	RemoveItem(ctx context.Context, in *RemoveItemRequest, opts ...grpc.CallOption) (*Cart, error)
+	ClearSelected(ctx context.Context, in *ClearCartRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type cartServiceClient struct {
@@ -1163,6 +1165,16 @@ func (c *cartServiceClient) RemoveItem(ctx context.Context, in *RemoveItemReques
 	return out, nil
 }
 
+func (c *cartServiceClient) ClearSelected(ctx context.Context, in *ClearCartRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, CartService_ClearSelected_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CartServiceServer is the server API for CartService service.
 // All implementations must embed UnimplementedCartServiceServer
 // for forward compatibility.
@@ -1173,6 +1185,7 @@ type CartServiceServer interface {
 	AddItem(context.Context, *AddItemRequest) (*Cart, error)
 	UpdateItem(context.Context, *UpdateItemRequest) (*Cart, error)
 	RemoveItem(context.Context, *RemoveItemRequest) (*Cart, error)
+	ClearSelected(context.Context, *ClearCartRequest) (*Empty, error)
 	mustEmbedUnimplementedCartServiceServer()
 }
 
@@ -1194,6 +1207,9 @@ func (UnimplementedCartServiceServer) UpdateItem(context.Context, *UpdateItemReq
 }
 func (UnimplementedCartServiceServer) RemoveItem(context.Context, *RemoveItemRequest) (*Cart, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveItem not implemented")
+}
+func (UnimplementedCartServiceServer) ClearSelected(context.Context, *ClearCartRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClearSelected not implemented")
 }
 func (UnimplementedCartServiceServer) mustEmbedUnimplementedCartServiceServer() {}
 func (UnimplementedCartServiceServer) testEmbeddedByValue()                     {}
@@ -1288,6 +1304,24 @@ func _CartService_RemoveItem_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CartService_ClearSelected_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClearCartRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CartServiceServer).ClearSelected(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CartService_ClearSelected_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CartServiceServer).ClearSelected(ctx, req.(*ClearCartRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CartService_ServiceDesc is the grpc.ServiceDesc for CartService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1310,6 +1344,10 @@ var CartService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveItem",
 			Handler:    _CartService_RemoveItem_Handler,
+		},
+		{
+			MethodName: "ClearSelected",
+			Handler:    _CartService_ClearSelected_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

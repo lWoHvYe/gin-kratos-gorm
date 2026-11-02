@@ -91,7 +91,7 @@ Authenticated (`Authorization: Bearer <token>`):
 | PATCH | `/api/v1/cart/items` | `Cart.UpdateItem` `{sku_id, quantity, selected}` |
 | DELETE | `/api/v1/cart/items` | `Cart.RemoveItem` `{sku_id}` or `?sku_id=` |
 | POST | `/api/v1/cart/merge` | `Cart.AddItem` per line `{items:[{sku_id, quantity}]}` |
-| POST | `/api/v1/checkout/preview` | `Pricing.CreateQuote` `{items:[{sku_id, quantity}], address_id, coupon_id}` |
+| POST | `/api/v1/checkout/preview` | `Pricing.CreateQuote`; `items` is optional and defaults to selected cart lines: `{items:[{sku_id, quantity}], address_id, coupon_id}` |
 | POST | `/api/v1/checkout/place` | `Order.CreateOrder` `{quote_id, address_id, receiver_name, receiver_phone, receiver_address, client_request_id}` (201) |
 | GET | `/api/v1/orders` | `Order.ListOrders` (`page`, `page_size`, `status`) |
 | GET | `/api/v1/orders/:orderNo` | `Order.GetOrder` |
@@ -103,6 +103,13 @@ Authenticated (`Authorization: Bearer <token>`):
 
 Details worth knowing:
 
+- `POST /checkout/preview` with no `items` reads the selected cart lines. This
+  makes the server cart the normal C-end source of truth and avoids trusting a
+  client-generated list.
+- `POST /checkout/place` fills any missing receiver fields from `address_id`
+  (the address must belong to the user) before creating the order, then clears
+  selected cart lines after the order and payment intent succeed. Clearing is best-effort: a stale cart is preferable to failing
+  an already-created order.
 - `POST /checkout/place` resolves the idempotency key from the body
   `client_request_id`, then the `Idempotency-Key` header, then a generated
   `id.Event()`. The order service keys `(user_id, client_request_id)` on it.

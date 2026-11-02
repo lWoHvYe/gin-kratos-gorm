@@ -25,9 +25,10 @@ const (
 	// cartEventTopic carries cart mutations through the outbox.
 	cartEventTopic = "shop.cart.updated.v1"
 
-	eventItemAdded   = "cart.item_added"
-	eventItemUpdated = "cart.item_updated"
-	eventItemRemoved = "cart.item_removed"
+	eventItemAdded       = "cart.item_added"
+	eventItemUpdated     = "cart.item_updated"
+	eventItemRemoved     = "cart.item_removed"
+	eventSelectedCleared = "cart.selected_cleared"
 )
 
 // Service implements pb.CartServiceServer.
@@ -40,18 +41,27 @@ type Service struct {
 	db      *sql.DB
 	catalog pb.CatalogServiceClient
 	repo    *repo
+	gorm    *cartGorm
 	log     *slog.Logger
 }
 
 // New builds a cart service. catalog is the catalog gRPC client used to resolve
 // sku price and display name.
 func New(database *sql.DB, catalog pb.CatalogServiceClient, logger *slog.Logger) *Service {
-	return &Service{
+	s := &Service{
 		db:      database,
 		catalog: catalog,
 		repo:    newRepo(database),
 		log:     logger,
 	}
+	if reader, err := newCartGorm(database); err != nil {
+		if logger != nil {
+			logger.Warn("cart gorm reader disabled", "error", err)
+		}
+	} else {
+		s.gorm = reader
+	}
+	return s
 }
 
 // GetCart returns the user's cart. A user without a cart gets an empty cart;
@@ -197,7 +207,40 @@ func (s *Service) RemoveItem(ctx context.Context, req *pb.RemoveItemRequest) (*p
 	return cart, nil
 }
 
+// ClearSelected removes the selected lines after a successful checkout. The
+// caller treats failures as non-fatal; the order already exists.
+func (s *Service) ClearSelected(ctx context.Context, req *pb.ClearCartRequest) (*pb.Empty, error) {
+	userID := req.GetUserId()
+	if userID <= 0 {
+		return nil, apperr.Invalid("user_id is required")
+	}
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		cartID, err := s.repo.cartID(ctx, tx, userID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return apperr.Internal("query cart", err)
+		}
+		res, err := tx.ExecContext(ctx, `DELETE FROM cart_items WHERE cart_id = ? AND selected = 1`, cartID)
+		if err != nil {
+			return apperr.Internal("clear selected cart items", err)
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			return s.appendEvent(ctx, tx, eventSelectedCleared, userID, 0)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.Empty{}, nil
+}
+
 func (s *Service) loadCart(ctx context.Context, userID int64) (*pb.Cart, error) {
+	if s.gorm != nil {
+		return s.gorm.GetCart(ctx, userID)
+	}
 	cartID, err := s.repo.cartID(ctx, s.db, userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &pb.Cart{UserId: userID}, nil

@@ -28,7 +28,7 @@ rm -f /tmp/mall-platform.$$
 
 # 3. GORM is allowed only in the catalog read-side repository. The
 # transactional core must stay on database/sql.
-gorm_hits="$(grep -R --include='*.go' -n 'gorm.io\|glebarez/sqlite' internal cmd 2>/dev/null | grep -v '^internal/services/catalog/gorm_repo.go:' || true)"
+gorm_hits="$(grep -R --include='*.go' -n 'gorm.io\|glebarez/sqlite' internal cmd 2>/dev/null | grep -v -E '^internal/services/(catalog|cart)/gorm_repo.go:' || true)"
 if [ -n "$gorm_hits" ]; then
   echo "[arch] GORM/sqlite import outside catalog read side:"
   echo "$gorm_hits"

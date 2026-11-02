@@ -103,3 +103,9 @@ go test ./internal/services/cart/...
 `pb.Sku` has no `name` field, so the cart resolves the display name through
 `GetProduct` with `sku_code` as fallback. Adding `name` to `Sku` (or a batched
 "get sku with product" RPC) would remove the extra catalog round trip.
+
+## Checkout integration
+
+`ClearSelected` removes `selected = 1` lines after checkout and writes
+`cart.selected_cleared`. The gateway calls it best-effort after creating the
+order and payment intent; the order remains authoritative if the call fails.

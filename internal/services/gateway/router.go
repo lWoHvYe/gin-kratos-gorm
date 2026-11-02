@@ -131,7 +131,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	if logger == nil {
 		logger = slog.Default()
 	}
-	h := &handlers{clients: clients}
+	h := &handlers{clients: clients, log: logger}
 
 	engine := gin.New()
 	engine.Use(recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), timeout(requestTimeout))
@@ -169,6 +169,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 // handlers holds the downstream clients. It is stateless.
 type handlers struct {
 	clients *Clients
+	log     *slog.Logger
 }
 
 // ---------------------------------------------------------------- middleware
@@ -496,13 +497,27 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	if len(in.Items) == 0 {
-		httpx.Error(c, apperr.Invalid("items are required"))
-		return
-	}
 	items := make([]*pb.QuoteItem, 0, len(in.Items))
 	for _, item := range in.Items {
 		items = append(items, &pb.QuoteItem{SkuId: item.SkuID, Quantity: item.Quantity})
+	}
+	if len(items) == 0 {
+		// No explicit items: price the selected cart lines. This keeps the
+		// server cart as the source of truth for the normal C-end checkout.
+		cart, err := h.clients.Cart.GetCart(c.Request.Context(), &pb.GetCartRequest{UserId: uid})
+		if err != nil {
+			httpx.Error(c, remoteError(err))
+			return
+		}
+		for _, item := range cart.GetItems() {
+			if item.GetSelected() && item.GetQuantity() > 0 {
+				items = append(items, &pb.QuoteItem{SkuId: item.GetSkuId(), Quantity: item.GetQuantity()})
+			}
+		}
+		if len(items) == 0 {
+			httpx.Error(c, apperr.Invalid("cart has no selected items"))
+			return
+		}
 	}
 	quote, err := h.clients.Pricing.CreateQuote(c.Request.Context(), &pb.QuoteRequest{
 		UserId:    uid,
@@ -546,14 +561,35 @@ func (h *handlers) placeOrder(c *gin.Context) {
 	if clientRequestID == "" {
 		clientRequestID = id.Event()
 	}
+	receiverName, receiverPhone, receiverAddress := strings.TrimSpace(in.ReceiverName), strings.TrimSpace(in.ReceiverPhone), strings.TrimSpace(in.ReceiverAddress)
+	if receiverName == "" || receiverPhone == "" || receiverAddress == "" {
+		address, err := h.resolveAddress(c.Request.Context(), uid, in.AddressID)
+		if err != nil {
+			httpx.Error(c, err)
+			return
+		}
+		if receiverName == "" {
+			receiverName = address.GetReceiver()
+		}
+		if receiverPhone == "" {
+			receiverPhone = address.GetPhone()
+		}
+		if receiverAddress == "" {
+			receiverAddress = joinAddress(address)
+		}
+	}
+	if receiverName == "" || receiverPhone == "" || receiverAddress == "" {
+		httpx.Error(c, apperr.Invalid("receiver_name, receiver_phone and receiver_address are required"))
+		return
+	}
 	order, err := h.clients.Order.CreateOrder(c.Request.Context(), &pb.CreateOrderRequest{
 		UserId:          uid,
 		QuoteId:         strings.TrimSpace(in.QuoteID),
 		AddressId:       in.AddressID,
 		ClientRequestId: clientRequestID,
-		ReceiverName:    strings.TrimSpace(in.ReceiverName),
-		ReceiverPhone:   strings.TrimSpace(in.ReceiverPhone),
-		ReceiverAddress: strings.TrimSpace(in.ReceiverAddress),
+		ReceiverName:    receiverName,
+		ReceiverPhone:   receiverPhone,
+		ReceiverAddress: receiverAddress,
 	})
 	if err != nil {
 		httpx.Error(c, remoteError(err))
@@ -569,10 +605,44 @@ func (h *handlers) placeOrder(c *gin.Context) {
 		httpx.Error(c, remoteError(err))
 		return
 	}
+	// The order is authoritative even if clearing the cart fails; keep the
+	// stale cart rather than failing a successful order.
+	if _, err := h.clients.Cart.ClearSelected(c.Request.Context(), &pb.ClearCartRequest{UserId: uid}); err != nil {
+		if h.log != nil {
+			h.log.Warn("clear selected cart after order", "order_no", order.GetOrderNo(), "error", err)
+		}
+	}
 	httpx.Created(c, gin.H{"order": order, "payment": intent})
 }
 
 // ---------------------------------------------------------------- orders
+
+func (h *handlers) resolveAddress(ctx context.Context, userID, addressID int64) (*pb.Address, error) {
+	if addressID <= 0 {
+		return nil, apperr.Invalid("address_id is required when receiver fields are omitted")
+	}
+	list, err := h.clients.Identity.ListAddresses(ctx, &pb.GetUserRequest{UserId: userID})
+	if err != nil {
+		return nil, remoteError(err)
+	}
+	for _, address := range list.GetAddresses() {
+		if address.GetId() == addressID {
+			return address, nil
+		}
+	}
+	return nil, apperr.NotFound("address not found")
+}
+
+func joinAddress(address *pb.Address) string {
+	parts := []string{address.GetProvince(), address.GetCity(), address.GetDistrict(), address.GetDetail()}
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return strings.Join(out, " ")
+}
 
 func (h *handlers) listOrders(c *gin.Context) {
 	uid, err := userID(c)

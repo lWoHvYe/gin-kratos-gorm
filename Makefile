@@ -38,7 +38,7 @@ help:
 	@echo "  dtm-contract                      static DTM wiring guard"
 	@echo "  test-race                         unit tests with the race detector"
 	@echo "  arch                              architecture/import guard"
-	@echo "  wire                              regenerate Wire injectors for gateway/order"
+	@echo "  wire                              regenerate Wire injectors for gateway/admin/order"
 	@echo "  verify                            fmt-check + vet + test + build + arch + dtm-contract"
 	@echo "  clean                             remove ./bin"
 	@echo ""
@@ -98,7 +98,7 @@ arch:
 	./scripts/check-architecture.sh
 
 wire:
-	$(GO) run github.com/google/wire/cmd/wire ./cmd/gateway ./cmd/order
+	$(GO) run github.com/google/wire/cmd/wire ./cmd/gateway ./cmd/admin ./cmd/order
 
 verify: fmt-check vet test build arch dtm-contract
 	@echo "verify: OK"

@@ -24,11 +24,21 @@ type Service struct {
 	db    *sql.DB
 	mq    *mq.Client
 	cache *redis.Client
+	gorm  *gormReader
 	log   *slog.Logger
 }
 
 func New(db *sql.DB, client *mq.Client, cache *redis.Client, logger *slog.Logger) *Service {
-	return &Service{db: db, mq: client, cache: cache, log: logger}
+	s := &Service{db: db, mq: client, cache: cache, log: logger}
+	reader, err := newGormReader(db)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("catalog gorm reader disabled", "error", err)
+		}
+	} else {
+		s.gorm = reader
+	}
+	return s
 }
 
 const productCacheKey = "catalog:product:"
@@ -69,9 +79,21 @@ func (s *Service) GetProduct(ctx context.Context, req *pb.GetProductRequest) (*p
 	if p, ok := s.cacheGetProduct(ctx, req.GetId()); ok {
 		return p, nil
 	}
-	p, err := s.loadProduct(ctx, req.GetId())
-	if err != nil {
-		return nil, err
+	var p *pb.Product
+	var err error
+	if s.gorm != nil {
+		p, err = s.gorm.GetProduct(ctx, req.GetId())
+		if err != nil {
+			return nil, apperr.Internal("get product", err)
+		}
+		if p == nil {
+			return nil, apperr.NotFound("product not found")
+		}
+	} else {
+		p, err = s.loadProduct(ctx, req.GetId())
+		if err != nil {
+			return nil, err
+		}
 	}
 	s.cachePutProduct(ctx, p)
 	return p, nil
@@ -83,6 +105,13 @@ func (s *Service) ListProducts(ctx context.Context, req *pb.ListProductsRequest)
 	}
 	if req.GetPageSize() <= 0 || req.GetPageSize() > 100 {
 		req.PageSize = 20
+	}
+	if s.gorm != nil {
+		list, err := s.gorm.ListProducts(ctx, req)
+		if err != nil {
+			return nil, apperr.Internal("list products", err)
+		}
+		return list, nil
 	}
 	where := "WHERE status = 'ON_SALE'"
 	args := []any{}
@@ -120,6 +149,16 @@ func (s *Service) ListProducts(ctx context.Context, req *pb.ListProductsRequest)
 }
 
 func (s *Service) GetSku(ctx context.Context, req *pb.GetSkuRequest) (*pb.Sku, error) {
+	if s.gorm != nil {
+		sku, err := s.gorm.GetSku(ctx, req.GetSkuId())
+		if err != nil {
+			return nil, apperr.Internal("get sku", err)
+		}
+		if sku == nil {
+			return nil, apperr.NotFound("sku not found")
+		}
+		return sku, nil
+	}
 	var sku pb.Sku
 	err := s.db.QueryRowContext(ctx, `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status FROM skus WHERE id = ?`, req.GetSkuId()).
 		Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status)

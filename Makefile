@@ -15,7 +15,7 @@ OBS_SERVICES := prometheus grafana
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract test-race verify arch clean
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract test-race verify wire arch clean
 
 help:
 	@echo "mall - Go microservice mall (Kratos + Gin + database/sql + DTM)"
@@ -38,6 +38,7 @@ help:
 	@echo "  dtm-contract                      static DTM wiring guard"
 	@echo "  test-race                         unit tests with the race detector"
 	@echo "  arch                              architecture/import guard"
+	@echo "  wire                              regenerate Wire injectors for gateway/order"
 	@echo "  verify                            fmt-check + vet + test + build + arch + dtm-contract"
 	@echo "  clean                             remove ./bin"
 	@echo ""
@@ -95,6 +96,9 @@ run-all:
 
 arch:
 	./scripts/check-architecture.sh
+
+wire:
+	$(GO) run github.com/google/wire/cmd/wire ./cmd/gateway ./cmd/order
 
 verify: fmt-check vet test build arch dtm-contract
 	@echo "verify: OK"

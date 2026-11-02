@@ -28,6 +28,7 @@ vendor/
 # Generated protobuf code is committed under api/gen for reproducible builds.
 *.pb.go
 *_gen.go
+!**/wire_gen.go
 !api/gen/**/*.pb.go
 
 # Compiled object files, static and dynamic libraries

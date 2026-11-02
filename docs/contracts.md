@@ -64,7 +64,8 @@ Payment/after-sales: `PAYMENT_TCC_ENABLED`, `ORDER_TCC_URL`, `INVENTORY_TCC_URL`
 
 ## Database conventions
 
-- MySQL 8.0, `database/sql` + `go-sql-driver/mysql`; no GORM.
+- MySQL 8.0. Transactional core uses `database/sql` +
+  `go-sql-driver/mysql`; catalog read queries use GORM (`docs/architecture.md`).
 - All money columns end with `_cent BIGINT`.
 - All status columns are VARCHAR strings.
 - Every table has `created_at/updated_at`; mutable aggregates have `version BIGINT`.

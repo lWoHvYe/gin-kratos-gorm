@@ -26,10 +26,12 @@ if grep -R --include='*.go' -n 'gin-kratos-gorm/internal/services/' internal/pla
 fi
 rm -f /tmp/mall-platform.$$
 
-# 3. The greenfield data layer must not regress to GORM.
-if grep -R --include='*.go' -n 'gorm.io\|glebarez/sqlite' internal cmd >/dev/null 2>&1; then
-  echo "[arch] GORM/sqlite import found; this project uses database/sql"
-  grep -R --include='*.go' -n 'gorm.io\|glebarez/sqlite' internal cmd || true
+# 3. GORM is allowed only in the catalog read-side repository. The
+# transactional core must stay on database/sql.
+gorm_hits="$(grep -R --include='*.go' -n 'gorm.io\|glebarez/sqlite' internal cmd 2>/dev/null | grep -v '^internal/services/catalog/gorm_repo.go:' || true)"
+if [ -n "$gorm_hits" ]; then
+  echo "[arch] GORM/sqlite import outside catalog read side:"
+  echo "$gorm_hits"
   fail=1
 fi
 

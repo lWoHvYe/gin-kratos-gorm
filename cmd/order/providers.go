@@ -1,0 +1,136 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"log/slog"
+	"os"
+	"strings"
+	"time"
+
+	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/config"
+	"gin-kratos-gorm/internal/platform/db"
+	"gin-kratos-gorm/internal/platform/dtm"
+	"gin-kratos-gorm/internal/platform/grpcx"
+	"gin-kratos-gorm/internal/platform/log"
+	"gin-kratos-gorm/internal/platform/mq"
+	"gin-kratos-gorm/internal/platform/registry"
+	"gin-kratos-gorm/internal/platform/runtime"
+	"gin-kratos-gorm/internal/services/order"
+
+	_ "github.com/dtm-labs/driver-kratos"
+	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v2"
+	"github.com/go-kratos/kratos/v2"
+	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
+	"github.com/go-kratos/kratos/v2/transport/grpc/resolver/discovery"
+	khttp "github.com/go-kratos/kratos/v2/transport/http"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/resolver"
+)
+
+const (
+	defaultPricingAddr   = "pricing:9005"
+	defaultInventoryAddr = "inventory:9003"
+)
+
+type pricingConn struct{ *grpc.ClientConn }
+type inventoryConn struct{ *grpc.ClientConn }
+
+type orderApp struct {
+	App     *kratos.App
+	Service *order.Service
+	DB      *sql.DB
+	MQ      *mq.Client
+	Logger  *slog.Logger
+}
+
+func provideLogger(cfg *config.Config) *slog.Logger {
+	return log.New(cfg.Service, cfg.Env)
+}
+
+func provideDB(cfg *config.Config) (*sql.DB, func(), error) {
+	database, err := db.Open(cfg.MySQLDSN)
+	if err != nil {
+		return nil, nil, err
+	}
+	return database, func() { _ = database.Close() }, nil
+}
+
+func provideMQ(cfg *config.Config) (*mq.Client, func(), error) {
+	client, err := mq.Connect(cfg.NATSURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, func() { client.Close() }, nil
+}
+
+func provideRegistry(cfg *config.Config) (*etcdregistry.Registry, func(), error) {
+	reg, closeReg, err := registry.New(cfg.ETCDEndpoints)
+	if err != nil {
+		return nil, nil, err
+	}
+	if reg != nil {
+		resolver.Register(discovery.NewBuilder(reg, discovery.WithInsecure(true)))
+	}
+	return reg, closeReg, nil
+}
+
+func providePricingConn(ctx context.Context, reg *etcdregistry.Registry) (*pricingConn, func(), error) {
+	conn, err := grpcx.Dial(ctx, env("PRICING_ADDR", defaultPricingAddr), reg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &pricingConn{conn}, func() { _ = conn.Close() }, nil
+}
+
+func provideInventoryConn(ctx context.Context, reg *etcdregistry.Registry) (*inventoryConn, func(), error) {
+	conn, err := grpcx.Dial(ctx, env("INVENTORY_ADDR", defaultInventoryAddr), reg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &inventoryConn{conn}, func() { _ = conn.Close() }, nil
+}
+
+func providePricingClient(conn *pricingConn) pb.PricingServiceClient {
+	return pb.NewPricingServiceClient(conn.ClientConn)
+}
+
+func provideInventoryClient(conn *inventoryConn) pb.InventoryServiceClient {
+	return pb.NewInventoryServiceClient(conn.ClientConn)
+}
+
+func provideDTMClient(cfg *config.Config) *dtm.Client {
+	return dtm.New(cfg)
+}
+
+func provideOrderService(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client, pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient) *order.Service {
+	return order.New(database, client, logger, dtmClient, pricing, inventory)
+}
+
+func provideGRPCServer(logger *slog.Logger, svc *order.Service) *kratosgrpc.Server {
+	gs := grpcx.NewServer(logger)
+	pb.RegisterOrderServiceServer(gs, svc)
+	return gs
+}
+
+func provideHealthServer(cfg *config.Config, database *sql.DB, logger *slog.Logger) *khttp.Server {
+	return runtime.HealthServerWithChecks(cfg, database, logger, func(ctx context.Context) error {
+		return dtm.Probe(ctx, cfg.DTMAddress, 2*time.Second)
+	})
+}
+
+func provideApp(cfg *config.Config, logger *slog.Logger, gs *kratosgrpc.Server, hs *khttp.Server, reg *etcdregistry.Registry) *kratos.App {
+	return runtime.NewApp(cfg, logger, gs, hs, reg)
+}
+
+func provideOrderApp(app *kratos.App, svc *order.Service, database *sql.DB, client *mq.Client, logger *slog.Logger) *orderApp {
+	return &orderApp{App: app, Service: svc, DB: database, MQ: client, Logger: logger}
+}
+
+func env(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
+}

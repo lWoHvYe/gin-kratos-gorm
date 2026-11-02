@@ -129,7 +129,7 @@ GOCACHE=$PWD/.tmp/gocache GOTMPDIR=$PWD/.tmp GOSUMDB=off GOFLAGS=-mod=mod \
   go run ./cmd/payment
 ```
 
-Built with `database/sql` + `github.com/go-sql-driver/mysql` (no GORM), using
+Built with `database/sql` + `github.com/go-sql-driver/mysql`, using
 the platform helpers `config`, `db`, `log`, `grpcx`, `runtime`, `registry`,
 `apperr`, `mq`, `outbox` and `dtm`. `httpx`/`auth` are HTTP/JWT helpers used by
 the gateway, so this gRPC-only service does not import them.

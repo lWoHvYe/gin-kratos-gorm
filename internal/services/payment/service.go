@@ -58,7 +58,7 @@ type Service struct {
 	pb.UnimplementedPaymentServiceServer
 
 	db        *sql.DB
-	orders    pb.OrderServiceClient
+	orders    orderPort
 	inventory pb.InventoryServiceClient
 	pricing   pb.PricingServiceClient
 	secret    string
@@ -76,7 +76,7 @@ func (s *Service) SetReconciliationClients(inventory pb.InventoryServiceClient, 
 	s.inventory, s.pricing = inventory, pricing
 }
 
-func New(database *sql.DB, orders pb.OrderServiceClient, secret string, logger *slog.Logger) *Service {
+func New(database *sql.DB, orders orderPort, secret string, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}

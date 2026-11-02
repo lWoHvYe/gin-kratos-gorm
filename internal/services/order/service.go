@@ -62,8 +62,8 @@ type Service struct {
 	mq        *mq.Client
 	log       *slog.Logger
 	dtm       *dtm.Client
-	pricing   pb.PricingServiceClient
-	inventory pb.InventoryServiceClient
+	pricing   pricingPort
+	inventory inventoryPort
 
 	inventoryDTM string
 	orderDTM     string
@@ -72,7 +72,7 @@ type Service struct {
 // New builds the order service. pricing and inventory may be nil in tests that
 // only exercise local logic.
 func New(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client,
-	pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient) *Service {
+	pricing pricingPort, inventory inventoryPort) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}

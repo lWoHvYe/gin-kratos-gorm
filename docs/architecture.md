@@ -10,6 +10,8 @@ The project now uses Wire for composition roots where the graph is non-trivial:
   HTTP server and app.
 - `cmd/order`: DB, NATS, registry, pricing/inventory gRPC connections, DTM
   client, service, gRPC/HTTP servers and app.
+- `cmd/payment`: DB, NATS, registry, order/inventory/pricing gRPC
+  connections, DTM/TCC configuration, service, gRPC/HTTP servers and app.
 
 Generated files are committed:
 
@@ -20,6 +22,8 @@ cmd/admin/wire.go
 cmd/admin/wire_gen.go
 cmd/order/wire.go
 cmd/order/wire_gen.go
+cmd/payment/wire.go
+cmd/payment/wire_gen.go
 ```
 
 Regenerate with:
@@ -34,8 +38,8 @@ Wire can be added per service without changing service constructors; the
 provider set is the only new code.
 
 Why not Wire everywhere at once: it adds generated files and provider sets to
-every service. The three adopted roots have the highest fan-in (BFF clients,
-order clients/DTM), so they get the compile-time graph checks first.
+every service. The four adopted roots have the highest fan-in (BFF clients,
+order/payment clients and DTM), so they get the compile-time graph checks first.
 
 ## Data access: database/sql core, GORM read side
 
@@ -66,8 +70,9 @@ Those services are state machines around conditional SQL and DTM; hiding their
 transactions behind GORM would increase risk without reducing the hard parts.
 
 Future GORM candidates are low-contention CRUD/reporting surfaces (admin
-reporting, warehouse lists), not the transaction core. The next Wire candidate
-is payment once its graph is migrated.
+reporting, warehouse lists), not the transaction core. Payment has now joined
+gateway/admin/order on Wire; the next candidates are only services whose graphs
+grow beyond the current shallow shape.
 
 ## Testing
 

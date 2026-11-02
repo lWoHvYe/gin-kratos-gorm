@@ -73,6 +73,7 @@ func main() {
 	svc := order.New(database, client, logger, dtm.New(cfg),
 		pb.NewPricingServiceClient(pricingConn), pb.NewInventoryServiceClient(inventoryConn))
 	go order.RunExpiry(ctx, database, svc, logger, time.Minute)
+	go order.RunShipmentConsumer(ctx, client, svc, logger)
 	pb.RegisterOrderServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServerWithChecks(cfg, database, logger, func(ctx context.Context) error {
 		return dtm.Probe(ctx, cfg.DTMAddress, 2*time.Second)

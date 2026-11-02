@@ -74,6 +74,21 @@ func main() {
 	defer conn.Close()
 	orders := pb.NewOrderServiceClient(conn)
 
+	inventoryAddr := envOr("INVENTORY_ADDR", "inventory:9003")
+	inventoryConn, err := grpcx.Dial(context.Background(), inventoryAddr, reg)
+	if err != nil {
+		logger.Error("dial inventory", "addr", inventoryAddr, "error", err)
+		os.Exit(1)
+	}
+	defer inventoryConn.Close()
+	pricingAddr := envOr("PRICING_ADDR", "pricing:9005")
+	pricingConn, err := grpcx.Dial(context.Background(), pricingAddr, reg)
+	if err != nil {
+		logger.Error("dial pricing", "addr", pricingAddr, "error", err)
+		os.Exit(1)
+	}
+	defer pricingConn.Close()
+
 	secret := os.Getenv("PAYMENT_SECRET")
 	if secret == "" {
 		logger.Warn("PAYMENT_SECRET is not set; callback signatures are not verified (mock mode)")
@@ -84,6 +99,7 @@ func main() {
 	}
 	gs := grpcx.NewServer(logger)
 	svc := payment.New(database, orders, secret, logger)
+	svc.SetReconciliationClients(pb.NewInventoryServiceClient(inventoryConn), pb.NewPricingServiceClient(pricingConn))
 	go payment.RunRefundConsumer(ctx, client, svc, logger)
 	svc.EnableTCC(dtm.New(cfg),
 		envOr("ORDER_TCC_URL", "discovery:///order/mall.v1.OrderService"),

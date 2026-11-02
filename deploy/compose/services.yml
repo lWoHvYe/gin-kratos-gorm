@@ -121,6 +121,8 @@ services:
         condition: service_healthy
       order:
         condition: service_healthy
+      payment:
+        condition: service_healthy
       fulfillment:
         condition: service_healthy
       aftersales:
@@ -278,6 +280,8 @@ services:
       GRPC_ENDPOINT: "grpc://payment:9007"
       HTTP_ADDR: ":9107"
       ORDER_ADDR: order:9006
+      INVENTORY_ADDR: inventory:9003
+      PRICING_ADDR: pricing:9005
       PAYMENT_SECRET: ${PAYMENT_SECRET:-}
       PAYMENT_TCC_ENABLED: "true"
       ORDER_TCC_URL: "discovery:///order/mall.v1.OrderService"
@@ -291,6 +295,10 @@ services:
       dtm:
         condition: service_healthy
       order:
+        condition: service_healthy
+      inventory:
+        condition: service_healthy
+      pricing:
         condition: service_healthy
 
   fulfillment:
@@ -330,6 +338,8 @@ services:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9109/healthz"]
     depends_on:
       <<: *deps-core
+      payment:
+        condition: service_healthy
 
   # ---------------------------------------------------------------- ingress
   # Optional Traefik ingress on :80. Enable with:

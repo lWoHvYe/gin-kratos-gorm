@@ -49,13 +49,14 @@ const aggregateAfterSale = "after_sale"
 
 type Service struct {
 	pb.UnimplementedAfterSalesServiceServer
-	db  *sql.DB
-	mq  *mq.Client
-	log *slog.Logger
+	db       *sql.DB
+	mq       *mq.Client
+	payments pb.PaymentServiceClient
+	log      *slog.Logger
 }
 
-func New(db *sql.DB, client *mq.Client, logger *slog.Logger) *Service {
-	return &Service{db: db, mq: client, log: logger}
+func New(db *sql.DB, client *mq.Client, payments pb.PaymentServiceClient, logger *slog.Logger) *Service {
+	return &Service{db: db, mq: client, payments: payments, log: logger}
 }
 
 // CreateAfterSale opens a refund only / return-refund request. The request is
@@ -178,69 +179,102 @@ func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.Afte
 	return s.loadAfterSale(ctx, afterSaleNo)
 }
 
-// Refund drives APPROVED -> REFUNDING -> REFUNDED in a single transaction and
-// emits shop.aftersale.completed.v1. No payment call is made yet: the refund is
-// recorded as an intent in after_sale_logs so a payment saga can pick it up.
+// Refund first persists REFUNDING, then calls payment, then marks REFUNDED.
+// A failure between the two phases leaves the request REFUNDING so a retry can
+// safely call the idempotent payment refund again.
 func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*pb.AfterSale, error) {
 	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
 	if afterSaleNo == "" {
 		return nil, apperr.Invalid("after_sale_no is required")
 	}
+	if s.payments == nil {
+		return nil, apperr.Unavailable("payment client is not configured", nil)
+	}
+	var row *afterSaleRow
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, apperr.Internal("begin refund after sale", err)
 	}
-	defer func() { _ = tx.Rollback() }()
-
-	row, err := lockAfterSale(ctx, tx, afterSaleNo)
+	row, err = lockAfterSale(ctx, tx, afterSaleNo)
 	if err != nil {
+		_ = tx.Rollback()
 		return nil, err
 	}
-	next, changed, err := refundOutcome(row.status)
-	if err != nil {
+	if _, _, err := refundOutcome(row.status); err != nil {
+		_ = tx.Rollback()
 		return nil, err
 	}
-	if changed {
-		// APPROVED -> REFUNDING: persist the refund intent before completing.
+	switch row.status {
+	case statusRefunded:
+		_ = tx.Rollback()
+		return s.loadAfterSale(ctx, afterSaleNo)
+	case statusRefunding:
+		_ = tx.Rollback()
+	case statusApproved:
 		if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, version = version + 1 WHERE id = ?",
 			statusRefunding, row.id); err != nil {
+			_ = tx.Rollback()
 			return nil, apperr.Internal("mark after sale refunding", err)
 		}
-		intent, err := json.Marshal(map[string]any{
-			"after_sale_no": afterSaleNo,
-			"order_no":      row.orderNo,
-			"user_id":       row.userID,
-			"amount_cent":   row.amountCent,
-			"payment":       "pending",
+		intent, _ := json.Marshal(map[string]any{
+			"after_sale_no": afterSaleNo, "order_no": row.orderNo, "user_id": row.userID,
+			"amount_cent": row.amountCent, "payment": "pending",
 		})
-		if err != nil {
-			return nil, apperr.Internal("marshal refund intent", err)
-		}
 		if err := appendLog(ctx, tx, row.id, "REFUND_INTENT", statusApproved, statusRefunding, string(intent)); err != nil {
+			_ = tx.Rollback()
 			return nil, err
 		}
-		// REFUNDING -> REFUNDED.
-		if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, version = version + 1 WHERE id = ?",
-			next, row.id); err != nil {
-			return nil, apperr.Internal("mark after sale refunded", err)
+		if err := tx.Commit(); err != nil {
+			return nil, apperr.Internal("commit refund intent", err)
 		}
-		if err := appendLog(ctx, tx, row.id, "REFUND", statusRefunding, next, "refund completed without payment call"); err != nil {
-			return nil, err
-		}
-		payload, err := json.Marshal(afterSaleEvent{
-			AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
-			Type: row.typ, Status: next, AmountCent: row.amountCent,
-			Reason: row.reason, RefundIntent: true,
-		})
-		if err != nil {
-			return nil, apperr.Internal("marshal after sale event", err)
-		}
-		if err := outbox.Append(ctx, tx, outbox.Event{
-			Topic: topicAfterSaleCompleted, AggregateType: aggregateAfterSale,
-			AggregateID: afterSaleNo, EventType: "aftersale.completed", Payload: payload,
-		}); err != nil {
-			return nil, apperr.Internal("append aftersale.completed", err)
-		}
+	default:
+		_ = tx.Rollback()
+		return nil, apperr.Failed(fmt.Sprintf("after sale cannot be refunded in status %s", row.status))
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, err := s.payments.RefundOrder(callCtx, &pb.RefundOrderRequest{
+		OrderNo: row.orderNo, AmountCent: row.amountCent, Reason: "after-sale " + afterSaleNo,
+	}); err != nil {
+		s.log.Warn("after sale payment refund failed", "after_sale_no", afterSaleNo, "order_no", row.orderNo, "error", err)
+		return nil, apperr.Unavailable("payment refund failed; retry is safe", err)
+	}
+
+	tx, err = s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, apperr.Internal("begin complete refund", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	row, err = lockAfterSale(ctx, tx, afterSaleNo)
+	if err != nil {
+		return nil, err
+	}
+	if row.status == statusRefunded {
+		return s.loadAfterSale(ctx, afterSaleNo)
+	}
+	if row.status != statusRefunding {
+		return nil, apperr.Failed(fmt.Sprintf("after sale cannot be completed in status %s", row.status))
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, version = version + 1 WHERE id = ?",
+		statusRefunded, row.id); err != nil {
+		return nil, apperr.Internal("mark after sale refunded", err)
+	}
+	if err := appendLog(ctx, tx, row.id, "REFUND", statusRefunding, statusRefunded, "payment refund completed"); err != nil {
+		return nil, err
+	}
+	payload, err := json.Marshal(afterSaleEvent{
+		AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
+		Type: row.typ, Status: statusRefunded, AmountCent: row.amountCent, Reason: row.reason,
+	})
+	if err != nil {
+		return nil, apperr.Internal("marshal after sale event", err)
+	}
+	if err := outbox.Append(ctx, tx, outbox.Event{
+		Topic: topicAfterSaleCompleted, AggregateType: aggregateAfterSale,
+		AggregateID: afterSaleNo, EventType: "aftersale.completed", Payload: payload,
+	}); err != nil {
+		return nil, apperr.Internal("append aftersale.completed", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, apperr.Internal("commit refund after sale", err)
@@ -406,6 +440,8 @@ func approveOutcome(current string, approved bool) (string, bool, error) {
 func refundOutcome(current string) (string, bool, error) {
 	switch current {
 	case statusApproved:
+		return statusRefunding, true, nil
+	case statusRefunding:
 		return statusRefunded, true, nil
 	case statusRefunded:
 		return statusRefunded, false, nil

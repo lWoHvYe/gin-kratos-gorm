@@ -137,39 +137,11 @@ GOCACHE=$PWD/.tmp/gocache GOTMPDIR=$PWD/.tmp GOSUMDB=off GOFLAGS=-mod=mod \
 
 ## Known contract gaps
 
-1. **No refund route.** `AfterSales.Refund` (and `Approve` with a partial
-   amount) are exposed only partially: an admin can approve, but triggering the
-   refund needs a dedicated `POST /after-sales/:no/refund`. Left out because the
-   listed admin route set stops at approve.
-2. **Admin cancel/receive are not exposed.** Order cancellation and receipt live
-   on the public gateway (as the buyer) and fulfillment has no admin "force"
-   variant, so a back-office operator cannot yet cancel or close an order.
-3. **Shipment lookup is by order, not reversed.** `POST /shipments` copies order
-   lines, but tracking updates (`Fulfillment.Ship`) by `shipment_no` are not
-   surfaced as a separate route; pass `"ship": true` at creation or add
-   `POST /shipments/:no/ship`.
-4. **Role enforcement is BFF-only.** `products`, `shipments` and `after-sales`
-   write RPCs accept any caller on the gRPC plane. Do not expose `:9008`/`:9009`
-   outside the cluster; moving the check into the services would need contract
-   and ownership changes.
-
-## Inventory adjustment
-
-`POST /api/admin/v1/inventory/adjust`
-
-```json
-{"sku_id":1,"warehouse_id":1,"delta":50,"reason":"inbound"}
-```
-
-The inventory service applies the signed delta (positive may create the stock
-row for a newly listed SKU), writes an `inventory_ledger` row and publishes
-`shop.inventory.adjusted.v1`. Negative deltas cannot take `on_hand` below
-`reserved`.
-
-## Operations routes
-
-- `POST /api/admin/v1/inventory/adjust` — signed stock adjustment.
-- `POST /api/admin/v1/orders/:orderNo/cancel` — admin cancel (reason body).
-- `POST /api/admin/v1/shipments/:shipmentNo/ship` — move CREATED → SHIPPED.
-- `POST /api/admin/v1/after-sales/:no/approve` — approve/reject.
-- `POST /api/admin/v1/after-sales/:no/refund` — execute the recorded refund.
+1. **Product update/delete is limited.** Create, status changes and category
+   creation are exposed; full product editing is not.
+2. **Warehouse CRUD/stock listing is not exposed.** Inventory adjustment is
+   available, but there is no warehouse or stock-list admin route.
+3. **Role enforcement is BFF-only.** The gRPC services trust in-cluster callers;
+   do not expose gRPC ports outside the cluster.
+4. **Payment verification is read-only.** It reports TCC branch prepared state;
+   it does not force a transaction.

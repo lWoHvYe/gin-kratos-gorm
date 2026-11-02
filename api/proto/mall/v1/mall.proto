@@ -313,6 +313,8 @@ service PaymentService {
   rpc GetIntent (GetIntentRequest) returns (Intent);
   rpc Callback (CallbackRequest) returns (CallbackReply);
   rpc Refund (RefundRequest) returns (Empty);
+  rpc RefundOrder (RefundOrderRequest) returns (Empty);
+  rpc VerifyPayment (VerifyPaymentRequest) returns (VerifyPaymentReply);
 }
 message Intent {
   string payment_no = 1;
@@ -339,6 +341,14 @@ message CallbackRequest {
   string signature = 6;
 }
 message CallbackReply { bool ok = 1; }
+message RefundOrderRequest { string order_no = 1; int64 amount_cent = 2; string reason = 3; }
+message VerifyPaymentRequest { string payment_no = 1; }
+message VerifyPaymentReply {
+  bool order_prepared = 1;
+  bool inventory_prepared = 2;
+  bool pricing_prepared = 3;
+  string intent_status = 4;
+}
 message RefundRequest { string payment_no = 1; int64 amount_cent = 2; string reason = 3; }
 
 // ---------------------------------------------------------------- fulfillment

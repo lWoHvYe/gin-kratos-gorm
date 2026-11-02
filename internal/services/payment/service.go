@@ -57,17 +57,25 @@ var _ pb.PaymentServiceServer = (*Service)(nil)
 type Service struct {
 	pb.UnimplementedPaymentServiceServer
 
-	db     *sql.DB
-	orders pb.OrderServiceClient
-	secret string
-	log    *slog.Logger
-	now    func() time.Time
-	tcc    *tccConfig
+	db        *sql.DB
+	orders    pb.OrderServiceClient
+	inventory pb.InventoryServiceClient
+	pricing   pb.PricingServiceClient
+	secret    string
+	log       *slog.Logger
+	now       func() time.Time
+	tcc       *tccConfig
 }
 
 // New builds the payment service. orders may be nil, in which case MarkPaid is
 // skipped with a warning (useful for standalone unit tests). When secret is
 // empty callback signatures are not verified, which is the mock default.
+// SetReconciliationClients wires the read-only TCC query clients used by
+// VerifyPayment. The normal callback path does not need them.
+func (s *Service) SetReconciliationClients(inventory pb.InventoryServiceClient, pricing pb.PricingServiceClient) {
+	s.inventory, s.pricing = inventory, pricing
+}
+
 func New(database *sql.DB, orders pb.OrderServiceClient, secret string, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
@@ -426,4 +434,75 @@ func encodeError(msg string, err error) error {
 
 func payURL(paymentNo string) string {
 	return "mock://pay/" + paymentNo
+}
+
+// RefundOrder refunds the settled payment for an order. It is used by
+// aftersales, where only order_no and the approved amount are known.
+func (s *Service) RefundOrder(ctx context.Context, req *pb.RefundOrderRequest) (*pb.Empty, error) {
+	orderNo := strings.TrimSpace(req.GetOrderNo())
+	if orderNo == "" {
+		return nil, apperr.Invalid("order_no is required")
+	}
+	amount := req.GetAmountCent()
+	if amount <= 0 {
+		return nil, apperr.Invalid("amount_cent must be greater than 0")
+	}
+	reason := strings.TrimSpace(req.GetReason())
+	if reason == "" {
+		reason = "after-sale refund"
+	}
+	r := newRepo(s.db)
+	in, err := r.intentByOrder(ctx, s.db, orderNo)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, apperr.NotFound("settled payment not found for order")
+	}
+	if err != nil {
+		return nil, apperr.Internal("query payment for order", err)
+	}
+	if in.Status == statusRefunded {
+		return &pb.Empty{}, nil
+	}
+	return s.Refund(ctx, &pb.RefundRequest{PaymentNo: in.PaymentNo, AmountCent: amount, Reason: reason})
+}
+
+// VerifyPayment is a read-only consistency check for operators. It asks all
+// three TCC participants for their prepared state; it does not mutate anything.
+func (s *Service) VerifyPayment(ctx context.Context, req *pb.VerifyPaymentRequest) (*pb.VerifyPaymentReply, error) {
+	paymentNo := strings.TrimSpace(req.GetPaymentNo())
+	if paymentNo == "" {
+		return nil, apperr.Invalid("payment_no is required")
+	}
+	in, err := newRepo(s.db).intentByNo(ctx, s.db, paymentNo, false)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, apperr.NotFound("payment intent not found")
+	}
+	if err != nil {
+		return nil, apperr.Internal("load payment intent", err)
+	}
+	if s.orders == nil {
+		return nil, apperr.Unavailable("order client is not configured", nil)
+	}
+	order, err := s.orders.GetOrder(ctx, &pb.GetOrderRequest{OrderNo: in.OrderNo, Admin: true})
+	if err != nil {
+		return nil, apperr.Unavailable("load order for verification", err)
+	}
+	tccReq := &pb.TccPaymentRequest{
+		OrderNo: in.OrderNo, PaymentNo: in.PaymentNo, UserId: in.UserID,
+		PaidCent: in.AmountCent, QuoteId: order.GetQuoteId(), Items: order.GetItems(),
+	}
+	reply := &pb.VerifyPaymentReply{IntentStatus: in.Status}
+	if q, err := s.orders.TccQueryMarkPaid(ctx, tccReq); err == nil {
+		reply.OrderPrepared = q.GetPrepared()
+	}
+	if s.inventory != nil {
+		if q, err := s.inventory.TccQueryConfirm(ctx, tccReq); err == nil {
+			reply.InventoryPrepared = q.GetPrepared()
+		}
+	}
+	if s.pricing != nil {
+		if q, err := s.pricing.TccQueryConsume(ctx, tccReq); err == nil {
+			reply.PricingPrepared = q.GetPrepared()
+		}
+	}
+	return reply, nil
 }

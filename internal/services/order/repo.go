@@ -16,6 +16,7 @@ import (
 const (
 	statusPendingPayment = "PENDING_PAYMENT"
 	statusPaid           = "PAID"
+	statusAllocated      = "ALLOCATED"
 	statusCancelled      = "CANCELLED"
 	statusShipped        = "SHIPPED"
 	statusCompleted      = "COMPLETED"
@@ -27,6 +28,7 @@ const (
 var knownStatuses = map[string]struct{}{
 	statusPendingPayment: {},
 	statusPaid:           {},
+	statusAllocated:      {},
 	statusCancelled:      {},
 	statusShipped:        {},
 	statusCompleted:      {},

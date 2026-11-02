@@ -12,9 +12,8 @@ refund intent/state machine.
 - Persist after-sale requests, their line items and an append-only audit log.
 - Enforce the after-sale state machine.
 - Emit `shop.aftersale.*` events through the transactional outbox.
-- Record refund **intent** only. No payment RPC is issued in Phase 1; the
-  payment integration is expected to be driven as a saga
-  (`aftersale-refund:<after_sale_no>`, see `docs/dtm.md`).
+- Record the refund intent, call `Payment.RefundOrder`, then complete the
+  request. The two-phase `REFUNDING` state makes retries safe.
 
 ## API
 
@@ -52,8 +51,9 @@ REQUESTED --Approve(approved=false)--> REJECTED
   extra event is appended.
 - Conflicting or out-of-order transitions are rejected (e.g. refunding a
   `REQUESTED` or `REJECTED` request).
-- `Refund` commits `REFUNDING` and `REFUNDED` in the same transaction so a crash
-  can never leave a stuck `REFUNDING` row.
+- `Refund` commits `REFUNDING` first, calls payment, then commits `REFUNDED`.
+  A crash or payment failure leaves the row `REFUNDING`; retrying resumes from
+  that state and calls the idempotent payment refund again.
 
 ## Audit log
 
@@ -66,10 +66,10 @@ state change:
 | `APPROVE` | `REQUESTED` -> `APPROVED` | decision reason |
 | `REJECT` | `REQUESTED` -> `REJECTED` | decision reason |
 | `REFUND_INTENT` | `APPROVED` -> `REFUNDING` | JSON refund intent (`amount_cent`, `payment: "pending"`) |
-| `REFUND` | `REFUNDING` -> `REFUNDED` | refund completed without payment call |
+| `REFUND` | `REFUNDING` -> `REFUNDED` | payment refund completed |
 
-The `REFUND_INTENT` row is the durable record a future payment saga (or an
-operator) uses to execute the actual refund.
+The `REFUND_INTENT` row is the durable record of the approved amount before the
+payment call; the actual refund is executed by `Payment.RefundOrder`.
 
 ## Events
 
@@ -81,7 +81,7 @@ Aggregate type `after_sale`, keyed by `after_sale_no`.
 | `shop.aftersale.created.v1` | `CreateAfterSale` commits | `after_sale_no, order_no, user_id, type, status, amount_cent, reason` |
 | `shop.aftersale.approved.v1` | approve commits | same shape, `status = APPROVED` |
 | `shop.aftersale.rejected.v1` | reject commits | same shape, `status = REJECTED` |
-| `shop.aftersale.completed.v1` | `Refund` commits | same shape, `status = REFUNDED`, `refund_intent = true` |
+| `shop.aftersale.completed.v1` | `Refund` commits | same shape, `status = REFUNDED` |
 
 `created` and `completed` are part of the Phase 1 event set in
 `docs/contracts.md`; `approved`/`rejected` follow the same `shop.<domain>.<event>.v1`
@@ -104,9 +104,9 @@ naming and need main-agent sign-off if they are to be treated as contract.
 ## Configuration
 
 `config.Load("aftersales")`; standard env vars apply (`MYSQL_DSN`, `NATS_URL`,
-`ETCD_ENDPOINTS`, `GRPC_ADDR`, `HTTP_ADDR`). No DTM branch endpoints are exposed
-yet; when the refund saga lands, `Refund` should be wrapped in
-`dtm.Branch(ctx, db, ...)` and the outbox append must reuse the barrier `*sql.Tx`.
+`ETCD_ENDPOINTS`, `GRPC_ADDR`, `HTTP_ADDR`). `PAYMENT_ADDR` points at the payment
+gRPC service. There is no DTM branch in this service; the payment refund is a
+normal idempotent gRPC call.
 
 ## Build and test
 
@@ -122,10 +122,15 @@ There are no integration tests, per `docs/contracts.md`.
 
 ## Not implemented (deliberately)
 
-- No call to the payment service and no `shop.payment.refunded.v1` emission from
-  this service; refunds stop at `REFUNDED` with a recorded intent.
 - No idempotency key on `CreateAfterSale` (multiple requests per order are
   legal); a client retry creates a second request.
 - No item-return logistics or inspection step for `RETURN_REFUND`.
 - `GetAfterSale` does not return line items: the generated `AfterSale` message
   has no items field. Items are stored for audit and future contract use.
+
+## Payment integration
+
+`Refund` is two-phase: it commits `REFUNDING`, calls `Payment.RefundOrder`, and
+then commits `REFUNDED` with `shop.aftersale.completed.v1`. If payment is down,
+the request stays `REFUNDING` and a retry resumes it; the payment refund itself
+is idempotent. The service now depends on the payment gRPC service.

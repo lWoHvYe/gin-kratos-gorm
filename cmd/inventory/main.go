@@ -49,6 +49,7 @@ func main() {
 	gs := grpcx.NewServer(logger)
 	svc := inventory.New(database, logger)
 	go inventory.RunExpiry(ctx, database, svc, logger, time.Minute)
+	go inventory.RunOrderCancelledConsumer(ctx, client, svc, logger)
 	pb.RegisterInventoryServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger), reg)
 	if err := app.Run(); err != nil {

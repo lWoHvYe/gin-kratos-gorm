@@ -104,3 +104,9 @@ mysql mall_pricing < migrations/pricing/0001_init.sql
 go build ./cmd/pricing ./internal/services/pricing
 go test ./internal/services/pricing/...
 ```
+
+## Cancellation consumer
+
+The service consumes `shop.order.cancelled.v1` durably and returns the quote's
+locked coupon to `AVAILABLE`. This is the reliable compensation path; duplicate
+events are idempotent.

@@ -46,8 +46,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer closeReg()
+	paymentAddr := os.Getenv("PAYMENT_ADDR")
+	if paymentAddr == "" {
+		paymentAddr = "payment:9007"
+	}
+	conn, err := grpcx.Dial(context.Background(), paymentAddr, reg)
+	if err != nil {
+		logger.Error("dial payment", "addr", paymentAddr, "error", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+	payments := pb.NewPaymentServiceClient(conn)
 	gs := grpcx.NewServer(logger)
-	pb.RegisterAfterSalesServiceServer(gs, aftersales.New(database, client, logger))
+	pb.RegisterAfterSalesServiceServer(gs, aftersales.New(database, client, payments, logger))
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger), reg)
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)

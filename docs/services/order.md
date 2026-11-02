@@ -106,13 +106,20 @@ otherwise `PENDING_PAYMENT` → `CANCELLED` with status log and
 
 ### `MarkPaid`
 
-Called by the payment service callback; no TCC lives here. Idempotent:
-already `PAID` returns the stored order (and replays the best-effort side
-effects), `PENDING_PAYMENT` is updated with `paid_cent`
-(default `pay_cent`, rejected when it exceeds `pay_cent`), status log and
-`shop.order.paid.v1` outbox event in one transaction. Afterwards inventory
-`Confirm` is called per item and pricing `ConsumeCoupon` for the quote coupon
-(best-effort, retried by the callback replay).
+Direct fallback used only when `PAYMENT_TCC_ENABLED=false`. The default path is
+the order TCC in `tcc.go`; inventory and pricing are confirmed by their own TCC
+branches. `MarkPaid` remains idempotent for rollback and old callers.
+
+### Cancellation and fulfillment projection
+
+`CancelOrder` commits `PENDING_PAYMENT -> CANCELLED` and writes
+`shop.order.cancelled.v1` with the order lines and quote id. Inventory and
+pricing consume that event to release stock and unlock the coupon; the
+post-commit calls are not best-effort inline calls.
+
+Order consumes `shop.shipment.created|shipped|delivered` to move
+`PAID -> ALLOCATED -> SHIPPED -> COMPLETED` with a compare-and-set and status
+log. Duplicate events are safe.
 
 ### `GetOrder`
 
@@ -139,3 +146,17 @@ Published through the outbox relay (`outbox.Relay`, 1s tick):
   resolve the coupon with a best-effort `GetQuote`.
 - `MarkPaid` writes in a local transaction on purpose: the payment service owns
   the payment callback and calls `MarkPaid`; no DTM TCC is implemented yet.
+
+## Fulfillment event projection
+
+The order service runs durable JetStream consumers for
+`shop.shipment.created.v1`, `shop.shipment.shipped.v1` and
+`shop.shipment.delivered.v1`. They project the order state through
+`PAID -> ALLOCATED -> SHIPPED -> COMPLETED` using a compare-and-set and an
+append-only status log. Duplicate events are safe.
+
+## Payment TCC
+
+The default payment confirmation is the TCC in `tcc.go` with gid
+`payment-confirm:<payment_no>`. `MarkPaid` remains only as the
+`PAYMENT_TCC_ENABLED=false` rollback path.

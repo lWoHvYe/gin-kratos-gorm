@@ -20,7 +20,7 @@ transactional outbox, etcd discovery and DTM sagas for order/payment flows.
         └──────────┴───────────┴──────────┴─────────────┴──────────┴──────────┘
                                one MySQL database per service
                                NATS JetStream outbox (shop.<domain>.<event>.v1)
-                               DTM saga server for order create/cancel + payment
+                               DTM for order create + payment TCC
 
    fulfillment :9008, aftersales :9009
 ```
@@ -122,12 +122,15 @@ etcd and resolves the `discovery:///...` branch URLs used by the order service.
 
 - Order create: saga `order-create:<order_no>` — inventory `Reserve` (per line),
   then `CreateOrderInner`; compensation releases stock and cancels the order.
-- Order cancel: idempotent order transition + inventory release/pricing unlock.
+- Order cancel: local order transition + durable `shop.order.cancelled.v1`
+  outbox event; inventory and pricing consume it to release stock/unlock the
+  coupon. This is reliable eventual compensation, not a DTM Saga.
 - Payment confirm: DTM TCC (`payment-confirm:<payment_no>`) across order,
   inventory and pricing, with a direct idempotent `MarkPaid` fallback when
   `PAYMENT_TCC_ENABLED=false`.
-- Refund/after-sale: after-sales records the refund intent; payment/inventory
-  orchestration is the next step.
+- Refund/after-sale: `AfterSales.Refund` first commits `REFUNDING`, calls
+  `Payment.RefundOrder`, then commits `REFUNDED`. Retrying is safe and resumes
+  a stuck `REFUNDING` request.
 
 Branch handlers write business rows and outbox events in the same `*sql.Tx`
 through `dtm.Branch`. If DTM is unavailable the write paths return
@@ -157,6 +160,8 @@ need MySQL, NATS, etcd or DTM.
 
 ```bash
 make test        # go test ./...
+make test-race   # go test -race over services/platform
+make verify      # fmt + vet + test + build + arch + DTM contract
 make build       # build every service into ./bin
 make fmt         # gofmt
 make fmt-check   # fail if gofmt would change files
@@ -171,7 +176,7 @@ internal/services/<service>/ gRPC implementations, repos, workers
 internal/platform/          config, db, log, grpcx, runtime, registry,
                             auth, apperr, httpx, mq, outbox, dtm
 api/proto/mall/v1/          contract (all services in one proto package)
-api/gen/mall/v1/            generated Go stubs (ignored by git)
+api/gen/mall/v1/            generated Go stubs (committed)
 migrations/<service>/       MySQL DDL per service
 deploy/compose/             infra + services compose files, MySQL init, DTM
 Dockerfile                  one multi-stage image, SERVICE build arg

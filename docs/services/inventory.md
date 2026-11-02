@@ -181,3 +181,10 @@ math and deterministic event IDs; there are no integration tests.
   "restock flow" referenced by `Release` exists.
 - Reservations are per `(order_no, sku_id)`. A single order line can only ever
   have one reservation; a released line cannot be reserved again.
+
+## Cancellation consumer
+
+The service consumes `shop.order.cancelled.v1` durably and releases each order
+line via `Release`. This is the reliable compensation path; the order service no
+longer calls inventory after committing the cancellation. Duplicate events are
+idempotent.

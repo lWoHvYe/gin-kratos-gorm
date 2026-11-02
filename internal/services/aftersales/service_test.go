@@ -122,7 +122,8 @@ func TestRefundOutcome(t *testing.T) {
 		changed bool
 		wantErr bool
 	}{
-		{name: "approved", current: statusApproved, next: statusRefunded, changed: true},
+		{name: "approved", current: statusApproved, next: statusRefunding, changed: true},
+		{name: "refunding", current: statusRefunding, next: statusRefunded, changed: true},
 		{name: "already refunded", current: statusRefunded, next: statusRefunded, changed: false},
 		{name: "requested", current: statusRequested, wantErr: true},
 		{name: "rejected", current: statusRejected, wantErr: true},

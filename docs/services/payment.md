@@ -21,7 +21,7 @@ domain events through the transactional outbox. There is no real payment SDK:
 | `NATS_URL` | `nats://127.0.0.1:4222` | JetStream for outbox relay |
 | `ETCD_ENDPOINTS` | `127.0.0.1:2379` | service registration/discovery |
 | `DTM_ADDRESS` | `127.0.0.1:36790` | DTM coordinator |
-| `ORDER_ADDR` | `order:9006` | order service used for `MarkPaid` |
+| `ORDER_ADDR` | `order:9006` | order service used by TCC/verification |
 | `PAYMENT_SECRET` | *(empty)* | when set, callback HMAC is enforced |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
@@ -81,11 +81,11 @@ downgrades a `SUCCEEDED`/`REFUNDED` one.
 - The callback amount must equal the intent amount, otherwise
   `FAILED_PRECONDITION`.
 - On `SUCCEEDED` the outbox row `shop.payment.succeeded.v1` is written and,
-  after commit, the order service is called via `MarkPaid(order_no,
-  payment_no, paid_cent)`. `shop.payment.failed.v1` is written for `FAILED`.
-- If `MarkPaid` fails the callback returns an error so the channel retries; a
-  retried `SUCCEEDED` callback is still idempotent and re-runs `MarkPaid`,
-  which makes the order reconciliation eventually consistent.
+  after commit, the TCC `payment-confirm:<payment_no>` is started; with
+  `PAYMENT_TCC_ENABLED=false` the older `MarkPaid` call is used instead.
+  `shop.payment.failed.v1` is written for `FAILED`.
+- If the TCC/MarkPaid step fails the callback returns an error so the channel
+  retries; the callback row, intent and refund keys are idempotent.
 
 ### `Refund(RefundRequest) returns (Empty)`
 
@@ -114,10 +114,10 @@ Events are appended with the business write and published by
 
 ## DTM
 
-`Callback` and `Refund` write inside a DTM branch transaction when the RPC
-runs the DTM payment-confirm TCC (gid `payment-confirm:<payment_no>`) by default;
-plain channel callbacks use a local transaction. Branch duplicates are handled
-by the barrier, and the local unique keys keep both paths idempotent.
+`Callback` settles the local intent and outbox in one local `*sql.Tx`. On a
+successful callback, payment runs the `payment-confirm:<payment_no>` TCC with
+order, inventory and pricing branches. The local unique keys keep callbacks and
+refunds idempotent; the TCC branch methods are idempotent on their side.
 `payment_intents`/`refunds` writes and `outbox.Append` always share one
 `*sql.Tx`.
 
@@ -145,5 +145,17 @@ the tests.
 
 - Mock only; no channel SDK, no asynchronous settlement.
 - No refund ledger balance (partial refunds are not accumulated).
-- `MarkPaid` is the only downstream synchronous call; all other effects are
-  events.
+- The default success path uses the DTM payment-confirm TCC; `MarkPaid` is only
+  the `PAYMENT_TCC_ENABLED=false` fallback.
+
+### `RefundOrder(RefundOrderRequest) returns (Empty)`
+
+Order-keyed refund used by after-sales. It resolves the latest `SUCCEEDED` (or
+already `REFUNDED`) intent for the order and calls `Refund`; the refund is
+idempotent by `(payment_no, amount_cent, reason)`.
+
+### `VerifyPayment(VerifyPaymentRequest) returns (VerifyPaymentReply)`
+
+Read-only TCC consistency check. It asks order/inventory/pricing for their
+`TccQuery*` prepared state and returns the intent status. Exposed to operators
+as `POST /api/admin/v1/payments/:paymentNo/verify`.

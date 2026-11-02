@@ -60,6 +60,7 @@ Reference implementation: `internal/services/identity` and `cmd/identity`.
 | admin | - | 8081 | mall_admin |
 
 Common env: `MYSQL_DSN`, `REDIS_ADDR`, `NATS_URL`, `ETCD_ENDPOINTS`, `DTM_ADDRESS`, `JWT_SECRET`, `GRPC_ADDR`, `HTTP_ADDR`.
+Payment/after-sales: `PAYMENT_TCC_ENABLED`, `ORDER_TCC_URL`, `INVENTORY_TCC_URL`, `PRICING_TCC_URL`, `INVENTORY_ADDR`, `PRICING_ADDR`, `PAYMENT_ADDR`.
 
 ## Database conventions
 
@@ -90,11 +91,12 @@ Common env: `MYSQL_DSN`, `REDIS_ADDR`, `NATS_URL`, `ETCD_ENDPOINTS`, `DTM_ADDRES
 
 ## DTM branch rules
 
-- Branch handlers must call `dtm.Branch(ctx, db, func(tx *sql.Tx) error { ... })`.
+- Saga branch handlers must call `dtm.Branch(ctx, db, func(tx *sql.Tx) error { ... })`.
 - Business writes and `outbox.Append(ctx, tx, ...)` must use the same `*sql.Tx`.
-- If not in a DTM branch context, return `UNAVAILABLE`; do not open a separate transaction.
+- A Saga branch invoked outside a DTM context must return `UNAVAILABLE`; do not open a separate transaction.
+- Direct admin calls and TCC Confirm/Cancel are not DTM barrier calls; they use the service-local transaction helper and must be idempotent.
 - Branch IDs must be deterministic from `order_no` / `reservation_no`.
-- Use `gid = order-create:<order_no>`, `order-cancel:<order_no>`, `payment-confirm:<payment_no>`.
+- Use `gid = order-create:<order_no>`, `payment-confirm:<payment_no>`. `order-cancel` is not a DTM GID: order cancellation is local + `shop.order.cancelled.v1` outbox compensation.
 - Payment-confirm TCC branch methods live in `order/tcc.go`, `inventory/tcc.go`
   and `pricing/tcc.go`; URLs are configurable with `ORDER_TCC_URL`,
   `INVENTORY_TCC_URL`, `PRICING_TCC_URL`.
@@ -109,14 +111,28 @@ Events for Phase 1:
 
 - `shop.order.created.v1`
 - `shop.order.paid.v1`
+- `shop.order.allocated.v1`
+- `shop.order.shipped.v1`
+- `shop.order.completed.v1`
 - `shop.order.cancelled.v1`
+- `shop.order.refund_requested.v1`
 - `shop.inventory.reserved.v1`
 - `shop.inventory.confirmed.v1`
 - `shop.inventory.released.v1`
 - `shop.payment.succeeded.v1`
 - `shop.payment.refunded.v1`
+- `shop.shipment.created.v1`
 - `shop.shipment.shipped.v1`
+- `shop.shipment.delivered.v1`
 - `shop.aftersale.completed.v1`
+
+Consumers:
+
+- inventory/pricing consume `shop.order.cancelled.v1` for durable compensation.
+- order consumes shipment created/shipped/delivered to project `ALLOCATED` /
+  `SHIPPED` / `COMPLETED`.
+- payment consumes `shop.order.refund_requested.v1`.
+- fulfillment consumes `shop.order.paid.v1` to create a shipment.
 
 ## API / errors
 

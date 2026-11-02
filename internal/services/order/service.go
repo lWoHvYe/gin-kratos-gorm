@@ -48,6 +48,9 @@ const (
 	topicOrderCreated   = "shop.order.created.v1"
 	topicOrderPaid      = "shop.order.paid.v1"
 	topicOrderCancelled = "shop.order.cancelled.v1"
+	topicOrderAllocated = "shop.order.allocated.v1"
+	topicOrderShipped   = "shop.order.shipped.v1"
+	topicOrderCompleted = "shop.order.completed.v1"
 )
 
 // Service implements pb.OrderServiceServer on top of MySQL (database/sql) and
@@ -385,10 +388,12 @@ func (s *Service) CancelOrder(ctx context.Context, req *pb.CancelOrderRequest) (
 			Payload: map[string]any{
 				"order_no":     orderNo,
 				"user_id":      record.UserID,
+				"quote_id":     record.QuoteID,
 				"reason":       reason,
 				"operator":     operator,
 				"status":       statusCancelled,
 				"cancelled_at": time.Now().Unix(),
+				"items":        orderItemsPayload(items),
 			},
 		})
 	})
@@ -405,10 +410,8 @@ func (s *Service) CancelOrder(ctx context.Context, req *pb.CancelOrderRequest) (
 	if !cancelled && updated.Status != statusCancelled {
 		return nil, apperr.Failed(fmt.Sprintf("order cannot be cancelled in status %s", updated.Status))
 	}
-	if cancelled {
-		s.releaseReservations(ctx, orderNo, items)
-		s.unlockCoupon(ctx, record.QuoteID, record.UserID)
-	}
+	// Inventory release and coupon unlock are driven by the durable
+	// shop.order.cancelled.v1 event, not by best-effort calls after commit.
 	reply, err := s.replyFor(ctx, s.db, updated)
 	if err != nil {
 		return nil, err
@@ -452,6 +455,10 @@ func (s *Service) CancelOrderInner(ctx context.Context, req *pb.CancelOrderInner
 		if err := insertStatusLog(ctx, tx, orderNo, statusPendingPayment, statusCancelled, reason, "system"); err != nil {
 			return err
 		}
+		items, err := loadOrderItems(ctx, tx, orderNo)
+		if err != nil {
+			return err
+		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic:         topicOrderCancelled,
 			AggregateType: "order",
@@ -460,9 +467,11 @@ func (s *Service) CancelOrderInner(ctx context.Context, req *pb.CancelOrderInner
 			Payload: map[string]any{
 				"order_no":     orderNo,
 				"user_id":      record.UserID,
+				"quote_id":     record.QuoteID,
 				"reason":       reason,
 				"status":       statusCancelled,
 				"cancelled_at": time.Now().Unix(),
+				"items":        orderItemsPayload(items),
 			},
 		})
 	})
@@ -474,9 +483,9 @@ func (s *Service) CancelOrderInner(ctx context.Context, req *pb.CancelOrderInner
 
 // ---------------------------------------------------------------- payment
 
-// MarkPaid is called by the payment callback. It is idempotent: replaying a
-// paid order re-runs the best-effort inventory confirm / coupon consume and
-// returns the stored order. No TCC is implemented in this service.
+// MarkPaid is the direct fallback used when PAYMENT_TCC_ENABLED=false. The
+// default payment path is the TCC in tcc.go; this method remains idempotent for
+// rollback and old callers.
 func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Order, error) {
 	orderNo := strings.TrimSpace(req.GetOrderNo())
 	if orderNo == "" {
@@ -614,33 +623,6 @@ func (s *Service) afterPaid(ctx context.Context, record *orderRecord) {
 		if err != nil {
 			s.log.Warn("consume coupon", "order_no", record.OrderNo, "quote_id", record.QuoteID, "error", err)
 		}
-	}
-}
-
-func (s *Service) releaseReservations(ctx context.Context, orderNo string, items []*pb.OrderItem) {
-	if s.inventory == nil {
-		return
-	}
-	for _, item := range items {
-		req := &pb.ReserveRequest{
-			OrderNo:     orderNo,
-			SkuId:       item.GetSkuId(),
-			WarehouseId: defaultWarehouseID,
-			Quantity:    item.GetQuantity(),
-		}
-		if _, err := s.inventory.Release(ctx, req); err != nil {
-			s.log.Warn("release inventory", "order_no", orderNo, "sku_id", item.GetSkuId(), "error", err)
-		}
-	}
-}
-
-func (s *Service) unlockCoupon(ctx context.Context, quoteID string, userID int64) {
-	if s.pricing == nil || quoteID == "" {
-		return
-	}
-	couponID := s.couponForQuote(ctx, quoteID)
-	if _, err := s.pricing.UnlockCoupon(ctx, &pb.LockCouponRequest{QuoteId: quoteID, CouponId: couponID, UserId: userID}); err != nil {
-		s.log.Warn("unlock coupon", "quote_id", quoteID, "error", err)
 	}
 }
 

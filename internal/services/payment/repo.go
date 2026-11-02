@@ -184,3 +184,11 @@ func isDuplicateKey(err error) bool {
 	var me *mysql.MySQLError
 	return errors.As(err, &me) && me.Number == 1062
 }
+
+// intentByOrder returns the latest settled intent for an order. Aftersales
+// refunds are order-keyed and do not need the payment number.
+func (r *repo) intentByOrder(ctx context.Context, q querier, orderNo string) (*intent, error) {
+	return scanIntent(q.QueryRowContext(ctx, `SELECT `+intentColumns+` FROM payment_intents
+		WHERE order_no = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1`,
+		orderNo, statusSucceeded, statusRefunded))
+}

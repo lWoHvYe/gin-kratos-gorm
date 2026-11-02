@@ -40,6 +40,7 @@ var serviceAddrs = map[string]string{
 	"catalog":     "127.0.0.1:9002",
 	"inventory":   "127.0.0.1:9003",
 	"order":       "127.0.0.1:9006",
+	"payment":     "127.0.0.1:9007",
 	"fulfillment": "127.0.0.1:9008",
 	"aftersales":  "127.0.0.1:9009",
 }
@@ -49,6 +50,7 @@ type Clients struct {
 	Catalog     pb.CatalogServiceClient
 	Inventory   pb.InventoryServiceClient
 	Order       pb.OrderServiceClient
+	Payment     pb.PaymentServiceClient
 	Fulfillment pb.FulfillmentServiceClient
 	AfterSales  pb.AfterSalesServiceClient
 
@@ -81,6 +83,7 @@ func Dial(ctx context.Context, reg *etcdregistry.Registry) (*Clients, error) {
 		{"catalog", func(conn *grpc.ClientConn) { clients.Catalog = pb.NewCatalogServiceClient(conn) }},
 		{"inventory", func(conn *grpc.ClientConn) { clients.Inventory = pb.NewInventoryServiceClient(conn) }},
 		{"order", func(conn *grpc.ClientConn) { clients.Order = pb.NewOrderServiceClient(conn) }},
+		{"payment", func(conn *grpc.ClientConn) { clients.Payment = pb.NewPaymentServiceClient(conn) }},
 		{"fulfillment", func(conn *grpc.ClientConn) { clients.Fulfillment = pb.NewFulfillmentServiceClient(conn) }},
 		{"aftersales", func(conn *grpc.ClientConn) { clients.AfterSales = pb.NewAfterSalesServiceClient(conn) }},
 	}
@@ -130,6 +133,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	admin.POST("/inventory/adjust", h.adjustStock)
 	admin.GET("/orders", h.listOrders)
 	admin.POST("/orders/:orderNo/cancel", h.cancelOrder)
+	admin.POST("/payments/:paymentNo/verify", h.verifyPayment)
 	admin.POST("/shipments", h.createShipment)
 	admin.POST("/shipments/:shipmentNo/ship", h.shipShipment)
 	admin.POST("/after-sales/:no/approve", h.approveAfterSale)
@@ -386,6 +390,20 @@ func (h *handlers) cancelOrder(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, order)
+}
+
+func (h *handlers) verifyPayment(c *gin.Context) {
+	paymentNo := strings.TrimSpace(c.Param("paymentNo"))
+	if paymentNo == "" {
+		httpx.Error(c, apperr.Invalid("paymentNo is required"))
+		return
+	}
+	reply, err := h.clients.Payment.VerifyPayment(c.Request.Context(), &pb.VerifyPaymentRequest{PaymentNo: paymentNo})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
 }
 
 func (h *handlers) shipShipment(c *gin.Context) {

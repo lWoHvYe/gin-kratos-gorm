@@ -2213,10 +2213,12 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	PaymentService_CreateIntent_FullMethodName = "/mall.v1.PaymentService/CreateIntent"
-	PaymentService_GetIntent_FullMethodName    = "/mall.v1.PaymentService/GetIntent"
-	PaymentService_Callback_FullMethodName     = "/mall.v1.PaymentService/Callback"
-	PaymentService_Refund_FullMethodName       = "/mall.v1.PaymentService/Refund"
+	PaymentService_CreateIntent_FullMethodName  = "/mall.v1.PaymentService/CreateIntent"
+	PaymentService_GetIntent_FullMethodName     = "/mall.v1.PaymentService/GetIntent"
+	PaymentService_Callback_FullMethodName      = "/mall.v1.PaymentService/Callback"
+	PaymentService_Refund_FullMethodName        = "/mall.v1.PaymentService/Refund"
+	PaymentService_RefundOrder_FullMethodName   = "/mall.v1.PaymentService/RefundOrder"
+	PaymentService_VerifyPayment_FullMethodName = "/mall.v1.PaymentService/VerifyPayment"
 )
 
 // PaymentServiceClient is the client API for PaymentService service.
@@ -2229,6 +2231,8 @@ type PaymentServiceClient interface {
 	GetIntent(ctx context.Context, in *GetIntentRequest, opts ...grpc.CallOption) (*Intent, error)
 	Callback(ctx context.Context, in *CallbackRequest, opts ...grpc.CallOption) (*CallbackReply, error)
 	Refund(ctx context.Context, in *RefundRequest, opts ...grpc.CallOption) (*Empty, error)
+	RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*Empty, error)
+	VerifyPayment(ctx context.Context, in *VerifyPaymentRequest, opts ...grpc.CallOption) (*VerifyPaymentReply, error)
 }
 
 type paymentServiceClient struct {
@@ -2279,6 +2283,26 @@ func (c *paymentServiceClient) Refund(ctx context.Context, in *RefundRequest, op
 	return out, nil
 }
 
+func (c *paymentServiceClient) RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PaymentService_RefundOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) VerifyPayment(ctx context.Context, in *VerifyPaymentRequest, opts ...grpc.CallOption) (*VerifyPaymentReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyPaymentReply)
+	err := c.cc.Invoke(ctx, PaymentService_VerifyPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentServiceServer is the server API for PaymentService service.
 // All implementations must embed UnimplementedPaymentServiceServer
 // for forward compatibility.
@@ -2289,6 +2313,8 @@ type PaymentServiceServer interface {
 	GetIntent(context.Context, *GetIntentRequest) (*Intent, error)
 	Callback(context.Context, *CallbackRequest) (*CallbackReply, error)
 	Refund(context.Context, *RefundRequest) (*Empty, error)
+	RefundOrder(context.Context, *RefundOrderRequest) (*Empty, error)
+	VerifyPayment(context.Context, *VerifyPaymentRequest) (*VerifyPaymentReply, error)
 	mustEmbedUnimplementedPaymentServiceServer()
 }
 
@@ -2310,6 +2336,12 @@ func (UnimplementedPaymentServiceServer) Callback(context.Context, *CallbackRequ
 }
 func (UnimplementedPaymentServiceServer) Refund(context.Context, *RefundRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method Refund not implemented")
+}
+func (UnimplementedPaymentServiceServer) RefundOrder(context.Context, *RefundOrderRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefundOrder not implemented")
+}
+func (UnimplementedPaymentServiceServer) VerifyPayment(context.Context, *VerifyPaymentRequest) (*VerifyPaymentReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyPayment not implemented")
 }
 func (UnimplementedPaymentServiceServer) mustEmbedUnimplementedPaymentServiceServer() {}
 func (UnimplementedPaymentServiceServer) testEmbeddedByValue()                        {}
@@ -2404,6 +2436,42 @@ func _PaymentService_Refund_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentService_RefundOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefundOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).RefundOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_RefundOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).RefundOrder(ctx, req.(*RefundOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_VerifyPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyPaymentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).VerifyPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_VerifyPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).VerifyPayment(ctx, req.(*VerifyPaymentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentService_ServiceDesc is the grpc.ServiceDesc for PaymentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2426,6 +2494,14 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Refund",
 			Handler:    _PaymentService_Refund_Handler,
+		},
+		{
+			MethodName: "RefundOrder",
+			Handler:    _PaymentService_RefundOrder_Handler,
+		},
+		{
+			MethodName: "VerifyPayment",
+			Handler:    _PaymentService_VerifyPayment_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

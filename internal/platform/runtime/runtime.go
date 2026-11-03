@@ -5,23 +5,21 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"gin-kratos-gorm/internal/platform/config"
 
-	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v2"
-	"github.com/go-kratos/kratos/v2"
-	kratoslog "github.com/go-kratos/kratos/v2/log"
-	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
-	khttp "github.com/go-kratos/kratos/v2/transport/http"
+	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v3"
+	"github.com/go-kratos/kratos/v3"
+	kratosgrpc "github.com/go-kratos/kratos/v3/transport/grpc"
+	khttp "github.com/go-kratos/kratos/v3/transport/http"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func NewApp(cfg *config.Config, logger *slog.Logger, gs *kratosgrpc.Server, hs *khttp.Server, reg *etcdregistry.Registry) *kratos.App {
 	opts := []kratos.Option{
 		kratos.Name(cfg.Service),
-		kratos.Logger(kratoslog.NewStdLogger(os.Stdout)),
+		kratos.Logger(logger),
 		kratos.Server(gs, hs),
 	}
 	if reg != nil {

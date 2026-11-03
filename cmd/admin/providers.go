@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log/slog"
-	"os"
 
 	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/config"
@@ -12,10 +11,9 @@ import (
 	"gin-kratos-gorm/internal/services/admin"
 
 	"github.com/gin-gonic/gin"
-	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v2"
-	"github.com/go-kratos/kratos/v2"
-	kratoslog "github.com/go-kratos/kratos/v2/log"
-	khttp "github.com/go-kratos/kratos/v2/transport/http"
+	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v3"
+	"github.com/go-kratos/kratos/v3"
+	khttp "github.com/go-kratos/kratos/v3/transport/http"
 )
 
 const listenAddr = ":8081"
@@ -50,10 +48,10 @@ func provideHTTPServer(engine *gin.Engine) *khttp.Server {
 	return srv
 }
 
-func provideApp(cfg *config.Config, srv *khttp.Server, reg *etcdregistry.Registry) *kratos.App {
+func provideApp(cfg *config.Config, logger *slog.Logger, srv *khttp.Server, reg *etcdregistry.Registry) *kratos.App {
 	opts := []kratos.Option{
 		kratos.Name(cfg.Service),
-		kratos.Logger(kratoslog.NewStdLogger(os.Stdout)),
+		kratos.Logger(logger),
 		kratos.Server(srv),
 	}
 	if reg != nil {

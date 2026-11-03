@@ -9,7 +9,7 @@ package main
 import (
 	"context"
 	"gin-kratos-gorm/internal/platform/config"
-	"github.com/go-kratos/kratos/v2"
+	"github.com/go-kratos/kratos/v3"
 )
 
 // Injectors from wire.go:
@@ -28,7 +28,7 @@ func initialize(ctx context.Context, cfg *config.Config) (*kratos.App, func(), e
 	}
 	engine := provideEngine(logger, manager, clients)
 	server := provideHTTPServer(engine)
-	app := provideApp(cfg, server, registry)
+	app := provideApp(cfg, logger, server, registry)
 	return app, func() {
 		cleanup2()
 		cleanup()

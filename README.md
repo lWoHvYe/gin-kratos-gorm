@@ -1,6 +1,6 @@
 # gin-kratos-gorm
 
-A production-oriented microservice mall written in Go 1.27: Kratos gRPC
+A production-oriented microservice mall written in Go 1.27: Kratos v3 gRPC
 services, Gin BFFs, MySQL via `database/sql` for the transactional core and a
 GORM read side for catalog, NATS JetStream
 transactional outbox, etcd discovery and DTM sagas for order/payment flows.
@@ -190,5 +190,6 @@ checkout builds without protoc. Regenerate it with the protoc command in
 [docs/contracts.md](docs/contracts.md) whenever the proto changes.
 
 Architecture decisions (Wire/GORM): [docs/architecture.md](docs/architecture.md).
+Kratos v3 migration notes: [docs/kratos-v3.md](docs/kratos-v3.md).
 Contracts and conventions: [docs/contracts.md](docs/contracts.md).
 File ownership: [docs/ownership.md](docs/ownership.md).

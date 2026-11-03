@@ -2,7 +2,8 @@
 
 ## Dependency injection: Wire, incrementally
 
-The project now uses Wire for composition roots where the graph is non-trivial:
+Kratos runtime is v3; see `docs/kratos-v3.md` for migration details. The project
+now uses Wire for composition roots where the graph is non-trivial:
 
 - `cmd/gateway`: registry, downstream clients, auth manager, Gin engine, Kratos
   HTTP server and app.

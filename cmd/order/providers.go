@@ -20,11 +20,11 @@ import (
 	"gin-kratos-gorm/internal/services/order"
 
 	_ "github.com/dtm-labs/driver-kratos"
-	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v2"
-	"github.com/go-kratos/kratos/v2"
-	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
-	"github.com/go-kratos/kratos/v2/transport/grpc/resolver/discovery"
-	khttp "github.com/go-kratos/kratos/v2/transport/http"
+	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v3"
+	"github.com/go-kratos/kratos/v3"
+	kratosgrpc "github.com/go-kratos/kratos/v3/transport/grpc"
+	"github.com/go-kratos/kratos/v3/transport/grpc/resolver/discovery"
+	khttp "github.com/go-kratos/kratos/v3/transport/http"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/resolver"
 )

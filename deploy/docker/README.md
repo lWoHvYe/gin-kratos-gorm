@@ -107,3 +107,24 @@ and point `MYSQL_DSN`, `REDIS_ADDR`, `NATS_URL` at them.
   `GRPC_ENDPOINT=grpc://host.docker.internal:9003`.
 - etcd data is stale after changing the cluster: remove `deploy/docker/data/etcd`
   (this deletes local etcd state) or use a fresh named volume.
+
+## etcd image and data volume
+
+`quay.io/coreos/etcd:v3.5.17` is the legacy CoreOS namespace for the official
+etcd image. CoreOS created etcd, but the project is now CNCF-governed; the
+namespace is historical, not a special etcd distribution. For new deployments,
+pin an exact version (or digest) from the official etcd image and verify the
+platform/architecture you need. Do not use `latest` for infrastructure.
+
+The compose file uses a named volume:
+
+```yaml
+volumes:
+  - etcd-data:/etcd-data
+```
+
+`mall-sim-etcd-data` is managed by Docker. It survives `docker compose down`
+but is removed by `docker compose down -v`. A bind mount such as
+`./data/etcd:/etcd-data` is convenient for local inspection but is easier to
+delete accidentally and can hit host permission issues. Use one etcd data
+directory per etcd member; never share it between nodes.

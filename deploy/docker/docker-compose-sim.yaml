@@ -51,7 +51,7 @@ services:
       - "2379:2379"
       - "2380:2380"
     volumes:
-      - ./data/etcd:/etcd-data
+      - etcd-data:/etcd-data
     healthcheck:
       test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
       interval: 5s
@@ -98,3 +98,7 @@ services:
 networks:
   mall-sim:
     name: mall-sim
+
+volumes:
+  etcd-data:
+    name: mall-sim-etcd-data

@@ -26,7 +26,7 @@ need internal/services/order/tcc.go 'TccConfirmMarkPaid' 'order TCC branch'
 need internal/services/inventory/tcc.go 'TccConfirm' 'inventory TCC branch'
 need internal/services/pricing/tcc.go 'TccConsume\|TccConfirmConsume' 'pricing TCC branch'
 need deploy/compose/dtm/config.yml 'dtm-driver-kratos' 'DTM kratos discovery driver'
-need deploy/compose/infra.yml 'dtmphp/dtm' 'DTM image'
+need deploy/compose/infra.yml 'yedf/dtm' 'DTM image'
 
 if grep -R --include='*.go' -n 'MustGenGid\|MustGetDtmClient' internal cmd >/dev/null 2>&1; then
   echo "[dtm-contract] nondeterministic DTM GID helper found"

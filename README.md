@@ -91,6 +91,9 @@ docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml \
 docker compose -f deploy/compose/infra.yml --profile tracing up -d tempo
 ```
 
+For running etcd + DTM in Docker while the Go services run on the host, see
+[deploy/docker/README.md](deploy/docker/README.md).
+
 `make db-reset` drops the named volumes and re-applies `00-databases.sql`,
 `02-dtm.sql` and every `migrations/<service>/*.sql` file. See
 [docs/ops.md](docs/ops.md) for operations, database lifecycle, troubleshooting
@@ -117,7 +120,7 @@ The gateway falls back to `127.0.0.1` addresses when `ETCD_ENDPOINTS` is empty
 
 ## DTM
 
-DTM runs as a compose service backed by MySQL (`dtmphp/dtm:latest`, store
+DTM runs as a compose service backed by MySQL (`yedf/dtm:latest`, store
 config in `deploy/compose/dtm/config.yml`). Its kratos driver registers DTM in
 etcd and resolves the `discovery:///...` branch URLs used by the order service.
 

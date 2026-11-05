@@ -168,7 +168,7 @@ as needed.
 
 ## DTM operations
 
-DTM uses `dtmphp/dtm:latest` with `deploy/compose/dtm/config.yml` mounted at
+DTM uses `yedf/dtm:latest` with `deploy/compose/dtm/config.yml` mounted at
 `/app/dtm/conf.yml`:
 
 - store: MySQL `dtm` database on host `mysql`;

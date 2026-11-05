@@ -124,7 +124,7 @@ services:
   # DTM coordinates order/payment sagas. Its own transaction state lives in the
   # `dtm` database; branch barriers live in `dtm_barrier`.
   dtm:
-    image: dtmphp/dtm:latest
+    image: yedf/dtm:latest
     restart: unless-stopped
     # The image entrypoint is already /app/dtm/dtm; only pass the config flag.
     command: ["-c", "/app/dtm/conf.yml"]

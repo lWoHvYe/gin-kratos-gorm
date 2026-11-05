@@ -329,3 +329,9 @@ Each service exposes `/metrics` from the default Prometheus registry:
 
 Suggested alerts: outbox error rate, outbox publish stall, HTTP 5xx ratio, and
 order/payment readiness failures.
+
+## etcd configuration overlay
+
+Services can optionally load a startup configuration overlay from etcd. Set
+`CONFIG_ETCD_PATH` (and optionally `CONFIG_ETCD_PREFIX=true`); environment
+variables still win. See `docs/etcd-config.md` for the schema and precedence.

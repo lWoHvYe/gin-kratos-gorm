@@ -194,5 +194,6 @@ checkout builds without protoc. Regenerate it with the protoc command in
 
 Architecture decisions (Wire/GORM): [docs/architecture.md](docs/architecture.md).
 Kratos v3 migration notes: [docs/kratos-v3.md](docs/kratos-v3.md).
+Optional etcd configuration overlay: [docs/etcd-config.md](docs/etcd-config.md).
 Contracts and conventions: [docs/contracts.md](docs/contracts.md).
 File ownership: [docs/ownership.md](docs/ownership.md).

@@ -8,6 +8,7 @@ require (
 	github.com/dtm-labs/client v1.18.7
 	github.com/dtm-labs/driver-kratos v0.0.9
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-kratos/kratos/contrib/config/etcd/v3 v3.0.0-20261026152050-dd0fb7df1e32
 	github.com/go-kratos/kratos/contrib/registry/etcd/v3 v3.0.0-20261026152050-dd0fb7df1e32
 	github.com/go-kratos/kratos/v3 v3.0.0
 	github.com/go-sql-driver/mysql v1.9.3

@@ -126,6 +126,7 @@ Pin `1.31.4` (or the current supported version in
 istioctl install --set profile=ambient \
   --set values.cni.cniConfDir=/home/k3s/agent/etc/cni/net.d \
   --set values.cni.cniBinDir=/home/k3s/data/cni \
+  --set values.pilot.env.ENABLE_INGRESS_WAYPOINT_ROUTING=true \
   --skip-confirmation
 ```
 
@@ -143,6 +144,12 @@ Do **not** separately install a second `istio-ingressgateway` Helm release. The
 `mall` chart's `Gateway` creates `mall-gateway-istio` and k3s servicelb assigns
 `10.211.55.29`. A second ingress gateway competes for host port 80 and remains
 `pending`.
+
+`ENABLE_INGRESS_WAYPOINT_ROUTING=true`, plus the
+`istio.io/ingress-use-waypoint: "true"` label on the gateway/admin Services
+(the chart adds it), makes north-south ingress go through the waypoint instead
+of directly to the backend. Without them the ingress gateway can connect to the
+app endpoint but the app's ztunnel rejects the HBONE path.
 
 ## 6. Build and import images
 
@@ -198,6 +205,17 @@ KUBECONFIG=~/.kube/mall-k3s.yaml make mesh-smoke
 
 The smoke test checks deployments, migration Job, no application sidecars,
 STRICT mTLS, port-forwarded C-end/DTM flow, and the ingress product endpoint.
+
+If `istiod`, `ztunnel`, or the waypoint was restarted, restart the application
+deployments once after they are Ready. In-pod ztunnel proxies are created when
+an ambient pod starts; existing pods can be left without a working `15008`
+listener (symptom: ingress 503, waypoint log
+`connecting to <pod>:15008 ... Connection refused`).
+
+```bash
+kubectl -n mall rollout restart deployment
+kubectl -n mall rollout status deployment --timeout=180s
+```
 
 ## 9. Local debugging
 

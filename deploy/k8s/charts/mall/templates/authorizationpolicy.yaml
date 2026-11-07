@@ -40,7 +40,9 @@ spec:
   rules:
     - from:
         - source:
-            namespaces: ["{{ .Values.ingress.gatewayNamespace }}", "{{ .Values.namespace }}"]
+            principals:
+              - "cluster.local/ns/{{ .Values.ingress.gatewayNamespace }}/sa/mall-gateway-istio"
+              - "cluster.local/ns/{{ .Values.namespace }}/sa/mall-waypoint"
       to:
         - operation:
             ports: ["8080", "8081"]

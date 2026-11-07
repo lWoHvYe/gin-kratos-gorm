@@ -6,6 +6,9 @@ metadata:
   namespace: {{ $.Values.namespace }}
   labels:
     {{- include "mall.labels" $ | nindent 4 }}
+    {{- if or (eq $name "gateway") (eq $name "admin") }}
+    istio.io/ingress-use-waypoint: "true"
+    {{- end }}
 spec:
   type: ClusterIP
   selector:

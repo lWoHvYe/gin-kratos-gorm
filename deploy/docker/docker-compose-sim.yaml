@@ -1,15 +1,16 @@
 # Local simulation: etcd + DTM in Docker, business services on the host.
 #
-# The host services must register an endpoint that DTM can reach from inside
+# The host services use direct DTM branch URLs that DTM can reach from inside
 # this container, for example:
 #
-#   ETCD_ENDPOINTS=127.0.0.1:2379
 #   DTM_ADDRESS=127.0.0.1:36790
-#   GRPC_ENDPOINT=grpc://host.docker.internal:9003
+#   INVENTORY_DTM_URL=host.docker.internal:9003/mall.v1.InventoryService
+#   ORDER_DTM_URL=host.docker.internal:9006/mall.v1.OrderService
+#   ORDER_TCC_URL=host.docker.internal:9006/mall.v1.OrderService
+#   INVENTORY_TCC_URL=host.docker.internal:9003/mall.v1.InventoryService
+#   PRICING_TCC_URL=host.docker.internal:9005/mall.v1.PricingService
 #
-# Do this for every service that participates in a DTM branch (inventory,
-# order, pricing, payment). Without it, etcd contains `inventory:9003`, which
-# DTM cannot resolve from its container.
+# There is no etcd service registration and no GRPC_ENDPOINT.
 #
 # DTM needs a MySQL store. It is not included here because the host may already
 # run MySQL. Set MYSQL_* in deploy/docker/.env, or start a MySQL container and
@@ -25,8 +26,8 @@
 #   cp deploy/docker/.env.example deploy/docker/.env
 #   docker compose -f deploy/docker/docker-compose-sim.yaml up -d etcd dtm
 #
-# DTM exposes HTTP :36789 and gRPC :36790. Host services use
-# DTM_ADDRESS=127.0.0.1:36790; DTM resolves branch services through etcd.
+# DTM exposes HTTP :36789 and gRPC :36790. Host services call DTM directly at
+# 127.0.0.1:36790; DTM calls host branches at host.docker.internal.
 
 name: mall-sim
 
@@ -70,11 +71,8 @@ services:
       STORE_USER: ${MYSQL_USER:-root}
       STORE_PASSWORD: ${MYSQL_PASSWORD:-root}
       STORE_DB: ${MYSQL_DATABASE:-dtm}
-      MICRO_SERVICE_DRIVER: dtm-driver-kratos
-      MICRO_SERVICE_TARGET: ${DTM_ETCD_TARGET:-etcd://etcd:2379/dtmservice}
       # Endpoint DTM registers in etcd. Host clients use DTM_ADDRESS directly;
       # set this to a host-reachable name if other containers discover DTM.
-      MICRO_SERVICE_END_POINT: ${DTM_ENDPOINT:-grpc://host.docker.internal:36790}
       HTTP_PORT: "36789"
       GRPC_PORT: "36790"
     ports:

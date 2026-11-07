@@ -14,7 +14,6 @@ import (
 	"gin-kratos-gorm/internal/platform/log"
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/outbox"
-	"gin-kratos-gorm/internal/platform/registry"
 	"gin-kratos-gorm/internal/platform/runtime"
 	"gin-kratos-gorm/internal/services/pricing"
 )
@@ -42,18 +41,11 @@ func main() {
 	defer cancel()
 	go outbox.Relay(ctx, database, client, logger, time.Second)
 
-	reg, closeReg, err := registry.New(cfg.ETCDEndpoints)
-	if err != nil {
-		logger.Error("registry", "error", err)
-		os.Exit(1)
-	}
-	defer closeReg()
-
 	catalogAddr := os.Getenv("CATALOG_ADDR")
 	if catalogAddr == "" {
 		catalogAddr = "catalog:9002"
 	}
-	conn, err := grpcx.Dial(context.Background(), catalogAddr, reg)
+	conn, err := grpcx.Dial(context.Background(), catalogAddr)
 	if err != nil {
 		logger.Error("dial catalog", "addr", catalogAddr, "error", err)
 		os.Exit(1)
@@ -65,7 +57,7 @@ func main() {
 	svc := pricing.New(database, catalog, logger)
 	go pricing.RunOrderCancelledConsumer(ctx, client, svc, logger)
 	pb.RegisterPricingServiceServer(gs, svc)
-	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger), reg)
+	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)
 		os.Exit(1)

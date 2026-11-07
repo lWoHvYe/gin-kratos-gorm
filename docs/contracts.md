@@ -35,7 +35,7 @@ Each service must:
 - create gRPC server using `grpcx.NewServer(logger)`;
 - register its generated service;
 - use `runtime.HealthServer(cfg, database, logger)` for internal health/metrics;
-- use `runtime.NewApp(cfg, logger, grpcServer, healthServer, registry)` and `app.Run()`;
+- use `runtime.NewApp(cfg, logger, grpcServer, healthServer)` and `app.Run()`;
 - use `config.Load("<service>")`;
 - use `log.New(cfg.Service, cfg.Env)`;
 - use `apperr` for domain errors;
@@ -59,7 +59,9 @@ Reference implementation: `internal/services/identity` and `cmd/identity`.
 | gateway | - | 8080 | - |
 | admin | - | 8081 | mall_admin |
 
-Common env: `MYSQL_DSN`, `REDIS_ADDR`, `NATS_URL`, `ETCD_ENDPOINTS`, `DTM_ADDRESS`, `JWT_SECRET`, `GRPC_ADDR`, `HTTP_ADDR`.
+Common env: `MYSQL_DSN`, `REDIS_ADDR`, `NATS_URL`, `ETCD_ENDPOINTS` (optional
+configuration center only), `DTM_ADDRESS`, `JWT_SECRET`, `GRPC_ADDR`, `HTTP_ADDR`.
+Service-to-service addresses are direct Kubernetes/Docker DNS names.
 Payment/after-sales: `PAYMENT_TCC_ENABLED`, `ORDER_TCC_URL`, `INVENTORY_TCC_URL`, `PRICING_TCC_URL`, `INVENTORY_ADDR`, `PRICING_ADDR`, `PAYMENT_ADDR`.
 
 ## Database conventions

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: mall
+description: Mall application services, DTM and Istio Ambient policies
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

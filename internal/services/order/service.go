@@ -26,10 +26,10 @@ import (
 )
 
 const (
-	// defaultInventoryDTMURL / defaultOrderDTMURL are the DTM branch base URLs.
-	// They are resolved on the DTM side (discovery:/// -> etcd).
-	defaultInventoryDTMURL = "discovery:///inventory/mall.v1.InventoryService"
-	defaultOrderDTMURL     = "discovery:///order/mall.v1.OrderService"
+	// defaultInventoryDTMURL / defaultOrderDTMURL are direct DNS targets.
+	// Kubernetes overrides them with *.mall.svc.cluster.local.
+	defaultInventoryDTMURL = "inventory:9003/mall.v1.InventoryService"
+	defaultOrderDTMURL     = "order:9006/mall.v1.OrderService"
 
 	inventoryReserveMethod  = "/Reserve"
 	inventoryReleaseMethod  = "/Release"

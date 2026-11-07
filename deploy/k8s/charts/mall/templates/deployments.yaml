@@ -1,0 +1,156 @@
+{{- range $name, $svc := .Values.services }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "mall.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ default 1 $svc.replicas }}
+  selector:
+    matchLabels:
+      {{- include "mall.selectorLabels" (dict "name" $name "root" $) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mall.selectorLabels" (dict "name" $name "root" $) | nindent 8 }}
+        {{- include "mall.labels" $ | nindent 8 }}
+        mall.io/mesh-policy: enabled
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ $svc.healthPort }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: {{ $name }}-sa
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.image.registry }}/{{ $name }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            {{- if eq $svc.protocol "grpc" }}
+            - name: grpc
+              containerPort: {{ $svc.port }}
+            {{- else }}
+            - name: http
+              containerPort: {{ $svc.port }}
+            {{- end }}
+          env:
+            - name: APP_ENV
+              value: {{ $.Values.appEnv | quote }}
+            - name: LOG_LEVEL
+              value: {{ $.Values.logLevel | quote }}
+            - name: MYSQL_DSN
+              value: "{{ $.Values.mysql.user }}:{{ $.Values.mysql.password }}@tcp({{ $.Values.mysql.host }}:{{ $.Values.mysql.port }})/{{ $svc.mysqlDatabase }}?parseTime=true&loc=Local&charset=utf8mb4"
+            - name: REDIS_ADDR
+              value: {{ $.Values.redis.addr | quote }}
+            - name: REDIS_PASSWORD
+              value: {{ $.Values.redis.password | quote }}
+            - name: NATS_URL
+              value: {{ $.Values.nats.url | quote }}
+            - name: DTM_ADDRESS
+              value: {{ $.Values.dtm.address | quote }}
+            - name: JWT_ISSUER
+              value: {{ $.Values.jwt.issuer | quote }}
+            - name: JWT_ACCESS_TTL
+              value: {{ $.Values.jwt.accessTTL | quote }}
+            - name: JWT_REFRESH_TTL
+              value: {{ $.Values.jwt.refreshTTL | quote }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.jwt.secretName }}
+                  key: {{ $.Values.jwt.secretKey }}
+            - name: HTTP_ADDR
+              value: ":{{ $svc.healthPort }}"
+            {{- if eq $svc.protocol "grpc" }}
+            - name: GRPC_ADDR
+              value: ":{{ $svc.port }}"
+            {{- end }}
+            {{- if and (eq $name "order") }}
+            - name: INVENTORY_DTM_URL
+              value: "inventory:9003/mall.v1.InventoryService"
+            - name: ORDER_DTM_URL
+              value: "order:9006/mall.v1.OrderService"
+            {{- end }}
+            {{- if eq $name "payment" }}
+            - name: ORDER_ADDR
+              value: "order:9006"
+            - name: INVENTORY_ADDR
+              value: "inventory:9003"
+            - name: PRICING_ADDR
+              value: "pricing:9005"
+            - name: ORDER_TCC_URL
+              value: "order:9006/mall.v1.OrderService"
+            - name: INVENTORY_TCC_URL
+              value: "inventory:9003/mall.v1.InventoryService"
+            - name: PRICING_TCC_URL
+              value: "pricing:9005/mall.v1.PricingService"
+            - name: PAYMENT_TCC_ENABLED
+              value: {{ $.Values.payment.tccEnabled | quote }}
+            {{- if $.Values.payment.secret }}
+            - name: PAYMENT_SECRET
+              value: {{ $.Values.payment.secret | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if and (eq $name "order") }}
+            - name: PRICING_ADDR
+              value: "pricing:9005"
+            - name: INVENTORY_ADDR
+              value: "inventory:9003"
+            {{- end }}
+            {{- if and (eq $name "cart") }}
+            - name: CATALOG_ADDR
+              value: "catalog:9002"
+            {{- end }}
+            {{- if and (eq $name "pricing") }}
+            - name: CATALOG_ADDR
+              value: "catalog:9002"
+            {{- end }}
+            {{- if and (eq $name "aftersales") }}
+            - name: PAYMENT_ADDR
+              value: "payment:9007"
+            {{- end }}
+            {{- if $.Values.etcd.endpoints }}
+            - name: ETCD_ENDPOINTS
+              value: {{ $.Values.etcd.endpoints | quote }}
+            {{- end }}
+            {{- if $.Values.etcd.configPath }}
+            - name: CONFIG_ETCD_PATH
+              value: {{ $.Values.etcd.configPath | quote }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: {{ $svc.healthPort }}
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ $svc.healthPort }}
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ $svc.healthPort }}
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+      restartPolicy: Always
+---
+{{- end }}

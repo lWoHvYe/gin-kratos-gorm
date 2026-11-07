@@ -84,7 +84,7 @@ Note: cart events are not part of the Phase 1 event list in
 | `GRPC_ADDR` | `:9000` (set `:9004`) | gRPC listen address |
 | `HTTP_ADDR` | `:9100` (set `:9104`) | health/metrics |
 | `NATS_URL` | `nats://127.0.0.1:4222` | outbox relay |
-| `ETCD_ENDPOINTS` | `127.0.0.1:2379` | service registration |
+| `ETCD_ENDPOINTS` | empty | optional configuration-center bootstrap only |
 | `CATALOG_ADDR` | `catalog:9002` | catalog gRPC target (direct address, no discovery) |
 
 `CATALOG_ADDR` is dialed once in `main` with `grpcx.Dial(ctx, addr, nil)` and the

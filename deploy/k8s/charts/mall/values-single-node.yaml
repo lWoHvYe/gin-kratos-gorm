@@ -1,0 +1,18 @@
+image:
+  tag: dev
+  pullPolicy: IfNotPresent
+
+ingress:
+  host: mall.local
+
+network:
+  # kind/k3s node CIDR, adjust to the actual single-node cluster.
+  nodeCIDR: 172.18.0.0/16
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

@@ -146,7 +146,6 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_identity?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9001"
-      GRPC_ENDPOINT: "grpc://identity:9001"
       HTTP_ADDR: ":9101"
     healthcheck:
       <<: *healthcheck
@@ -165,7 +164,6 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_catalog?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9002"
-      GRPC_ENDPOINT: "grpc://catalog:9002"
       HTTP_ADDR: ":9102"
     healthcheck:
       <<: *healthcheck
@@ -184,7 +182,6 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_inventory?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9003"
-      GRPC_ENDPOINT: "grpc://inventory:9003"
       HTTP_ADDR: ":9103"
     healthcheck:
       <<: *healthcheck
@@ -203,7 +200,6 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_cart?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9004"
-      GRPC_ENDPOINT: "grpc://cart:9004"
       HTTP_ADDR: ":9104"
       CATALOG_ADDR: catalog:9002
     healthcheck:
@@ -225,7 +221,6 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_pricing?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9005"
-      GRPC_ENDPOINT: "grpc://pricing:9005"
       HTTP_ADDR: ":9105"
       CATALOG_ADDR: catalog:9002
     healthcheck:
@@ -247,13 +242,12 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_order?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9006"
-      GRPC_ENDPOINT: "grpc://order:9006"
       HTTP_ADDR: ":9106"
       PRICING_ADDR: pricing:9005
       INVENTORY_ADDR: inventory:9003
-      # DTM resolves discovery:///... through etcd using dtm-driver-kratos.
-      INVENTORY_DTM_URL: "discovery:///inventory/mall.v1.InventoryService"
-      ORDER_DTM_URL: "discovery:///order/mall.v1.OrderService"
+      # DTM branches use direct service DNS, not etcd discovery.
+      INVENTORY_DTM_URL: "inventory:9003/mall.v1.InventoryService"
+      ORDER_DTM_URL: "order:9006/mall.v1.OrderService"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9106/healthz"]
@@ -277,16 +271,20 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_payment?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9007"
-      GRPC_ENDPOINT: "grpc://payment:9007"
       HTTP_ADDR: ":9107"
       ORDER_ADDR: order:9006
       INVENTORY_ADDR: inventory:9003
       PRICING_ADDR: pricing:9005
       PAYMENT_SECRET: ${PAYMENT_SECRET:-}
       PAYMENT_TCC_ENABLED: "true"
-      ORDER_TCC_URL: "discovery:///order/mall.v1.OrderService"
-      INVENTORY_TCC_URL: "discovery:///inventory/mall.v1.InventoryService"
-      PRICING_TCC_URL: "discovery:///pricing/mall.v1.PricingService"
+      ORDER_TCC_URL: "order:9006/mall.v1.OrderService"
+      INVENTORY_TCC_URL: "inventory:9003/mall.v1.InventoryService"
+      PRICING_TCC_URL: "pricing:9005/mall.v1.PricingService"
+      # TCC Try executes in the payment process; in Compose the host service
+      # names are not resolvable, so use localhost for the Try leg.
+      ORDER_TCC_TRY_URL: "127.0.0.1:9006/mall.v1.OrderService"
+      INVENTORY_TCC_TRY_URL: "127.0.0.1:9003/mall.v1.InventoryService"
+      PRICING_TCC_TRY_URL: "127.0.0.1:9005/mall.v1.PricingService"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9107/healthz"]
@@ -312,7 +310,6 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_fulfillment?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9008"
-      GRPC_ENDPOINT: "grpc://fulfillment:9008"
       HTTP_ADDR: ":9108"
     healthcheck:
       <<: *healthcheck
@@ -331,7 +328,6 @@ services:
       <<: *service-env
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_aftersales?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9009"
-      GRPC_ENDPOINT: "grpc://aftersales:9009"
       HTTP_ADDR: ":9109"
     healthcheck:
       <<: *healthcheck

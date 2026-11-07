@@ -66,23 +66,26 @@ docker compose -f deploy/docker/docker-compose-sim.yaml exec etcd \
 
 ## 4. Host service environment
 
-For every service that participates in a DTM branch, register an endpoint that
-the DTM container can reach:
+For every service that participates in a DTM branch, point the direct DTM URL
+at an address the DTM container can reach:
 
 ```bash
-export ETCD_ENDPOINTS=127.0.0.1:2379
 export DTM_ADDRESS=127.0.0.1:36790
 
-# inventory, order, pricing, payment ...
-export GRPC_ENDPOINT=grpc://host.docker.internal:9003
+# order/payment host processes:
+export INVENTORY_DTM_URL=host.docker.internal:9003/mall.v1.InventoryService
+export ORDER_DTM_URL=host.docker.internal:9006/mall.v1.OrderService
+export ORDER_TCC_URL=host.docker.internal:9006/mall.v1.OrderService
+export INVENTORY_TCC_URL=host.docker.internal:9003/mall.v1.InventoryService
+export PRICING_TCC_URL=host.docker.internal:9005/mall.v1.PricingService
 ```
 
-Without `GRPC_ENDPOINT`, Kratos registers the container-local/listen address or
-`inventory:9003`; DTM cannot resolve that from its own container.
+There is no etcd service registration and no `GRPC_ENDPOINT`. DTM calls the
+host at `host.docker.internal`; the host services call DTM at `127.0.0.1`.
 
 On Linux, `host.docker.internal` is mapped by the compose `extra_hosts` entry.
-If you use another host address, set the same address in `GRPC_ENDPOINT` and
-`DTM_ENDPOINT`.
+If you use another host address, use the same address in the five `*_URL`
+variables.
 
 ## 5. Other dependencies
 
@@ -102,9 +105,9 @@ and point `MYSQL_DSN`, `REDIS_ADDR`, `NATS_URL` at them.
 - `dtm` exits with a MySQL connection error: `STORE_HOST` is not reachable.
   Test from the container:
   `docker compose -f deploy/docker/docker-compose-sim.yaml run --rm dtm sh`.
-- DTM finds the service but the branch call times out: the service registered
-  `grpc://inventory:9003` instead of a host-reachable endpoint. Restart it with
-  `GRPC_ENDPOINT=grpc://host.docker.internal:9003`.
+- DTM finds the service but the branch call times out: the service was started
+  with `inventory:9003`, which the DTM container cannot reach. Set
+  `INVENTORY_DTM_URL=host.docker.internal:9003` and the matching TCC URLs.
 - etcd data is stale after changing the cluster: remove `deploy/docker/data/etcd`
   (this deletes local etcd state) or use a fresh named volume.
 

@@ -26,18 +26,16 @@ migrations/order/0001_init.sql
 |---|---|---|
 | `MYSQL_DSN` | `root:root@tcp(127.0.0.1:3306)/mall?...` | must point at the `mall_order` schema |
 | `NATS_URL` | `nats://127.0.0.1:4222` | JetStream for the outbox relay |
-| `ETCD_ENDPOINTS` | `127.0.0.1:2379` | kratos registry + `discovery:///` resolver |
+| `ETCD_ENDPOINTS` | empty | optional configuration center only |
 | `DTM_ADDRESS` | `127.0.0.1:36790` | DTM server used to submit sagas |
 | `PRICING_ADDR` | `pricing:9005` | pricing gRPC target (`GetQuote`, `UnlockCoupon`, `ConsumeCoupon`) |
 | `INVENTORY_ADDR` | `inventory:9003` | inventory gRPC target (`Release`, `Confirm`) |
-| `INVENTORY_DTM_URL` | `discovery:///inventory/mall.v1.InventoryService` | DTM branch base URL (`+ /Reserve`, `/Release`) |
-| `ORDER_DTM_URL` | `discovery:///order/mall.v1.OrderService` | DTM branch base URL (`+ /CreateOrderInner`, `/CancelOrderInner`) |
+| `INVENTORY_DTM_URL` | `inventory:9003/mall.v1.InventoryService` | direct DTM branch base URL (`+ /Reserve`, `/Release`) |
+| `ORDER_DTM_URL` | `order:9006/mall.v1.OrderService` | direct DTM branch base URL (`+ /CreateOrderInner`, `/CancelOrderInner`) |
 | `GRPC_ADDR` / `HTTP_ADDR` | `:9000` / `:9100` | set to `:9006` / `:9106` in compose |
 
-`_ "github.com/dtm-labs/driver-kratos"` is imported in `cmd/order` so DTM can
-parse `discovery:///` URLs. The service registers the kratos etcd resolver
-(`discovery.NewBuilder`) for the `discovery` scheme so the same URLs also
-resolve inside this process.
+DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
+`driver-kratos` import are gone; Kubernetes/Docker DNS resolves the target.
 
 ## Schema (`migrations/order/0001_init.sql`)
 
@@ -144,8 +142,8 @@ Published through the outbox relay (`outbox.Relay`, 1s tick):
   would remove that workaround (contract change owned by the platform agent).
 - Coupon ids are not duplicated in `orders`; `ConsumeCoupon`/`UnlockCoupon`
   resolve the coupon with a best-effort `GetQuote`.
-- `MarkPaid` writes in a local transaction on purpose: the payment service owns
-  the payment callback and calls `MarkPaid`; no DTM TCC is implemented yet.
+- `MarkPaid` is the `PAYMENT_TCC_ENABLED=false` fallback; the default payment
+  path is the DTM TCC in `tcc.go`.
 
 ## Fulfillment event projection
 

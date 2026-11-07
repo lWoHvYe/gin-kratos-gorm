@@ -9,7 +9,6 @@ import (
 	"gin-kratos-gorm/internal/platform/db"
 	"gin-kratos-gorm/internal/platform/grpcx"
 	"gin-kratos-gorm/internal/platform/log"
-	"gin-kratos-gorm/internal/platform/registry"
 	"gin-kratos-gorm/internal/platform/runtime"
 	"gin-kratos-gorm/internal/services/identity"
 )
@@ -26,16 +25,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer database.Close()
-	reg, closeReg, err := registry.New(cfg.ETCDEndpoints)
-	if err != nil {
-		logger.Error("registry", "error", err)
-		os.Exit(1)
-	}
-	defer closeReg()
 	gs := grpcx.NewServer(logger)
 	svc := identity.New(database, auth.NewManager(cfg), logger)
 	pb.RegisterIdentityServiceServer(gs, svc)
-	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger), reg)
+	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)
 		os.Exit(1)

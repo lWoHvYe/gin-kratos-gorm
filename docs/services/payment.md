@@ -19,7 +19,7 @@ domain events through the transactional outbox. There is no real payment SDK:
 | `HTTP_ADDR` | `:9107` (deploy) | `/healthz`, `/readyz`, `/metrics` |
 | `MYSQL_DSN` | `root:root@tcp(127.0.0.1:3306)/mall_payment?...` | MySQL DSN |
 | `NATS_URL` | `nats://127.0.0.1:4222` | JetStream for outbox relay |
-| `ETCD_ENDPOINTS` | `127.0.0.1:2379` | service registration/discovery |
+| `ETCD_ENDPOINTS` | empty | optional configuration-center bootstrap only |
 | `DTM_ADDRESS` | `127.0.0.1:36790` | DTM coordinator |
 | `ORDER_ADDR` | `order:9006` | order service used by TCC/verification |
 | `PAYMENT_SECRET` | *(empty)* | when set, callback HMAC is enforced |
@@ -130,7 +130,7 @@ GOCACHE=$PWD/.tmp/gocache GOTMPDIR=$PWD/.tmp GOSUMDB=off GOFLAGS=-mod=mod \
 ```
 
 Built with `database/sql` + `github.com/go-sql-driver/mysql`, using
-the platform helpers `config`, `db`, `log`, `grpcx`, `runtime`, `registry`,
+the platform helpers `config`, `db`, `log`, `grpcx`, `runtime`,
 `apperr`, `mq`, `outbox` and `dtm`. `httpx`/`auth` are HTTP/JWT helpers used by
 the gateway, so this gRPC-only service does not import them.
 

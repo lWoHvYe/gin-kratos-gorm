@@ -15,7 +15,6 @@ import (
 	"gin-kratos-gorm/internal/platform/log"
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/outbox"
-	"gin-kratos-gorm/internal/platform/registry"
 	"gin-kratos-gorm/internal/platform/runtime"
 	"gin-kratos-gorm/internal/services/cart"
 )
@@ -45,15 +44,9 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	go outbox.Relay(ctx, database, client, logger, time.Second)
-	reg, closeReg, err := registry.New(cfg.ETCDEndpoints)
-	if err != nil {
-		logger.Error("registry", "error", err)
-		os.Exit(1)
-	}
-	defer closeReg()
 	// Cart talks to catalog directly by address; discovery is not used here.
 	catalogAddr := envOr("CATALOG_ADDR", defaultCatalogAddr)
-	catalogConn, err := grpcx.Dial(ctx, catalogAddr, nil)
+	catalogConn, err := grpcx.Dial(ctx, catalogAddr)
 	if err != nil {
 		logger.Error("dial catalog", "addr", catalogAddr, "error", err)
 		os.Exit(1)
@@ -62,7 +55,7 @@ func main() {
 	gs := grpcx.NewServer(logger)
 	svc := cart.New(database, pb.NewCatalogServiceClient(catalogConn), logger)
 	pb.RegisterCartServiceServer(gs, svc)
-	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger), reg)
+	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)
 		os.Exit(1)

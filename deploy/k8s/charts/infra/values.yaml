@@ -1,0 +1,38 @@
+namespace: mall-data
+
+mysql:
+  image: mysql:8.4
+  rootPassword: root
+  storage: 5Gi
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+
+redis:
+  image: redis:7-alpine
+  storage: 1Gi
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
+nats:
+  image: nats:2.10-alpine
+  storage: 1Gi
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
+network:
+  # Set to the node/pod CIDR if the CNI does not exempt kubelet probes.
+  nodeCIDR: ""
+
+etcd:
+  image: quay.io/coreos/etcd:v3.5.17
+  storage: 1Gi
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+
+migrate:
+  image: mall/migrate:dev
+  imagePullPolicy: IfNotPresent

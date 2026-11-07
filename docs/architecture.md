@@ -5,14 +5,14 @@
 Kratos runtime is v3; see `docs/kratos-v3.md` for migration details. The project
 now uses Wire for composition roots where the graph is non-trivial:
 
-- `cmd/gateway`: registry, downstream clients, auth manager, Gin engine, Kratos
-  HTTP server and app.
-- `cmd/admin`: registry, admin clients, auth manager, Gin engine, Kratos
-  HTTP server and app.
-- `cmd/order`: DB, NATS, registry, pricing/inventory gRPC connections, DTM
-  client, service, gRPC/HTTP servers and app.
-- `cmd/payment`: DB, NATS, registry, order/inventory/pricing gRPC
-  connections, DTM/TCC configuration, service, gRPC/HTTP servers and app.
+- `cmd/gateway`: downstream clients, auth manager, Gin engine, Kratos HTTP
+  server and app.
+- `cmd/admin`: admin clients, auth manager, Gin engine, Kratos HTTP server and
+  app.
+- `cmd/order`: DB, NATS, pricing/inventory gRPC connections, DTM client,
+  service, gRPC/HTTP servers and app.
+- `cmd/payment`: DB, NATS, order/inventory/pricing gRPC connections, DTM/TCC
+  configuration, service, gRPC/HTTP servers and app.
 
 Generated files are committed:
 

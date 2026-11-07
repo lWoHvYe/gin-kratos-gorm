@@ -1,7 +1,9 @@
 # Kratos v3 upgrade
 
 The Kratos runtime is now on `github.com/go-kratos/kratos/v3 v3.0.0`
-(`github.com/go-kratos/kratos/contrib/registry/etcd/v3` for etcd).
+(the optional etcd configuration source is
+`github.com/go-kratos/kratos/contrib/config/etcd/v3`; etcd registry is no longer
+used).
 
 ## What changed
 
@@ -34,7 +36,8 @@ Go 1.27 build tags.
 
 ## Deliberate architecture
 
-- Kratos: gRPC transport, etcd registry/discovery, app lifecycle, middleware.
+- Kratos: gRPC transport, app lifecycle, middleware; discovery is Kubernetes
+  DNS, not Kratos registry.
 - Gin: C-end/admin REST BFF and aggregation.
 - Wire: gateway/admin/order/payment composition roots.
 - database/sql: DTM barriers, outbox, conditional updates.

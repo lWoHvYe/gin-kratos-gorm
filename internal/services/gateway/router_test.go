@@ -14,10 +14,10 @@ import (
 
 func TestTargetFor(t *testing.T) {
 	t.Setenv("IDENTITY_ADDR", "127.0.0.1:19001")
-	if got := targetFor(nil, "identity"); got != "127.0.0.1:19001" {
+	if got := targetFor("identity"); got != "127.0.0.1:19001" {
 		t.Fatalf("targetFor = %q", got)
 	}
-	if got := targetFor(nil, "missing"); got != "missing:9000" {
+	if got := targetFor("missing"); got != "missing:9000" {
 		t.Fatalf("targetFor fallback = %q", got)
 	}
 }

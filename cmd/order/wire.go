@@ -15,7 +15,6 @@ func initialize(ctx context.Context, cfg *config.Config) (*orderApp, func(), err
 		provideLogger,
 		provideDB,
 		provideMQ,
-		provideRegistry,
 		providePricingConn,
 		provideInventoryConn,
 		providePricingClient,

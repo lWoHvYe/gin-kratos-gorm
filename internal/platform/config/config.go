@@ -59,7 +59,7 @@ func Load(service string) (*Config, error) {
 		RefreshTTL: 720 * time.Hour,
 	}
 	// Bootstrap endpoints are needed before the config center can be read.
-	if v := env("ETCD_ENDPOINTS", "127.0.0.1:2379"); v != "" {
+	if v := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS")); v != "" {
 		for _, p := range strings.Split(v, ",") {
 			if p = strings.TrimSpace(p); p != "" {
 				c.ETCDEndpoints = append(c.ETCDEndpoints, p)
@@ -67,6 +67,9 @@ func Load(service string) (*Config, error) {
 		}
 	}
 	if path := strings.TrimSpace(os.Getenv("CONFIG_ETCD_PATH")); path != "" {
+		if len(c.ETCDEndpoints) == 0 {
+			return nil, fmt.Errorf("ETCD_ENDPOINTS is required when CONFIG_ETCD_PATH is set")
+		}
 		provider, err := LoadEtcd(context.Background(), c.ETCDEndpoints, path, envBool("CONFIG_ETCD_PREFIX", false))
 		if err != nil {
 			return nil, err
@@ -81,9 +84,6 @@ func Load(service string) (*Config, error) {
 		}
 	}
 	applyEnv(c)
-	if len(c.ETCDEndpoints) == 0 {
-		return nil, fmt.Errorf("ETCD_ENDPOINTS is required")
-	}
 	if len(c.JWTSecret) < 16 {
 		return nil, fmt.Errorf("JWT_SECRET must be at least 16 characters")
 	}

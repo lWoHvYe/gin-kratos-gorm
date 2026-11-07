@@ -7,11 +7,9 @@ import (
 	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/config"
 	"gin-kratos-gorm/internal/platform/log"
-	"gin-kratos-gorm/internal/platform/registry"
 	"gin-kratos-gorm/internal/services/admin"
 
 	"github.com/gin-gonic/gin"
-	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v3"
 	"github.com/go-kratos/kratos/v3"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
 )
@@ -22,12 +20,8 @@ func provideLogger(cfg *config.Config) *slog.Logger {
 	return log.New(cfg.Service, cfg.Env)
 }
 
-func provideRegistry(cfg *config.Config) (*etcdregistry.Registry, func(), error) {
-	return registry.New(cfg.ETCDEndpoints)
-}
-
-func provideClients(ctx context.Context, reg *etcdregistry.Registry) (*admin.Clients, func(), error) {
-	clients, err := admin.Dial(ctx, reg)
+func provideClients(ctx context.Context) (*admin.Clients, func(), error) {
+	clients, err := admin.Dial(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -48,14 +42,10 @@ func provideHTTPServer(engine *gin.Engine) *khttp.Server {
 	return srv
 }
 
-func provideApp(cfg *config.Config, logger *slog.Logger, srv *khttp.Server, reg *etcdregistry.Registry) *kratos.App {
-	opts := []kratos.Option{
+func provideApp(cfg *config.Config, logger *slog.Logger, srv *khttp.Server) *kratos.App {
+	return kratos.New(
 		kratos.Name(cfg.Service),
 		kratos.Logger(logger),
 		kratos.Server(srv),
-	}
-	if reg != nil {
-		opts = append(opts, kratos.Registrar(reg))
-	}
-	return kratos.New(opts...)
+	)
 }

@@ -9,8 +9,7 @@ It has no database and no gRPC server.
 - Binary: `cmd/admin`
 - HTTP: `:8081` (fixed, see `docs/contracts.md`)
 - Database: none
-- Registry: the HTTP endpoint is registered in etcd as `admin` when
-  `ETCD_ENDPOINTS` is set
+- Registry: none; the ingress gateway resolves the Kubernetes Service directly
 
 ## Startup
 
@@ -18,7 +17,7 @@ It has no database and no gRPC server.
 require a gRPC server):
 
 ```text
-config.Load("admin") -> log.New -> registry.New(cfg.ETCDEndpoints)
+config.Load("admin") -> log.New -> direct DNS clients
 admin.Dial(ctx, reg) -> gin engine -> khttp.NewServer(khttp.Address(":8081"))
 srv.HandlePrefix("/", engine) -> kratos.New(Name, Logger, Server, [Registrar]).Run()
 ```
@@ -31,13 +30,13 @@ Only the services the back office needs are dialed:
 
 | client | service name | direct fallback |
 |---|---|---|
-| `catalog` | `discovery:///catalog` | `CATALOG_ADDR`, default `127.0.0.1:9002` |
-| `order` | `discovery:///order` | `ORDER_ADDR`, default `127.0.0.1:9006` |
-| `fulfillment` | `discovery:///fulfillment` | `FULFILLMENT_ADDR`, default `127.0.0.1:9008` |
-| `aftersales` | `discovery:///aftersales` | `AFTERSALES_ADDR`, default `127.0.0.1:9009` |
+| `catalog` | `catalog:9002` | `CATALOG_ADDR` override |
+| `order` | `order:9006` | `ORDER_ADDR` override |
+| `fulfillment` | `fulfillment:9008` | `FULFILLMENT_ADDR` override |
+| `aftersales` | `aftersales:9009` | `AFTERSALES_ADDR` override |
 
-With a registry the discovery targets are used; only when `registry.New`
-returns `nil` does the BFF fall back to `<SERVICE>_ADDR`. The admin BFF keeps
+The BFF uses direct Kubernetes/Docker DNS names and optional `<SERVICE>_ADDR`
+overrides. The admin BFF keeps
 its own small dial helper instead of importing the gateway package, so the two
 BFFs stay independently deployable.
 
@@ -119,8 +118,8 @@ gRPC `InvalidArgument`, `Unauthenticated`, `PermissionDenied`, `NotFound`,
 | `JWT_SECRET` | dev placeholder | shared signing secret (>= 16 chars) |
 | `JWT_ISSUER` | `mall` | token issuer |
 | `JWT_ACCESS_TTL` | `15m` | access token lifetime |
-| `ETCD_ENDPOINTS` | `127.0.0.1:2379` | service discovery; leave empty for direct dialing |
-| `<SERVICE>_ADDR` | port table | direct target used when no registry is configured |
+| `ETCD_ENDPOINTS` | empty | optional configuration-center bootstrap only |
+| `<SERVICE>_ADDR` | port table | direct target override |
 | `LOG_LEVEL` | `info` | `debug`, `warn`, `error` |
 | `GIN_MODE` | `debug` | set `release` in production |
 

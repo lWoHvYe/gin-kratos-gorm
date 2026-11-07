@@ -26,7 +26,7 @@ schema conventions live in [contracts.md](contracts.md); DTM design lives in
 | `deploy/compose/init/mysql/00-databases.sql` | creates every `mall_*` database plus `dtm`/`dtm_barrier` |
 | `deploy/compose/init/mysql/01-schemas.sh` | applies `/migrations/*/*.sql` to `mall_<service>` |
 | `deploy/compose/init/mysql/02-dtm.sql` | DTM store tables (`dtm.*`) and the shared branch barrier |
-| `deploy/compose/dtm/config.yml` | DTM MySQL store + kratos/etcd discovery driver |
+| `deploy/compose/dtm/config.yml` | DTM MySQL store; direct branch DNS, no etcd registration |
 | `deploy/compose/observability/` | Prometheus scrape config, Grafana datasource, Tempo config |
 
 ## Compose model
@@ -91,7 +91,7 @@ All configuration is environment based (`internal/platform/config`).
 | `MYSQL_DSN` | `root:root@tcp(127.0.0.1:3306)/mall?...` | per-service `mall_<service>` |
 | `REDIS_ADDR` | `127.0.0.1:6379` | reserved for cache/idempotency |
 | `NATS_URL` | `nats://127.0.0.1:4222` | JetStream is required (`-js`) |
-| `ETCD_ENDPOINTS` | `127.0.0.1:2379` | comma separated; empty disables discovery |
+| `ETCD_ENDPOINTS` | empty | optional configuration-center bootstrap; no service discovery |
 | `DTM_ADDRESS` | `127.0.0.1:36790` | DTM gRPC endpoint |
 | `JWT_SECRET` | dev placeholder | **minimum 16 characters** |
 | `JWT_ISSUER` | `mall` | |
@@ -100,8 +100,8 @@ All configuration is environment based (`internal/platform/config`).
 | `PRICING_ADDR` | `pricing:9005` | order direct fallback |
 | `INVENTORY_ADDR` | `inventory:9003` | order direct fallback |
 | `ORDER_ADDR` | `order:9006` | payment direct fallback |
-| `INVENTORY_DTM_URL` | `discovery:///inventory/mall.v1.InventoryService` | DTM branch base URL |
-| `ORDER_DTM_URL` | `discovery:///order/mall.v1.OrderService` | DTM branch base URL |
+| `INVENTORY_DTM_URL` | `inventory:9003/mall.v1.InventoryService` | direct DTM branch base URL |
+| `ORDER_DTM_URL` | `order:9006/mall.v1.OrderService` | direct DTM branch base URL |
 
 Secrets live in `deploy/compose/.env` (git-ignored). Copy
 `.env.example` and rotate `JWT_SECRET`/`PAYMENT_SECRET` for any shared
@@ -173,8 +173,8 @@ DTM uses `yedf/dtm:latest` with `deploy/compose/dtm/config.yml` mounted at
 
 - store: MySQL `dtm` database on host `mysql`;
 - HTTP API `:36789`, gRPC `:36790`;
-- kratos driver registers DTM at `etcd://etcd:2379/dtmservice` and resolves the
-  order service's `discovery:///...` branch URLs through etcd.
+- DTM is addressed directly by the application; branch URLs use direct
+  Kubernetes/Docker DNS names, not etcd discovery.
 
 DTM state and branch barriers:
 
@@ -195,8 +195,8 @@ curl http://localhost:36789/api/metrics       # Prometheus exposition
 ```
 
 Order creation, cancellation, payment confirmation and refunds require DTM.
-If DTM (or the etcd discovery it uses) is down, the services return
-`UNAVAILABLE`; they deliberately do not fall back to local transactions.
+If DTM is down, the services return `UNAVAILABLE`; they deliberately do not
+fall back to local transactions. DTM calls branches by direct service DNS.
 
 ## Observability
 
@@ -258,7 +258,7 @@ the Docker socket read-only and must join the `mall` network.
 | `network mall declared as external` / label mismatch | remove a manually created `mall` network or the stale project: `docker network rm mall` |
 | service restarts with `dial tcp 127.0.0.1:3306` | an env address was overridden with localhost; use Docker DNS names |
 | service restarts with `jetstream` / `no responders` | NATS was started without `-js`; use the provided `nats` service |
-| `order` create fails with `UNAVAILABLE` | DTM/etcd not healthy, or DTM cannot resolve `discovery:///inventory/...`; check DTM logs and the `dtmservice` etcd registration |
+| `order` create fails with `UNAVAILABLE` | DTM is not healthy, or DTM cannot resolve `inventory:9003`; check DTM logs and service DNS |
 | tables missing | data volume was not empty, so init scripts were skipped; run `make db-reset` |
 | MySQL healthcheck red during first boot | init scripts still running; increase `start_period`/`retries` on slow hosts |
 | port 8080/8081/80/3306 already in use | stop the conflicting process or remap the host port in compose |

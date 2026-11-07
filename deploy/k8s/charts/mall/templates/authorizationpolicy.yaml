@@ -1,0 +1,52 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: default-deny
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      mall.io/mesh-policy: enabled
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ingress
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      mall.io/mesh-policy: enabled
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: ["{{ .Values.ingress.gatewayNamespace }}", "{{ .Values.namespace }}"]
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+            paths: ["/api/v1/*", "/api/admin/v1/*"]
+{{- range $rule := .Values.authz.rules }}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-{{ $rule.name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      mall.io/mesh-policy: enabled
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              {{- range $source := $rule.sources }}
+              - "cluster.local/ns/{{ $.Values.namespace }}/sa/{{ $source }}-sa"
+              {{- end }}
+      to:
+        - operation:
+            paths:
+              {{- toYaml $rule.paths | nindent 14 }}
+{{- end }}

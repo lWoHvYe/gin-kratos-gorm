@@ -1,0 +1,160 @@
+namespace: mall
+
+image:
+  registry: mall
+  tag: dev
+  pullPolicy: IfNotPresent
+
+appEnv: dev
+logLevel: info
+
+mysql:
+  host: mysql.mall-data.svc.cluster.local
+  port: 3306
+  user: root
+  password: root
+
+redis:
+  addr: redis.mall-data.svc.cluster.local:6379
+  password: ""
+
+nats:
+  url: nats://nats.mall-data.svc.cluster.local:4222
+
+# Optional etcd configuration center. Leave empty to run without it.
+etcd:
+  endpoints: ""
+  configPath: ""
+
+dtm:
+  address: dtm:36790
+  image: yedf/dtm:latest
+  replicas: 1
+
+jwt:
+  issuer: mall
+  accessTTL: 15m
+  refreshTTL: 720h
+  secretName: mall-secrets
+  secretKey: jwt-secret
+  # Local-only default; override with an external Secret for anything real.
+  devSecret: dev-only-change-me-32-characters
+
+payment:
+  secret: ""
+  tccEnabled: "true"
+
+ingress:
+  enabled: true
+  host: mall.local
+  gatewayName: mall-gateway
+  gatewayNamespace: istio-system
+  serviceAccount: istio-ingressgateway
+
+monitoring:
+  namespace: monitoring
+
+network:
+  # CIDR allowed to reach health probes when the CNI does not exempt host traffic.
+  # Leave empty to rely on the CNI's probe exemption.
+  nodeCIDR: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+services:
+  gateway:
+    protocol: http
+    port: 8080
+    healthPort: 8080
+    mysqlDatabase: mall_admin
+  admin:
+    protocol: http
+    port: 8081
+    healthPort: 8081
+    mysqlDatabase: mall_admin
+  identity:
+    protocol: grpc
+    port: 9001
+    healthPort: 9101
+    mysqlDatabase: mall_identity
+  catalog:
+    protocol: grpc
+    port: 9002
+    healthPort: 9102
+    mysqlDatabase: mall_catalog
+  inventory:
+    protocol: grpc
+    port: 9003
+    healthPort: 9103
+    mysqlDatabase: mall_inventory
+  cart:
+    protocol: grpc
+    port: 9004
+    healthPort: 9104
+    mysqlDatabase: mall_cart
+  pricing:
+    protocol: grpc
+    port: 9005
+    healthPort: 9105
+    mysqlDatabase: mall_pricing
+  order:
+    protocol: grpc
+    port: 9006
+    healthPort: 9106
+    mysqlDatabase: mall_order
+  payment:
+    protocol: grpc
+    port: 9007
+    healthPort: 9107
+    mysqlDatabase: mall_payment
+  fulfillment:
+    protocol: grpc
+    port: 9008
+    healthPort: 9108
+    mysqlDatabase: mall_fulfillment
+  aftersales:
+    protocol: grpc
+    port: 9009
+    healthPort: 9109
+    mysqlDatabase: mall_aftersales
+
+# L7 service-to-service matrix. Each rule allows one source ServiceAccount to
+# call one service's gRPC methods. Ingress is handled separately.
+authz:
+  rules:
+    - name: identity
+      sources: [gateway]
+      paths: ["/mall.v1.IdentityService/*"]
+    - name: catalog
+      sources: [gateway, admin, cart, pricing]
+      paths: ["/mall.v1.CatalogService/*"]
+    - name: inventory
+      sources: [gateway, admin, order, payment, dtm]
+      paths: ["/mall.v1.InventoryService/*"]
+    - name: cart
+      sources: [gateway]
+      paths: ["/mall.v1.CartService/*"]
+    - name: pricing
+      sources: [gateway, order, payment, dtm]
+      paths: ["/mall.v1.PricingService/*"]
+    - name: order
+      sources: [gateway, admin, payment, dtm]
+      paths: ["/mall.v1.OrderService/*"]
+    - name: payment
+      sources: [gateway, admin, aftersales]
+      paths: ["/mall.v1.PaymentService/*"]
+    - name: fulfillment
+      sources: [gateway, admin]
+      paths: ["/mall.v1.FulfillmentService/*"]
+    - name: aftersales
+      sources: [gateway, admin]
+      paths: ["/mall.v1.AfterSalesService/*"]
+    - name: dtm
+      sources: [order, payment]
+      paths: ["/dtmgimp.Dtm/*"]

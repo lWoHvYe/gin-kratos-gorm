@@ -43,14 +43,20 @@ func (s *Service) markPaidTCC(ctx context.Context, in *intent) error {
 		OrderNo: in.OrderNo, PaymentNo: in.PaymentNo, UserId: in.UserID,
 		PaidCent: in.AmountCent, QuoteId: order.GetQuoteId(), Items: order.GetItems(),
 	}
+	orderTry := strings.TrimRight(envOr("ORDER_TCC_TRY_URL", s.tcc.orderURL), "/")
+	inventoryTry := strings.TrimRight(envOr("INVENTORY_TCC_TRY_URL", s.tcc.inventoryURL), "/")
+	pricingTry := strings.TrimRight(envOr("PRICING_TCC_TRY_URL", s.tcc.pricingURL), "/")
 	err = s.tcc.client.TCC("payment-confirm:"+in.PaymentNo, func(tcc *dtmgrpc.TccGrpc) error {
-		if err := tcc.CallBranch(req, s.tcc.orderURL+"/TccTryMarkPaid", s.tcc.orderURL+"/TccConfirmMarkPaid", s.tcc.orderURL+"/TccCancelMarkPaid", &pb.Empty{}); err != nil {
+		// Try runs in this process, while Confirm/Cancel run from the DTM
+		// container. In Compose these are different addresses; in Kubernetes
+		// both are the same Service DNS name.
+		if err := tcc.CallBranch(req, orderTry+"/TccTryMarkPaid", s.tcc.orderURL+"/TccConfirmMarkPaid", s.tcc.orderURL+"/TccCancelMarkPaid", &pb.Empty{}); err != nil {
 			return err
 		}
-		if err := tcc.CallBranch(req, s.tcc.inventoryURL+"/TccTryConfirm", s.tcc.inventoryURL+"/TccConfirm", s.tcc.inventoryURL+"/TccCancelConfirm", &pb.Empty{}); err != nil {
+		if err := tcc.CallBranch(req, inventoryTry+"/TccTryConfirm", s.tcc.inventoryURL+"/TccConfirm", s.tcc.inventoryURL+"/TccCancelConfirm", &pb.Empty{}); err != nil {
 			return err
 		}
-		return tcc.CallBranch(req, s.tcc.pricingURL+"/TccTryConsume", s.tcc.pricingURL+"/TccConfirmConsume", s.tcc.pricingURL+"/TccCancelConsume", &pb.Empty{})
+		return tcc.CallBranch(req, pricingTry+"/TccTryConsume", s.tcc.pricingURL+"/TccConfirmConsume", s.tcc.pricingURL+"/TccCancelConsume", &pb.Empty{})
 	})
 	if err != nil {
 		s.log.Error("payment tcc failed", "payment_no", in.PaymentNo, "order_no", in.OrderNo, "error", err)
@@ -87,9 +93,9 @@ func mapOrderError(err error) error {
 }
 
 func tccURLs() (orderURL, inventoryURL, pricingURL string) {
-	orderURL = envOr("ORDER_TCC_URL", "discovery:///order/mall.v1.OrderService")
-	inventoryURL = envOr("INVENTORY_TCC_URL", "discovery:///inventory/mall.v1.InventoryService")
-	pricingURL = envOr("PRICING_TCC_URL", "discovery:///pricing/mall.v1.PricingService")
+	orderURL = envOr("ORDER_TCC_URL", "order:9006/mall.v1.OrderService")
+	inventoryURL = envOr("INVENTORY_TCC_URL", "inventory:9003/mall.v1.InventoryService")
+	pricingURL = envOr("PRICING_TCC_URL", "pricing:9005/mall.v1.PricingService")
 	return
 }
 

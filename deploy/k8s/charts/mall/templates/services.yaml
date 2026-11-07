@@ -1,0 +1,26 @@
+{{- range $name, $svc := .Values.services }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "mall.labels" $ | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "mall.selectorLabels" (dict "name" $name "root" $) | nindent 4 }}
+  ports:
+    {{- if eq $svc.protocol "grpc" }}
+    - name: grpc
+      port: {{ $svc.port }}
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c
+    {{- else }}
+    - name: http
+      port: {{ $svc.port }}
+      targetPort: http
+      appProtocol: http
+    {{- end }}
+---
+{{- end }}

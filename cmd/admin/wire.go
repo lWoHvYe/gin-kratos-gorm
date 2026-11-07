@@ -14,7 +14,6 @@ import (
 func initialize(ctx context.Context, cfg *config.Config) (*kratos.App, func(), error) {
 	wire.Build(
 		provideLogger,
-		provideRegistry,
 		provideClients,
 		provideAuth,
 		provideEngine,

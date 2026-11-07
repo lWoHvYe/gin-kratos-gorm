@@ -15,18 +15,13 @@ import (
 	"gin-kratos-gorm/internal/platform/grpcx"
 	"gin-kratos-gorm/internal/platform/log"
 	"gin-kratos-gorm/internal/platform/mq"
-	"gin-kratos-gorm/internal/platform/registry"
 	"gin-kratos-gorm/internal/platform/runtime"
 	"gin-kratos-gorm/internal/services/order"
 
-	_ "github.com/dtm-labs/driver-kratos"
-	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v3"
 	"github.com/go-kratos/kratos/v3"
 	kratosgrpc "github.com/go-kratos/kratos/v3/transport/grpc"
-	"github.com/go-kratos/kratos/v3/transport/grpc/resolver/discovery"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/resolver"
 )
 
 const (
@@ -65,27 +60,16 @@ func provideMQ(cfg *config.Config) (*mq.Client, func(), error) {
 	return client, func() { client.Close() }, nil
 }
 
-func provideRegistry(cfg *config.Config) (*etcdregistry.Registry, func(), error) {
-	reg, closeReg, err := registry.New(cfg.ETCDEndpoints)
-	if err != nil {
-		return nil, nil, err
-	}
-	if reg != nil {
-		resolver.Register(discovery.NewBuilder(reg, discovery.WithInsecure(true)))
-	}
-	return reg, closeReg, nil
-}
-
-func providePricingConn(ctx context.Context, reg *etcdregistry.Registry) (*pricingConn, func(), error) {
-	conn, err := grpcx.Dial(ctx, env("PRICING_ADDR", defaultPricingAddr), reg)
+func providePricingConn(ctx context.Context) (*pricingConn, func(), error) {
+	conn, err := grpcx.Dial(ctx, env("PRICING_ADDR", defaultPricingAddr))
 	if err != nil {
 		return nil, nil, err
 	}
 	return &pricingConn{conn}, func() { _ = conn.Close() }, nil
 }
 
-func provideInventoryConn(ctx context.Context, reg *etcdregistry.Registry) (*inventoryConn, func(), error) {
-	conn, err := grpcx.Dial(ctx, env("INVENTORY_ADDR", defaultInventoryAddr), reg)
+func provideInventoryConn(ctx context.Context) (*inventoryConn, func(), error) {
+	conn, err := grpcx.Dial(ctx, env("INVENTORY_ADDR", defaultInventoryAddr))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -120,8 +104,8 @@ func provideHealthServer(cfg *config.Config, database *sql.DB, logger *slog.Logg
 	})
 }
 
-func provideApp(cfg *config.Config, logger *slog.Logger, gs *kratosgrpc.Server, hs *khttp.Server, reg *etcdregistry.Registry) *kratos.App {
-	return runtime.NewApp(cfg, logger, gs, hs, reg)
+func provideApp(cfg *config.Config, logger *slog.Logger, gs *kratosgrpc.Server, hs *khttp.Server) *kratos.App {
+	return runtime.NewApp(cfg, logger, gs, hs)
 }
 
 func provideOrderApp(app *kratos.App, svc *order.Service, database *sql.DB, client *mq.Client, logger *slog.Logger) *orderApp {

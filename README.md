@@ -3,7 +3,8 @@
 A production-oriented microservice mall written in Go 1.27: Kratos v3 gRPC
 services, Gin BFFs, MySQL via `database/sql` for the transactional core and a
 GORM read side for catalog, NATS JetStream
-transactional outbox, etcd discovery and DTM sagas for order/payment flows.
+transactional outbox, Kubernetes DNS discovery and DTM sagas for order/payment
+flows. Docker Compose remains the non-mesh local fallback.
 
 ## Architecture
 
@@ -12,7 +13,7 @@ transactional outbox, etcd discovery and DTM sagas for order/payment flows.
    HTTP :8080  ───────▶│   gateway     │        │     admin     │◀─────── HTTP :8081
                        │  (Gin BFF)    │        │  (Gin BFF)    │
                        └───────┬───────┘        └───────┬───────┘
-                               │ gRPC / etcd discovery  │
+                               │ gRPC / Kubernetes DNS  │
         ┌──────────────────────┼────────────────────────┼─────────────────────┐
         ▼          ▼           ▼          ▼             ▼          ▼          ▼
    identity    catalog     inventory    cart        pricing      order      payment
@@ -108,21 +109,22 @@ service you are working on on the host:
 make run-infra
 
 export MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/mall_identity?parseTime=true&loc=Local&charset=utf8mb4'
-export ETCD_ENDPOINTS=127.0.0.1:2379 NATS_URL=nats://127.0.0.1:4222 DTM_ADDRESS=127.0.0.1:36790
+export NATS_URL=nats://127.0.0.1:4222 DTM_ADDRESS=127.0.0.1:36790
 export JWT_SECRET=dev-only-change-me-32-characters
 export GRPC_ADDR=:9001 HTTP_ADDR=:9101
 
 go run ./cmd/identity
 ```
 
-The gateway falls back to `127.0.0.1` addresses when `ETCD_ENDPOINTS` is empty
-(override any of them with `<SERVICE>_ADDR`, e.g. `ORDER_ADDR=127.0.0.1:9006`).
+The BFFs resolve downstream services with Kubernetes/Docker DNS names. Override
+any target with `<SERVICE>_ADDR`, for example
+`ORDER_ADDR=order.mall.svc.cluster.local:9006`.
 
 ## DTM
 
 DTM runs as a compose service backed by MySQL (`yedf/dtm:latest`, store
-config in `deploy/compose/dtm/config.yml`). Its kratos driver registers DTM in
-etcd and resolves the `discovery:///...` branch URLs used by the order service.
+config in `deploy/compose/dtm/config.yml`). Application and DTM branch URLs use
+direct service DNS; DTM no longer registers in etcd.
 
 - Order create: saga `order-create:<order_no>` — inventory `Reserve` (per line),
   then `CreateOrderInner`; compensation releases stock and cancels the order.
@@ -148,14 +150,18 @@ curl http://localhost:36789/api/dtmsvr/version
 curl 'http://localhost:36789/api/dtmsvr/query?gid=order-create:<order_no>'
 ```
 
-## Service mesh
+## Kubernetes + Istio Ambient
 
-Kratos and a service mesh are not mutually exclusive, but they overlap:
-Kratos already provides discovery, load balancing, middleware, retries,
-circuit breaking and tracing; a mesh adds mTLS and traffic policy at the
-infrastructure layer. This version deliberately does **not** include Istio or
-Linkerd. If mTLS/canary/zero-trust becomes a requirement, add Linkerd first and
-disable duplicate retry/timeout/tracing configuration in Kratos.
+Docker Compose remains the non-mesh local fallback. The target Kubernetes
+deployment is `deploy/k8s`, using **Istio Ambient** with a namespace waypoint,
+STRICT mTLS, Gateway API ingress and Kubernetes DNS service discovery.
+
+The application no longer uses Kratos etcd discovery. etcd is optional and only
+backs the configuration overlay.
+
+See [deploy/k8s/README.md](deploy/k8s/README.md) and
+[docs/istio-ambient.md](docs/istio-ambient.md). Runtime verification is deferred
+until the single-node Kubernetes cluster is available.
 
 ## Tests
 
@@ -178,7 +184,7 @@ make vet         # go vet ./...
 ```text
 cmd/<service>/              service binaries (main.go)
 internal/services/<service>/ gRPC implementations, repos, workers
-internal/platform/          config, db, log, grpcx, runtime, registry,
+internal/platform/          config, db, log, grpcx, runtime,
                             auth, apperr, httpx, mq, outbox, dtm
 api/proto/mall/v1/          contract (all services in one proto package)
 api/gen/mall/v1/            generated Go stubs (committed)
@@ -194,6 +200,7 @@ checkout builds without protoc. Regenerate it with the protoc command in
 
 Architecture decisions (Wire/GORM): [docs/architecture.md](docs/architecture.md).
 Kratos v3 migration notes: [docs/kratos-v3.md](docs/kratos-v3.md).
+Istio Ambient target: [docs/istio-ambient.md](docs/istio-ambient.md).
 Optional etcd configuration overlay: [docs/etcd-config.md](docs/etcd-config.md).
 Contracts and conventions: [docs/contracts.md](docs/contracts.md).
 File ownership: [docs/ownership.md](docs/ownership.md).

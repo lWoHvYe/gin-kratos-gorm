@@ -9,8 +9,7 @@ data. It has no database and no gRPC server of its own.
 - Binary: `cmd/gateway`
 - HTTP: `:8080` (fixed, see `docs/contracts.md`)
 - Database: none
-- Registry: the HTTP endpoint is registered in etcd as `gateway` when
-  `ETCD_ENDPOINTS` is set
+- Registry: none; the ingress gateway resolves the Kubernetes Service directly
 
 ## Startup
 
@@ -18,9 +17,9 @@ data. It has no database and no gRPC server of its own.
 it requires a gRPC server:
 
 ```text
-config.Load("gateway") -> log.New -> registry.New(cfg.ETCDEndpoints)
-gateway.Dial(ctx, reg) -> gin engine -> khttp.NewServer(khttp.Address(":8080"))
-srv.HandlePrefix("/", engine) -> kratos.New(Name, Logger, Server, [Registrar]).Run()
+config.Load("gateway") -> log.New -> direct DNS clients
+gateway.Dial(ctx) -> gin engine -> khttp.NewServer(khttp.Address(":8080"))
+srv.HandlePrefix("/", engine) -> kratos.New(Name, Logger, Server).Run()
 ```
 
 The Gin engine owns every route, including `/healthz`; the Kratos HTTP server
@@ -32,18 +31,17 @@ only forwards requests to it.
 
 | client | service name | direct fallback |
 |---|---|---|
-| `identity` | `discovery:///identity` | `IDENTITY_ADDR`, default `127.0.0.1:9001` |
-| `catalog` | `discovery:///catalog` | `CATALOG_ADDR`, default `127.0.0.1:9002` |
-| `cart` | `discovery:///cart` | `CART_ADDR`, default `127.0.0.1:9004` |
-| `pricing` | `discovery:///pricing` | `PRICING_ADDR`, default `127.0.0.1:9005` |
-| `order` | `discovery:///order` | `ORDER_ADDR`, default `127.0.0.1:9006` |
-| `payment` | `discovery:///payment` | `PAYMENT_ADDR`, default `127.0.0.1:9007` |
-| `fulfillment` | `discovery:///fulfillment` | `FULFILLMENT_ADDR`, default `127.0.0.1:9008` |
-| `aftersales` | `discovery:///aftersales` | `AFTERSALES_ADDR`, default `127.0.0.1:9009` |
+| `identity` | `identity:9001` | `IDENTITY_ADDR` override |
+| `catalog` | `catalog:9002` | `CATALOG_ADDR` override |
+| `cart` | `cart:9004` | `CART_ADDR` override |
+| `pricing` | `pricing:9005` | `PRICING_ADDR` override |
+| `order` | `order:9006` | `ORDER_ADDR` override |
+| `payment` | `payment:9007` | `PAYMENT_ADDR` override |
+| `fulfillment` | `fulfillment:9008` | `FULFILLMENT_ADDR` override |
+| `aftersales` | `aftersales:9009` | `AFTERSALES_ADDR` override |
 
-With a registry (non-empty `ETCD_ENDPOINTS`) the discovery targets are used.
-Only when `registry.New` returns `nil` does the gateway fall back to the direct
-`<SERVICE>_ADDR` addresses. Connections are dialed once at startup and closed
+The gateway uses direct Kubernetes/Docker DNS names and optional
+`<SERVICE>_ADDR` overrides. Connections are dialed once at startup and closed
 when the app exits; `grpc.NewClient` dials lazily, so an unavailable service
 surfaces as a per-request `UNAVAILABLE` rather than a startup failure.
 
@@ -166,8 +164,8 @@ etcd service health or the HTTP probe in `deploy/`.
 | `JWT_SECRET` | dev placeholder | shared signing secret (>= 16 chars) |
 | `JWT_ISSUER` | `mall` | token issuer |
 | `JWT_ACCESS_TTL` | `15m` | access token lifetime |
-| `ETCD_ENDPOINTS` | `127.0.0.1:2379` | service discovery; leave empty for direct dialing |
-| `<SERVICE>_ADDR` | port table | direct target used when no registry is configured |
+| `ETCD_ENDPOINTS` | empty | optional configuration-center bootstrap only |
+| `<SERVICE>_ADDR` | port table | direct target override |
 | `LOG_LEVEL` | `info` | `debug`, `warn`, `error` |
 | `GIN_MODE` | `debug` | set `release` in production |
 

@@ -217,11 +217,11 @@ func TestTCCConfiguration(t *testing.T) {
 	if !tccEnabled() {
 		t.Fatal("PAYMENT_TCC_ENABLED=true must enable TCC")
 	}
-	t.Setenv("ORDER_TCC_URL", "discovery:///order")
-	t.Setenv("INVENTORY_TCC_URL", "discovery:///inventory")
-	t.Setenv("PRICING_TCC_URL", "discovery:///pricing")
+	t.Setenv("ORDER_TCC_URL", "order:9006")
+	t.Setenv("INVENTORY_TCC_URL", "inventory:9003")
+	t.Setenv("PRICING_TCC_URL", "pricing:9005")
 	o, i, p := tccURLs()
-	if o != "discovery:///order" || i != "discovery:///inventory" || p != "discovery:///pricing" {
+	if o != "order:9006" || i != "inventory:9003" || p != "pricing:9005" {
 		t.Fatalf("unexpected tcc urls: %s %s %s", o, i, p)
 	}
 }

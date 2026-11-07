@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 
 GO ?= go
+IMAGE_REGISTRY ?= mall
+IMAGE_TAG ?= dev
 
 COMPOSE_DIR := deploy/compose
 COMPOSE_ENV_ARG := $(if $(wildcard $(COMPOSE_DIR)/.env),--env-file $(COMPOSE_DIR)/.env,)
@@ -11,11 +13,15 @@ COMPOSE := docker compose $(COMPOSE_ENV_ARG) \
 SERVICES := gateway admin identity catalog inventory cart pricing order payment fulfillment aftersales
 INFRA_SERVICES := mysql redis nats etcd dtm
 OBS_SERVICES := prometheus grafana
+K8S_DIR := deploy/k8s
+K8S_MALL_VALUES := $(K8S_DIR)/charts/mall/values-single-node.yaml
+K8S_INFRA_VALUES := $(K8S_DIR)/charts/infra/values-single-node.yaml
 
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract test-race verify wire arch clean
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract test-race verify wire arch clean \
+	k8s-images k8s-render k8s-lint k8s-deploy mesh-smoke
 
 help:
 	@echo "mall - Go microservice mall (Kratos + Gin + database/sql + DTM)"
@@ -40,6 +46,11 @@ help:
 	@echo "  arch                              architecture/import guard"
 	@echo "  wire                              regenerate Wire injectors for gateway/admin/order/payment"
 	@echo "  verify                            fmt-check + vet + test + build + arch + dtm-contract"
+	@echo "  k8s-images                        build service and migration images for Kubernetes"
+	@echo "  k8s-render                        render Helm charts for the single-node values"
+	@echo "  k8s-lint                          helm lint Kubernetes charts"
+	@echo "  k8s-deploy                        install/upgrade charts into an existing cluster"
+	@echo "  mesh-smoke                        run the Kubernetes/Ambient smoke script"
 	@echo "  clean                             remove ./bin"
 	@echo ""
 	@echo "Compose files: $(COMPOSE_DIR)/infra.yml + $(COMPOSE_DIR)/services.yml"
@@ -117,6 +128,30 @@ db-reset:
 	$(COMPOSE) down -v --remove-orphans
 	@echo ">> starting mysql; init scripts re-apply databases and migrations"
 	$(COMPOSE) up -d --wait mysql
+
+k8s-images:
+	@set -e; for svc in $(SERVICES); do \
+		echo ">> docker build --build-arg SERVICE=$$svc -t $(IMAGE_REGISTRY)/$$svc:$(IMAGE_TAG) ."; \
+		docker build --build-arg SERVICE=$$svc -t $(IMAGE_REGISTRY)/$$svc:$(IMAGE_TAG) .; \
+	done
+	docker build -f $(K8S_DIR)/images/migrate/Dockerfile -t $(IMAGE_REGISTRY)/migrate:$(IMAGE_TAG) .
+
+k8s-render:
+	helm template mall $(K8S_DIR)/charts/mall -n mall -f $(K8S_MALL_VALUES) > /tmp/mall-rendered.yaml
+	helm template mall-infra $(K8S_DIR)/charts/infra -n mall-data -f $(K8S_INFRA_VALUES) > /tmp/mall-infra-rendered.yaml
+	@echo "rendered /tmp/mall-rendered.yaml and /tmp/mall-infra-rendered.yaml"
+
+k8s-lint:
+	helm lint $(K8S_DIR)/charts/mall -f $(K8S_MALL_VALUES)
+	helm lint $(K8S_DIR)/charts/infra -f $(K8S_INFRA_VALUES)
+
+k8s-deploy:
+	kubectl apply -f $(K8S_DIR)/manifests/namespaces.yaml
+	helm upgrade --install mall-infra $(K8S_DIR)/charts/infra -n mall-data -f $(K8S_INFRA_VALUES)
+	helm upgrade --install mall $(K8S_DIR)/charts/mall -n mall -f $(K8S_MALL_VALUES)
+
+mesh-smoke:
+	./scripts/k8s-smoke.sh
 
 clean:
 	rm -rf bin

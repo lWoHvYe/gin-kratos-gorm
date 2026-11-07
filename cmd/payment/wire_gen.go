@@ -11,10 +11,6 @@ import (
 	"gin-kratos-gorm/internal/platform/config"
 )
 
-import (
-	_ "github.com/dtm-labs/driver-kratos"
-)
-
 // Injectors from wire.go:
 
 func initialize(ctx context.Context, cfg *config.Config) (*paymentApp, func(), error) {
@@ -28,30 +24,21 @@ func initialize(ctx context.Context, cfg *config.Config) (*paymentApp, func(), e
 		cleanup()
 		return nil, nil, err
 	}
-	registry, cleanup3, err := provideRegistry(cfg)
+	mainOrderConn, cleanup3, err := provideOrderConn(ctx)
 	if err != nil {
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	mainOrderConn, cleanup4, err := provideOrderConn(ctx, registry)
+	mainInventoryConn, cleanup4, err := provideInventoryConn(ctx)
 	if err != nil {
 		cleanup3()
 		cleanup2()
 		cleanup()
 		return nil, nil, err
 	}
-	mainInventoryConn, cleanup5, err := provideInventoryConn(ctx, registry)
+	mainPricingConn, cleanup5, err := providePricingConn(ctx)
 	if err != nil {
-		cleanup4()
-		cleanup3()
-		cleanup2()
-		cleanup()
-		return nil, nil, err
-	}
-	mainPricingConn, cleanup6, err := providePricingConn(ctx, registry)
-	if err != nil {
-		cleanup5()
 		cleanup4()
 		cleanup3()
 		cleanup2()
@@ -61,10 +48,9 @@ func initialize(ctx context.Context, cfg *config.Config) (*paymentApp, func(), e
 	service := providePaymentService(db, client, mainOrderConn, mainInventoryConn, mainPricingConn, cfg, logger)
 	server := provideGRPCServer(logger, service)
 	httpServer := provideHealth(cfg, db, logger)
-	app := provideApp(cfg, logger, server, httpServer, registry)
+	app := provideApp(cfg, logger, server, httpServer)
 	mainPaymentApp := providePaymentApp(app, service, db, client, logger)
 	return mainPaymentApp, func() {
-		cleanup6()
 		cleanup5()
 		cleanup4()
 		cleanup3()

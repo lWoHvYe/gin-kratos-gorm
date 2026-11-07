@@ -20,7 +20,6 @@ import (
 	"gin-kratos-gorm/internal/platform/httpx"
 
 	"github.com/gin-gonic/gin"
-	etcdregistry "github.com/go-kratos/kratos/contrib/registry/etcd/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -33,16 +32,16 @@ const (
 	adminRole = "admin"
 )
 
-// serviceAddrs are the direct gRPC addresses used when no registry is
-// configured. They mirror the port table in docs/contracts.md and can be
-// overridden with <SERVICE>_ADDR (e.g. CATALOG_ADDR).
+// serviceAddrs are the direct gRPC addresses used by the BFF. They mirror the
+// port table in docs/contracts.md and can be overridden with <SERVICE>_ADDR
+// (for example CATALOG_ADDR); Kubernetes sets these to Service DNS names.
 var serviceAddrs = map[string]string{
-	"catalog":     "127.0.0.1:9002",
-	"inventory":   "127.0.0.1:9003",
-	"order":       "127.0.0.1:9006",
-	"payment":     "127.0.0.1:9007",
-	"fulfillment": "127.0.0.1:9008",
-	"aftersales":  "127.0.0.1:9009",
+	"catalog":     "catalog:9002",
+	"inventory":   "inventory:9003",
+	"order":       "order:9006",
+	"payment":     "payment:9007",
+	"fulfillment": "fulfillment:9008",
+	"aftersales":  "aftersales:9009",
 }
 
 // Clients bundles the downstream gRPC clients used by the admin BFF.
@@ -71,10 +70,9 @@ func (c *Clients) Close() error {
 	return first
 }
 
-// Dial opens the downstream client connections. With a registry the clients use
-// discovery:///<service> targets; without one they fall back to the direct
-// addresses from <SERVICE>_ADDR.
-func Dial(ctx context.Context, reg *etcdregistry.Registry) (*Clients, error) {
+// Dial opens the downstream client connections using Kubernetes Service DNS or
+// <SERVICE>_ADDR overrides.
+func Dial(ctx context.Context) (*Clients, error) {
 	clients := &Clients{}
 	targets := []struct {
 		name string
@@ -88,7 +86,7 @@ func Dial(ctx context.Context, reg *etcdregistry.Registry) (*Clients, error) {
 		{"aftersales", func(conn *grpc.ClientConn) { clients.AfterSales = pb.NewAfterSalesServiceClient(conn) }},
 	}
 	for _, target := range targets {
-		conn, err := grpcx.Dial(ctx, targetFor(reg, target.name), reg)
+		conn, err := grpcx.Dial(ctx, targetFor(target.name))
 		if err != nil {
 			_ = clients.Close()
 			return nil, fmt.Errorf("dial %s: %w", target.name, err)
@@ -100,10 +98,7 @@ func Dial(ctx context.Context, reg *etcdregistry.Registry) (*Clients, error) {
 }
 
 // targetFor returns the gRPC target for one downstream service.
-func targetFor(reg *etcdregistry.Registry, name string) string {
-	if reg != nil {
-		return "discovery:///" + name
-	}
+func targetFor(name string) string {
 	if addr := strings.TrimSpace(os.Getenv(strings.ToUpper(name) + "_ADDR")); addr != "" {
 		return addr
 	}

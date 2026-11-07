@@ -25,7 +25,16 @@ need internal/services/payment/tcc.go 'TccGlobalTransaction\|TCC(' 'payment TCC 
 need internal/services/order/tcc.go 'TccConfirmMarkPaid' 'order TCC branch'
 need internal/services/inventory/tcc.go 'TccConfirm' 'inventory TCC branch'
 need internal/services/pricing/tcc.go 'TccConsume\|TccConfirmConsume' 'pricing TCC branch'
-need deploy/compose/dtm/config.yml 'dtm-driver-kratos' 'DTM kratos discovery driver'
+need internal/services/order/service.go 'inventory:9003/mall.v1.InventoryService' 'direct inventory DTM URL'
+need internal/services/payment/tcc.go 'order:9006/mall.v1.OrderService' 'direct order TCC URL'
+if grep -q 'MicroService:' deploy/compose/dtm/config.yml; then
+  echo "[dtm-contract] etcd MicroService registration must not be configured"
+  fail=1
+fi
+if grep -R --include='*.go' -n 'discovery:///\|GRPC_ENDPOINT' internal cmd >/dev/null 2>&1; then
+  echo "[dtm-contract] legacy etcd discovery reference found in Go code"
+  fail=1
+fi
 need deploy/compose/infra.yml 'yedf/dtm' 'DTM image'
 
 if grep -R --include='*.go' -n 'MustGenGid\|MustGetDtmClient' internal cmd >/dev/null 2>&1; then

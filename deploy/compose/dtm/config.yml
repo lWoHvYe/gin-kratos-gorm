@@ -3,9 +3,7 @@
 # Store: MySQL is shared with the app stack and the `dtm` database holds the
 # global transaction state.
 #
-# MicroService: the kratos driver lets DTM register itself in etcd and resolve
-# the order service's discovery:///inventory/... branch URLs through the same
-# registry that the Go services use.
+# DTM is addressed directly by the application; branch URLs use direct DNS.
 Store:
   Driver: mysql
   Host: mysql
@@ -16,11 +14,6 @@ Store:
   MaxOpenConns: 100
   MaxIdleConns: 20
   ConnMaxLifeTime: 5
-
-MicroService:
-  Driver: dtm-driver-kratos
-  Target: etcd://etcd:2379/dtmservice
-  EndPoint: grpc://dtm:36790
 
 HttpPort: 36789
 GrpcPort: 36790

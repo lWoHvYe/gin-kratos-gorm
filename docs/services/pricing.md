@@ -91,11 +91,11 @@ Payload: `{quote_id, coupon_id, code, user_id, amount_cent}`.
 |---|---|
 | `MYSQL_DSN` | `root:root@tcp(127.0.0.1:3306)/mall?parseTime=true&loc=Local&charset=utf8mb4` |
 | `NATS_URL` | `nats://127.0.0.1:4222` |
-| `ETCD_ENDPOINTS` | `127.0.0.1:2379` |
+| `ETCD_ENDPOINTS` | empty | optional configuration-center bootstrap only |
 | `DTM_ADDRESS` | `127.0.0.1:36790` |
 | `GRPC_ADDR` | `:9000` (set `:9005` for pricing) |
 | `HTTP_ADDR` | `:9100` (set `:9105` for pricing) |
-| `CATALOG_ADDR` | `catalog:9002` (plain `host:port` or `discovery:///catalog`) |
+| `CATALOG_ADDR` | `catalog:9002` (plain `host:port`) |
 
 ## Develop
 

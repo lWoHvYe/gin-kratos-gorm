@@ -152,7 +152,7 @@ executions idempotent by `gid + branch_id`.
 | `GRPC_ADDR` | `:9000` (set `:9003`) | gRPC listen address |
 | `HTTP_ADDR` | `:9100` (set `:9103`) | health/metrics |
 | `NATS_URL` | `nats://127.0.0.1:4222` | outbox relay |
-| `ETCD_ENDPOINTS` | `127.0.0.1:2379` | service registration |
+| `ETCD_ENDPOINTS` | empty | optional configuration-center bootstrap only |
 | `DTM_ADDRESS` | `127.0.0.1:36790` | DTM server for the orchestrator; branch handling needs no client |
 
 `cmd/inventory/main.go` starts `outbox.Relay` (1s interval), registers the gRPC

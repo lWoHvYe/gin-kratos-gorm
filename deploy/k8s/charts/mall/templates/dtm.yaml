@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dtm-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mall.labels" . | nindent 4 }}
+data:
+  conf.yml: |
+    Store:
+      Driver: mysql
+      Host: {{ .Values.mysql.host }}
+      Port: {{ .Values.mysql.port }}
+      User: {{ .Values.mysql.user }}
+      Password: {{ .Values.mysql.password }}
+      Db: dtm
+      MaxOpenConns: 100
+      MaxIdleConns: 20
+      ConnMaxLifeTime: 5
+    HttpPort: 36789
+    GrpcPort: 36790
+    LogLevel: info
+    RetryInterval: 10
+    TimeoutToFail: 35
+    TransCronInterval: 3
+    RequestTimeout: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dtm
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mall.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.dtm.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dtm
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dtm
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- include "mall.labels" . | nindent 8 }}
+        mall.io/mesh-policy: enabled
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "36789"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: dtm-sa
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: dtm
+          image: {{ .Values.dtm.image }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          args: ["-c", "/app/dtm/conf.yml"]
+          ports:
+            - name: http
+              containerPort: 36789
+            - name: grpc
+              containerPort: 36790
+          volumeMounts:
+            - name: config
+              mountPath: /app/dtm/conf.yml
+              subPath: conf.yml
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/dtmsvr/version
+              port: 36789
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /api/dtmsvr/version
+              port: 36789
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: dtm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dtm
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mall.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: dtm
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: 36789
+      targetPort: http
+    - name: grpc
+      port: 36790
+      targetPort: grpc
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dtm-sa
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mall.labels" . | nindent 4 }}
+automountServiceAccountToken: false

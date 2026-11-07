@@ -4,6 +4,9 @@ This directory targets **Kubernetes + Istio Ambient**. It is implementation-only
 until a single-node cluster is available; `make k8s-render` and `make k8s-lint`
 work without a cluster.
 
+For the Debian VM + k3s installation path, see
+[`install/debian-k3s.md`](install/debian-k3s.md).
+
 ## Assumptions
 
 - Kubernetes 1.30+ with a default StorageClass.

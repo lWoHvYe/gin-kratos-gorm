@@ -3,6 +3,7 @@ SHELL := /bin/bash
 GO ?= go
 IMAGE_REGISTRY ?= mall
 IMAGE_TAG ?= dev
+K8S_REMOTE ?= root@10.211.55.29
 
 COMPOSE_DIR := deploy/compose
 COMPOSE_ENV_ARG := $(if $(wildcard $(COMPOSE_DIR)/.env),--env-file $(COMPOSE_DIR)/.env,)
@@ -21,7 +22,7 @@ K8S_INFRA_VALUES := $(K8S_DIR)/charts/infra/values-single-node.yaml
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
 	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract test-race verify wire arch clean \
-	k8s-images k8s-render k8s-lint k8s-deploy mesh-smoke
+	k8s-images k8s-import k8s-render k8s-lint k8s-deploy mesh-smoke
 
 help:
 	@echo "mall - Go microservice mall (Kratos + Gin + database/sql + DTM)"
@@ -47,6 +48,7 @@ help:
 	@echo "  wire                              regenerate Wire injectors for gateway/admin/order/payment"
 	@echo "  verify                            fmt-check + vet + test + build + arch + dtm-contract"
 	@echo "  k8s-images                        build service and migration images for Kubernetes"
+	@echo "  k8s-import                        import images into a remote k3s containerd"
 	@echo "  k8s-render                        render Helm charts for the single-node values"
 	@echo "  k8s-lint                          helm lint Kubernetes charts"
 	@echo "  k8s-deploy                        install/upgrade charts into an existing cluster"
@@ -135,6 +137,12 @@ k8s-images:
 		docker build --build-arg SERVICE=$$svc -t $(IMAGE_REGISTRY)/$$svc:$(IMAGE_TAG) .; \
 	done
 	docker build -f $(K8S_DIR)/images/migrate/Dockerfile -t $(IMAGE_REGISTRY)/migrate:$(IMAGE_TAG) .
+
+k8s-import:
+	@set -e; for image in $(addprefix $(IMAGE_REGISTRY)/,$(SERVICES)) $(IMAGE_REGISTRY)/migrate; do \
+		echo ">> import $$image:$(IMAGE_TAG)"; \
+		docker save "$$image:$(IMAGE_TAG)" | ssh $(K8S_REMOTE) "k3s ctr -n k8s.io images import -"; \
+	done
 
 k8s-render:
 	helm template mall $(K8S_DIR)/charts/mall -n mall -f $(K8S_MALL_VALUES) > /tmp/mall-rendered.yaml

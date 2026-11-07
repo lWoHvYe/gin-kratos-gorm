@@ -48,7 +48,7 @@ exposes `/healthz`, `/readyz` and `/metrics` on its health port.
 | fulfillment | 9008 | 9108 | `mall_fulfillment` |
 | aftersales | 9009 | 9109 | `mall_aftersales` |
 
-Infrastructure: MySQL 8.4 `:3306`, Redis 7 `:6379`, NATS 2.10 + JetStream
+Infrastructure: MySQL 8.4 `:3306`, Redis 8.10 `:6379`, NATS 2.10 + JetStream
 `:4222` (`:8222` monitoring), etcd 3.5 `:2379`, DTM `:36789` (HTTP) /
 `:36790` (gRPC). Optional Prometheus `:9090`, Grafana `:3000`, Tempo `:3200`.
 

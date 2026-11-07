@@ -165,7 +165,7 @@ The app images in this validation were built as Linux binaries
 `k3s ctr -n k8s.io images import -`. Do not import macOS binaries into Linux
 containers.
 
-Infra images (`mysql:8.4`, `redis:7-alpine`, `nats:2.10-alpine`,
+Infra images (`mysql:8.4`, `redis:8.10.3-alpine`, `nats:2.10-alpine`,
 `quay.io/coreos/etcd:v3.5.17`, `yedf/dtm:latest`, `mall/migrate:dev`) must also
 be imported or pullable through the proxy.
 

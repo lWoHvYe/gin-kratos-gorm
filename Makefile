@@ -4,6 +4,7 @@ GO ?= go
 IMAGE_REGISTRY ?= mall
 IMAGE_TAG ?= dev
 K8S_REMOTE ?= root@10.211.55.29
+GOPROXY ?= https://proxy.golang.org,direct
 
 COMPOSE_DIR := deploy/compose
 COMPOSE_ENV_ARG := $(if $(wildcard $(COMPOSE_DIR)/.env),--env-file $(COMPOSE_DIR)/.env,)
@@ -133,8 +134,8 @@ db-reset:
 
 k8s-images:
 	@set -e; for svc in $(SERVICES); do \
-		echo ">> docker build --build-arg SERVICE=$$svc -t $(IMAGE_REGISTRY)/$$svc:$(IMAGE_TAG) ."; \
-		docker build --build-arg SERVICE=$$svc -t $(IMAGE_REGISTRY)/$$svc:$(IMAGE_TAG) .; \
+		echo ">> docker build --build-arg SERVICE=$$svc --build-arg GOPROXY=$(GOPROXY) -t $(IMAGE_REGISTRY)/$$svc:$(IMAGE_TAG) ."; \
+		docker build --build-arg SERVICE=$$svc --build-arg GOPROXY=$(GOPROXY) -t $(IMAGE_REGISTRY)/$$svc:$(IMAGE_TAG) .; \
 	done
 	docker build -f $(K8S_DIR)/images/migrate/Dockerfile -t $(IMAGE_REGISTRY)/migrate:$(IMAGE_TAG) .
 

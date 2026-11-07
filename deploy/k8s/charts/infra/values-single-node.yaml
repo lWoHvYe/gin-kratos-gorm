@@ -1,2 +1,2 @@
 network:
-  nodeCIDR: 172.18.0.0/16
+  nodeCIDR: 10.211.55.0/24

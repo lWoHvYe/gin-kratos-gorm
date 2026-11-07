@@ -12,6 +12,8 @@
 FROM golang:1.27-alpine AS builder
 
 ARG SERVICE
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 RUN test -n "$SERVICE" || ( \
         echo "SERVICE build arg is required, e.g. --build-arg SERVICE=identity" >&2; \
         echo "known services: gateway admin identity catalog inventory cart pricing order payment fulfillment aftersales" >&2; \

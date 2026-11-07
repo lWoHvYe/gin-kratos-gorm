@@ -7,7 +7,7 @@ ingress:
 
 network:
   # kind/k3s node CIDR, adjust to the actual single-node cluster.
-  nodeCIDR: 172.18.0.0/16
+  nodeCIDR: 10.211.55.0/24
 
 resources:
   requests:

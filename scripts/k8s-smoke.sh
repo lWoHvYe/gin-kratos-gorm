@@ -5,6 +5,7 @@ set -euo pipefail
 NS="${NAMESPACE:-mall}"
 DATA_NS="${DATA_NAMESPACE:-mall-data}"
 INGRESS_HOST="${INGRESS_HOST:-mall.local}"
+INGRESS_IP="${INGRESS_IP:-10.211.55.29}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:18080}"
 
 command -v kubectl >/dev/null || { echo "kubectl is required"; exit 1; }
@@ -17,7 +18,7 @@ done
 kubectl wait --for=condition=Complete job/mall-migrate -n "$DATA_NS" --timeout=300s
 
 echo "== ambient enrollment =="
-if kubectl get pods -n "$NS" -o jsonpath='{range .items[*]}{.spec.containers[*].name}{"\n"}{end}' | grep -q istio-proxy; then
+if kubectl get pods -n "$NS" -l mall.io/mesh-policy=enabled -o jsonpath='{range .items[*]}{.spec.containers[*].name}{"\n"}{end}' | grep -q istio-proxy; then
   echo "unexpected sidecar found in $NS"; exit 1
 fi
 kubectl get peerauthentication -n "$NS" default -o yaml | grep -q 'mode: STRICT'
@@ -35,7 +36,7 @@ BASE_URL="$BASE_URL" ADMIN_URL="http://127.0.0.1:18081" ./scripts/dtm-smoke.sh
 
 echo "== ingress check =="
 if command -v curl >/dev/null; then
-  curl -fsS -H "Host: $INGRESS_HOST" http://127.0.0.1/healthz >/dev/null || true
+  curl -fsS -H "Host: $INGRESS_HOST" "http://${INGRESS_IP}/api/v1/products" >/dev/null
 fi
 
 echo "== k8s smoke passed =="

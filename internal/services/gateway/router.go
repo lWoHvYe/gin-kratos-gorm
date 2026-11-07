@@ -42,14 +42,14 @@ const (
 // configured. They mirror the port table in docs/contracts.md and can be
 // overridden with <SERVICE>_ADDR (e.g. IDENTITY_ADDR).
 var serviceAddrs = map[string]string{
-	"identity":    "127.0.0.1:9001",
-	"catalog":     "127.0.0.1:9002",
-	"cart":        "127.0.0.1:9004",
-	"pricing":     "127.0.0.1:9005",
-	"order":       "127.0.0.1:9006",
-	"payment":     "127.0.0.1:9007",
-	"fulfillment": "127.0.0.1:9008",
-	"aftersales":  "127.0.0.1:9009",
+	"identity":    "identity:9001",
+	"catalog":     "catalog:9002",
+	"cart":        "cart:9004",
+	"pricing":     "pricing:9005",
+	"order":       "order:9006",
+	"payment":     "payment:9007",
+	"fulfillment": "fulfillment:9008",
+	"aftersales":  "aftersales:9009",
 }
 
 // Clients bundles every downstream gRPC client used by the public BFF.
@@ -132,6 +132,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.Use(recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), timeout(requestTimeout))
 	engine.NoRoute(func(c *gin.Context) { httpx.Error(c, apperr.NotFound("route not found")) })
 	engine.GET("/healthz", h.health)
+	engine.GET("/readyz", h.health)
 
 	engine.POST("/api/v1/auth/register", h.register)
 	engine.POST("/api/v1/auth/login", h.login)

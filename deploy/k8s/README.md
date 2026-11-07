@@ -49,10 +49,11 @@ The required components are:
 - istio-cni
 - ztunnel
 - Gateway API
-- an ingress gateway for `GatewayClass: istio`
+- a `Gateway` object using `GatewayClass: istio`; the chart creates the
+  ingress gateway service
 
-The exact `istioctl`/Helm commands depend on the pinned Istio version; record
-them in `docs/istio-ambient.md` when the version is finalized.
+For k3s, install with the CNI paths in `install/debian-k3s.md`. Do not install a
+second ingress gateway; the `mall` chart's `Gateway` creates it.
 
 ## 4. Deploy
 

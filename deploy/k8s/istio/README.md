@@ -7,7 +7,11 @@ Typical sequence (verify against the pinned version's official Ambient guide):
 ```bash
 export ISTIO_VERSION="$(tr -d '[:space:]' < deploy/k8s/istio/version)"
 # install istioctl matching ISTIO_VERSION, then:
-istioctl install --set profile=ambient --skip-confirmation
+# k3s uses non-standard CNI paths:
+istioctl install --set profile=ambient \
+  --set values.cni.cniConfDir=/home/k3s/agent/etc/cni/net.d \
+  --set values.cni.cniBinDir=/home/k3s/data/cni \
+  --skip-confirmation
 
 # Gateway API CRDs are required for Gateway/HTTPRoute and the waypoint.
 # Use the Gateway API release bundled/tested with the pinned Istio version.
@@ -21,7 +25,8 @@ The chart expects:
 
 - `GatewayClass: istio` for north-south ingress;
 - `GatewayClass: istio-waypoint` for `mall-waypoint`;
-- an ingress gateway deployment/service in `istio-system`;
+- a `GatewayClass: istio` Gateway (the `mall` chart creates
+  `mall-gateway-istio`; do not install a second one);
 - the Gateway API CRDs installed.
 
 The `mall` namespace labels and waypoint are created by

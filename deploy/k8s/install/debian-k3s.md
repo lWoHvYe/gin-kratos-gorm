@@ -1,154 +1,205 @@
 # Debian VM + single-node k3s + Istio Ambient
 
-This is the recommended local target when a Debian VM with at least **4 vCPU /
-8 GiB RAM / 50 GiB disk** is available. The Mac remains the development and
-control machine; the VM runs Kubernetes.
+Validated on the current VM:
 
-## Why VM rather than Docker Desktop
-
-Istio Ambient depends on Linux CNI/ztunnel networking. A native Debian/k3s node
-is more predictable and closer to production than a nested kind cluster inside
-Docker Desktop. The Mac still gets a normal kubeconfig, `kubectl`, `helm`,
-`istioctl`, port-forward and IDE workflow.
+- Debian 12, 4 vCPU, 16 GiB RAM
+- k3s `v1.37.2+k3s1`
+- Istio `1.31.4` (Ambient)
+- k3s data and kubelet data on `/home` (the root `/` and `/var` disks are small)
+- Docker kept installed and moved to `/home/docker`; k3s uses containerd
 
 ## 1. Prepare the VM
-
-On the Mac:
 
 ```bash
 ssh-copy-id root@10.211.55.29
 ssh root@10.211.55.29
-```
 
-On the VM:
-
-```bash
 apt update
-apt install -y curl ca-certificates jq
+apt install -y curl ca-certificates jq conntrack socat
 hostnamectl set-hostname mall-k8s
-
-# Confirm resources before installing.
 nproc
 free -h
 df -h /
 ```
 
-If a firewall is enabled, allow:
+The VM must have at least 4 vCPU and 8 GiB RAM. This deployment used 16 GiB.
 
-```text
-6443/tcp   Kubernetes API
-80/tcp     ingress
-443/tcp    ingress TLS (optional)
-30000-32767/tcp  NodePort (temporary/debug)
+## 2. Proxy and DNS
+
+The VM's mihomo listens on `127.0.0.1:7890`. Keep its HTTP proxy, but **do not
+let its TUN DNS hijack Kubernetes CIDRs**. Add this to
+`/root/.config/mihomo/config.yaml`:
+
+```yaml
+tun:
+  enable: true
+  stack: mixed
+  dns-hijack:
+    - "8.8.8.8:53"
+    - "1.1.1.1:53"
+  auto-route: true
+  auto-redirect: true
+  auto-detect-interface: true
+  route-exclude-address:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
 ```
 
-## 2. Install k3s
+Then reload mihomo (or restart it). Without the exclusion, ClusterIP DNS
+(`10.43.0.10`) is hijacked and CoreDNS returns fake IPs.
+
+Configure k3s proxy environment in
+`/etc/systemd/system/k3s.service.d/proxy.conf`:
+
+```ini
+[Service]
+Environment="HTTP_PROXY=http://127.0.0.1:7890"
+Environment="HTTPS_PROXY=http://127.0.0.1:7890"
+Environment="NO_PROXY=127.0.0.1,localhost,10.211.55.0/24,10.42.0.0/16,10.43.0.0/16,.svc,.cluster.local"
+Environment="http_proxy=http://127.0.0.1:7890"
+Environment="https_proxy=http://127.0.0.1:7890"
+Environment="no_proxy=127.0.0.1,localhost,10.211.55.0/24,10.42.0.0/16,10.43.0.0/16,.svc,.cluster.local"
+```
+
+## 3. Install k3s
+
+Keep Traefik disabled; the chart's Gateway API Gateway provides Istio ingress.
+Use `/home/k3s` because `/var` is small.
 
 ```bash
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+export http_proxy=http://127.0.0.1:7890 https_proxy=http://127.0.0.1:7890
+export NO_PROXY=127.0.0.1,localhost,10.211.55.0/24,10.42.0.0/16,10.43.0.0/16,.svc,.cluster.local
+
+mkdir -p /home/k3s
+chmod 700 /home/k3s
+
+curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_START=true INSTALL_K3S_EXEC="server \
   --write-kubeconfig-mode 644 \
   --tls-san 10.211.55.29 \
   --node-external-ip 10.211.55.29 \
-  --disable traefik" sh -
+  --disable traefik \
+  --data-dir /home/k3s" sh -
+
+mkdir -p /etc/systemd/system/k3s.service.d
+# create proxy.conf as shown above
+systemctl daemon-reload
+systemctl enable --now k3s
 ```
 
-We disable Traefik so Istio owns ingress; k3s servicelb remains available for
-the Istio ingress `LoadBalancer`.
+Move the kubelet root to `/home` so ephemeral storage is not limited by the
+small `/var` partition:
 
-Verify:
-
-```bash
-systemctl status k3s
-k3s kubectl get nodes -o wide
-k3s kubectl get storageclass
+```yaml
+# /etc/rancher/k3s/config.yaml
+kubelet-arg:
+  - root-dir=/home/k3s/kubelet
 ```
 
-## 3. Use the cluster from the Mac
+Then restart k3s and check:
 
 ```bash
-mkdir -p ~/.kube
+systemctl restart k3s
+kubectl get node -o json | jq '.items[0].status.capacity'
+```
+
+`ephemeral-storage` should now report the `/home` capacity (about 45 GiB).
+
+## 4. Mac kubeconfig
+
+```bash
 scp root@10.211.55.29:/etc/rancher/k3s/k3s.yaml ~/.kube/mall-k3s.yaml
 sed -i '' 's/127.0.0.1/10.211.55.29/' ~/.kube/mall-k3s.yaml
 export KUBECONFIG=$HOME/.kube/mall-k3s.yaml
 kubectl get nodes
 ```
 
-The project's `deploy/k8s` Make targets use the current `KUBECONFIG`.
+If `kubectl` is not installed on the Mac, install a matching client or use
+`ssh root@10.211.55.29 k3s kubectl` for bootstrap.
 
-## 4. Install Istio Ambient
+## 5. Install Istio Ambient
 
-Pin the version in `deploy/k8s/istio/version` and use the matching `istioctl`.
-
-```bash
-export ISTIO_VERSION="$(tr -d '[:space:]' < deploy/k8s/istio/version)"
-# install istioctl ${ISTIO_VERSION} on the Mac, then:
-istioctl install --set profile=ambient --skip-confirmation
-kubectl get pods -n istio-system
-```
-
-Install Gateway API CRDs matching the pinned Istio release, then the ingress
-gateway. One supported route is the official Istio gateway Helm chart:
+Pin `1.31.4` (or the current supported version in
+`deploy/k8s/istio/version`):
 
 ```bash
-helm repo add istio https://istio-release.storage.googleapis.com/charts
-helm repo update
-helm upgrade --install istio-ingressgateway istio/gateway -n istio-system --create-namespace
+istioctl install --set profile=ambient \
+  --set values.cni.cniConfDir=/home/k3s/agent/etc/cni/net.d \
+  --set values.cni.cniBinDir=/home/k3s/data/cni \
+  --skip-confirmation
 ```
 
-Confirm `GatewayClass` resources:
+The k3s CNI paths are **not** `/etc/cni/net.d` and `/opt/cni/bin`; without
+these two values the CNI DaemonSet waits forever and ztunnel cannot start.
 
-```bash
-kubectl get gatewayclass
-# expect istio and istio-waypoint
+`GatewayClass` should include:
+
+```text
+istio
+istio-waypoint
 ```
 
-The chart expects `istio` for north-south and `istio-waypoint` for the mall
-namespace waypoint.
+Do **not** separately install a second `istio-ingressgateway` Helm release. The
+`mall` chart's `Gateway` creates `mall-gateway-istio` and k3s servicelb assigns
+`10.211.55.29`. A second ingress gateway competes for host port 80 and remains
+`pending`.
 
-## 5. Build and import images
+## 6. Build and import images
 
-On the Mac:
+On the Mac, with Docker running:
 
 ```bash
 make k8s-images IMAGE_REGISTRY=mall IMAGE_TAG=dev
 make k8s-import K8S_REMOTE=root@10.211.55.29
 ```
 
-`k8s-import` copies each image into the k3s containerd namespace `k8s.io`, so
-the charts use `imagePullPolicy: IfNotPresent` without a registry.
+The app images in this validation were built as Linux binaries
+(`CGO_ENABLED=0 GOOS=linux GOARCH=amd64`) and imported via
+`k3s ctr -n k8s.io images import -`. Do not import macOS binaries into Linux
+containers.
 
-For iterative development:
+Infra images (`mysql:8.4`, `redis:7-alpine`, `nats:2.10-alpine`,
+`quay.io/coreos/etcd:v3.5.17`, `yedf/dtm:latest`, `mall/migrate:dev`) must also
+be imported or pullable through the proxy.
 
-```bash
-make k8s-images IMAGE_REGISTRY=mall IMAGE_TAG=dev
-# import only the changed image
-docker save mall/order:dev | ssh root@10.211.55.29 'k3s ctr -n k8s.io images import -'
-kubectl -n mall rollout restart deployment/order
-```
-
-A local registry can replace the import step later, but is not required.
-
-## 6. Deploy
+## 7. Deploy
 
 ```bash
 kubectl apply -f deploy/k8s/manifests/namespaces.yaml
-make k8s-deploy
+helm upgrade --install mall-infra deploy/k8s/charts/infra \
+  -n mall-data -f deploy/k8s/charts/infra/values-single-node.yaml
+
+helm upgrade --install mall deploy/k8s/charts/mall \
+  -n mall -f deploy/k8s/charts/mall/values-single-node.yaml
+
 kubectl get pods -n mall
 kubectl get pods -n mall-data
 kubectl get gateway,httproute -A
 ```
 
-Set Mac hosts resolution:
+The `mall` chart creates:
+
+- `mall-waypoint`
+- `mall-gateway` and `mall-gateway-istio`
+- STRICT mTLS and L4/L7 AuthorizationPolicy
+- NetworkPolicy default deny
+
+Ingress is available at:
 
 ```bash
-# /etc/hosts
-10.211.55.29 mall.local
+curl -H 'Host: mall.local' http://10.211.55.29/api/v1/products
 ```
 
-Then browse `http://mall.local/api/v1/products` or use
-`curl -H 'Host: mall.local' http://10.211.55.29/api/v1/products`.
+## 8. Smoke
 
-## 7. Local debugging
+```bash
+KUBECONFIG=~/.kube/mall-k3s.yaml make mesh-smoke
+```
+
+The smoke test checks deployments, migration Job, no application sidecars,
+STRICT mTLS, port-forwarded C-end/DTM flow, and the ingress product endpoint.
+
+## 9. Local debugging
 
 ```bash
 export KUBECONFIG=$HOME/.kube/mall-k3s.yaml
@@ -158,21 +209,9 @@ kubectl -n mall port-forward svc/admin 8081:8081
 kubectl -n mall logs -f deploy/order
 kubectl -n mall exec -it deploy/order -- sh
 
-istioctl ztunnel-config workloads -n mall
+istioctl ztunnel-config workloads
 kubectl get peerauthentication -n mall -o yaml
 ```
 
-The Mac workspace remains the source of truth. The VM only runs the cluster;
-there is no need to install DSH inside the VM.
-
-## 8. Smoke and acceptance
-
-```bash
-make mesh-smoke
-```
-
-The smoke script checks pod readiness, Ambient enrollment/no sidecars, STRICT
-mTLS, port-forwards gateway/admin, runs the DTM/C-end smoke, and checks
-ingress.
-
-Runtime acceptance remains deliberately deferred until the VM is available.
+The Mac workspace remains the source of truth. No DSH installation is needed
+inside the VM.

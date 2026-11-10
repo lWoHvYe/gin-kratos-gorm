@@ -164,8 +164,10 @@ k8s-lint:
 
 k8s-deploy:
 	kubectl apply -f $(K8S_DIR)/manifests/namespaces.yaml
-	helm upgrade --install mall-infra $(K8S_DIR)/charts/infra -n mall-data -f $(K8S_INFRA_VALUES)
-	helm upgrade --install mall $(K8S_DIR)/charts/mall -n mall -f $(K8S_MALL_VALUES)
+	helm upgrade --install mall-infra $(K8S_DIR)/charts/infra -n mall-data -f $(K8S_INFRA_VALUES) --wait --timeout 5m
+	helm upgrade --install mall $(K8S_DIR)/charts/mall -n mall -f $(K8S_MALL_VALUES) --wait --timeout 5m
+	# Same-tag dev images are not pulled automatically; restart after import.
+	kubectl -n mall rollout restart deployment
 
 mesh-smoke:
 	./scripts/k8s-smoke.sh

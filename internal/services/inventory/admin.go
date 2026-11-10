@@ -71,6 +71,9 @@ func (s *Service) AdminAdjustStock(ctx context.Context, req *pb.AdminAdjustStock
 		if err := insertLedger(ctx, tx, entry, "ADJUST", st); err != nil {
 			return err
 		}
+		if err := appendStockChanged(ctx, tx, st); err != nil {
+			return err
+		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic:         "shop.inventory.adjusted.v1",
 			AggregateType: "inventory",

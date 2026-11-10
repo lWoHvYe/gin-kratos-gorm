@@ -123,17 +123,38 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.GET("/readyz", h.health)
 
 	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole))
+	admin.GET("/categories", h.listCategoriesAdmin)
 	admin.POST("/categories", h.createCategory)
+	admin.PUT("/categories/:id", h.updateCategory)
+	admin.DELETE("/categories/:id", h.deleteCategory)
+	admin.GET("/brands", h.listBrands)
+	admin.POST("/brands", h.createBrand)
+	admin.PUT("/brands/:id", h.updateBrand)
+	admin.DELETE("/brands/:id", h.deleteBrand)
+	admin.GET("/products", h.listAdminProducts)
+	admin.GET("/products/:id", h.getAdminProduct)
 	admin.POST("/products", h.createProduct)
+	admin.PUT("/products/:id", h.updateProduct)
+	admin.DELETE("/products/:id", h.deleteProduct)
 	admin.PUT("/products/:id/status", h.setProductStatus)
+	admin.POST("/products/:id/skus", h.createSku)
+	admin.PUT("/skus/:id", h.updateSku)
+	admin.DELETE("/skus/:id", h.deleteSku)
+	admin.PUT("/skus/:id/status", h.setSkuStatus)
+	admin.GET("/inventory/stocks", h.listStocks)
 	admin.POST("/inventory/adjust", h.adjustStock)
 	admin.GET("/orders", h.listOrders)
 	admin.POST("/orders/:orderNo/cancel", h.cancelOrder)
 	admin.POST("/payments/:paymentNo/verify", h.verifyPayment)
+	admin.GET("/shipments", h.listShipments)
+	admin.GET("/shipments/:shipmentNo", h.getShipment)
 	admin.POST("/shipments", h.createShipment)
 	admin.POST("/shipments/:shipmentNo/ship", h.shipShipment)
+	admin.GET("/after-sales", h.listAfterSales)
 	admin.POST("/after-sales/:no/approve", h.approveAfterSale)
+	admin.POST("/after-sales/:no/receive", h.receiveReturn)
 	admin.POST("/after-sales/:no/refund", h.refundAfterSale)
+	admin.GET("/payments/refunds", h.listRefunds)
 
 	return engine
 }
@@ -219,6 +240,27 @@ func (h *handlers) setProductStatus(c *gin.Context) {
 	if status == "" {
 		httpx.Error(c, apperr.Invalid("status is required"))
 		return
+	}
+	if status == "ON_SALE" {
+		product, err := h.clients.Catalog.GetAdminProduct(c.Request.Context(), &pb.GetProductRequest{Id: productID})
+		if err != nil {
+			httpx.Error(c, remoteError(err))
+			return
+		}
+		for _, sku := range product.GetSkus() {
+			if sku.GetStatus() != "ENABLED" {
+				continue
+			}
+			stock, err := h.clients.Inventory.GetStock(c.Request.Context(), &pb.GetStockRequest{SkuId: sku.GetId(), WarehouseId: 1})
+			if err != nil {
+				httpx.Error(c, apperr.Failed(fmt.Sprintf("sku %d has no initialized inventory; adjust stock before publishing", sku.GetId())))
+				return
+			}
+			if stock.GetAvailable() <= 0 {
+				httpx.Error(c, apperr.Failed(fmt.Sprintf("sku %d has no available stock", sku.GetId())))
+				return
+			}
+		}
 	}
 	if _, err := h.clients.Catalog.SetProductStatus(c.Request.Context(), &pb.SetProductStatusRequest{
 		Id:     productID,
@@ -541,4 +583,394 @@ func remoteError(err error) error {
 
 func bodyPresent(c *gin.Context) bool {
 	return c.Request != nil && c.Request.Body != nil && c.Request.ContentLength != 0
+}
+
+// ---------------------------------------------------------------- catalog admin
+
+func (h *handlers) listCategoriesAdmin(c *gin.Context) {
+	reply, err := h.clients.Catalog.ListCategories(c.Request.Context(), &pb.Empty{})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) updateCategory(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var req pb.UpdateCategoryRequest
+	if err := bindJSON(c, &req); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if req.Category == nil {
+		httpx.Error(c, apperr.Invalid("category is required"))
+		return
+	}
+	req.Category.Id = id
+	category, err := h.clients.Catalog.UpdateCategory(c.Request.Context(), &req)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, category)
+}
+
+func (h *handlers) deleteCategory(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Catalog.DeleteCategory(c.Request.Context(), &pb.DeleteCategoryRequest{Id: id}); err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": "deleted"})
+}
+
+func (h *handlers) listBrands(c *gin.Context) {
+	reply, err := h.clients.Catalog.ListBrands(c.Request.Context(), &pb.Empty{})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) createBrand(c *gin.Context) {
+	var req pb.CreateBrandRequest
+	if err := bindJSON(c, &req); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	brand, err := h.clients.Catalog.CreateBrand(c.Request.Context(), &req)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.Created(c, brand)
+}
+
+func (h *handlers) updateBrand(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var req pb.UpdateBrandRequest
+	if err := bindJSON(c, &req); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if req.Brand == nil {
+		httpx.Error(c, apperr.Invalid("brand is required"))
+		return
+	}
+	req.Brand.Id = id
+	brand, err := h.clients.Catalog.UpdateBrand(c.Request.Context(), &req)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, brand)
+}
+
+func (h *handlers) deleteBrand(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Catalog.DeleteBrand(c.Request.Context(), &pb.DeleteBrandRequest{Id: id}); err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": "deleted"})
+}
+
+func (h *handlers) listAdminProducts(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	pageSize, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	categoryID, err := queryInt64(c, "category_id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	brandID, err := queryInt64(c, "brand_id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Catalog.ListAdminProducts(c.Request.Context(), &pb.ListAdminProductsRequest{
+		Page: page, PageSize: pageSize, Keyword: strings.TrimSpace(c.Query("keyword")),
+		CategoryId: categoryID, BrandId: brandID, Status: strings.TrimSpace(c.Query("status")),
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) getAdminProduct(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	product, err := h.clients.Catalog.GetAdminProduct(c.Request.Context(), &pb.GetProductRequest{Id: id})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, product)
+}
+
+func (h *handlers) updateProduct(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var req pb.UpdateProductRequest
+	if err := bindJSON(c, &req); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	req.Id = id
+	product, err := h.clients.Catalog.UpdateProduct(c.Request.Context(), &req)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, product)
+}
+
+func (h *handlers) deleteProduct(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Catalog.DeleteProduct(c.Request.Context(), &pb.DeleteProductRequest{Id: id}); err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": "deleted"})
+}
+
+func (h *handlers) createSku(c *gin.Context) {
+	spuID, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var sku pb.SkuInput
+	if err := bindJSON(c, &sku); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	created, err := h.clients.Catalog.CreateSku(c.Request.Context(), &pb.CreateSkuRequest{SpuId: spuID, Sku: &sku})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.Created(c, created)
+}
+
+func (h *handlers) updateSku(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var req pb.UpdateSkuRequest
+	if err := bindJSON(c, &req); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	req.Id = id
+	sku, err := h.clients.Catalog.UpdateSku(c.Request.Context(), &req)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, sku)
+}
+
+func (h *handlers) deleteSku(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Catalog.DeleteSku(c.Request.Context(), &pb.DeleteSkuRequest{Id: id}); err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": "deleted"})
+}
+
+func (h *handlers) setSkuStatus(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var in setStatusRequest
+	if err := bindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	sku, err := h.clients.Catalog.SetSkuStatus(c.Request.Context(), &pb.SetSkuStatusRequest{Id: id, Status: in.Status})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, sku)
+}
+
+func (h *handlers) listStocks(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	pageSize, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	skuID, err := queryInt64(c, "sku_id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	warehouseID, err := queryInt64(c, "warehouse_id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Inventory.ListStocks(c.Request.Context(), &pb.ListStocksRequest{
+		SkuId: skuID, WarehouseId: warehouseID, Page: page, PageSize: pageSize,
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) listShipments(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	pageSize, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Fulfillment.ListShipments(c.Request.Context(), &pb.ListShipmentsRequest{
+		Page: page, PageSize: pageSize, Status: strings.TrimSpace(c.Query("status")),
+		OrderNo: strings.TrimSpace(c.Query("order_no")),
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) getShipment(c *gin.Context) {
+	shipmentNo := strings.TrimSpace(c.Param("shipmentNo"))
+	shipment, err := h.clients.Fulfillment.GetShipment(c.Request.Context(), &pb.GetShipmentRequest{ShipmentNo: shipmentNo})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, shipment)
+}
+
+func (h *handlers) listAfterSales(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	pageSize, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	userID, err := queryInt64(c, "user_id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.AfterSales.ListAfterSales(c.Request.Context(), &pb.ListAfterSalesRequest{
+		UserId: userID, Admin: true, Page: page, PageSize: pageSize, Status: strings.TrimSpace(c.Query("status")),
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+type receiveReturnRequest struct {
+	Condition string `json:"condition"`
+}
+
+func (h *handlers) receiveReturn(c *gin.Context) {
+	no := strings.TrimSpace(c.Param("no"))
+	var in receiveReturnRequest
+	if bodyPresent(c) {
+		if err := bindJSON(c, &in); err != nil {
+			httpx.Error(c, err)
+			return
+		}
+	}
+	afterSale, err := h.clients.AfterSales.ReceiveReturn(c.Request.Context(), &pb.ReceiveReturnRequest{AfterSaleNo: no, Condition: in.Condition})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, afterSale)
+}
+
+func (h *handlers) listRefunds(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	pageSize, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Payment.ListRefunds(c.Request.Context(), &pb.ListRefundsRequest{
+		PaymentNo: strings.TrimSpace(c.Query("payment_no")), OrderNo: strings.TrimSpace(c.Query("order_no")),
+		Page: page, PageSize: pageSize,
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
 }

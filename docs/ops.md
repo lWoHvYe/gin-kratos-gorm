@@ -335,3 +335,40 @@ order/payment readiness failures.
 Services can optionally load a startup configuration overlay from etcd. Set
 `CONFIG_ETCD_PATH` (and optionally `CONFIG_ETCD_PREFIX=true`); environment
 variables still win. See `docs/etcd-config.md` for the schema and precedence.
+
+## Phase 1.5 end-to-end check
+
+The Phase 1.5 flow exercises the B-end product model (category, brand, SPU,
+SKU, images, attributes, publish), C-end search, address book, cart stock
+validation, DTM checkout, mock payment, shipment, return tracking, inventory
+restock and partial refund projection.
+
+With the Kubernetes stack running:
+
+```bash
+kubectl -n mall port-forward svc/gateway 18080:8080 &
+kubectl -n mall port-forward svc/admin   18081:8081 &
+BASE_URL=http://127.0.0.1:18080 \
+ADMIN_URL=http://127.0.0.1:18081 \
+make e2e-phase15
+```
+
+The script creates uniquely named data on every run (`E2E-<epoch>`), initializes
+inventory before publishing, and asserts the refund and stock projections. It
+leaves its test data in the database; use `make db-reset` for a disposable
+Compose environment.
+
+## Ambient certificate rotation on the test VM
+
+Istio workload certificates are short-lived. If the VM is left running past
+their TTL, ztunnel logs show `CertificateExpired` and the ingress gateway
+returns 503. Restart the data plane so new certificates are fetched, then
+restart the application pods so their in-pod ztunnel proxies reconnect:
+
+```bash
+kubectl -n istio-system rollout restart ds/ztunnel
+kubectl -n istio-system rollout restart deployment/istiod
+kubectl -n mall delete pod -l gateway.networking.k8s.io/gateway-name=mall-waypoint
+kubectl -n istio-system rollout restart deployment/mall-gateway-istio
+kubectl -n mall rollout restart deployment
+```

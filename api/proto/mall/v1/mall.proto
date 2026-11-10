@@ -14,6 +14,9 @@ service IdentityService {
   rpc Logout (LogoutRequest) returns (Empty);
   rpc GetUser (GetUserRequest) returns (User);
   rpc CreateAddress (CreateAddressRequest) returns (Address);
+  rpc UpdateAddress (UpdateAddressRequest) returns (Address);
+  rpc DeleteAddress (DeleteAddressRequest) returns (Empty);
+  rpc SetDefaultAddress (SetDefaultAddressRequest) returns (Empty);
   rpc ListAddresses (GetUserRequest) returns (AddressList);
 }
 
@@ -53,6 +56,9 @@ message Address {
   bool is_default = 9;
 }
 message CreateAddressRequest { Address address = 1; }
+message UpdateAddressRequest { Address address = 1; }
+message DeleteAddressRequest { int64 user_id = 1; int64 address_id = 2; }
+message SetDefaultAddressRequest { int64 user_id = 1; int64 address_id = 2; }
 message AddressList { repeated Address addresses = 1; }
 
 // ---------------------------------------------------------------- catalog
@@ -61,9 +67,23 @@ service CatalogService {
   rpc ListProducts (ListProductsRequest) returns (ProductList);
   rpc GetSku (GetSkuRequest) returns (Sku);
   rpc CreateCategory (CreateCategoryRequest) returns (Category);
+  rpc UpdateCategory (UpdateCategoryRequest) returns (Category);
+  rpc DeleteCategory (DeleteCategoryRequest) returns (Empty);
   rpc ListCategories (Empty) returns (CategoryList);
+  rpc CreateBrand (CreateBrandRequest) returns (Brand);
+  rpc UpdateBrand (UpdateBrandRequest) returns (Brand);
+  rpc DeleteBrand (DeleteBrandRequest) returns (Empty);
+  rpc ListBrands (Empty) returns (BrandList);
   rpc CreateProduct (CreateProductRequest) returns (Product);
+  rpc UpdateProduct (UpdateProductRequest) returns (Product);
+  rpc DeleteProduct (DeleteProductRequest) returns (Empty);
   rpc SetProductStatus (SetProductStatusRequest) returns (Empty);
+  rpc ListAdminProducts (ListAdminProductsRequest) returns (ProductList);
+  rpc GetAdminProduct (GetProductRequest) returns (Product);
+  rpc CreateSku (CreateSkuRequest) returns (Sku);
+  rpc UpdateSku (UpdateSkuRequest) returns (Sku);
+  rpc DeleteSku (DeleteSkuRequest) returns (Empty);
+  rpc SetSkuStatus (SetSkuStatusRequest) returns (Sku);
 }
 
 message Category {
@@ -76,7 +96,31 @@ message Category {
 }
 message CategoryList { repeated Category categories = 1; }
 message CreateCategoryRequest { Category category = 1; }
+message UpdateCategoryRequest { Category category = 1; }
+message DeleteCategoryRequest { int64 id = 1; }
 
+message Brand {
+  int64 id = 1;
+  string name = 2;
+  string logo = 3;
+  string status = 4;
+}
+message BrandList { repeated Brand brands = 1; }
+message CreateBrandRequest { Brand brand = 1; }
+message UpdateBrandRequest { Brand brand = 1; }
+message DeleteBrandRequest { int64 id = 1; }
+
+message ProductImage {
+  int64 id = 1;
+  string url = 2;
+  int32 sort = 3;
+}
+message ProductAttribute {
+  int64 id = 1;
+  string name = 2;
+  string value = 3;
+  int32 sort = 4;
+}
 message Sku {
   int64 id = 1;
   int64 spu_id = 2;
@@ -85,6 +129,7 @@ message Sku {
   int64 price_cent = 5;
   int64 stock = 6;
   string status = 7;
+  string image_url = 8;
 }
 message Product {
   int64 id = 1;
@@ -97,6 +142,8 @@ message Product {
   string status = 8;
   repeated Sku skus = 9;
   int64 min_price_cent = 10;
+  repeated ProductImage images = 11;
+  repeated ProductAttribute attributes = 12;
 }
 message GetProductRequest { int64 id = 1; }
 message ListProductsRequest {
@@ -104,6 +151,18 @@ message ListProductsRequest {
   int32 page_size = 2;
   string keyword = 3;
   int64 category_id = 4;
+  int64 brand_id = 5;
+  int64 min_price_cent = 6;
+  int64 max_price_cent = 7;
+  string sort = 8;
+}
+message ListAdminProductsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string keyword = 3;
+  int64 category_id = 4;
+  int64 brand_id = 5;
+  string status = 6;
 }
 message ProductList {
   repeated Product products = 1;
@@ -115,6 +174,7 @@ message SkuInput {
   string specs_json = 2;
   int64 price_cent = 3;
   int64 stock = 4;
+  string image_url = 5;
 }
 message CreateProductRequest {
   int64 category_id = 1;
@@ -124,7 +184,35 @@ message CreateProductRequest {
   string description = 5;
   string main_image = 6;
   repeated SkuInput skus = 7;
+  repeated ProductImage images = 8;
+  repeated ProductAttribute attributes = 9;
 }
+message UpdateProductRequest {
+  int64 id = 1;
+  int64 category_id = 2;
+  int64 brand_id = 3;
+  string name = 4;
+  string subtitle = 5;
+  string description = 6;
+  string main_image = 7;
+  repeated ProductImage images = 8;
+  repeated ProductAttribute attributes = 9;
+}
+message DeleteProductRequest { int64 id = 1; }
+message CreateSkuRequest {
+  int64 spu_id = 1;
+  SkuInput sku = 2;
+}
+message UpdateSkuRequest {
+  int64 id = 1;
+  string sku_code = 2;
+  string specs_json = 3;
+  int64 price_cent = 4;
+  string status = 5;
+  string image_url = 6;
+}
+message DeleteSkuRequest { int64 id = 1; }
+message SetSkuStatusRequest { int64 id = 1; string status = 2; }
 message SetProductStatusRequest { int64 id = 1; string status = 2; }
 
 // ---------------------------------------------------------------- inventory
@@ -134,6 +222,8 @@ service InventoryService {
   rpc Confirm (ReserveRequest) returns (Empty);
   rpc Release (ReserveRequest) returns (Empty);
   rpc AdminAdjustStock (AdminAdjustStockRequest) returns (Stock);
+  rpc ListStocks (ListStocksRequest) returns (StockList);
+  rpc Restock (RestockRequest) returns (Stock);
   rpc TccTryConfirm (TccPaymentRequest) returns (Empty);
   rpc TccConfirm (TccPaymentRequest) returns (Empty);
   rpc TccCancelConfirm (TccPaymentRequest) returns (Empty);
@@ -160,6 +250,22 @@ message AdminAdjustStockRequest {
   int64 warehouse_id = 2;
   int64 delta = 3;
   string reason = 4;
+}
+message ListStocksRequest {
+  int64 sku_id = 1;
+  int64 warehouse_id = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+message StockList { repeated Stock stocks = 1; int64 total = 2; }
+message RestockRequest {
+  string order_no = 1;
+  int64 sku_id = 2;
+  int64 warehouse_id = 3;
+  int64 quantity = 4;
+  string condition = 5;
+  string reason = 6;
+  string restock_no = 7;
 }
 
 
@@ -271,6 +377,7 @@ message Order {
   int64 created_at_unix = 13;
   int64 expire_at_unix = 14;
   string quote_id = 15;
+  int64 refunded_cent = 16;
 }
 message CreateOrderRequest {
   int64 user_id = 1;
@@ -317,6 +424,7 @@ service PaymentService {
   rpc Refund (RefundRequest) returns (Empty);
   rpc RefundOrder (RefundOrderRequest) returns (Empty);
   rpc VerifyPayment (VerifyPaymentRequest) returns (VerifyPaymentReply);
+  rpc ListRefunds (ListRefundsRequest) returns (RefundList);
 }
 message Intent {
   string payment_no = 1;
@@ -326,6 +434,9 @@ message Intent {
   string channel = 5;
   string pay_url = 6;
   int64 expires_at_unix = 7;
+  int64 captured_cent = 8;
+  int64 refunded_cent = 9;
+  string payment_method = 10;
 }
 message CreateIntentRequest {
   string order_no = 1;
@@ -343,7 +454,7 @@ message CallbackRequest {
   string signature = 6;
 }
 message CallbackReply { bool ok = 1; }
-message RefundOrderRequest { string order_no = 1; int64 amount_cent = 2; string reason = 3; }
+message RefundOrderRequest { string order_no = 1; int64 amount_cent = 2; string reason = 3; string idempotency_key = 4; }
 message VerifyPaymentRequest { string payment_no = 1; }
 message VerifyPaymentReply {
   bool order_prepared = 1;
@@ -351,7 +462,18 @@ message VerifyPaymentReply {
   bool pricing_prepared = 3;
   string intent_status = 4;
 }
-message RefundRequest { string payment_no = 1; int64 amount_cent = 2; string reason = 3; }
+message RefundRequest { string payment_no = 1; int64 amount_cent = 2; string reason = 3; string idempotency_key = 4; }
+message Refund {
+  string refund_no = 1;
+  string payment_no = 2;
+  string order_no = 3;
+  int64 amount_cent = 4;
+  string reason = 5;
+  string status = 6;
+  int64 created_at_unix = 7;
+}
+message ListRefundsRequest { string payment_no = 1; string order_no = 2; int32 page = 3; int32 page_size = 4; }
+message RefundList { repeated Refund refunds = 1; int64 total = 2; }
 
 // ---------------------------------------------------------------- fulfillment
 service FulfillmentService {
@@ -360,6 +482,7 @@ service FulfillmentService {
   rpc Receive (ReceiveRequest) returns (Shipment);
   rpc GetShipment (GetShipmentRequest) returns (Shipment);
   rpc GetShipmentByOrder (GetShipmentByOrderRequest) returns (Shipment);
+  rpc ListShipments (ListShipmentsRequest) returns (ShipmentList);
 }
 message ShipmentItem { int64 sku_id = 1; int32 quantity = 2; }
 message Shipment {
@@ -382,13 +505,18 @@ message ShipRequest { string shipment_no = 1; }
 message ReceiveRequest { string shipment_no = 1; }
 message GetShipmentRequest { string shipment_no = 1; }
 message GetShipmentByOrderRequest { string order_no = 1; }
+message ListShipmentsRequest { int32 page = 1; int32 page_size = 2; string status = 3; string order_no = 4; }
+message ShipmentList { repeated Shipment shipments = 1; int64 total = 2; }
 
 // ---------------------------------------------------------------- aftersales
 service AfterSalesService {
   rpc CreateAfterSale (CreateAfterSaleRequest) returns (AfterSale);
   rpc GetAfterSale (GetAfterSaleRequest) returns (AfterSale);
   rpc Approve (ApproveRequest) returns (AfterSale);
+  rpc SubmitReturnTracking (SubmitReturnTrackingRequest) returns (AfterSale);
+  rpc ReceiveReturn (ReceiveReturnRequest) returns (AfterSale);
   rpc Refund (RefundAfterSaleRequest) returns (AfterSale);
+  rpc ListAfterSales (ListAfterSalesRequest) returns (AfterSaleList);
 }
 message AfterSaleItem { int64 sku_id = 1; int32 quantity = 2; }
 message AfterSale {
@@ -400,7 +528,13 @@ message AfterSale {
   int64 amount_cent = 6;
   string reason = 7;
   int64 created_at_unix = 8;
+  string return_carrier = 9;
+  string return_tracking_no = 10;
+  string refund_no = 11;
+  int64 refunded_cent = 12;
+  repeated AfterSaleItem items = 13;
 }
+message AfterSaleList { repeated AfterSale after_sales = 1; int64 total = 2; }
 message CreateAfterSaleRequest {
   string order_no = 1;
   int64 user_id = 2;
@@ -410,5 +544,8 @@ message CreateAfterSaleRequest {
   repeated AfterSaleItem items = 6;
 }
 message GetAfterSaleRequest { string after_sale_no = 1; }
+message SubmitReturnTrackingRequest { string after_sale_no = 1; string carrier = 2; string tracking_no = 3; }
+message ReceiveReturnRequest { string after_sale_no = 1; string condition = 2; }
+message ListAfterSalesRequest { int64 user_id = 1; bool admin = 2; int32 page = 3; int32 page_size = 4; string status = 5; }
 message ApproveRequest { string after_sale_no = 1; bool approved = 2; int64 amount_cent = 3; string reason = 4; }
 message RefundAfterSaleRequest { string after_sale_no = 1; }

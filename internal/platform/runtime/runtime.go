@@ -40,6 +40,7 @@ func HealthServerWithChecks(cfg *config.Config, db *sql.DB, logger *slog.Logger,
 		defer cancel()
 		if db != nil {
 			if err := db.PingContext(ctx); err != nil {
+				logger.Warn("readiness check failed", "dependency", "mysql", "error", err)
 				w.WriteHeader(http.StatusServiceUnavailable)
 				_, _ = w.Write([]byte(`{"status":"not ready","dependency":"mysql"}`))
 				return
@@ -50,6 +51,7 @@ func HealthServerWithChecks(cfg *config.Config, db *sql.DB, logger *slog.Logger,
 				continue
 			}
 			if err := check(ctx); err != nil {
+				logger.Warn("readiness check failed", "dependency", "required", "error", err)
 				w.WriteHeader(http.StatusServiceUnavailable)
 				_, _ = w.Write([]byte(`{"status":"not ready","dependency":"required"}`))
 				return

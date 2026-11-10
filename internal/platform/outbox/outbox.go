@@ -23,9 +23,9 @@ type Event struct {
 }
 
 func Append(ctx context.Context, tx *sql.Tx, e Event) error {
-	payload, err := json.Marshal(e.Payload)
+	payload, err := encodePayload(e.Payload)
 	if err != nil {
-		return fmt.Errorf("marshal event: %w", err)
+		return err
 	}
 	if e.ID == "" {
 		e.ID = id.Event()
@@ -104,4 +104,27 @@ func relayOnce(ctx context.Context, db *sql.DB, client *mq.Client) (int, error) 
 		n++
 	}
 	return n, tx.Commit()
+}
+
+// encodePayload accepts already-marshalled JSON as well as Go values. Passing a
+// []byte to json.Marshal would base64-encode it, so callers that pre-marshal an
+// event must not silently turn the outbox row into a JSON string.
+func encodePayload(v any) ([]byte, error) {
+	var payload []byte
+	switch value := v.(type) {
+	case json.RawMessage:
+		payload = value
+	case []byte:
+		payload = value
+	default:
+		var err error
+		payload, err = json.Marshal(v)
+		if err != nil {
+			return nil, fmt.Errorf("marshal event: %w", err)
+		}
+	}
+	if !json.Valid(payload) {
+		return nil, fmt.Errorf("marshal event: payload is not valid JSON")
+	}
+	return payload, nil
 }

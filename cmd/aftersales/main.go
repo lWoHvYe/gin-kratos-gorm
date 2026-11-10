@@ -50,8 +50,19 @@ func main() {
 	}
 	defer conn.Close()
 	payments := pb.NewPaymentServiceClient(conn)
+	inventoryAddr := os.Getenv("INVENTORY_ADDR")
+	if inventoryAddr == "" {
+		inventoryAddr = "inventory:9003"
+	}
+	inventoryConn, err := grpcx.Dial(context.Background(), inventoryAddr)
+	if err != nil {
+		logger.Error("dial inventory", "addr", inventoryAddr, "error", err)
+		os.Exit(1)
+	}
+	defer inventoryConn.Close()
+	inventory := pb.NewInventoryServiceClient(inventoryConn)
 	gs := grpcx.NewServer(logger)
-	pb.RegisterAfterSalesServiceServer(gs, aftersales.New(database, client, payments, logger))
+	pb.RegisterAfterSalesServiceServer(gs, aftersales.New(database, client, payments, inventory, logger))
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)

@@ -150,3 +150,27 @@ func TestRefundOutcome(t *testing.T) {
 		})
 	}
 }
+
+func TestRefundableStatus(t *testing.T) {
+	cases := []struct {
+		name    string
+		typ     string
+		status  string
+		wantErr bool
+	}{
+		{"refund only approved", typeRefundOnly, statusApproved, false},
+		{"refund only requested", typeRefundOnly, statusRequested, true},
+		{"return received", typeReturnRefund, statusReceived, false},
+		{"return approved", typeReturnRefund, statusApproved, true},
+		{"return returning", typeReturnRefund, statusReturning, true},
+		{"retry refunding", typeReturnRefund, statusRefunding, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := refundableStatus(&afterSaleRow{typ: tc.typ, status: tc.status})
+			if tc.wantErr != (err != nil) {
+				t.Fatalf("wantErr=%v got %v", tc.wantErr, err)
+			}
+		})
+	}
+}

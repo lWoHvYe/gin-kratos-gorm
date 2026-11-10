@@ -44,6 +44,7 @@ const (
 var serviceAddrs = map[string]string{
 	"identity":    "identity:9001",
 	"catalog":     "catalog:9002",
+	"inventory":   "inventory:9003",
 	"cart":        "cart:9004",
 	"pricing":     "pricing:9005",
 	"order":       "order:9006",
@@ -56,6 +57,7 @@ var serviceAddrs = map[string]string{
 type Clients struct {
 	Identity    pb.IdentityServiceClient
 	Catalog     pb.CatalogServiceClient
+	Inventory   pb.InventoryServiceClient
 	Cart        pb.CartServiceClient
 	Pricing     pb.PricingServiceClient
 	Order       pb.OrderServiceClient
@@ -90,6 +92,7 @@ func Dial(ctx context.Context) (*Clients, error) {
 	}{
 		{"identity", func(conn *grpc.ClientConn) { clients.Identity = pb.NewIdentityServiceClient(conn) }},
 		{"catalog", func(conn *grpc.ClientConn) { clients.Catalog = pb.NewCatalogServiceClient(conn) }},
+		{"inventory", func(conn *grpc.ClientConn) { clients.Inventory = pb.NewInventoryServiceClient(conn) }},
 		{"cart", func(conn *grpc.ClientConn) { clients.Cart = pb.NewCartServiceClient(conn) }},
 		{"pricing", func(conn *grpc.ClientConn) { clients.Pricing = pb.NewPricingServiceClient(conn) }},
 		{"order", func(conn *grpc.ClientConn) { clients.Order = pb.NewOrderServiceClient(conn) }},
@@ -144,6 +147,11 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.GET("/api/v1/skus/:id", h.getSku)
 
 	authed := engine.Group("/api/v1", httpx.Auth(jwt), requireUser())
+	authed.GET("/addresses", h.listAddresses)
+	authed.POST("/addresses", h.createAddress)
+	authed.PUT("/addresses/:id", h.updateAddress)
+	authed.DELETE("/addresses/:id", h.deleteAddress)
+	authed.POST("/addresses/:id/default", h.setDefaultAddress)
 	authed.GET("/cart", h.getCart)
 	authed.POST("/cart/items", h.addCartItem)
 	authed.PATCH("/cart/items", h.updateCartItem)
@@ -157,7 +165,10 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	authed.POST("/orders/:orderNo/receive", h.receiveOrder)
 	authed.POST("/payments/:paymentNo/pay", h.pay)
 	authed.POST("/after-sales", h.createAfterSale)
+	authed.GET("/after-sales", h.listAfterSales)
 	authed.GET("/after-sales/:no", h.getAfterSale)
+	authed.POST("/after-sales/:no/return-tracking", h.submitReturnTracking)
+	authed.GET("/orders/:orderNo/shipments", h.getOrderShipment)
 
 	return engine
 }
@@ -289,11 +300,25 @@ func (h *handlers) listProducts(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
+	brandID, err := queryInt64(c, "brand_id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	minPrice, err := queryInt64(c, "min_price_cent")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	maxPrice, err := queryInt64(c, "max_price_cent")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
 	reply, err := h.clients.Catalog.ListProducts(c.Request.Context(), &pb.ListProductsRequest{
-		Page:       page,
-		PageSize:   pageSize,
-		Keyword:    strings.TrimSpace(c.Query("keyword")),
-		CategoryId: categoryID,
+		Page: page, PageSize: pageSize, Keyword: strings.TrimSpace(c.Query("keyword")),
+		CategoryId: categoryID, BrandId: brandID, MinPriceCent: minPrice, MaxPriceCent: maxPrice,
+		Sort: strings.TrimSpace(c.Query("sort")),
 	})
 	if err != nil {
 		httpx.Error(c, remoteError(err))
@@ -330,6 +355,123 @@ func (h *handlers) getSku(c *gin.Context) {
 	httpx.OK(c, sku)
 }
 
+// ensureStock checks the default warehouse before adding to cart or quoting.
+// The final authority remains DTM Reserve during order creation.
+func (h *handlers) ensureStock(ctx context.Context, skuID int64, quantity int32) error {
+	if skuID <= 0 || quantity <= 0 {
+		return apperr.Invalid("sku_id and quantity must be positive")
+	}
+	if h.clients.Inventory == nil {
+		return apperr.Unavailable("inventory client is not configured", nil)
+	}
+	stock, err := h.clients.Inventory.GetStock(ctx, &pb.GetStockRequest{SkuId: skuID, WarehouseId: 1})
+	if err != nil {
+		return remoteError(err)
+	}
+	if stock.GetAvailable() < int64(quantity) {
+		return apperr.Failed(fmt.Sprintf("insufficient stock for sku %d: available %d", skuID, stock.GetAvailable()))
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------- addresses
+
+func (h *handlers) listAddresses(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Identity.ListAddresses(c.Request.Context(), &pb.GetUserRequest{UserId: uid})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) createAddress(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var address pb.Address
+	if err := bindJSON(c, &address); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	address.UserId = uid
+	created, err := h.clients.Identity.CreateAddress(c.Request.Context(), &pb.CreateAddressRequest{Address: &address})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.Created(c, created)
+}
+
+func (h *handlers) updateAddress(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	addressID, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var address pb.Address
+	if err := bindJSON(c, &address); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	address.Id = addressID
+	address.UserId = uid
+	updated, err := h.clients.Identity.UpdateAddress(c.Request.Context(), &pb.UpdateAddressRequest{Address: &address})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, updated)
+}
+
+func (h *handlers) deleteAddress(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	addressID, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Identity.DeleteAddress(c.Request.Context(), &pb.DeleteAddressRequest{UserId: uid, AddressId: addressID}); err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": "deleted"})
+}
+
+func (h *handlers) setDefaultAddress(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	addressID, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Identity.SetDefaultAddress(c.Request.Context(), &pb.SetDefaultAddressRequest{UserId: uid, AddressId: addressID}); err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": "default"})
+}
+
 // ---------------------------------------------------------------- cart
 
 func (h *handlers) getCart(c *gin.Context) {
@@ -358,6 +500,10 @@ func (h *handlers) addCartItem(c *gin.Context) {
 		return
 	}
 	req.UserId = uid
+	if err := h.ensureStock(c.Request.Context(), req.SkuId, req.Quantity); err != nil {
+		httpx.Error(c, err)
+		return
+	}
 	cart, err := h.clients.Cart.AddItem(c.Request.Context(), &req)
 	if err != nil {
 		httpx.Error(c, remoteError(err))
@@ -378,6 +524,12 @@ func (h *handlers) updateCartItem(c *gin.Context) {
 		return
 	}
 	req.UserId = uid
+	if req.Quantity > 0 {
+		if err := h.ensureStock(c.Request.Context(), req.SkuId, req.Quantity); err != nil {
+			httpx.Error(c, err)
+			return
+		}
+	}
 	cart, err := h.clients.Cart.UpdateItem(c.Request.Context(), &req)
 	if err != nil {
 		httpx.Error(c, remoteError(err))
@@ -447,6 +599,10 @@ func (h *handlers) mergeCart(c *gin.Context) {
 	}
 	var cart *pb.Cart
 	for _, item := range in.Items {
+		if err := h.ensureStock(c.Request.Context(), item.SkuID, item.Quantity); err != nil {
+			httpx.Error(c, err)
+			return
+		}
 		cart, err = h.clients.Cart.AddItem(c.Request.Context(), &pb.AddItemRequest{
 			UserId:   uid,
 			SkuId:    item.SkuID,
@@ -512,6 +668,12 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 		}
 		if len(items) == 0 {
 			httpx.Error(c, apperr.Invalid("cart has no selected items"))
+			return
+		}
+	}
+	for _, item := range items {
+		if err := h.ensureStock(c.Request.Context(), item.GetSkuId(), item.GetQuantity()); err != nil {
+			httpx.Error(c, err)
 			return
 		}
 	}
@@ -1028,4 +1190,92 @@ func remoteError(err error) error {
 	default:
 		return apperr.Internal("downstream error", err)
 	}
+}
+
+// ---------------------------------------------------------------- after-sales / shipment
+
+type returnTrackingRequest struct {
+	Carrier    string `json:"carrier"`
+	TrackingNo string `json:"tracking_no"`
+}
+
+func (h *handlers) submitReturnTracking(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	no := strings.TrimSpace(c.Param("no"))
+	var in returnTrackingRequest
+	if err := bindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	afterSale, err := h.clients.AfterSales.GetAfterSale(c.Request.Context(), &pb.GetAfterSaleRequest{AfterSaleNo: no})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	if afterSale.GetUserId() != uid {
+		httpx.Error(c, apperr.Forbidden("after sale does not belong to user"))
+		return
+	}
+	updated, err := h.clients.AfterSales.SubmitReturnTracking(c.Request.Context(), &pb.SubmitReturnTrackingRequest{
+		AfterSaleNo: no, Carrier: strings.TrimSpace(in.Carrier), TrackingNo: strings.TrimSpace(in.TrackingNo),
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, updated)
+}
+
+func (h *handlers) listAfterSales(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	pageSize, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.AfterSales.ListAfterSales(c.Request.Context(), &pb.ListAfterSalesRequest{
+		UserId: uid, Page: page, PageSize: pageSize, Status: strings.TrimSpace(c.Query("status")),
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) getOrderShipment(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	orderNo := strings.TrimSpace(c.Param("orderNo"))
+	order, err := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: orderNo, UserId: uid})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	if order.GetOrderNo() == "" {
+		httpx.Error(c, apperr.NotFound("order not found"))
+		return
+	}
+	shipment, err := h.clients.Fulfillment.GetShipmentByOrder(c.Request.Context(), &pb.GetShipmentByOrderRequest{OrderNo: orderNo})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, shipment)
 }

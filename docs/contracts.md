@@ -145,7 +145,7 @@ Consumers:
 
 ## Testing
 
-- Unit tests only, no integration tests.
+- Unit tests plus the opt-in Phase 1.5 E2E script (`make e2e-phase15`).
 - Focus on money math, state transitions, reservation/refund idempotency.
 - `go build ./cmd/<service>` and `go test ./internal/services/<service>/...` must pass.
 
@@ -155,3 +155,37 @@ Consumers:
   from the order items. The consumer is durable and idempotent by `order_no`.
 - `order.paid` payload includes `items` (`sku_id`, `name`, `price_cent`,
   `quantity`, `discount_cent`).
+
+## Phase 1.5 additions
+
+- Catalog admin now covers category/brand CRUD, SPU/SKU CRUD, image and
+  attribute lists, draft/publish status, and `GetAdminProduct`/
+  `ListAdminProducts`.
+- `skus.stock` is a display projection. Inventory owns the counters and emits
+  `shop.inventory.stock.changed.v1`; catalog consumes it with a durable
+  `catalog-stock-projection` consumer.
+- C-end product search filters in MySQL by category subtree, brand, price and
+  keyword, with `price_asc`/`price_desc`/`newest` ordering.
+- Identity exposes `UpdateAddress`, `DeleteAddress`, `SetDefaultAddress`.
+- Payment supports idempotent partial refunds, `captured_cent`, `refunded_cent`
+  and `ListRefunds`. Mock channel only; no provider SDK.
+- `order.refunded_cent` follows `shop.payment.refunded.v1`; partial/full refund
+  statuses are projected asynchronously.
+- After-sales supports `RETURN_REFUND`: approve, submit return tracking, receive
+  the parcel, restock (`SELLABLE`) or record `DAMAGED`, then refund. Restock is
+  idempotent by after-sale number.
+- Fulfillment exposes `ListShipments` for the back office.
+- Phase 1.5 validation is covered by `scripts/e2e-phase15.sh` against a running
+  stack in addition to unit tests. It is intentionally not run by `make test`.
+
+Events added:
+
+- `shop.inventory.stock.changed.v1`
+- `shop.aftersale.returning.v1`
+- `shop.aftersale.received.v1`
+- `shop.order.refund_projected.v1`
+
+Consumer added:
+
+- catalog `catalog-stock-projection`.
+- order `order-refund-projection`.

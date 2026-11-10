@@ -27,6 +27,7 @@ func main() {
 	go outbox.Relay(ctx, bundle.DB, bundle.MQ, bundle.Logger, time.Second)
 	go order.RunExpiry(ctx, bundle.DB, bundle.Service, bundle.Logger, time.Minute)
 	go order.RunShipmentConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger)
+	go order.RunRefundConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger)
 	if err := bundle.App.Run(); err != nil {
 		panic(err)
 	}

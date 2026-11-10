@@ -12,6 +12,7 @@ import (
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/auth"
+	"gin-kratos-gorm/internal/platform/db"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -155,13 +156,102 @@ func (s *Service) CreateAddress(ctx context.Context, req *pb.CreateAddressReques
 	if strings.TrimSpace(a.GetReceiver()) == "" || strings.TrimSpace(a.GetDetail()) == "" {
 		return nil, apperr.Invalid("receiver and detail are required")
 	}
-	res, err := s.db.ExecContext(ctx, `INSERT INTO user_addresses (user_id, receiver, phone, province, city, district, detail, is_default)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, a.GetUserId(), a.GetReceiver(), a.GetPhone(), a.GetProvince(), a.GetCity(), a.GetDistrict(), a.GetDetail(), a.GetIsDefault())
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		if a.GetIsDefault() {
+			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0 WHERE user_id = ?`, a.GetUserId()); err != nil {
+				return apperr.Internal("clear default address", err)
+			}
+		}
+		res, err := tx.ExecContext(ctx, `INSERT INTO user_addresses (user_id, receiver, phone, province, city, district, detail, is_default)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, a.GetUserId(), a.GetReceiver(), a.GetPhone(), a.GetProvince(), a.GetCity(), a.GetDistrict(), a.GetDetail(), a.GetIsDefault())
+		if err != nil {
+			return apperr.Internal("create address", err)
+		}
+		a.Id, _ = res.LastInsertId()
+		return nil
+	})
 	if err != nil {
-		return nil, apperr.Internal("create address", err)
+		return nil, err
 	}
-	a.Id, _ = res.LastInsertId()
 	return a, nil
+}
+
+func (s *Service) UpdateAddress(ctx context.Context, req *pb.UpdateAddressRequest) (*pb.Address, error) {
+	a := req.GetAddress()
+	if a == nil || a.GetId() <= 0 || a.GetUserId() <= 0 {
+		return nil, apperr.Invalid("address id and user_id are required")
+	}
+	if strings.TrimSpace(a.GetReceiver()) == "" || strings.TrimSpace(a.GetDetail()) == "" {
+		return nil, apperr.Invalid("receiver and detail are required")
+	}
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		if a.GetIsDefault() {
+			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0 WHERE user_id = ?`, a.GetUserId()); err != nil {
+				return apperr.Internal("clear default address", err)
+			}
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE user_addresses
+			SET receiver = ?, phone = ?, province = ?, city = ?, district = ?, detail = ?, is_default = ?
+			WHERE id = ? AND user_id = ?`,
+			a.GetReceiver(), a.GetPhone(), a.GetProvince(), a.GetCity(), a.GetDistrict(), a.GetDetail(), a.GetIsDefault(), a.GetId(), a.GetUserId())
+		if err != nil {
+			return apperr.Internal("update address", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return apperr.NotFound("address not found")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+func (s *Service) DeleteAddress(ctx context.Context, req *pb.DeleteAddressRequest) (*pb.Empty, error) {
+	if req.GetUserId() <= 0 || req.GetAddressId() <= 0 {
+		return nil, apperr.Invalid("user_id and address_id are required")
+	}
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `DELETE FROM user_addresses WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId())
+		if err != nil {
+			return apperr.Internal("delete address", err)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return apperr.NotFound("address not found")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.Empty{}, nil
+}
+
+func (s *Service) SetDefaultAddress(ctx context.Context, req *pb.SetDefaultAddressRequest) (*pb.Empty, error) {
+	if req.GetUserId() <= 0 || req.GetAddressId() <= 0 {
+		return nil, apperr.Invalid("user_id and address_id are required")
+	}
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		var exists int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_addresses WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId()).Scan(&exists); err != nil {
+			return apperr.Internal("query address", err)
+		}
+		if exists == 0 {
+			return apperr.NotFound("address not found")
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0 WHERE user_id = ?`, req.GetUserId()); err != nil {
+			return apperr.Internal("clear default address", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 1 WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId()); err != nil {
+			return apperr.Internal("set default address", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.Empty{}, nil
 }
 
 func (s *Service) ListAddresses(ctx context.Context, req *pb.GetUserRequest) (*pb.AddressList, error) {

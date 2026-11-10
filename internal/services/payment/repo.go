@@ -26,14 +26,17 @@ type querier interface {
 
 // intent is one payment_intents row.
 type intent struct {
-	PaymentNo  string
-	OrderNo    string
-	UserID     int64
-	AmountCent int64
-	Channel    string
-	Status     string
-	PayURL     string
-	ExpiresAt  time.Time
+	PaymentNo     string
+	OrderNo       string
+	UserID        int64
+	AmountCent    int64
+	CapturedCent  int64
+	RefundedCent  int64
+	Channel       string
+	PaymentMethod string
+	Status        string
+	PayURL        string
+	ExpiresAt     time.Time
 }
 
 func (in *intent) toPB() *pb.Intent {
@@ -41,8 +44,11 @@ func (in *intent) toPB() *pb.Intent {
 		PaymentNo:     in.PaymentNo,
 		OrderNo:       in.OrderNo,
 		AmountCent:    in.AmountCent,
+		CapturedCent:  in.CapturedCent,
+		RefundedCent:  in.RefundedCent,
 		Status:        in.Status,
 		Channel:       in.Channel,
+		PaymentMethod: in.PaymentMethod,
 		PayUrl:        in.PayURL,
 		ExpiresAtUnix: in.ExpiresAt.Unix(),
 	}
@@ -60,13 +66,14 @@ type callback struct {
 
 // refund is one refunds row.
 type refund struct {
-	RefundNo   string
-	PaymentNo  string
-	OrderNo    string
-	AmountCent int64
-	Reason     string
-	Status     string
-	Channel    string
+	RefundNo       string
+	PaymentNo      string
+	OrderNo        string
+	AmountCent     int64
+	Reason         string
+	Status         string
+	Channel        string
+	IdempotencyKey string
 }
 
 type repo struct {
@@ -77,12 +84,13 @@ func newRepo(database *sql.DB) *repo {
 	return &repo{db: database}
 }
 
-const intentColumns = `payment_no, order_no, user_id, amount_cent, channel, status, pay_url, expires_at`
+const intentColumns = `payment_no, order_no, user_id, amount_cent, captured_cent, refunded_cent, channel, payment_method, status, pay_url, expires_at`
 
 func scanIntent(row *sql.Row) (*intent, error) {
 	var in intent
 	if err := row.Scan(&in.PaymentNo, &in.OrderNo, &in.UserID, &in.AmountCent,
-		&in.Channel, &in.Status, &in.PayURL, &in.ExpiresAt); err != nil {
+		&in.CapturedCent, &in.RefundedCent, &in.Channel, &in.PaymentMethod,
+		&in.Status, &in.PayURL, &in.ExpiresAt); err != nil {
 		return nil, err
 	}
 	return &in, nil
@@ -108,16 +116,18 @@ func (r *repo) intentByKey(ctx context.Context, q querier, orderNo string, amoun
 
 func (r *repo) insertIntent(ctx context.Context, q querier, in *intent, now time.Time) error {
 	_, err := q.ExecContext(ctx, `INSERT INTO payment_intents
-		(payment_no, order_no, user_id, amount_cent, channel, status, pay_url, expires_at, version, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-		in.PaymentNo, in.OrderNo, in.UserID, in.AmountCent, in.Channel, in.Status, in.PayURL, in.ExpiresAt, now, now)
+		(payment_no, order_no, user_id, amount_cent, captured_cent, refunded_cent, channel, payment_method, status, pay_url, expires_at, version, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+		in.PaymentNo, in.OrderNo, in.UserID, in.AmountCent, in.CapturedCent, in.RefundedCent, in.Channel, in.PaymentMethod, in.Status, in.PayURL, in.ExpiresAt, now, now)
 	return err
 }
 
 func (r *repo) updateIntentStatus(ctx context.Context, q querier, paymentNo, status string, now time.Time) error {
 	res, err := q.ExecContext(ctx, `UPDATE payment_intents
-		SET status = ?, version = version + 1, updated_at = ?
-		WHERE payment_no = ?`, status, now, paymentNo)
+		SET status = ?, captured_cent = CASE WHEN ? = 'SUCCEEDED' THEN amount_cent ELSE captured_cent END,
+		    payment_method = CASE WHEN ? = 'SUCCEEDED' AND payment_method = '' THEN channel ELSE payment_method END,
+		    version = version + 1, updated_at = ?
+		WHERE payment_no = ?`, status, status, status, now, paymentNo)
 	if err != nil {
 		return err
 	}
@@ -156,15 +166,13 @@ func (r *repo) callbackPaymentNo(ctx context.Context, q querier, channel, eventI
 	return paymentNo, err
 }
 
-const refundColumns = `refund_no, payment_no, order_no, amount_cent, reason, status, channel`
+const refundColumns = `refund_no, payment_no, order_no, amount_cent, reason, status, channel, COALESCE(idempotency_key, '')`
 
-// refundByKey loads the refund identified by the Refund idempotency key
-// (payment_no, amount_cent, reason).
-func (r *repo) refundByKey(ctx context.Context, q querier, paymentNo string, amountCent int64, reason string) (*refund, error) {
+func (r *repo) refundByKey(ctx context.Context, q querier, paymentNo, idempotencyKey string) (*refund, error) {
 	var ref refund
 	err := q.QueryRowContext(ctx, `SELECT `+refundColumns+` FROM refunds
-		WHERE payment_no = ? AND amount_cent = ? AND reason = ?`, paymentNo, amountCent, reason).
-		Scan(&ref.RefundNo, &ref.PaymentNo, &ref.OrderNo, &ref.AmountCent, &ref.Reason, &ref.Status, &ref.Channel)
+		WHERE payment_no = ? AND idempotency_key = ?`, paymentNo, idempotencyKey).
+		Scan(&ref.RefundNo, &ref.PaymentNo, &ref.OrderNo, &ref.AmountCent, &ref.Reason, &ref.Status, &ref.Channel, &ref.IdempotencyKey)
 	if err != nil {
 		return nil, err
 	}
@@ -173,10 +181,27 @@ func (r *repo) refundByKey(ctx context.Context, q querier, paymentNo string, amo
 
 func (r *repo) insertRefund(ctx context.Context, q querier, ref *refund, now time.Time) error {
 	_, err := q.ExecContext(ctx, `INSERT INTO refunds
-		(refund_no, payment_no, order_no, amount_cent, reason, status, channel, version, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-		ref.RefundNo, ref.PaymentNo, ref.OrderNo, ref.AmountCent, ref.Reason, ref.Status, ref.Channel, now, now)
+		(refund_no, payment_no, order_no, amount_cent, reason, status, channel, idempotency_key, completed_at, version, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+		ref.RefundNo, ref.PaymentNo, ref.OrderNo, ref.AmountCent, ref.Reason, ref.Status, ref.Channel, ref.IdempotencyKey, now, now, now)
 	return err
+}
+
+func (r *repo) updateIntentRefund(ctx context.Context, q querier, paymentNo string, refundedCent int64, status string, now time.Time) error {
+	res, err := q.ExecContext(ctx, `UPDATE payment_intents
+		SET refunded_cent = ?, status = ?, version = version + 1, updated_at = ?
+		WHERE payment_no = ?`, refundedCent, status, now, paymentNo)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return errNotUpdated
+	}
+	return nil
 }
 
 // isDuplicateKey reports whether err is a MySQL unique-key violation.
@@ -189,6 +214,6 @@ func isDuplicateKey(err error) bool {
 // refunds are order-keyed and do not need the payment number.
 func (r *repo) intentByOrder(ctx context.Context, q querier, orderNo string) (*intent, error) {
 	return scanIntent(q.QueryRowContext(ctx, `SELECT `+intentColumns+` FROM payment_intents
-		WHERE order_no = ? AND status IN (?, ?) ORDER BY id DESC LIMIT 1`,
-		orderNo, statusSucceeded, statusRefunded))
+		WHERE order_no = ? AND status IN (?, ?, ?) ORDER BY id DESC LIMIT 1`,
+		orderNo, statusSucceeded, statusPartiallyRefunded, statusRefunded))
 }

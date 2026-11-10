@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/config"
@@ -102,9 +101,8 @@ func provideGRPCServer(logger *slog.Logger, svc *payment.Service) *kratosgrpc.Se
 }
 
 func provideHealth(cfg *config.Config, database *sql.DB, logger *slog.Logger) *khttp.Server {
-	return runtime.HealthServerWithChecks(cfg, database, logger, func(ctx context.Context) error {
-		return dtm.Probe(ctx, cfg.DTMAddress, 2*time.Second)
-	})
+	// DTM is required per transaction, not for process readiness.
+	return runtime.HealthServer(cfg, database, logger)
 }
 
 func provideApp(cfg *config.Config, logger *slog.Logger, gs *kratosgrpc.Server, hs *khttp.Server) *kratos.App {

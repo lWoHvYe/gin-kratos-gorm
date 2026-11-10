@@ -18,3 +18,19 @@ func TestGormSPUToPB(t *testing.T) {
 		t.Fatalf("unexpected skus: %+v", p.GetSkus())
 	}
 }
+
+func TestGormSPUToPBIncludesMediaAndAttributes(t *testing.T) {
+	row := gormSPU{
+		ID: 1, Name: "Widget", Status: "ON_SALE",
+		Skus:       []gormSKU{{ID: 7, SpuID: 1, PriceCent: 1200, Status: "ENABLED"}},
+		Images:     []gormImage{{ID: 2, SpuID: 1, URL: "https://example.invalid/a.png", Sort: 1}},
+		Attributes: []gormAttribute{{ID: 3, SpuID: 1, Name: "color", Value: "red", Sort: 1}},
+	}
+	p := row.toPB()
+	if p.GetMinPriceCent() != 1200 || len(p.GetImages()) != 1 || len(p.GetAttributes()) != 1 {
+		t.Fatalf("unexpected product: %+v", p)
+	}
+	if p.GetImages()[0].GetUrl() == "" || p.GetAttributes()[0].GetName() != "color" {
+		t.Fatalf("media not mapped: %+v", p)
+	}
+}

@@ -137,18 +137,21 @@ spec:
               port: {{ $svc.healthPort }}
             periodSeconds: 5
             failureThreshold: 30
+            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /readyz
               port: {{ $svc.healthPort }}
             periodSeconds: 10
             failureThreshold: 6
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
               path: /healthz
               port: {{ $svc.healthPort }}
             periodSeconds: 20
             failureThreshold: 3
+            timeoutSeconds: 5
           resources:
             {{- toYaml $.Values.resources | nindent 12 }}
       restartPolicy: Always

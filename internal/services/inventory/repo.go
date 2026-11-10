@@ -22,6 +22,10 @@ const (
 	entryReserve = "RESERVE"
 	entryConfirm = "CONFIRM"
 	entryRelease = "RELEASE"
+	entryRestock = "RESTOCK"
+	entryDamaged = "DAMAGED"
+
+	topicStockChanged = "shop.inventory.stock.changed.v1"
 
 	topicReserved  = "shop.inventory.reserved.v1"
 	topicConfirmed = "shop.inventory.confirmed.v1"
@@ -159,6 +163,9 @@ func (s *Service) reserveTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 	if err := appendEvent(ctx, tx, r, topicReserved, eventReserved); err != nil {
 		return nil, err
 	}
+	if err := appendStockChanged(ctx, tx, st); err != nil {
+		return nil, err
+	}
 	return r, nil
 }
 
@@ -217,6 +224,9 @@ func (s *Service) confirmTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 		return nil, err
 	}
 	if err := appendEvent(ctx, tx, r, topicConfirmed, eventConfirmed); err != nil {
+		return nil, err
+	}
+	if err := appendStockChanged(ctx, tx, st); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -278,6 +288,9 @@ func (s *Service) releaseTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 		return nil, err
 	}
 	if err := appendEvent(ctx, tx, r, topicReleased, eventReleased); err != nil {
+		return nil, err
+	}
+	if err := appendStockChanged(ctx, tx, st); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -343,4 +356,27 @@ func eventID(eventType, reservationNo string) string {
 func isDuplicateEntry(err error) bool {
 	var me *mysql.MySQLError
 	return errors.As(err, &me) && me.Number == 1062
+}
+
+// appendStockChanged projects the authoritative inventory counters to the
+// catalog read model. It is deliberately separate from the reservation domain
+// event so consumers can subscribe to exactly one stock projection stream.
+func appendStockChanged(ctx context.Context, tx *sql.Tx, st *stock) error {
+	if st == nil {
+		return nil
+	}
+	return outbox.Append(ctx, tx, outbox.Event{
+		Topic:         topicStockChanged,
+		AggregateType: "inventory_stock",
+		AggregateID:   fmt.Sprintf("%d:%d", st.skuID, st.warehouseID),
+		EventType:     "inventory.stock_changed",
+		Payload: map[string]any{
+			"sku_id":       st.skuID,
+			"warehouse_id": st.warehouseID,
+			"on_hand":      st.onHand,
+			"reserved":     st.reserved,
+			"available":    st.available(),
+			"changed_at":   time.Now().Unix(),
+		},
+	})
 }

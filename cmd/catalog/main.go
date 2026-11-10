@@ -46,8 +46,10 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	go outbox.Relay(ctx, database, client, logger, time.Second)
+	svc := catalog.New(database, client, cache, logger)
+	go catalog.RunStockConsumer(ctx, client, svc, logger)
 	gs := grpcx.NewServer(logger)
-	pb.RegisterCatalogServiceServer(gs, catalog.New(database, client, cache, logger))
+	pb.RegisterCatalogServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)

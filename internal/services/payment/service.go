@@ -27,10 +27,11 @@ import (
 )
 
 const (
-	statusPending   = "PENDING"
-	statusSucceeded = "SUCCEEDED"
-	statusFailed    = "FAILED"
-	statusRefunded  = "REFUNDED"
+	statusPending           = "PENDING"
+	statusSucceeded         = "SUCCEEDED"
+	statusFailed            = "FAILED"
+	statusPartiallyRefunded = "PARTIALLY_REFUNDED"
+	statusRefunded          = "REFUNDED"
 
 	defaultChannel = "mock"
 
@@ -258,17 +259,20 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 	}
 	amount := req.GetAmountCent()
 	reason := strings.TrimSpace(req.GetReason())
-
+	idempotencyKey := strings.TrimSpace(req.GetIdempotencyKey())
+	if idempotencyKey == "" {
+		idempotencyKey = paymentNo + ":" + strconv.FormatInt(amount, 10) + ":" + reason
+	}
 	now := s.now()
 	r := newRepo(s.db)
 	var refundNo string
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, err := r.refundByKey(ctx, tx, paymentNo, amount, reason); err == nil {
-			return nil // already refunded with this exact key
+		if existing, err := r.refundByKey(ctx, tx, paymentNo, idempotencyKey); err == nil {
+			refundNo = existing.RefundNo
+			return nil
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-
 		in, err := r.intentByNo(ctx, tx, paymentNo, true)
 		if errors.Is(err, sql.ErrNoRows) {
 			return apperr.NotFound("payment intent not found")
@@ -276,29 +280,43 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 		if err != nil {
 			return err
 		}
-		if in.Status != statusSucceeded {
-			return apperr.Failed(fmt.Sprintf("payment intent is %s; only SUCCEEDED payments can be refunded", in.Status))
+		if in.Status != statusSucceeded && in.Status != statusPartiallyRefunded {
+			return apperr.Failed(fmt.Sprintf("payment intent is %s; only captured payments can be refunded", in.Status))
 		}
-		if amount > in.AmountCent {
-			return apperr.Invalid("refund amount %d exceeds payment amount %d", amount, in.AmountCent)
+		captured := in.CapturedCent
+		if captured <= 0 {
+			captured = in.AmountCent
 		}
-
+		if in.RefundedCent+amount > captured {
+			return apperr.Invalid("refund amount %d exceeds remaining refundable amount %d", amount, captured-in.RefundedCent)
+		}
 		ref := &refund{
-			RefundNo:   id.New("RFD"),
-			PaymentNo:  in.PaymentNo,
-			OrderNo:    in.OrderNo,
-			AmountCent: amount,
-			Reason:     reason,
-			Status:     statusRefunded,
-			Channel:    in.Channel,
+			RefundNo:       id.New("RFD"),
+			PaymentNo:      in.PaymentNo,
+			OrderNo:        in.OrderNo,
+			AmountCent:     amount,
+			Reason:         reason,
+			Status:         statusSucceeded,
+			Channel:        in.Channel,
+			IdempotencyKey: idempotencyKey,
 		}
 		if err := r.insertRefund(ctx, tx, ref, now); err != nil {
 			if isDuplicateKey(err) {
-				return nil // a concurrent identical refund won the race
+				winner, qerr := r.refundByKey(ctx, tx, paymentNo, idempotencyKey)
+				if qerr != nil {
+					return apperr.Internal("load concurrent refund", qerr)
+				}
+				refundNo = winner.RefundNo
+				return nil
 			}
 			return err
 		}
-		if err := r.updateIntentStatus(ctx, tx, in.PaymentNo, statusRefunded, now); err != nil {
+		totalRefunded := in.RefundedCent + amount
+		nextStatus := statusPartiallyRefunded
+		if totalRefunded >= captured {
+			nextStatus = statusRefunded
+		}
+		if err := r.updateIntentRefund(ctx, tx, in.PaymentNo, totalRefunded, nextStatus, now); err != nil {
 			return err
 		}
 		refundNo = ref.RefundNo
@@ -308,18 +326,22 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 			AggregateID:   in.PaymentNo,
 			EventType:     eventRefunded,
 			Payload: map[string]any{
-				"refund_no":   ref.RefundNo,
-				"payment_no":  in.PaymentNo,
-				"order_no":    in.OrderNo,
-				"user_id":     in.UserID,
-				"amount_cent": amount,
-				"reason":      reason,
-				"channel":     in.Channel,
-				"status":      statusRefunded,
+				"refund_no":       ref.RefundNo,
+				"payment_no":      in.PaymentNo,
+				"order_no":        in.OrderNo,
+				"user_id":         in.UserID,
+				"amount_cent":     amount,
+				"refunded_cent":   totalRefunded,
+				"captured_cent":   captured,
+				"reason":          reason,
+				"channel":         in.Channel,
+				"status":          nextStatus,
+				"idempotency_key": idempotencyKey,
 			},
 		})
 	})
 	if err != nil {
+		s.log.Error("refund payment failed", "payment_no", paymentNo, "error", err)
 		return nil, encodeError("refund payment", err)
 	}
 	if refundNo != "" {
@@ -459,10 +481,54 @@ func (s *Service) RefundOrder(ctx context.Context, req *pb.RefundOrderRequest) (
 	if err != nil {
 		return nil, apperr.Internal("query payment for order", err)
 	}
-	if in.Status == statusRefunded {
-		return &pb.Empty{}, nil
+	return s.Refund(ctx, &pb.RefundRequest{
+		PaymentNo:      in.PaymentNo,
+		AmountCent:     amount,
+		Reason:         reason,
+		IdempotencyKey: req.GetIdempotencyKey(),
+	})
+}
+
+// ListRefunds returns refund rows for operators and the order detail page.
+func (s *Service) ListRefunds(ctx context.Context, req *pb.ListRefundsRequest) (*pb.RefundList, error) {
+	page, size := req.GetPage(), req.GetPageSize()
+	if page <= 0 {
+		page = 1
 	}
-	return s.Refund(ctx, &pb.RefundRequest{PaymentNo: in.PaymentNo, AmountCent: amount, Reason: reason})
+	if size <= 0 || size > 100 {
+		size = 20
+	}
+	where := "WHERE 1 = 1"
+	args := []any{}
+	if paymentNo := strings.TrimSpace(req.GetPaymentNo()); paymentNo != "" {
+		where += " AND payment_no = ?"
+		args = append(args, paymentNo)
+	}
+	if orderNo := strings.TrimSpace(req.GetOrderNo()); orderNo != "" {
+		where += " AND order_no = ?"
+		args = append(args, orderNo)
+	}
+	var total int64
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM refunds "+where, args...).Scan(&total); err != nil {
+		return nil, apperr.Internal("count refunds", err)
+	}
+	args = append(args, size, (page-1)*size)
+	rows, err := s.db.QueryContext(ctx, `SELECT refund_no, payment_no, order_no, amount_cent, reason, status, created_at FROM refunds `+where+` ORDER BY id DESC LIMIT ? OFFSET ?`, args...)
+	if err != nil {
+		return nil, apperr.Internal("list refunds", err)
+	}
+	defer rows.Close()
+	reply := &pb.RefundList{Total: total}
+	for rows.Next() {
+		var r pb.Refund
+		var created time.Time
+		if err := rows.Scan(&r.RefundNo, &r.PaymentNo, &r.OrderNo, &r.AmountCent, &r.Reason, &r.Status, &created); err != nil {
+			return nil, apperr.Internal("scan refund", err)
+		}
+		r.CreatedAtUnix = created.Unix()
+		reply.Refunds = append(reply.Refunds, &r)
+	}
+	return reply, rows.Err()
 }
 
 // VerifyPayment is a read-only consistency check for operators. It asks all

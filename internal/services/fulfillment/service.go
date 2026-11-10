@@ -381,3 +381,48 @@ func validateCreateShipment(orderNo string, items []*pb.ShipmentItem) ([]shipmen
 	}
 	return merged, nil
 }
+
+// ListShipments is the admin shipment list. It uses the same aggregate loader
+// as the detail endpoint so items and status stay consistent.
+func (s *Service) ListShipments(ctx context.Context, req *pb.ListShipmentsRequest) (*pb.ShipmentList, error) {
+	page, size := req.GetPage(), req.GetPageSize()
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 || size > 100 {
+		size = 20
+	}
+	where := "WHERE 1 = 1"
+	args := []any{}
+	if status := strings.TrimSpace(req.GetStatus()); status != "" {
+		where += " AND status = ?"
+		args = append(args, status)
+	}
+	if orderNo := strings.TrimSpace(req.GetOrderNo()); orderNo != "" {
+		where += " AND order_no = ?"
+		args = append(args, orderNo)
+	}
+	var total int64
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM shipments "+where, args...).Scan(&total); err != nil {
+		return nil, apperr.Internal("count shipments", err)
+	}
+	args = append(args, size, (page-1)*size)
+	rows, err := s.db.QueryContext(ctx, "SELECT shipment_no FROM shipments "+where+" ORDER BY id DESC LIMIT ? OFFSET ?", args...)
+	if err != nil {
+		return nil, apperr.Internal("list shipments", err)
+	}
+	defer rows.Close()
+	reply := &pb.ShipmentList{Total: total}
+	for rows.Next() {
+		var no string
+		if err := rows.Scan(&no); err != nil {
+			return nil, apperr.Internal("scan shipment", err)
+		}
+		shipment, err := s.loadShipment(ctx, no)
+		if err != nil {
+			return nil, err
+		}
+		reply.Shipments = append(reply.Shipments, shipment)
+	}
+	return reply, rows.Err()
+}

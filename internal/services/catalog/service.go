@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,114 +76,195 @@ func (s *Service) cacheEvictProduct(ctx context.Context, id int64) {
 	}
 }
 
+// ---------------------------------------------------------------- read side
+
 func (s *Service) GetProduct(ctx context.Context, req *pb.GetProductRequest) (*pb.Product, error) {
+	if req.GetId() <= 0 {
+		return nil, apperr.Invalid("id is required")
+	}
 	if p, ok := s.cacheGetProduct(ctx, req.GetId()); ok {
 		return p, nil
 	}
-	var p *pb.Product
-	var err error
+	var (
+		p   *pb.Product
+		err error
+	)
 	if s.gorm != nil {
-		p, err = s.gorm.GetProduct(ctx, req.GetId())
-		if err != nil {
-			return nil, apperr.Internal("get product", err)
-		}
-		if p == nil {
-			return nil, apperr.NotFound("product not found")
-		}
+		p, err = s.gorm.GetProduct(ctx, req.GetId(), true)
 	} else {
-		p, err = s.loadProduct(ctx, req.GetId())
-		if err != nil {
-			return nil, err
-		}
+		p, err = s.loadProduct(ctx, req.GetId(), true)
+	}
+	if err != nil {
+		return nil, apperr.Internal("get product", err)
+	}
+	if p == nil {
+		return nil, apperr.NotFound("product not found")
 	}
 	s.cachePutProduct(ctx, p)
 	return p, nil
 }
 
-func (s *Service) ListProducts(ctx context.Context, req *pb.ListProductsRequest) (*pb.ProductList, error) {
-	if req.GetPage() <= 0 {
-		req.Page = 1
+func (s *Service) GetAdminProduct(ctx context.Context, req *pb.GetProductRequest) (*pb.Product, error) {
+	if req.GetId() <= 0 {
+		return nil, apperr.Invalid("id is required")
 	}
-	if req.GetPageSize() <= 0 || req.GetPageSize() > 100 {
-		req.PageSize = 20
+	p, err := s.loadProduct(ctx, req.GetId(), false)
+	if err != nil {
+		return nil, apperr.Internal("get admin product", err)
+	}
+	if p == nil || p.GetStatus() == "DELETED" {
+		return nil, apperr.NotFound("product not found")
+	}
+	return p, nil
+}
+
+func (s *Service) ListProducts(ctx context.Context, req *pb.ListProductsRequest) (*pb.ProductList, error) {
+	normalizePage(&req.Page, &req.PageSize)
+	ids, err := s.categoryIDs(ctx, req.GetCategoryId())
+	if err != nil {
+		return nil, err
+	}
+	if req.GetCategoryId() > 0 && len(ids) == 0 {
+		return &pb.ProductList{}, nil
 	}
 	if s.gorm != nil {
-		list, err := s.gorm.ListProducts(ctx, req)
+		list, err := s.gorm.ListProducts(ctx, req, ids)
 		if err != nil {
 			return nil, apperr.Internal("list products", err)
 		}
 		return list, nil
 	}
-	where := "WHERE status = 'ON_SALE'"
-	args := []any{}
-	if kw := strings.TrimSpace(req.GetKeyword()); kw != "" {
-		where += " AND (name LIKE ? OR subtitle LIKE ?)"
-		args = append(args, "%"+kw+"%", "%"+kw+"%")
-	}
-	if req.GetCategoryId() > 0 {
-		where += " AND category_id = ?"
-		args = append(args, req.GetCategoryId())
-	}
-	var total int64
-	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM spus "+where, args...).Scan(&total); err != nil {
-		return nil, apperr.Internal("count products", err)
-	}
-	args = append(args, req.GetPageSize(), (req.GetPage()-1)*req.GetPageSize())
-	rows, err := s.db.QueryContext(ctx, "SELECT id FROM spus "+where+" ORDER BY id DESC LIMIT ? OFFSET ?", args...)
-	if err != nil {
-		return nil, apperr.Internal("list products", err)
-	}
-	defer rows.Close()
-	reply := &pb.ProductList{Total: total}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, apperr.Internal("scan product id", err)
-		}
-		p, err := s.loadProduct(ctx, id)
+	return s.listProductsSQL(ctx, req, ids)
+}
+
+func (s *Service) ListAdminProducts(ctx context.Context, req *pb.ListAdminProductsRequest) (*pb.ProductList, error) {
+	normalizePage(&req.Page, &req.PageSize)
+	if s.gorm != nil {
+		list, err := s.gorm.ListAdminProducts(ctx, req)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Internal("list admin products", err)
 		}
-		reply.Products = append(reply.Products, p)
+		return list, nil
 	}
-	return reply, rows.Err()
+	return s.listAdminProductsSQL(ctx, req)
 }
 
 func (s *Service) GetSku(ctx context.Context, req *pb.GetSkuRequest) (*pb.Sku, error) {
+	if req.GetSkuId() <= 0 {
+		return nil, apperr.Invalid("sku_id is required")
+	}
 	if s.gorm != nil {
 		sku, err := s.gorm.GetSku(ctx, req.GetSkuId())
 		if err != nil {
 			return nil, apperr.Internal("get sku", err)
 		}
-		if sku == nil {
+		if sku == nil || sku.Status == "DELETED" {
 			return nil, apperr.NotFound("sku not found")
 		}
 		return sku, nil
 	}
 	var sku pb.Sku
-	err := s.db.QueryRowContext(ctx, `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status FROM skus WHERE id = ?`, req.GetSkuId()).
-		Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status)
+	err := s.db.QueryRowContext(ctx, `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status, image_url FROM skus WHERE id = ?`, req.GetSkuId()).
+		Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status, &sku.ImageUrl)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("sku not found")
 	}
 	if err != nil {
 		return nil, apperr.Internal("get sku", err)
 	}
+	if sku.Status == "DELETED" {
+		return nil, apperr.NotFound("sku not found")
+	}
 	return &sku, nil
 }
+
+// ---------------------------------------------------------------- category
 
 func (s *Service) CreateCategory(ctx context.Context, req *pb.CreateCategoryRequest) (*pb.Category, error) {
 	c := req.GetCategory()
 	if c == nil || strings.TrimSpace(c.GetName()) == "" {
 		return nil, apperr.Invalid("category name is required")
 	}
+	parentID := c.GetParentId()
+	level := int32(1)
+	if parentID > 0 {
+		var parentLevel int32
+		err := s.db.QueryRowContext(ctx, `SELECT level FROM categories WHERE id = ?`, parentID).Scan(&parentLevel)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperr.NotFound("parent category not found")
+		}
+		if err != nil {
+			return nil, apperr.Internal("load parent category", err)
+		}
+		level = parentLevel + 1
+	}
 	res, err := s.db.ExecContext(ctx, `INSERT INTO categories (parent_id, name, level, sort, status) VALUES (?, ?, ?, ?, ?)`,
-		c.GetParentId(), c.GetName(), c.GetLevel(), c.GetSort(), defaultString(c.GetStatus(), "ENABLED"))
+		parentID, strings.TrimSpace(c.GetName()), level, c.GetSort(), defaultString(c.GetStatus(), "ENABLED"))
 	if err != nil {
 		return nil, apperr.Internal("create category", err)
 	}
 	c.Id, _ = res.LastInsertId()
+	c.Level = level
 	return c, nil
+}
+
+func (s *Service) UpdateCategory(ctx context.Context, req *pb.UpdateCategoryRequest) (*pb.Category, error) {
+	c := req.GetCategory()
+	if c == nil || c.GetId() <= 0 || strings.TrimSpace(c.GetName()) == "" {
+		return nil, apperr.Invalid("category id and name are required")
+	}
+	if c.GetParentId() == c.GetId() {
+		return nil, apperr.Invalid("category cannot be its own parent")
+	}
+	level := int32(1)
+	if c.GetParentId() > 0 {
+		var parentLevel int32
+		err := s.db.QueryRowContext(ctx, `SELECT level FROM categories WHERE id = ?`, c.GetParentId()).Scan(&parentLevel)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperr.NotFound("parent category not found")
+		}
+		if err != nil {
+			return nil, apperr.Internal("load parent category", err)
+		}
+		level = parentLevel + 1
+	}
+	var exists int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM categories WHERE id = ?`, c.GetId()).Scan(&exists); err != nil {
+		return nil, apperr.Internal("query category", err)
+	}
+	if exists == 0 {
+		return nil, apperr.NotFound("category not found")
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE categories SET parent_id = ?, name = ?, level = ?, sort = ?, status = ? WHERE id = ?`,
+		c.GetParentId(), strings.TrimSpace(c.GetName()), level, c.GetSort(), defaultString(c.GetStatus(), "ENABLED"), c.GetId()); err != nil {
+		return nil, apperr.Internal("update category", err)
+	}
+	c.Level = level
+	return c, nil
+}
+
+func (s *Service) DeleteCategory(ctx context.Context, req *pb.DeleteCategoryRequest) (*pb.Empty, error) {
+	if req.GetId() <= 0 {
+		return nil, apperr.Invalid("id is required")
+	}
+	var children, products int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM categories WHERE parent_id = ?`, req.GetId()).Scan(&children); err != nil {
+		return nil, apperr.Internal("count child categories", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM spus WHERE category_id = ? AND status <> 'DELETED'`, req.GetId()).Scan(&products); err != nil {
+		return nil, apperr.Internal("count category products", err)
+	}
+	if children > 0 || products > 0 {
+		return nil, apperr.Failed("category has children or products")
+	}
+	res, err := s.db.ExecContext(ctx, `DELETE FROM categories WHERE id = ?`, req.GetId())
+	if err != nil {
+		return nil, apperr.Internal("delete category", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, apperr.NotFound("category not found")
+	}
+	return &pb.Empty{}, nil
 }
 
 func (s *Service) ListCategories(ctx context.Context, _ *pb.Empty) (*pb.CategoryList, error) {
@@ -202,107 +284,716 @@ func (s *Service) ListCategories(ctx context.Context, _ *pb.Empty) (*pb.Category
 	return reply, rows.Err()
 }
 
+// ---------------------------------------------------------------- brand
+
+func (s *Service) CreateBrand(ctx context.Context, req *pb.CreateBrandRequest) (*pb.Brand, error) {
+	b := req.GetBrand()
+	if b == nil || strings.TrimSpace(b.GetName()) == "" {
+		return nil, apperr.Invalid("brand name is required")
+	}
+	res, err := s.db.ExecContext(ctx, `INSERT INTO brands (name, logo, status) VALUES (?, ?, ?)`,
+		strings.TrimSpace(b.GetName()), b.GetLogo(), defaultString(b.GetStatus(), "ENABLED"))
+	if err != nil {
+		return nil, apperr.Internal("create brand", err)
+	}
+	b.Id, _ = res.LastInsertId()
+	return b, nil
+}
+
+func (s *Service) UpdateBrand(ctx context.Context, req *pb.UpdateBrandRequest) (*pb.Brand, error) {
+	b := req.GetBrand()
+	if b == nil || b.GetId() <= 0 || strings.TrimSpace(b.GetName()) == "" {
+		return nil, apperr.Invalid("brand id and name are required")
+	}
+	var exists int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM brands WHERE id = ?`, b.GetId()).Scan(&exists); err != nil {
+		return nil, apperr.Internal("query brand", err)
+	}
+	if exists == 0 {
+		return nil, apperr.NotFound("brand not found")
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE brands SET name = ?, logo = ?, status = ? WHERE id = ?`,
+		strings.TrimSpace(b.GetName()), b.GetLogo(), defaultString(b.GetStatus(), "ENABLED"), b.GetId()); err != nil {
+		return nil, apperr.Internal("update brand", err)
+	}
+	return b, nil
+}
+
+func (s *Service) DeleteBrand(ctx context.Context, req *pb.DeleteBrandRequest) (*pb.Empty, error) {
+	if req.GetId() <= 0 {
+		return nil, apperr.Invalid("id is required")
+	}
+	var products int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM spus WHERE brand_id = ? AND status <> 'DELETED'`, req.GetId()).Scan(&products); err != nil {
+		return nil, apperr.Internal("count brand products", err)
+	}
+	if products > 0 {
+		return nil, apperr.Failed("brand has products")
+	}
+	res, err := s.db.ExecContext(ctx, `DELETE FROM brands WHERE id = ?`, req.GetId())
+	if err != nil {
+		return nil, apperr.Internal("delete brand", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, apperr.NotFound("brand not found")
+	}
+	return &pb.Empty{}, nil
+}
+
+func (s *Service) ListBrands(ctx context.Context, _ *pb.Empty) (*pb.BrandList, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, logo, status FROM brands ORDER BY id`)
+	if err != nil {
+		return nil, apperr.Internal("list brands", err)
+	}
+	defer rows.Close()
+	reply := &pb.BrandList{}
+	for rows.Next() {
+		var b pb.Brand
+		if err := rows.Scan(&b.Id, &b.Name, &b.Logo, &b.Status); err != nil {
+			return nil, apperr.Internal("scan brand", err)
+		}
+		reply.Brands = append(reply.Brands, &b)
+	}
+	return reply, rows.Err()
+}
+
+// ---------------------------------------------------------------- product writes
+
 func (s *Service) CreateProduct(ctx context.Context, req *pb.CreateProductRequest) (*pb.Product, error) {
 	if strings.TrimSpace(req.GetName()) == "" || req.GetCategoryId() <= 0 || len(req.GetSkus()) == 0 {
 		return nil, apperr.Invalid("name, category_id and skus are required")
+	}
+	if err := s.requireCategory(ctx, s.db, req.GetCategoryId()); err != nil {
+		return nil, err
+	}
+	if req.GetBrandId() > 0 {
+		if err := s.requireBrand(ctx, s.db, req.GetBrandId()); err != nil {
+			return nil, err
+		}
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, apperr.Internal("begin product", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	res, err := tx.ExecContext(ctx, `INSERT INTO spus (category_id, brand_id, name, subtitle, description, main_image, status) VALUES (?, ?, ?, ?, ?, ?, 'DRAFT')`,
-		req.GetCategoryId(), req.GetBrandId(), req.GetName(), req.GetSubtitle(), req.GetDescription(), req.GetMainImage())
+	res, err := tx.ExecContext(ctx, `INSERT INTO spus (category_id, brand_id, name, subtitle, description, main_image, status, min_price_cent) VALUES (?, ?, ?, ?, ?, ?, 'DRAFT', 0)`,
+		req.GetCategoryId(), req.GetBrandId(), strings.TrimSpace(req.GetName()), req.GetSubtitle(), req.GetDescription(), req.GetMainImage())
 	if err != nil {
 		return nil, apperr.Internal("create spu", err)
 	}
 	spuID, _ := res.LastInsertId()
 	for _, in := range req.GetSkus() {
-		if strings.TrimSpace(in.GetSkuCode()) == "" || in.GetPriceCent() <= 0 {
-			return nil, apperr.Invalid("sku_code and price_cent are required")
+		if err := validateSkuInput(in); err != nil {
+			return nil, err
 		}
 		specs := in.GetSpecsJson()
-		if specs == "" {
+		if strings.TrimSpace(specs) == "" {
 			specs = "{}"
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO skus (spu_id, sku_code, specs_json, price_cent, stock) VALUES (?, ?, ?, ?, ?)`,
-			spuID, in.GetSkuCode(), specs, in.GetPriceCent(), in.GetStock()); err != nil {
+		// stock is a projection owned by inventory; product creation must not
+		// invent stock. The admin initializes inventory before publishing.
+		if _, err := tx.ExecContext(ctx, `INSERT INTO skus (spu_id, sku_code, specs_json, price_cent, stock, status, image_url) VALUES (?, ?, ?, ?, 0, 'ENABLED', ?)`,
+			spuID, strings.TrimSpace(in.GetSkuCode()), specs, in.GetPriceCent(), in.GetImageUrl()); err != nil {
 			return nil, apperr.Internal("create sku", err)
 		}
 	}
-	payload, _ := json.Marshal(map[string]any{"spu_id": spuID, "status": "DRAFT"})
-	if err := outbox.Append(ctx, tx, outbox.Event{Topic: "shop.catalog.product.changed.v1", AggregateType: "spu", AggregateID: itoa(spuID), EventType: "product.created", Payload: payload}); err != nil {
+	if err := insertMedia(ctx, tx, spuID, req.GetImages(), req.GetAttributes()); err != nil {
+		return nil, err
+	}
+	if err := recalcMinPrice(ctx, tx, spuID); err != nil {
+		return nil, err
+	}
+	if err := appendProductEvent(ctx, tx, spuID, "DRAFT", "product.created"); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, apperr.Internal("commit product", err)
 	}
-	p, err := s.loadProduct(ctx, spuID)
+	p, err := s.loadProduct(ctx, spuID, false)
 	if err != nil {
 		return nil, err
 	}
-	s.cachePutProduct(ctx, p)
+	s.cacheEvictProduct(ctx, spuID)
 	return p, nil
 }
 
-func (s *Service) SetProductStatus(ctx context.Context, req *pb.SetProductStatusRequest) (*pb.Empty, error) {
-	if req.GetId() <= 0 || (req.GetStatus() != "ON_SALE" && req.GetStatus() != "OFF_SALE" && req.GetStatus() != "DRAFT") {
-		return nil, apperr.Invalid("valid id and status are required")
+func (s *Service) UpdateProduct(ctx context.Context, req *pb.UpdateProductRequest) (*pb.Product, error) {
+	if req.GetId() <= 0 || strings.TrimSpace(req.GetName()) == "" || req.GetCategoryId() <= 0 {
+		return nil, apperr.Invalid("id, name and category_id are required")
+	}
+	if err := s.requireCategory(ctx, s.db, req.GetCategoryId()); err != nil {
+		return nil, err
+	}
+	if req.GetBrandId() > 0 {
+		if err := s.requireBrand(ctx, s.db, req.GetBrandId()); err != nil {
+			return nil, err
+		}
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, apperr.Internal("begin status", err)
+		return nil, apperr.Internal("begin update product", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `UPDATE spus SET status = ?, version = version + 1 WHERE id = ?`, req.GetStatus(), req.GetId()); err != nil {
-		return nil, apperr.Internal("set status", err)
+	res, err := tx.ExecContext(ctx, `UPDATE spus SET category_id = ?, brand_id = ?, name = ?, subtitle = ?, description = ?, main_image = ?, version = version + 1 WHERE id = ? AND status <> 'DELETED'`,
+		req.GetCategoryId(), req.GetBrandId(), strings.TrimSpace(req.GetName()), req.GetSubtitle(), req.GetDescription(), req.GetMainImage(), req.GetId())
+	if err != nil {
+		return nil, apperr.Internal("update spu", err)
 	}
-	payload, _ := json.Marshal(map[string]any{"spu_id": req.GetId(), "status": req.GetStatus()})
-	if err := outbox.Append(ctx, tx, outbox.Event{Topic: "shop.catalog.product.changed.v1", AggregateType: "spu", AggregateID: itoa(req.GetId()), EventType: "product.status_changed", Payload: payload}); err != nil {
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, apperr.NotFound("product not found")
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM spu_images WHERE spu_id = ?`, req.GetId()); err != nil {
+		return nil, apperr.Internal("replace images", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM spu_attributes WHERE spu_id = ?`, req.GetId()); err != nil {
+		return nil, apperr.Internal("replace attributes", err)
+	}
+	if err := insertMedia(ctx, tx, req.GetId(), req.GetImages(), req.GetAttributes()); err != nil {
+		return nil, err
+	}
+	if err := recalcMinPrice(ctx, tx, req.GetId()); err != nil {
+		return nil, err
+	}
+	if err := appendProductEvent(ctx, tx, req.GetId(), "", "product.updated"); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, apperr.Internal("commit status", err)
+		return nil, apperr.Internal("commit update product", err)
 	}
 	s.cacheEvictProduct(ctx, req.GetId())
+	return s.loadProduct(ctx, req.GetId(), false)
+}
+
+func (s *Service) DeleteProduct(ctx context.Context, req *pb.DeleteProductRequest) (*pb.Empty, error) {
+	if req.GetId() <= 0 {
+		return nil, apperr.Invalid("id is required")
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE spus SET status = 'DELETED', version = version + 1 WHERE id = ? AND status <> 'DELETED'`, req.GetId())
+	if err != nil {
+		return nil, apperr.Internal("delete product", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, apperr.NotFound("product not found")
+	}
+	s.cacheEvictProduct(ctx, req.GetId())
+	if err := s.appendStandaloneProductEvent(ctx, req.GetId(), "DELETED", "product.deleted"); err != nil {
+		return nil, err
+	}
 	return &pb.Empty{}, nil
 }
 
-func (s *Service) loadProduct(ctx context.Context, id int64) (*pb.Product, error) {
-	var p pb.Product
-	err := s.db.QueryRowContext(ctx, `SELECT id, category_id, brand_id, name, subtitle, description, main_image, status FROM spus WHERE id = ?`, id).
-		Scan(&p.Id, &p.CategoryId, &p.BrandId, &p.Name, &p.Subtitle, &p.Description, &p.MainImage, &p.Status)
-	if errors.Is(err, sql.ErrNoRows) {
+func (s *Service) SetProductStatus(ctx context.Context, req *pb.SetProductStatusRequest) (*pb.Empty, error) {
+	if req.GetId() <= 0 || !validProductStatus(req.GetStatus()) {
+		return nil, apperr.Invalid("valid id and status are required")
+	}
+	if req.GetStatus() == "ON_SALE" {
+		var enabled int
+		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM skus WHERE spu_id = ? AND status = 'ENABLED' AND price_cent > 0`, req.GetId()).Scan(&enabled); err != nil {
+			return nil, apperr.Internal("count active skus", err)
+		}
+		if enabled == 0 {
+			return nil, apperr.Failed("product has no active sku")
+		}
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE spus SET status = ?, version = version + 1 WHERE id = ? AND status <> 'DELETED'`, req.GetStatus(), req.GetId())
+	if err != nil {
+		return nil, apperr.Internal("set status", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, apperr.NotFound("product not found")
+	}
+	s.cacheEvictProduct(ctx, req.GetId())
+	if err := s.appendStandaloneProductEvent(ctx, req.GetId(), req.GetStatus(), "product.status_changed"); err != nil {
+		return nil, err
+	}
+	return &pb.Empty{}, nil
+}
+
+// ---------------------------------------------------------------- sku writes
+
+func (s *Service) CreateSku(ctx context.Context, req *pb.CreateSkuRequest) (*pb.Sku, error) {
+	if req.GetSpuId() <= 0 || req.GetSku() == nil {
+		return nil, apperr.Invalid("spu_id and sku are required")
+	}
+	if err := validateSkuInput(req.GetSku()); err != nil {
+		return nil, err
+	}
+	if err := s.requireProduct(ctx, s.db, req.GetSpuId()); err != nil {
+		return nil, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, apperr.Internal("begin create sku", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	specs := req.GetSku().GetSpecsJson()
+	if strings.TrimSpace(specs) == "" {
+		specs = "{}"
+	}
+	res, err := tx.ExecContext(ctx, `INSERT INTO skus (spu_id, sku_code, specs_json, price_cent, stock, status, image_url) VALUES (?, ?, ?, ?, 0, 'ENABLED', ?)`,
+		req.GetSpuId(), strings.TrimSpace(req.GetSku().GetSkuCode()), specs, req.GetSku().GetPriceCent(), req.GetSku().GetImageUrl())
+	if err != nil {
+		return nil, apperr.Internal("create sku", err)
+	}
+	id, _ := res.LastInsertId()
+	if err := recalcMinPrice(ctx, tx, req.GetSpuId()); err != nil {
+		return nil, err
+	}
+	if err := appendProductEvent(ctx, tx, req.GetSpuId(), "", "sku.created"); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, apperr.Internal("commit create sku", err)
+	}
+	s.cacheEvictProduct(ctx, req.GetSpuId())
+	return s.GetSku(ctx, &pb.GetSkuRequest{SkuId: id})
+}
+
+func (s *Service) UpdateSku(ctx context.Context, req *pb.UpdateSkuRequest) (*pb.Sku, error) {
+	if req.GetId() <= 0 {
+		return nil, apperr.Invalid("id is required")
+	}
+	var spuID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT spu_id FROM skus WHERE id = ? AND status <> 'DELETED'`, req.GetId()).Scan(&spuID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperr.NotFound("sku not found")
+		}
+		return nil, apperr.Internal("load sku", err)
+	}
+	if req.GetPriceCent() <= 0 {
+		return nil, apperr.Invalid("price_cent must be positive")
+	}
+	specs := req.GetSpecsJson()
+	if strings.TrimSpace(specs) == "" {
+		specs = "{}"
+	}
+	if !json.Valid([]byte(specs)) {
+		return nil, apperr.Invalid("specs_json must be valid JSON")
+	}
+	status := defaultString(req.GetStatus(), "ENABLED")
+	if status != "ENABLED" && status != "DISABLED" {
+		return nil, apperr.Invalid("invalid sku status")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, apperr.Internal("begin update sku", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = tx.ExecContext(ctx, `UPDATE skus SET sku_code = ?, specs_json = ?, price_cent = ?, status = ?, image_url = ? WHERE id = ?`,
+		strings.TrimSpace(req.GetSkuCode()), specs, req.GetPriceCent(), status, req.GetImageUrl(), req.GetId())
+	if err != nil {
+		return nil, apperr.Internal("update sku", err)
+	}
+	if err := recalcMinPrice(ctx, tx, spuID); err != nil {
+		return nil, err
+	}
+	if err := appendProductEvent(ctx, tx, spuID, "", "sku.updated"); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, apperr.Internal("commit update sku", err)
+	}
+	s.cacheEvictProduct(ctx, spuID)
+	return s.GetSku(ctx, &pb.GetSkuRequest{SkuId: req.GetId()})
+}
+
+func (s *Service) DeleteSku(ctx context.Context, req *pb.DeleteSkuRequest) (*pb.Empty, error) {
+	if req.GetId() <= 0 {
+		return nil, apperr.Invalid("id is required")
+	}
+	var spuID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT spu_id FROM skus WHERE id = ? AND status <> 'DELETED'`, req.GetId()).Scan(&spuID); err != nil {
+		return nil, apperr.NotFound("sku not found")
+	}
+	if err := s.setSkuStatus(ctx, req.GetId(), "DELETED"); err != nil {
+		return nil, err
+	}
+	s.cacheEvictProduct(ctx, spuID)
+	return &pb.Empty{}, nil
+}
+
+func (s *Service) SetSkuStatus(ctx context.Context, req *pb.SetSkuStatusRequest) (*pb.Sku, error) {
+	if req.GetId() <= 0 || (req.GetStatus() != "ENABLED" && req.GetStatus() != "DISABLED") {
+		return nil, apperr.Invalid("valid id and status are required")
+	}
+	var spuID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT spu_id FROM skus WHERE id = ? AND status <> 'DELETED'`, req.GetId()).Scan(&spuID); err != nil {
+		return nil, apperr.NotFound("sku not found")
+	}
+	if err := s.setSkuStatus(ctx, req.GetId(), req.GetStatus()); err != nil {
+		return nil, err
+	}
+	s.cacheEvictProduct(ctx, spuID)
+	return s.GetSku(ctx, &pb.GetSkuRequest{SkuId: req.GetId()})
+}
+
+func (s *Service) setSkuStatus(ctx context.Context, id int64, status string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return apperr.Internal("begin sku status", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var spuID int64
+	if err := tx.QueryRowContext(ctx, `SELECT spu_id FROM skus WHERE id = ?`, id).Scan(&spuID); err != nil {
+		return apperr.NotFound("sku not found")
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE skus SET status = ? WHERE id = ?`, status, id); err != nil {
+		return apperr.Internal("set sku status", err)
+	}
+	if err := recalcMinPrice(ctx, tx, spuID); err != nil {
+		return err
+	}
+	if err := appendProductEvent(ctx, tx, spuID, "", "sku.status_changed"); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return apperr.Internal("commit sku status", err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------- helpers
+
+func normalizePage(page, size *int32) {
+	if *page <= 0 {
+		*page = 1
+	}
+	if *size <= 0 || *size > 100 {
+		*size = 20
+	}
+}
+
+func validProductStatus(v string) bool {
+	switch v {
+	case "DRAFT", "ON_SALE", "OFF_SALE":
+		return true
+	default:
+		return false
+	}
+}
+
+func validateSkuInput(in *pb.SkuInput) error {
+	if in == nil || strings.TrimSpace(in.GetSkuCode()) == "" || in.GetPriceCent() <= 0 {
+		return apperr.Invalid("sku_code and price_cent are required")
+	}
+	specs := in.GetSpecsJson()
+	if strings.TrimSpace(specs) == "" {
+		specs = "{}"
+	}
+	if !json.Valid([]byte(specs)) {
+		return apperr.Invalid("specs_json must be valid JSON for sku %s", in.GetSkuCode())
+	}
+	return nil
+}
+
+func insertMedia(ctx context.Context, tx *sql.Tx, spuID int64, images []*pb.ProductImage, attrs []*pb.ProductAttribute) error {
+	for _, img := range images {
+		if img == nil || strings.TrimSpace(img.GetUrl()) == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO spu_images (spu_id, url, sort) VALUES (?, ?, ?)`, spuID, img.GetUrl(), img.GetSort()); err != nil {
+			return apperr.Internal("insert product image", err)
+		}
+	}
+	for _, attr := range attrs {
+		if attr == nil || strings.TrimSpace(attr.GetName()) == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO spu_attributes (spu_id, name, value, sort) VALUES (?, ?, ?, ?)`, spuID, attr.GetName(), attr.GetValue(), attr.GetSort()); err != nil {
+			return apperr.Internal("insert product attribute", err)
+		}
+	}
+	return nil
+}
+
+func recalcMinPrice(ctx context.Context, tx *sql.Tx, spuID int64) error {
+	var min sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT MIN(price_cent) FROM skus WHERE spu_id = ? AND status = 'ENABLED' AND price_cent > 0`, spuID).Scan(&min); err != nil {
+		return apperr.Internal("recalculate min price", err)
+	}
+	value := int64(0)
+	if min.Valid {
+		value = min.Int64
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE spus SET min_price_cent = ? WHERE id = ?`, value, spuID); err != nil {
+		return apperr.Internal("update min price", err)
+	}
+	return nil
+}
+
+func appendProductEvent(ctx context.Context, tx *sql.Tx, spuID int64, status, eventType string) error {
+	payload, _ := json.Marshal(map[string]any{"spu_id": spuID, "status": status})
+	return outbox.Append(ctx, tx, outbox.Event{
+		Topic: "shop.catalog.product.changed.v1", AggregateType: "spu",
+		AggregateID: strconv.FormatInt(spuID, 10), EventType: eventType, Payload: payload,
+	})
+}
+
+func (s *Service) appendStandaloneProductEvent(ctx context.Context, spuID int64, status, eventType string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return apperr.Internal("begin product event", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := appendProductEvent(ctx, tx, spuID, status, eventType); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return apperr.Internal("commit product event", err)
+	}
+	return nil
+}
+
+func (s *Service) requireCategory(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, id int64) error {
+	var exists int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM categories WHERE id = ? AND status = 'ENABLED'`, id).Scan(&exists); err != nil {
+		return apperr.Internal("query category", err)
+	}
+	if exists == 0 {
+		return apperr.NotFound("category not found or disabled")
+	}
+	return nil
+}
+
+func (s *Service) requireBrand(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, id int64) error {
+	var exists int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM brands WHERE id = ? AND status = 'ENABLED'`, id).Scan(&exists); err != nil {
+		return apperr.Internal("query brand", err)
+	}
+	if exists == 0 {
+		return apperr.NotFound("brand not found or disabled")
+	}
+	return nil
+}
+
+func (s *Service) requireProduct(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, id int64) error {
+	var exists int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM spus WHERE id = ? AND status <> 'DELETED'`, id).Scan(&exists); err != nil {
+		return apperr.Internal("query product", err)
+	}
+	if exists == 0 {
+		return apperr.NotFound("product not found")
+	}
+	return nil
+}
+
+func (s *Service) categoryIDs(ctx context.Context, root int64) ([]int64, error) {
+	if root <= 0 {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `WITH RECURSIVE tree AS (
+		SELECT id FROM categories WHERE id = ?
+		UNION ALL
+		SELECT c.id FROM categories c JOIN tree t ON c.parent_id = t.id
+	) SELECT id FROM tree`, root)
+	if err != nil {
+		return nil, apperr.Internal("load category tree", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, apperr.Internal("scan category id", err)
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return ids, rows.Err()
+}
+
+func (s *Service) loadProduct(ctx context.Context, id int64, activeOnly bool) (*pb.Product, error) {
+	var p pb.Product
+	err := s.db.QueryRowContext(ctx, `SELECT id, category_id, brand_id, name, subtitle, description, main_image, status, min_price_cent FROM spus WHERE id = ?`, id).
+		Scan(&p.Id, &p.CategoryId, &p.BrandId, &p.Name, &p.Subtitle, &p.Description, &p.MainImage, &p.Status, &p.MinPriceCent)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
 	}
 	if err != nil {
 		return nil, apperr.Internal("get product", err)
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status FROM skus WHERE spu_id = ? ORDER BY id`, id)
+	if activeOnly && p.Status != "ON_SALE" {
+		return nil, nil
+	}
+	skuQuery := `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status, image_url FROM skus WHERE spu_id = ?`
+	if activeOnly {
+		skuQuery += ` AND status = 'ENABLED'`
+	}
+	skuQuery += ` ORDER BY id`
+	rows, err := s.db.QueryContext(ctx, skuQuery, id)
 	if err != nil {
 		return nil, apperr.Internal("get skus", err)
 	}
-	defer rows.Close()
 	for rows.Next() {
 		var sku pb.Sku
-		if err := rows.Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status); err != nil {
+		if err := rows.Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status, &sku.ImageUrl); err != nil {
+			rows.Close()
 			return nil, apperr.Internal("scan sku", err)
 		}
-		if p.MinPriceCent == 0 || sku.PriceCent < p.MinPriceCent {
+		if sku.PriceCent > 0 && (p.MinPriceCent == 0 || sku.PriceCent < p.MinPriceCent) {
 			p.MinPriceCent = sku.PriceCent
 		}
 		p.Skus = append(p.Skus, &sku)
 	}
-	return &p, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	imgRows, err := s.db.QueryContext(ctx, `SELECT id, url, sort FROM spu_images WHERE spu_id = ? ORDER BY sort, id`, id)
+	if err != nil {
+		return nil, apperr.Internal("get product images", err)
+	}
+	for imgRows.Next() {
+		var img pb.ProductImage
+		if err := imgRows.Scan(&img.Id, &img.Url, &img.Sort); err != nil {
+			imgRows.Close()
+			return nil, apperr.Internal("scan product image", err)
+		}
+		p.Images = append(p.Images, &img)
+	}
+	imgRows.Close()
+	attrRows, err := s.db.QueryContext(ctx, `SELECT id, name, value, sort FROM spu_attributes WHERE spu_id = ? ORDER BY sort, id`, id)
+	if err != nil {
+		return nil, apperr.Internal("get product attributes", err)
+	}
+	for attrRows.Next() {
+		var attr pb.ProductAttribute
+		if err := attrRows.Scan(&attr.Id, &attr.Name, &attr.Value, &attr.Sort); err != nil {
+			attrRows.Close()
+			return nil, apperr.Internal("scan product attribute", err)
+		}
+		p.Attributes = append(p.Attributes, &attr)
+	}
+	attrRows.Close()
+	return &p, attrRows.Err()
+}
+
+func (s *Service) listProductsSQL(ctx context.Context, req *pb.ListProductsRequest, categoryIDs []int64) (*pb.ProductList, error) {
+	where := "WHERE status = 'ON_SALE'"
+	args := []any{}
+	if kw := strings.TrimSpace(req.GetKeyword()); kw != "" {
+		where += " AND (name LIKE ? OR subtitle LIKE ?)"
+		args = append(args, "%"+kw+"%", "%"+kw+"%")
+	}
+	if len(categoryIDs) > 0 {
+		where += " AND category_id IN (" + placeholders(len(categoryIDs)) + ")"
+		for _, id := range categoryIDs {
+			args = append(args, id)
+		}
+	}
+	if req.GetBrandId() > 0 {
+		where += " AND brand_id = ?"
+		args = append(args, req.GetBrandId())
+	}
+	if req.GetMinPriceCent() > 0 {
+		where += " AND min_price_cent >= ?"
+		args = append(args, req.GetMinPriceCent())
+	}
+	if req.GetMaxPriceCent() > 0 {
+		where += " AND min_price_cent <= ?"
+		args = append(args, req.GetMaxPriceCent())
+	}
+	var total int64
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM spus "+where, args...).Scan(&total); err != nil {
+		return nil, apperr.Internal("count products", err)
+	}
+	order := "id DESC"
+	if req.GetSort() == "price_asc" {
+		order = "min_price_cent ASC, id DESC"
+	} else if req.GetSort() == "price_desc" {
+		order = "min_price_cent DESC, id DESC"
+	}
+	args = append(args, req.GetPageSize(), (req.GetPage()-1)*req.GetPageSize())
+	rows, err := s.db.QueryContext(ctx, "SELECT id FROM spus "+where+" ORDER BY "+order+" LIMIT ? OFFSET ?", args...)
+	if err != nil {
+		return nil, apperr.Internal("list products", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, apperr.Internal("scan product id", err)
+		}
+		ids = append(ids, id)
+	}
+	reply := &pb.ProductList{Total: total}
+	for _, id := range ids {
+		p, err := s.loadProduct(ctx, id, true)
+		if err != nil {
+			return nil, err
+		}
+		if p != nil {
+			reply.Products = append(reply.Products, p)
+		}
+	}
+	return reply, rows.Err()
+}
+
+func (s *Service) listAdminProductsSQL(ctx context.Context, req *pb.ListAdminProductsRequest) (*pb.ProductList, error) {
+	where := "WHERE status <> 'DELETED'"
+	args := []any{}
+	if kw := strings.TrimSpace(req.GetKeyword()); kw != "" {
+		where += " AND (name LIKE ? OR subtitle LIKE ?)"
+		args = append(args, "%"+kw+"%", "%"+kw+"%")
+	}
+	if req.GetCategoryId() > 0 {
+		where += " AND category_id = ?"
+		args = append(args, req.GetCategoryId())
+	}
+	if req.GetBrandId() > 0 {
+		where += " AND brand_id = ?"
+		args = append(args, req.GetBrandId())
+	}
+	if st := strings.TrimSpace(req.GetStatus()); st != "" {
+		where += " AND status = ?"
+		args = append(args, st)
+	}
+	var total int64
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM spus "+where, args...).Scan(&total); err != nil {
+		return nil, apperr.Internal("count admin products", err)
+	}
+	args = append(args, req.GetPageSize(), (req.GetPage()-1)*req.GetPageSize())
+	rows, err := s.db.QueryContext(ctx, "SELECT id FROM spus "+where+" ORDER BY id DESC LIMIT ? OFFSET ?", args...)
+	if err != nil {
+		return nil, apperr.Internal("list admin products", err)
+	}
+	defer rows.Close()
+	reply := &pb.ProductList{Total: total}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, apperr.Internal("scan admin product id", err)
+		}
+		p, err := s.loadProduct(ctx, id, false)
+		if err != nil {
+			return nil, err
+		}
+		if p != nil {
+			reply.Products = append(reply.Products, p)
+		}
+	}
+	return reply, rows.Err()
+}
+
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
 }
 
 func defaultString(v, fallback string) string {
-	if v == "" {
+	if strings.TrimSpace(v) == "" {
 		return fallback
 	}
 	return v
 }
-func itoa(v int64) string {
-	return strings.TrimSpace(strings.ReplaceAll(strings.TrimSpace(formatInt(v)), " ", ""))
-}
-func formatInt(v int64) string { return fmt.Sprintf("%d", v) }

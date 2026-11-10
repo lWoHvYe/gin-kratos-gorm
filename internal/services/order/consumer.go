@@ -47,6 +47,7 @@ func RunShipmentConsumer(ctx context.Context, client *mq.Client, svc *Service, l
 				_ = msg.NakWithDelay(5 * time.Second)
 				return
 			}
+			logger.Info("shipment status projected", "order_no", event.OrderNo, "target", target)
 			_ = msg.Ack()
 		}
 		if _, err := client.JS.QueueSubscribe(subject, durable, handler,
@@ -60,26 +61,6 @@ func RunShipmentConsumer(ctx context.Context, client *mq.Client, svc *Service, l
 }
 
 func (s *Service) applyShipmentStatus(ctx context.Context, orderNo, target string, from ...string) error {
-	record, err := findOrder(ctx, s.db, orderNo)
-	if err != nil {
-		return fmt.Errorf("load order: %w", err)
-	}
-	if record == nil {
-		return nil
-	}
-	if record.Status == target || rankStatus(record.Status) > rankStatus(target) {
-		return nil
-	}
-	allowed := false
-	for _, status := range from {
-		if record.Status == status {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
-		return fmt.Errorf("cannot move order from %s to %s", record.Status, target)
-	}
 	topic, eventType := topicOrderShipped, "order.shipped"
 	if target == statusCompleted {
 		topic, eventType = topicOrderCompleted, "order.completed"
@@ -87,22 +68,58 @@ func (s *Service) applyShipmentStatus(ctx context.Context, orderNo, target strin
 	if target == statusAllocated {
 		topic, eventType = topicOrderAllocated, "order.allocated"
 	}
-	return db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		affected, err := updateOrderStatus(ctx, tx, orderNo, record.Status, target, record.PaidCent)
+	// Two shipment events (CREATED, SHIPPED) can arrive concurrently. Re-read
+	// and retry the compare-and-set instead of acknowledging a lost update.
+	for attempt := 0; attempt < 5; attempt++ {
+		record, err := findOrder(ctx, s.db, orderNo)
+		if err != nil {
+			return fmt.Errorf("load order: %w", err)
+		}
+		if record == nil {
+			return nil
+		}
+		if record.Status == statusPartiallyRefunded || record.Status == statusRefunded {
+			return nil
+		}
+		if record.Status == target || rankStatus(record.Status) > rankStatus(target) {
+			return nil
+		}
+		allowed := false
+		for _, status := range from {
+			if record.Status == status {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return fmt.Errorf("cannot move order from %s to %s", record.Status, target)
+		}
+		updated := false
+		err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+			affected, err := updateOrderStatus(ctx, tx, orderNo, record.Status, target, record.PaidCent)
+			if err != nil {
+				return err
+			}
+			if affected == 0 {
+				return nil
+			}
+			updated = true
+			if err := insertStatusLog(ctx, tx, orderNo, record.Status, target, "shipment projection", "fulfillment"); err != nil {
+				return err
+			}
+			return outbox.Append(ctx, tx, outbox.Event{
+				Topic: topic, AggregateType: "order", AggregateID: orderNo, EventType: eventType,
+				Payload: map[string]any{"order_no": orderNo, "status": target, "changed_at": time.Now().Unix()},
+			})
+		})
 		if err != nil {
 			return err
 		}
-		if affected == 0 {
+		if updated {
 			return nil
 		}
-		if err := insertStatusLog(ctx, tx, orderNo, record.Status, target, "shipment projection", "fulfillment"); err != nil {
-			return err
-		}
-		return outbox.Append(ctx, tx, outbox.Event{
-			Topic: topic, AggregateType: "order", AggregateID: orderNo, EventType: eventType,
-			Payload: map[string]any{"order_no": orderNo, "status": target, "changed_at": time.Now().Unix()},
-		})
-	})
+	}
+	return fmt.Errorf("shipment projection did not converge for %s", orderNo)
 }
 
 // rankStatus is used only for duplicate/stale event suppression.

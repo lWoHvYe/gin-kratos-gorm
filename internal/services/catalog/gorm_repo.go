@@ -217,7 +217,7 @@ func (row *gormSPU) toPB() *pb.Product {
 	}
 	for i := range row.Skus {
 		sku := row.Skus[i].toPB()
-		if p.MinPriceCent == 0 || (sku.PriceCent > 0 && sku.PriceCent < p.MinPriceCent) {
+		if sku.Status == "ENABLED" && sku.PriceCent > 0 && (p.MinPriceCent == 0 || sku.PriceCent < p.MinPriceCent) {
 			p.MinPriceCent = sku.PriceCent
 		}
 		p.Skus = append(p.Skus, sku)

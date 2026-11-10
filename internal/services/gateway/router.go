@@ -142,6 +142,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.POST("/api/v1/auth/refresh", h.refresh)
 	engine.POST("/api/v1/auth/logout", h.logout)
 	engine.GET("/api/v1/categories", h.listCategories)
+	engine.GET("/api/v1/brands", h.listBrands)
 	engine.GET("/api/v1/products", h.listProducts)
 	engine.GET("/api/v1/products/:id", h.getProduct)
 	engine.GET("/api/v1/skus/:id", h.getSku)
@@ -281,6 +282,29 @@ func (h *handlers) listCategories(c *gin.Context) {
 		httpx.Error(c, remoteError(err))
 		return
 	}
+	filtered := make([]*pb.Category, 0, len(reply.GetCategories()))
+	for _, category := range reply.GetCategories() {
+		if category.GetStatus() == "ENABLED" {
+			filtered = append(filtered, category)
+		}
+	}
+	reply.Categories = filtered
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) listBrands(c *gin.Context) {
+	reply, err := h.clients.Catalog.ListBrands(c.Request.Context(), &pb.Empty{})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	filtered := make([]*pb.Brand, 0, len(reply.GetBrands()))
+	for _, brand := range reply.GetBrands() {
+		if brand.GetStatus() == "ENABLED" {
+			filtered = append(filtered, brand)
+		}
+	}
+	reply.Brands = filtered
 	httpx.OK(c, reply)
 }
 
@@ -372,6 +396,22 @@ func (h *handlers) ensureStock(ctx context.Context, skuID int64, quantity int32)
 		return apperr.Failed(fmt.Sprintf("insufficient stock for sku %d: available %d", skuID, stock.GetAvailable()))
 	}
 	return nil
+}
+
+// ensureCartStock accounts for the quantity already accumulated in the cart;
+// AddItem is an upsert, so checking only the incoming delta is insufficient.
+func (h *handlers) ensureCartStock(ctx context.Context, userID, skuID int64, delta int32) error {
+	cart, err := h.clients.Cart.GetCart(ctx, &pb.GetCartRequest{UserId: userID})
+	if err != nil {
+		return remoteError(err)
+	}
+	var existing int32
+	for _, item := range cart.GetItems() {
+		if item.GetSkuId() == skuID {
+			existing += item.GetQuantity()
+		}
+	}
+	return h.ensureStock(ctx, skuID, existing+delta)
 }
 
 // ---------------------------------------------------------------- addresses
@@ -500,7 +540,7 @@ func (h *handlers) addCartItem(c *gin.Context) {
 		return
 	}
 	req.UserId = uid
-	if err := h.ensureStock(c.Request.Context(), req.SkuId, req.Quantity); err != nil {
+	if err := h.ensureCartStock(c.Request.Context(), uid, req.SkuId, req.Quantity); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -599,7 +639,7 @@ func (h *handlers) mergeCart(c *gin.Context) {
 	}
 	var cart *pb.Cart
 	for _, item := range in.Items {
-		if err := h.ensureStock(c.Request.Context(), item.SkuID, item.Quantity); err != nil {
+		if err := h.ensureCartStock(c.Request.Context(), uid, item.SkuID, item.Quantity); err != nil {
 			httpx.Error(c, err)
 			return
 		}
@@ -671,8 +711,12 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 			return
 		}
 	}
+	totals := make(map[int64]int32, len(items))
 	for _, item := range items {
-		if err := h.ensureStock(c.Request.Context(), item.GetSkuId(), item.GetQuantity()); err != nil {
+		totals[item.GetSkuId()] += item.GetQuantity()
+	}
+	for skuID, quantity := range totals {
+		if err := h.ensureStock(c.Request.Context(), skuID, quantity); err != nil {
 			httpx.Error(c, err)
 			return
 		}
@@ -992,6 +1036,14 @@ func (h *handlers) pay(c *gin.Context) {
 			httpx.Error(c, apperr.Forbidden("payment belongs to another user"))
 			return
 		}
+		if order.GetStatus() != "PENDING_PAYMENT" {
+			httpx.Error(c, apperr.Failed(fmt.Sprintf("order is not payable in status %s", order.GetStatus())))
+			return
+		}
+	}
+	if intent.GetExpiresAtUnix() > 0 && intent.GetExpiresAtUnix() < time.Now().Unix() {
+		httpx.Error(c, apperr.Failed("payment intent has expired"))
+		return
 	}
 	amount := in.AmountCent
 	if amount <= 0 {

@@ -83,23 +83,13 @@ CREATE TABLE IF NOT EXISTS outbox_events (
   KEY idx_outbox_pending (published_at, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- DTM creates its barrier table automatically; declaring it keeps a fresh
--- database usable by branch calls before the first DTM transaction.
-CREATE TABLE IF NOT EXISTS dtm_barrier (
-  id BIGINT NOT NULL AUTO_INCREMENT,
-  trans_type VARCHAR(45) DEFAULT '',
-  gid VARCHAR(128) DEFAULT '',
-  branch_id VARCHAR(128) DEFAULT '',
-  op VARCHAR(45) DEFAULT '',
-  barrier_id VARCHAR(45) DEFAULT '',
-  reason VARCHAR(45) DEFAULT '',
-  create_time DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3),
-  update_time DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-  PRIMARY KEY (id),
-  UNIQUE KEY uniq_barrier (trans_type, gid, branch_id, op)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- Seed only a fresh database; rerunning a migration must not resurrect rows.
+INSERT IGNORE INTO warehouses (id, name, status)
+SELECT 1, 'Main Warehouse', 'ENABLED' WHERE NOT EXISTS (SELECT 1 FROM warehouses);
 
-INSERT IGNORE INTO warehouses (id, name, status) VALUES (1, 'Main Warehouse', 'ENABLED');
-
-INSERT IGNORE INTO inventory_stocks (sku_id, warehouse_id, on_hand, reserved, version) VALUES
-  (1, 1, 100, 0, 1), (2, 1, 80, 0, 1), (3, 1, 200, 0, 1), (4, 1, 50, 0, 1);
+INSERT IGNORE INTO inventory_stocks (sku_id, warehouse_id, on_hand, reserved, version)
+SELECT * FROM (SELECT 1 AS sku_id, 1 AS warehouse_id, 100 AS on_hand, 0 AS reserved, 1 AS version
+  UNION ALL SELECT 2, 1, 80, 0, 1
+  UNION ALL SELECT 3, 1, 200, 0, 1
+  UNION ALL SELECT 4, 1, 50, 0, 1) AS seed
+WHERE NOT EXISTS (SELECT 1 FROM inventory_stocks);

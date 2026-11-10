@@ -134,3 +134,14 @@ There are no integration tests, per `docs/contracts.md`.
 then commits `REFUNDED` with `shop.aftersale.completed.v1`. If payment is down,
 the request stays `REFUNDING` and a retry resumes it; the payment refund itself
 is idempotent. The service now depends on the payment gRPC service.
+
+## Phase 1.5 return flow
+
+`0002_return_flow.sql` adds return carrier/tracking, refund number, cumulative
+refunded amount and per-item received quantity/condition. `RETURN_REFUND` goes
+through `Approve -> SubmitReturnTracking -> ReceiveReturn -> Refund`; receiving
+calls inventory `Restock` with the after-sale number as the idempotency key.
+`SELLABLE` returns restore stock; `DAMAGED` returns are recorded in the ledger
+without increasing sellable stock. Create/approve is validated against the
+order service (ownership, order status, refundable amount and ordered
+quantities). `ListAfterSales` serves user and admin lists.

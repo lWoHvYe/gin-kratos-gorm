@@ -8,8 +8,14 @@ set -eu
 
 export MYSQL_PWD="${MYSQL_PASSWORD}"
 
+attempt=0
 until mysqladmin ping -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" --silent; do
-  echo "[migrate] waiting for mysql ${MYSQL_HOST}:${MYSQL_PORT}"
+  attempt=$((attempt + 1))
+  if [ "${attempt}" -ge 150 ]; then
+    echo "[migrate] mysql did not become ready in 5 minutes" >&2
+    exit 1
+  fi
+  echo "[migrate] waiting for mysql ${MYSQL_HOST}:${MYSQL_PORT} (${attempt}/150)"
   sleep 2
 done
 

@@ -55,11 +55,72 @@ type Service struct {
 	mq        *mq.Client
 	payments  pb.PaymentServiceClient
 	inventory pb.InventoryServiceClient
+	orders    pb.OrderServiceClient
 	log       *slog.Logger
 }
 
-func New(db *sql.DB, client *mq.Client, payments pb.PaymentServiceClient, inventory pb.InventoryServiceClient, logger *slog.Logger) *Service {
-	return &Service{db: db, mq: client, payments: payments, inventory: inventory, log: logger}
+func New(db *sql.DB, client *mq.Client, payments pb.PaymentServiceClient, inventory pb.InventoryServiceClient, orders pb.OrderServiceClient, logger *slog.Logger) *Service {
+	return &Service{db: db, mq: client, payments: payments, inventory: inventory, orders: orders, log: logger}
+}
+
+// validateAgainstOrder prevents after-sales from inventing money or stock. The
+// order service is the source of truth for paid/refunded totals and items.
+func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, userID int64, typ string, amountCent int64, items []afterSaleItem) error {
+	if s.orders == nil {
+		return apperr.Unavailable("order client is not configured", nil)
+	}
+	order, err := s.orders.GetOrder(ctx, &pb.GetOrderRequest{OrderNo: orderNo, UserId: userID})
+	if err != nil {
+		return apperr.Unavailable("load order for after-sale validation", err)
+	}
+	if order.GetOrderNo() == "" || order.GetUserId() != userID {
+		return apperr.NotFound("order not found")
+	}
+	switch order.GetStatus() {
+	case "PAID", "ALLOCATED", "SHIPPED", "COMPLETED", "PARTIALLY_REFUNDED":
+	default:
+		return apperr.Failed(fmt.Sprintf("order is not eligible for after-sales in status %s", order.GetStatus()))
+	}
+	if typ == typeReturnRefund && order.GetStatus() != "SHIPPED" && order.GetStatus() != "COMPLETED" && order.GetStatus() != "PARTIALLY_REFUNDED" {
+		return apperr.Failed("return refund requires a shipped or completed order")
+	}
+	remaining := order.GetPaidCent() - order.GetRefundedCent()
+	if remaining <= 0 {
+		return apperr.Failed("order has no refundable amount")
+	}
+	var requested int64
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(amount_cent), 0) FROM after_sales
+		WHERE order_no = ? AND status <> 'REJECTED'`, orderNo).Scan(&requested); err != nil {
+		return apperr.Internal("sum after-sale amounts", err)
+	}
+	if requested+amountCent > remaining {
+		return apperr.Invalid("after-sale amount %d exceeds remaining refundable amount %d", amountCent, remaining-requested)
+	}
+	if len(items) == 0 {
+		if typ == typeReturnRefund {
+			return apperr.Invalid("return refund requires at least one item")
+		}
+		return nil
+	}
+	ordered := make(map[int64]int64, len(order.GetItems()))
+	for _, item := range order.GetItems() {
+		ordered[item.GetSkuId()] += int64(item.GetQuantity())
+	}
+	for _, item := range items {
+		if ordered[item.SkuID] == 0 {
+			return apperr.Invalid("sku %d is not part of order %s", item.SkuID, orderNo)
+		}
+		var existing int64
+		if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(i.quantity), 0)
+			FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id
+			WHERE a.order_no = ? AND a.status <> 'REJECTED' AND i.sku_id = ?`, orderNo, item.SkuID).Scan(&existing); err != nil {
+			return apperr.Internal("sum after-sale item quantity", err)
+		}
+		if existing+int64(item.Quantity) > ordered[item.SkuID] {
+			return apperr.Invalid("return quantity for sku %d exceeds ordered quantity", item.SkuID)
+		}
+	}
+	return nil
 }
 
 // CreateAfterSale opens a refund only / return-refund request. The request is
@@ -67,6 +128,9 @@ func New(db *sql.DB, client *mq.Client, payments pb.PaymentServiceClient, invent
 func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRequest) (*pb.AfterSale, error) {
 	input, items, err := validateCreate(req.GetOrderNo(), req.GetUserId(), req.GetType(), req.GetReason(), req.GetAmountCent(), req.GetItems())
 	if err != nil {
+		return nil, err
+	}
+	if err := s.validateAgainstOrder(ctx, input.orderNo, input.userID, input.typ, input.amountCent, items); err != nil {
 		return nil, err
 	}
 	afterSaleNo := id.AfterSale()
@@ -234,12 +298,17 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*
 
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if _, err := s.payments.RefundOrder(callCtx, &pb.RefundOrderRequest{
+	refundReply, err := s.payments.RefundOrder(callCtx, &pb.RefundOrderRequest{
 		OrderNo: row.orderNo, AmountCent: row.amountCent,
 		Reason: "after-sale " + afterSaleNo, IdempotencyKey: afterSaleNo,
-	}); err != nil {
+	})
+	if err != nil {
 		s.log.Warn("after sale payment refund failed", "after_sale_no", afterSaleNo, "order_no", row.orderNo, "error", err)
 		return nil, apperr.Unavailable("payment refund failed; retry is safe", err)
+	}
+	refundNo := ""
+	if refundReply != nil {
+		refundNo = refundReply.GetRefundNo()
 	}
 
 	tx, err = s.db.BeginTx(ctx, nil)
@@ -257,8 +326,8 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*
 	if row.status != statusRefunding {
 		return nil, apperr.Failed(fmt.Sprintf("after sale cannot be completed in status %s", row.status))
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, refunded_cent = ?, version = version + 1 WHERE id = ?",
-		statusRefunded, row.amountCent, row.id); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, refund_no = ?, refunded_cent = ?, version = version + 1 WHERE id = ?",
+		statusRefunded, refundNo, row.amountCent, row.id); err != nil {
 		return nil, apperr.Internal("mark after sale refunded", err)
 	}
 	if err := appendLog(ctx, tx, row.id, "REFUND", statusRefunding, statusRefunded, "payment refund completed"); err != nil {
@@ -303,8 +372,8 @@ func refundableStatus(row *afterSaleRow) error {
 // return-refund request.
 func (s *Service) SubmitReturnTracking(ctx context.Context, req *pb.SubmitReturnTrackingRequest) (*pb.AfterSale, error) {
 	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
-	carrier := strings.TrimSpace(req.GetCarrier())
-	tracking := strings.TrimSpace(req.GetTrackingNo())
+	carrier := cutRunes(strings.TrimSpace(req.GetCarrier()), 64)
+	tracking := cutRunes(strings.TrimSpace(req.GetTrackingNo()), 128)
 	if afterSaleNo == "" || carrier == "" || tracking == "" {
 		return nil, apperr.Invalid("after_sale_no, carrier and tracking_no are required")
 	}
@@ -549,9 +618,7 @@ func (s *Service) loadItems(ctx context.Context, afterSaleNo string) ([]*pb.Afte
 }
 
 func appendLog(ctx context.Context, tx *sql.Tx, afterSaleID int64, action, fromStatus, toStatus, remark string) error {
-	if len(remark) > 512 {
-		remark = remark[:512]
-	}
+	remark = cutRunes(remark, 512)
 	if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_logs (after_sale_id, action, from_status, to_status, remark)
 		VALUES (?, ?, ?, ?, ?)`, afterSaleID, action, fromStatus, toStatus, remark); err != nil {
 		return apperr.Internal("append after sale log", err)
@@ -606,7 +673,7 @@ func validateCreate(orderNo string, userID int64, typ, reason string, amountCent
 		return afterSaleInput{}, nil, apperr.Invalid("amount_cent must be positive")
 	}
 	in.amountCent = amountCent
-	in.reason = strings.TrimSpace(reason)
+	in.reason = cutRunes(strings.TrimSpace(reason), 512)
 
 	merged := make([]afterSaleItem, 0, len(items))
 	index := make(map[int64]int, len(items))
@@ -677,4 +744,15 @@ func refundOutcome(current string) (string, bool, error) {
 	default:
 		return "", false, apperr.Failed(fmt.Sprintf("invalid after sale status %q", current))
 	}
+}
+
+func cutRunes(s string, max int) string {
+	if max <= 0 {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }

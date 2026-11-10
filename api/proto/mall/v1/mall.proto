@@ -378,6 +378,7 @@ message Order {
   int64 expire_at_unix = 14;
   string quote_id = 15;
   int64 refunded_cent = 16;
+  string refund_status = 17;
 }
 message CreateOrderRequest {
   int64 user_id = 1;
@@ -422,7 +423,7 @@ service PaymentService {
   rpc GetIntent (GetIntentRequest) returns (Intent);
   rpc Callback (CallbackRequest) returns (CallbackReply);
   rpc Refund (RefundRequest) returns (Empty);
-  rpc RefundOrder (RefundOrderRequest) returns (Empty);
+  rpc RefundOrder (RefundOrderRequest) returns (RefundOrderReply);
   rpc VerifyPayment (VerifyPaymentRequest) returns (VerifyPaymentReply);
   rpc ListRefunds (ListRefundsRequest) returns (RefundList);
 }
@@ -455,6 +456,7 @@ message CallbackRequest {
 }
 message CallbackReply { bool ok = 1; }
 message RefundOrderRequest { string order_no = 1; int64 amount_cent = 2; string reason = 3; string idempotency_key = 4; }
+message RefundOrderReply { string refund_no = 1; string payment_no = 2; int64 refunded_cent = 3; string status = 4; }
 message VerifyPaymentRequest { string payment_no = 1; }
 message VerifyPaymentReply {
   bool order_prepared = 1;

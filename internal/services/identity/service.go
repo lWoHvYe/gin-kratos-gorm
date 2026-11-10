@@ -148,6 +148,17 @@ func (s *Service) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.User
 	return &user, nil
 }
 
+func lockUserAddresses(ctx context.Context, tx *sql.Tx, userID int64) error {
+	var id int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id = ? FOR UPDATE`, userID).Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return apperr.NotFound("user not found")
+		}
+		return apperr.Internal("lock user", err)
+	}
+	return nil
+}
+
 func (s *Service) CreateAddress(ctx context.Context, req *pb.CreateAddressRequest) (*pb.Address, error) {
 	a := req.GetAddress()
 	if a == nil || a.GetUserId() <= 0 {
@@ -157,6 +168,9 @@ func (s *Service) CreateAddress(ctx context.Context, req *pb.CreateAddressReques
 		return nil, apperr.Invalid("receiver and detail are required")
 	}
 	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		if err := lockUserAddresses(ctx, tx, a.GetUserId()); err != nil {
+			return err
+		}
 		if a.GetIsDefault() {
 			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0 WHERE user_id = ?`, a.GetUserId()); err != nil {
 				return apperr.Internal("clear default address", err)
@@ -185,20 +199,28 @@ func (s *Service) UpdateAddress(ctx context.Context, req *pb.UpdateAddressReques
 		return nil, apperr.Invalid("receiver and detail are required")
 	}
 	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		if err := lockUserAddresses(ctx, tx, a.GetUserId()); err != nil {
+			return err
+		}
+		var exists int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_addresses WHERE id = ? AND user_id = ?`,
+			a.GetId(), a.GetUserId()).Scan(&exists); err != nil {
+			return apperr.Internal("lock address", err)
+		}
+		if exists == 0 {
+			return apperr.NotFound("address not found")
+		}
 		if a.GetIsDefault() {
 			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0 WHERE user_id = ?`, a.GetUserId()); err != nil {
 				return apperr.Internal("clear default address", err)
 			}
 		}
-		res, err := tx.ExecContext(ctx, `UPDATE user_addresses
+		_, err := tx.ExecContext(ctx, `UPDATE user_addresses
 			SET receiver = ?, phone = ?, province = ?, city = ?, district = ?, detail = ?, is_default = ?
 			WHERE id = ? AND user_id = ?`,
 			a.GetReceiver(), a.GetPhone(), a.GetProvince(), a.GetCity(), a.GetDistrict(), a.GetDetail(), a.GetIsDefault(), a.GetId(), a.GetUserId())
 		if err != nil {
 			return apperr.Internal("update address", err)
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return apperr.NotFound("address not found")
 		}
 		return nil
 	})
@@ -213,12 +235,24 @@ func (s *Service) DeleteAddress(ctx context.Context, req *pb.DeleteAddressReques
 		return nil, apperr.Invalid("user_id and address_id are required")
 	}
 	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `DELETE FROM user_addresses WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId())
-		if err != nil {
+		if err := lockUserAddresses(ctx, tx, req.GetUserId()); err != nil {
+			return err
+		}
+		var wasDefault int
+		if err := tx.QueryRowContext(ctx, `SELECT is_default FROM user_addresses WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId()).Scan(&wasDefault); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return apperr.NotFound("address not found")
+			}
+			return apperr.Internal("load address", err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM user_addresses WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId()); err != nil {
 			return apperr.Internal("delete address", err)
 		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return apperr.NotFound("address not found")
+		if wasDefault == 1 {
+			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 1
+				WHERE user_id = ? ORDER BY id LIMIT 1`, req.GetUserId()); err != nil {
+				return apperr.Internal("promote default address", err)
+			}
 		}
 		return nil
 	})
@@ -233,6 +267,9 @@ func (s *Service) SetDefaultAddress(ctx context.Context, req *pb.SetDefaultAddre
 		return nil, apperr.Invalid("user_id and address_id are required")
 	}
 	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		if err := lockUserAddresses(ctx, tx, req.GetUserId()); err != nil {
+			return err
+		}
 		var exists int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_addresses WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId()).Scan(&exists); err != nil {
 			return apperr.Internal("query address", err)

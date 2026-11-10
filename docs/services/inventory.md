@@ -156,7 +156,7 @@ executions idempotent by `gid + branch_id`.
 | `DTM_ADDRESS` | `127.0.0.1:36790` | DTM server for the orchestrator; branch handling needs no client |
 
 `cmd/inventory/main.go` starts `outbox.Relay` (1s interval), registers the gRPC
-server with etcd and serves `/healthz`, `/readyz` and `/metrics`.
+serves `/healthz`, `/readyz` and `/metrics`.
 
 ## Build and test
 

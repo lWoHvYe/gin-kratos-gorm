@@ -280,11 +280,6 @@ services:
       ORDER_TCC_URL: "order:9006/mall.v1.OrderService"
       INVENTORY_TCC_URL: "inventory:9003/mall.v1.InventoryService"
       PRICING_TCC_URL: "pricing:9005/mall.v1.PricingService"
-      # TCC Try executes in the payment process; in Compose the host service
-      # names are not resolvable, so use localhost for the Try leg.
-      ORDER_TCC_TRY_URL: "127.0.0.1:9006/mall.v1.OrderService"
-      INVENTORY_TCC_TRY_URL: "127.0.0.1:9003/mall.v1.InventoryService"
-      PRICING_TCC_TRY_URL: "127.0.0.1:9005/mall.v1.PricingService"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9107/healthz"]

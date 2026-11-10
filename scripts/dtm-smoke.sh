@@ -18,7 +18,15 @@ AUTH="Authorization: Bearer $TOKEN"
 
 echo "== list products =="
 PRODUCTS="$(curl -fsS "$BASE/api/v1/products?page=1&page_size=10")"
-SKU_ID="$(printf '%s' "$PRODUCTS" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["products"][0]["skus"][0]["id"])')"
+SKU_ID="$(printf '%s' "$PRODUCTS" | python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+for p in d.get("products", []):
+    for sku in p.get("skus", []):
+        if sku.get("stock", 0) > 0:
+            print(sku["id"]); raise SystemExit
+raise SystemExit("no purchasable sku found")
+')"
 echo "sku_id=$SKU_ID"
 
 echo "== checkout preview =="

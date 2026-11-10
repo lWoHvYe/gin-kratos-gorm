@@ -135,7 +135,7 @@ authz:
       sources: [gateway, admin, cart, pricing]
       paths: ["/mall.v1.CatalogService/*"]
     - name: inventory
-      sources: [gateway, admin, order, payment, dtm]
+      sources: [gateway, admin, order, payment, aftersales, dtm]
       paths: ["/mall.v1.InventoryService/*"]
     - name: cart
       sources: [gateway]
@@ -144,7 +144,7 @@ authz:
       sources: [gateway, order, payment, dtm]
       paths: ["/mall.v1.PricingService/*"]
     - name: order
-      sources: [gateway, admin, payment, dtm]
+      sources: [gateway, admin, payment, aftersales, dtm]
       paths: ["/mall.v1.OrderService/*"]
     - name: payment
       sources: [gateway, admin, aftersales]

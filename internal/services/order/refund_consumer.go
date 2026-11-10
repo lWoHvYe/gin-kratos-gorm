@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -42,8 +43,8 @@ func RunRefundConsumer(ctx context.Context, client *mq.Client, svc *Service, log
 		}
 		err := db.WithTx(ctx, svc.db, func(tx *sql.Tx) error {
 			var current int64
-			var status string
-			if err := tx.QueryRowContext(ctx, `SELECT refunded_cent, status FROM orders WHERE order_no = ? FOR UPDATE`, event.OrderNo).Scan(&current, &status); err != nil {
+			var status, refundStatus string
+			if err := tx.QueryRowContext(ctx, `SELECT refunded_cent, status, refund_status FROM orders WHERE order_no = ? FOR UPDATE`, event.OrderNo).Scan(&current, &status, &refundStatus); err != nil {
 				return err
 			}
 			if event.RefundedCent <= current {
@@ -53,11 +54,11 @@ func RunRefundConsumer(ctx context.Context, client *mq.Client, svc *Service, log
 			if event.CapturedCent > 0 && event.RefundedCent >= event.CapturedCent {
 				next = statusRefunded
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE orders SET refunded_cent = ?, status = ?, version = version + 1, updated_at = ? WHERE order_no = ?`,
+			if _, err := tx.ExecContext(ctx, `UPDATE orders SET refunded_cent = ?, refund_status = ?, version = version + 1, updated_at = ? WHERE order_no = ?`,
 				event.RefundedCent, next, time.Now(), event.OrderNo); err != nil {
 				return err
 			}
-			if err := insertStatusLog(ctx, tx, event.OrderNo, status, next, "payment refund", "payment"); err != nil {
+			if err := insertStatusLog(ctx, tx, event.OrderNo, status, status, "payment refund "+next, "payment"); err != nil {
 				return err
 			}
 			return outbox.Append(ctx, tx, outbox.Event{
@@ -68,7 +69,8 @@ func RunRefundConsumer(ctx context.Context, client *mq.Client, svc *Service, log
 			})
 		})
 		if err != nil {
-			if apperr.IsCode(err, apperr.CodeNotFound) {
+			if errors.Is(err, sql.ErrNoRows) || apperr.IsCode(err, apperr.CodeNotFound) {
+				logger.Warn("refund projection order missing", "order_no", event.OrderNo)
 				_ = msg.Ack()
 				return
 			}

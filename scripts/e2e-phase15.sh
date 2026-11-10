@@ -49,7 +49,9 @@ need "$AID" address
 curl -fsS -X POST "$BASE/api/v1/cart/items" -H "$UH" -H 'Content-Type: application/json' -d "{\"sku_id\":$SKU,\"quantity\":2}" >/dev/null
 
 echo "== preview/place/pay =="
-QUOTE="$(curl -fsS -X POST "$BASE/api/v1/checkout/preview" -H "$UH" -H 'Content-Type: application/json' -d "{\"items\":[{\"sku_id\":$SKU,\"quantity\":2}],\"address_id\":$AID}")"
+# No explicit items: price the selected cart lines so the cart stock/quantity
+# path is exercised end to end.
+QUOTE="$(curl -fsS -X POST "$BASE/api/v1/checkout/preview" -H "$UH" -H 'Content-Type: application/json' -d "{\"address_id\":$AID}")"
 QID="$(echo "$QUOTE" | json "d['quote_id']")"
 PAY_CENT="$(echo "$QUOTE" | json "d['pay_cent']")"
 PLACE="$(curl -fsS -X POST "$BASE/api/v1/checkout/place" -H "$UH" -H 'Content-Type: application/json' \
@@ -64,8 +66,20 @@ echo "== ship/receive =="
 curl -fsS -X POST "$ADMIN/api/admin/v1/shipments" -H "$AH" -H 'Content-Type: application/json' \
   -d "{\"order_no\":\"$ORDER\",\"carrier\":\"SF\",\"tracking_no\":\"SF-$SUFFIX\",\"ship\":true}" >/dev/null
 curl -fsS -X POST "$BASE/api/v1/orders/$ORDER/receive" -H "$UH" -H 'Content-Type: application/json' -d '{}' >/dev/null
+# Shipment -> order status is an async projection. After-sales deliberately
+# requires a shipped/completed order, so wait for the projection to converge.
+for _ in $(seq 1 20); do
+  STATUS="$(curl -fsS "$BASE/api/v1/orders/$ORDER" -H "$UH" | json "d['status']")"
+  [ "$STATUS" = "COMPLETED" ] && break
+  sleep 0.5
+done
+[ "$STATUS" = "COMPLETED" ] || { echo "order did not reach COMPLETED: $STATUS"; exit 1; }
 
 echo "== return/refund =="
+# A return may not invent quantity that was never ordered.
+BAD_STATUS="$(curl -sS -o /tmp/e2e-bad-return.json -w '%{http_code}' -X POST "$BASE/api/v1/after-sales" -H "$UH" -H 'Content-Type: application/json' \
+  -d "{\"order_no\":\"$ORDER\",\"type\":\"RETURN_REFUND\",\"reason\":\"bad\",\"amount_cent\":1234,\"items\":[{\"sku_id\":$SKU,\"quantity\":99}]}")"
+case "$BAD_STATUS" in 2*) echo "invalid return was accepted"; cat /tmp/e2e-bad-return.json; exit 1;; esac
 AS="$(curl -fsS -X POST "$BASE/api/v1/after-sales" -H "$UH" -H 'Content-Type: application/json' \
   -d "{\"order_no\":\"$ORDER\",\"type\":\"RETURN_REFUND\",\"reason\":\"e2e return\",\"amount_cent\":1234,\"items\":[{\"sku_id\":$SKU,\"quantity\":1}]}")"
 ASNO="$(echo "$AS" | json "d['after_sale_no']")"
@@ -74,21 +88,27 @@ curl -fsS -X POST "$ADMIN/api/admin/v1/after-sales/$ASNO/approve" -H "$AH" -H 'C
 curl -fsS -X POST "$BASE/api/v1/after-sales/$ASNO/return-tracking" -H "$UH" -H 'Content-Type: application/json' \
   -d "{\"carrier\":\"SF\",\"tracking_no\":\"RET-$SUFFIX\"}" >/dev/null
 curl -fsS -X POST "$ADMIN/api/admin/v1/after-sales/$ASNO/receive" -H "$AH" -H 'Content-Type: application/json' -d '{"condition":"SELLABLE"}' >/dev/null
-curl -fsS -X POST "$ADMIN/api/admin/v1/after-sales/$ASNO/refund" -H "$AH" -H 'Content-Type: application/json' -d '{}' >/dev/null
+AS_DONE="$(curl -fsS -X POST "$ADMIN/api/admin/v1/after-sales/$ASNO/refund" -H "$AH" -H 'Content-Type: application/json' -d '{}')"
+echo "$AS_DONE" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["status"]=="REFUNDED" and d.get("refund_no",""), d'
 
 echo "== verify projections =="
 DETAIL=""
 for _ in $(seq 1 20); do
   DETAIL="$(curl -fsS "$BASE/api/v1/orders/$ORDER" -H "$UH")"
-  if echo "$DETAIL" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("refunded_cent")==1234 and d.get("status")=="PARTIALLY_REFUNDED"' 2>/dev/null; then
+  if echo "$DETAIL" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("refunded_cent")==1234 and d.get("refund_status")=="PARTIALLY_REFUNDED"' 2>/dev/null; then
     break
   fi
   sleep 0.5
 done
-echo "$DETAIL" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("refunded_cent")==1234 and d.get("status")=="PARTIALLY_REFUNDED", d'
+echo "$DETAIL" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("refunded_cent")==1234 and d.get("refund_status")=="PARTIALLY_REFUNDED", d'
 REFUNDS="$(curl -fsS "$ADMIN/api/admin/v1/payments/refunds?order_no=$ORDER" -H "$AH")"
 echo "$REFUNDS" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total"]==1 and d["refunds"][0]["amount_cent"]==1234, d'
-STOCK="$(curl -fsS "$BASE/api/v1/skus/$SKU")"
+STOCK=""
+for _ in $(seq 1 20); do
+  STOCK="$(curl -fsS "$BASE/api/v1/skus/$SKU")"
+  if echo "$STOCK" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["stock"]==9' 2>/dev/null; then break; fi
+  sleep 0.5
+done
 echo "$STOCK" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["stock"]==9, d'
 
 echo "== phase15 e2e passed =="

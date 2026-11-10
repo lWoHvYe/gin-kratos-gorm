@@ -67,7 +67,7 @@ This installs:
 - `mall` in `mall`: 11 services, DTM, waypoint, STRICT mTLS, L7 policies,
   Gateway API route.
 
-The migration Job is a Helm post-install/post-upgrade hook and is safe to
+The migration Job is a Helm post-install/pre-upgrade hook and is safe to
 rerun.
 
 ## 5. Verify

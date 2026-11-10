@@ -153,27 +153,33 @@ func (s *Service) GetSku(ctx context.Context, req *pb.GetSkuRequest) (*pb.Sku, e
 	if req.GetSkuId() <= 0 {
 		return nil, apperr.Invalid("sku_id is required")
 	}
-	if s.gorm != nil {
-		sku, err := s.gorm.GetSku(ctx, req.GetSkuId())
-		if err != nil {
-			return nil, apperr.Internal("get sku", err)
-		}
-		if sku == nil || sku.Status == "DELETED" {
-			return nil, apperr.NotFound("sku not found")
-		}
-		return sku, nil
-	}
-	var sku pb.Sku
-	err := s.db.QueryRowContext(ctx, `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status, image_url FROM skus WHERE id = ?`, req.GetSkuId()).
-		Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status, &sku.ImageUrl)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, apperr.NotFound("sku not found")
-	}
+	sku, err := s.loadSku(ctx, req.GetSkuId(), true)
 	if err != nil {
 		return nil, apperr.Internal("get sku", err)
 	}
-	if sku.Status == "DELETED" {
+	if sku == nil {
 		return nil, apperr.NotFound("sku not found")
+	}
+	return sku, nil
+}
+
+// loadSku is shared by the public SKU endpoint and the admin write methods.
+// activeOnly enforces the C-end rule: the SKU and its parent SPU must both be
+// sellable. Admin writes pass false so a DRAFT/disabled SKU can be read back.
+func (s *Service) loadSku(ctx context.Context, id int64, activeOnly bool) (*pb.Sku, error) {
+	query := `SELECT k.id, k.spu_id, k.sku_code, k.specs_json, k.price_cent, k.stock, k.status, k.image_url
+		FROM skus k JOIN spus p ON p.id = k.spu_id WHERE k.id = ?`
+	if activeOnly {
+		query += " AND k.status = 'ENABLED' AND p.status = 'ON_SALE'"
+	}
+	var sku pb.Sku
+	err := s.db.QueryRowContext(ctx, query, id).
+		Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status, &sku.ImageUrl)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	return &sku, nil
 }
@@ -216,6 +222,19 @@ func (s *Service) UpdateCategory(ctx context.Context, req *pb.UpdateCategoryRequ
 	if c.GetParentId() == c.GetId() {
 		return nil, apperr.Invalid("category cannot be its own parent")
 	}
+	if c.GetParentId() > 0 {
+		var cyclic int
+		if err := s.db.QueryRowContext(ctx, `WITH RECURSIVE descendants AS (
+			SELECT id FROM categories WHERE id = ?
+			UNION ALL
+			SELECT child.id FROM categories child JOIN descendants d ON child.parent_id = d.id
+		) SELECT COUNT(*) FROM descendants WHERE id = ?`, c.GetId(), c.GetParentId()).Scan(&cyclic); err != nil {
+			return nil, apperr.Internal("check category cycle", err)
+		}
+		if cyclic > 0 {
+			return nil, apperr.Invalid("category cannot be moved below its own descendant")
+		}
+	}
 	level := int32(1)
 	if c.GetParentId() > 0 {
 		var parentLevel int32
@@ -228,15 +247,22 @@ func (s *Service) UpdateCategory(ctx context.Context, req *pb.UpdateCategoryRequ
 		}
 		level = parentLevel + 1
 	}
-	var exists int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM categories WHERE id = ?`, c.GetId()).Scan(&exists); err != nil {
+	var currentStatus string
+	if err := s.db.QueryRowContext(ctx, `SELECT status FROM categories WHERE id = ?`, c.GetId()).Scan(&currentStatus); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperr.NotFound("category not found")
+		}
 		return nil, apperr.Internal("query category", err)
 	}
-	if exists == 0 {
-		return nil, apperr.NotFound("category not found")
+	status := strings.TrimSpace(c.GetStatus())
+	if status == "" {
+		status = currentStatus
+	}
+	if status != "ENABLED" && status != "DISABLED" {
+		return nil, apperr.Invalid("invalid category status")
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE categories SET parent_id = ?, name = ?, level = ?, sort = ?, status = ? WHERE id = ?`,
-		c.GetParentId(), strings.TrimSpace(c.GetName()), level, c.GetSort(), defaultString(c.GetStatus(), "ENABLED"), c.GetId()); err != nil {
+		c.GetParentId(), strings.TrimSpace(c.GetName()), level, c.GetSort(), status, c.GetId()); err != nil {
 		return nil, apperr.Internal("update category", err)
 	}
 	c.Level = level
@@ -305,15 +331,26 @@ func (s *Service) UpdateBrand(ctx context.Context, req *pb.UpdateBrandRequest) (
 	if b == nil || b.GetId() <= 0 || strings.TrimSpace(b.GetName()) == "" {
 		return nil, apperr.Invalid("brand id and name are required")
 	}
-	var exists int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM brands WHERE id = ?`, b.GetId()).Scan(&exists); err != nil {
+	var currentStatus, currentLogo string
+	if err := s.db.QueryRowContext(ctx, `SELECT status, logo FROM brands WHERE id = ?`, b.GetId()).Scan(&currentStatus, &currentLogo); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperr.NotFound("brand not found")
+		}
 		return nil, apperr.Internal("query brand", err)
 	}
-	if exists == 0 {
-		return nil, apperr.NotFound("brand not found")
+	status := strings.TrimSpace(b.GetStatus())
+	if status == "" {
+		status = currentStatus
+	}
+	if status != "ENABLED" && status != "DISABLED" {
+		return nil, apperr.Invalid("invalid brand status")
+	}
+	logo := b.GetLogo()
+	if strings.TrimSpace(logo) == "" {
+		logo = currentLogo
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE brands SET name = ?, logo = ?, status = ? WHERE id = ?`,
-		strings.TrimSpace(b.GetName()), b.GetLogo(), defaultString(b.GetStatus(), "ENABLED"), b.GetId()); err != nil {
+		strings.TrimSpace(b.GetName()), logo, status, b.GetId()); err != nil {
 		return nil, apperr.Internal("update brand", err)
 	}
 	return b, nil
@@ -442,14 +479,25 @@ func (s *Service) UpdateProduct(ctx context.Context, req *pb.UpdateProductReques
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, apperr.NotFound("product not found")
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM spu_images WHERE spu_id = ?`, req.GetId()); err != nil {
-		return nil, apperr.Internal("replace images", err)
+	// Repeated fields have presence in the Go request: nil means the client
+	// omitted the field, while an explicit empty array means "clear". Preserve
+	// media on partial updates; replace only when the corresponding field was
+	// supplied.
+	if req.Images != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM spu_images WHERE spu_id = ?`, req.GetId()); err != nil {
+			return nil, apperr.Internal("replace images", err)
+		}
+		if err := insertMedia(ctx, tx, req.GetId(), req.GetImages(), nil); err != nil {
+			return nil, err
+		}
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM spu_attributes WHERE spu_id = ?`, req.GetId()); err != nil {
-		return nil, apperr.Internal("replace attributes", err)
-	}
-	if err := insertMedia(ctx, tx, req.GetId(), req.GetImages(), req.GetAttributes()); err != nil {
-		return nil, err
+	if req.Attributes != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM spu_attributes WHERE spu_id = ?`, req.GetId()); err != nil {
+			return nil, apperr.Internal("replace attributes", err)
+		}
+		if err := insertMedia(ctx, tx, req.GetId(), nil, req.GetAttributes()); err != nil {
+			return nil, err
+		}
 	}
 	if err := recalcMinPrice(ctx, tx, req.GetId()); err != nil {
 		return nil, err
@@ -468,17 +516,25 @@ func (s *Service) DeleteProduct(ctx context.Context, req *pb.DeleteProductReques
 	if req.GetId() <= 0 {
 		return nil, apperr.Invalid("id is required")
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE spus SET status = 'DELETED', version = version + 1 WHERE id = ? AND status <> 'DELETED'`, req.GetId())
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, apperr.Internal("begin delete product", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.ExecContext(ctx, `UPDATE spus SET status = 'DELETED', version = version + 1 WHERE id = ? AND status <> 'DELETED'`, req.GetId())
 	if err != nil {
 		return nil, apperr.Internal("delete product", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, apperr.NotFound("product not found")
 	}
-	s.cacheEvictProduct(ctx, req.GetId())
-	if err := s.appendStandaloneProductEvent(ctx, req.GetId(), "DELETED", "product.deleted"); err != nil {
+	if err := appendProductEvent(ctx, tx, req.GetId(), "DELETED", "product.deleted"); err != nil {
 		return nil, err
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, apperr.Internal("commit delete product", err)
+	}
+	s.cacheEvictProduct(ctx, req.GetId())
 	return &pb.Empty{}, nil
 }
 
@@ -495,17 +551,25 @@ func (s *Service) SetProductStatus(ctx context.Context, req *pb.SetProductStatus
 			return nil, apperr.Failed("product has no active sku")
 		}
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE spus SET status = ?, version = version + 1 WHERE id = ? AND status <> 'DELETED'`, req.GetStatus(), req.GetId())
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, apperr.Internal("begin set status", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.ExecContext(ctx, `UPDATE spus SET status = ?, version = version + 1 WHERE id = ? AND status <> 'DELETED'`, req.GetStatus(), req.GetId())
 	if err != nil {
 		return nil, apperr.Internal("set status", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, apperr.NotFound("product not found")
 	}
-	s.cacheEvictProduct(ctx, req.GetId())
-	if err := s.appendStandaloneProductEvent(ctx, req.GetId(), req.GetStatus(), "product.status_changed"); err != nil {
+	if err := appendProductEvent(ctx, tx, req.GetId(), req.GetStatus(), "product.status_changed"); err != nil {
 		return nil, err
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, apperr.Internal("commit set status", err)
+	}
+	s.cacheEvictProduct(ctx, req.GetId())
 	return &pb.Empty{}, nil
 }
 
@@ -546,22 +610,25 @@ func (s *Service) CreateSku(ctx context.Context, req *pb.CreateSkuRequest) (*pb.
 		return nil, apperr.Internal("commit create sku", err)
 	}
 	s.cacheEvictProduct(ctx, req.GetSpuId())
-	return s.GetSku(ctx, &pb.GetSkuRequest{SkuId: id})
+	return s.loadSku(ctx, id, false)
 }
 
 func (s *Service) UpdateSku(ctx context.Context, req *pb.UpdateSkuRequest) (*pb.Sku, error) {
 	if req.GetId() <= 0 {
 		return nil, apperr.Invalid("id is required")
 	}
-	var spuID int64
-	if err := s.db.QueryRowContext(ctx, `SELECT spu_id FROM skus WHERE id = ? AND status <> 'DELETED'`, req.GetId()).Scan(&spuID); err != nil {
+	var (
+		spuID         int64
+		currentStatus string
+	)
+	if err := s.db.QueryRowContext(ctx, `SELECT spu_id, status FROM skus WHERE id = ? AND status <> 'DELETED'`, req.GetId()).Scan(&spuID, &currentStatus); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, apperr.NotFound("sku not found")
 		}
 		return nil, apperr.Internal("load sku", err)
 	}
-	if req.GetPriceCent() <= 0 {
-		return nil, apperr.Invalid("price_cent must be positive")
+	if strings.TrimSpace(req.GetSkuCode()) == "" || req.GetPriceCent() <= 0 {
+		return nil, apperr.Invalid("sku_code and positive price_cent are required")
 	}
 	specs := req.GetSpecsJson()
 	if strings.TrimSpace(specs) == "" {
@@ -570,7 +637,10 @@ func (s *Service) UpdateSku(ctx context.Context, req *pb.UpdateSkuRequest) (*pb.
 	if !json.Valid([]byte(specs)) {
 		return nil, apperr.Invalid("specs_json must be valid JSON")
 	}
-	status := defaultString(req.GetStatus(), "ENABLED")
+	status := strings.TrimSpace(req.GetStatus())
+	if status == "" {
+		status = currentStatus
+	}
 	if status != "ENABLED" && status != "DISABLED" {
 		return nil, apperr.Invalid("invalid sku status")
 	}
@@ -594,7 +664,7 @@ func (s *Service) UpdateSku(ctx context.Context, req *pb.UpdateSkuRequest) (*pb.
 		return nil, apperr.Internal("commit update sku", err)
 	}
 	s.cacheEvictProduct(ctx, spuID)
-	return s.GetSku(ctx, &pb.GetSkuRequest{SkuId: req.GetId()})
+	return s.loadSku(ctx, req.GetId(), false)
 }
 
 func (s *Service) DeleteSku(ctx context.Context, req *pb.DeleteSkuRequest) (*pb.Empty, error) {
@@ -624,7 +694,7 @@ func (s *Service) SetSkuStatus(ctx context.Context, req *pb.SetSkuStatusRequest)
 		return nil, err
 	}
 	s.cacheEvictProduct(ctx, spuID)
-	return s.GetSku(ctx, &pb.GetSkuRequest{SkuId: req.GetId()})
+	return s.loadSku(ctx, req.GetId(), false)
 }
 
 func (s *Service) setSkuStatus(ctx context.Context, id int64, status string) error {
@@ -676,6 +746,9 @@ func validateSkuInput(in *pb.SkuInput) error {
 	if in == nil || strings.TrimSpace(in.GetSkuCode()) == "" || in.GetPriceCent() <= 0 {
 		return apperr.Invalid("sku_code and price_cent are required")
 	}
+	if in.GetStock() != 0 {
+		return apperr.Invalid("sku stock is managed by inventory; use inventory.adjust before publishing")
+	}
 	specs := in.GetSpecsJson()
 	if strings.TrimSpace(specs) == "" {
 		specs = "{}"
@@ -707,6 +780,13 @@ func insertMedia(ctx context.Context, tx *sql.Tx, spuID int64, images []*pb.Prod
 }
 
 func recalcMinPrice(ctx context.Context, tx *sql.Tx, spuID int64) error {
+	// Serialize concurrent SKU mutations for the same SPU. Without this lock two
+	// transactions can each compute a minimum from their own snapshot and the
+	// last writer may store a stale price used by C-end filters.
+	var locked int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM spus WHERE id = ? FOR UPDATE`, spuID).Scan(&locked); err != nil {
+		return apperr.Internal("lock spu for min price", err)
+	}
 	var min sql.NullInt64
 	if err := tx.QueryRowContext(ctx, `SELECT MIN(price_cent) FROM skus WHERE spu_id = ? AND status = 'ENABLED' AND price_cent > 0`, spuID).Scan(&min); err != nil {
 		return apperr.Internal("recalculate min price", err)
@@ -717,6 +797,15 @@ func recalcMinPrice(ctx context.Context, tx *sql.Tx, spuID int64) error {
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE spus SET min_price_cent = ? WHERE id = ?`, value, spuID); err != nil {
 		return apperr.Internal("update min price", err)
+	}
+	var enabled int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM skus WHERE spu_id = ? AND status = 'ENABLED'`, spuID).Scan(&enabled); err != nil {
+		return apperr.Internal("count enabled skus", err)
+	}
+	if enabled == 0 {
+		if _, err := tx.ExecContext(ctx, `UPDATE spus SET status = 'OFF_SALE', version = version + 1 WHERE id = ? AND status = 'ON_SALE'`, spuID); err != nil {
+			return apperr.Internal("unpublish empty product", err)
+		}
 	}
 	return nil
 }
@@ -838,7 +927,7 @@ func (s *Service) loadProduct(ctx context.Context, id int64, activeOnly bool) (*
 			rows.Close()
 			return nil, apperr.Internal("scan sku", err)
 		}
-		if sku.PriceCent > 0 && (p.MinPriceCent == 0 || sku.PriceCent < p.MinPriceCent) {
+		if sku.Status == "ENABLED" && sku.PriceCent > 0 && (p.MinPriceCent == 0 || sku.PriceCent < p.MinPriceCent) {
 			p.MinPriceCent = sku.PriceCent
 		}
 		p.Skus = append(p.Skus, &sku)

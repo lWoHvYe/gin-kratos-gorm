@@ -2992,7 +2992,7 @@ type PaymentServiceClient interface {
 	GetIntent(ctx context.Context, in *GetIntentRequest, opts ...grpc.CallOption) (*Intent, error)
 	Callback(ctx context.Context, in *CallbackRequest, opts ...grpc.CallOption) (*CallbackReply, error)
 	Refund(ctx context.Context, in *RefundRequest, opts ...grpc.CallOption) (*Empty, error)
-	RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*Empty, error)
+	RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*RefundOrderReply, error)
 	VerifyPayment(ctx context.Context, in *VerifyPaymentRequest, opts ...grpc.CallOption) (*VerifyPaymentReply, error)
 	ListRefunds(ctx context.Context, in *ListRefundsRequest, opts ...grpc.CallOption) (*RefundList, error)
 }
@@ -3045,9 +3045,9 @@ func (c *paymentServiceClient) Refund(ctx context.Context, in *RefundRequest, op
 	return out, nil
 }
 
-func (c *paymentServiceClient) RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *paymentServiceClient) RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*RefundOrderReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
+	out := new(RefundOrderReply)
 	err := c.cc.Invoke(ctx, PaymentService_RefundOrder_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -3085,7 +3085,7 @@ type PaymentServiceServer interface {
 	GetIntent(context.Context, *GetIntentRequest) (*Intent, error)
 	Callback(context.Context, *CallbackRequest) (*CallbackReply, error)
 	Refund(context.Context, *RefundRequest) (*Empty, error)
-	RefundOrder(context.Context, *RefundOrderRequest) (*Empty, error)
+	RefundOrder(context.Context, *RefundOrderRequest) (*RefundOrderReply, error)
 	VerifyPayment(context.Context, *VerifyPaymentRequest) (*VerifyPaymentReply, error)
 	ListRefunds(context.Context, *ListRefundsRequest) (*RefundList, error)
 	mustEmbedUnimplementedPaymentServiceServer()
@@ -3110,7 +3110,7 @@ func (UnimplementedPaymentServiceServer) Callback(context.Context, *CallbackRequ
 func (UnimplementedPaymentServiceServer) Refund(context.Context, *RefundRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method Refund not implemented")
 }
-func (UnimplementedPaymentServiceServer) RefundOrder(context.Context, *RefundOrderRequest) (*Empty, error) {
+func (UnimplementedPaymentServiceServer) RefundOrder(context.Context, *RefundOrderRequest) (*RefundOrderReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefundOrder not implemented")
 }
 func (UnimplementedPaymentServiceServer) VerifyPayment(context.Context, *VerifyPaymentRequest) (*VerifyPaymentReply, error) {

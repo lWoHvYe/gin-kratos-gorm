@@ -6,10 +6,15 @@ metadata:
   labels:
     app.kubernetes.io/part-of: mall
   annotations:
-    helm.sh/hook: post-install,post-upgrade
+    # On upgrade run before the new application pods are rolled out, so they
+    # never observe an old schema. On a fresh install MySQL is part of this
+    # chart, so the job has to run post-install and wait for it.
+    helm.sh/hook: post-install,pre-upgrade
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 20
+  # A missing StorageClass/PVC must not block Helm forever.
+  activeDeadlineSeconds: 600
   template:
     metadata:
       labels:

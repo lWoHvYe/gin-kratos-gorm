@@ -22,7 +22,7 @@ K8S_INFRA_VALUES := $(K8S_DIR)/charts/infra/values-single-node.yaml
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 test-race verify wire arch clean \
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race verify wire arch clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-deploy mesh-smoke
 
 help:
@@ -45,6 +45,7 @@ help:
 	@echo "  dtm-smoke                         manual happy-path DTM smoke (stack must be up)"
 	@echo "  dtm-contract                      static DTM wiring guard"
 	@echo "  e2e-phase15                       Phase 1.5 B-end/C-end/return E2E (gateway/admin URLs)"
+	@echo "  concurrency-phase15               prove two simultaneous checkouts do not oversell"
 	@echo "  test-race                         unit tests with the race detector"
 	@echo "  arch                              architecture/import guard"
 	@echo "  wire                              regenerate Wire injectors for gateway/admin/order/payment"
@@ -115,7 +116,7 @@ arch:
 wire:
 	$(GO) run github.com/google/wire/cmd/wire ./cmd/gateway ./cmd/admin ./cmd/order ./cmd/payment
 
-verify: fmt-check vet test build arch dtm-contract
+verify: fmt-check vet test test-race build arch dtm-contract
 	@echo "verify: OK"
 
 dtm-smoke:
@@ -123,6 +124,9 @@ dtm-smoke:
 
 e2e-phase15:
 	./scripts/e2e-phase15.sh
+
+concurrency-phase15:
+	./scripts/concurrency-phase15.sh
 
 dtm-contract:
 	./scripts/check-dtm-contract.sh

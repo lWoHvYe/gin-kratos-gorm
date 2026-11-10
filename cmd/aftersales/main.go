@@ -61,8 +61,19 @@ func main() {
 	}
 	defer inventoryConn.Close()
 	inventory := pb.NewInventoryServiceClient(inventoryConn)
+	orderAddr := os.Getenv("ORDER_ADDR")
+	if orderAddr == "" {
+		orderAddr = "order:9006"
+	}
+	orderConn, err := grpcx.Dial(context.Background(), orderAddr)
+	if err != nil {
+		logger.Error("dial order", "addr", orderAddr, "error", err)
+		os.Exit(1)
+	}
+	defer orderConn.Close()
+	orders := pb.NewOrderServiceClient(orderConn)
 	gs := grpcx.NewServer(logger)
-	pb.RegisterAfterSalesServiceServer(gs, aftersales.New(database, client, payments, inventory, logger))
+	pb.RegisterAfterSalesServiceServer(gs, aftersales.New(database, client, payments, inventory, orders, logger))
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)

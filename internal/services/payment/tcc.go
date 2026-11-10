@@ -39,6 +39,12 @@ func (s *Service) markPaidTCC(ctx context.Context, in *intent) error {
 	if err != nil {
 		return mapOrderError(err)
 	}
+	switch order.GetStatus() {
+	case "CANCELLED", "CLOSED":
+		return s.refundUnpayable(ctx, in)
+	case "PAID", "ALLOCATED", "SHIPPED", "COMPLETED", "PARTIALLY_REFUNDED", "REFUNDED":
+		return nil
+	}
 	req := &pb.TccPaymentRequest{
 		OrderNo: in.OrderNo, PaymentNo: in.PaymentNo, UserId: in.UserID,
 		PaidCent: in.AmountCent, QuoteId: order.GetQuoteId(), Items: order.GetItems(),
@@ -60,9 +66,33 @@ func (s *Service) markPaidTCC(ctx context.Context, in *intent) error {
 	})
 	if err != nil {
 		s.log.Error("payment tcc failed", "payment_no", in.PaymentNo, "order_no", in.OrderNo, "error", err)
+		// The order may have been cancelled between settlement and confirm. The
+		// captured money must not disappear; refund it idempotently.
+		if latest, lerr := s.orders.GetOrder(ctx, &pb.GetOrderRequest{OrderNo: in.OrderNo, Admin: true}); lerr == nil {
+			if latest.GetStatus() == "CANCELLED" || latest.GetStatus() == "CLOSED" {
+				if rerr := s.refundUnpayable(ctx, in); rerr == nil {
+					return nil
+				}
+			}
+		}
 		return apperr.Unavailable("payment confirmation tcc failed", err)
 	}
 	return nil
+}
+
+func (s *Service) refundUnpayable(ctx context.Context, in *intent) error {
+	amount := in.CapturedCent
+	if amount <= 0 {
+		amount = in.AmountCent
+	}
+	if amount <= 0 {
+		return nil
+	}
+	_, err := s.Refund(ctx, &pb.RefundRequest{
+		PaymentNo: in.PaymentNo, AmountCent: amount,
+		Reason: "order not payable", IdempotencyKey: "auto-not-payable:" + in.PaymentNo,
+	})
+	return err
 }
 
 func (s *Service) markPaidDirect(ctx context.Context, in *intent) error {
@@ -75,6 +105,13 @@ func (s *Service) markPaidDirect(ctx context.Context, in *intent) error {
 	_, err := s.orders.MarkPaid(callCtx, &pb.MarkPaidRequest{OrderNo: in.OrderNo, PaymentNo: in.PaymentNo, PaidCent: in.AmountCent})
 	if err == nil {
 		return nil
+	}
+	if latest, lerr := s.orders.GetOrder(ctx, &pb.GetOrderRequest{OrderNo: in.OrderNo, Admin: true}); lerr == nil {
+		if latest.GetStatus() == "CANCELLED" || latest.GetStatus() == "CLOSED" {
+			if rerr := s.refundUnpayable(ctx, in); rerr == nil {
+				return nil
+			}
+		}
 	}
 	return mapOrderError(err)
 }

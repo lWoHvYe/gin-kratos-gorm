@@ -52,11 +52,24 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   KEY idx_refresh_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT IGNORE INTO roles (id, code, name) VALUES (1, 'admin', 'Administrator'), (2, 'user', 'Customer');
+INSERT IGNORE INTO roles (id, code, name)
+SELECT * FROM (SELECT 1 AS id, 'admin' AS code, 'Administrator' AS name
+  UNION ALL SELECT 2, 'user', 'Customer') AS seed
+WHERE NOT EXISTS (SELECT 1 FROM roles);
 
 -- Development accounts: admin/admin123, demo/user123.
 -- These are seed-only credentials; rotate/remove them outside local dev.
-INSERT IGNORE INTO users (id, username, password_hash, nickname, status) VALUES
-  (1, 'admin', '$2a$10$kbeq.fAUyBcH6fX4fRhoG.2GDgIysuSZORFBlJruc0ixF8mIvMq3u', 'Administrator', 'ACTIVE'),
-  (2, 'demo',  '$2a$10$22d5vF5PUGpU/e2F26UZ7ugdSzYMAKxdlHlaH2sS.4X6L4nW1c9iu', 'Demo Customer', 'ACTIVE');
-INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (1, 1), (2, 2);
+INSERT IGNORE INTO users (id, username, password_hash, nickname, status)
+SELECT * FROM (
+  SELECT 1 AS id, 'admin' AS username,
+    '$2a$10$kbeq.fAUyBcH6fX4fRhoG.2GDgIysuSZORFBlJruc0ixF8mIvMq3u' AS password_hash,
+    'Administrator' AS nickname, 'ACTIVE' AS status
+  UNION ALL
+  SELECT 2, 'demo',
+    '$2a$10$22d5vF5PUGpU/e2F26UZ7ugdSzYMAKxdlHlaH2sS.4X6L4nW1c9iu',
+    'Demo Customer', 'ACTIVE'
+) AS seed
+WHERE NOT EXISTS (SELECT 1 FROM users);
+INSERT IGNORE INTO user_roles (user_id, role_id)
+SELECT * FROM (SELECT 1 AS user_id, 1 AS role_id UNION ALL SELECT 2, 2) AS seed
+WHERE NOT EXISTS (SELECT 1 FROM user_roles);

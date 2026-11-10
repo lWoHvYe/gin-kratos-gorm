@@ -158,3 +158,11 @@ append-only status log. Duplicate events are safe.
 The default payment confirmation is the TCC in `tcc.go` with gid
 `payment-confirm:<payment_no>`. `MarkPaid` remains only as the
 `PAYMENT_TCC_ENABLED=false` rollback path.
+
+## Phase 1.5 refund projection
+
+`0002_refund_projection.sql` adds `refunded_cent`; `0003_refund_status.sql` adds
+the orthogonal `refund_status` (`PARTIALLY_REFUNDED` / `REFUNDED`). Refund events
+update the amount and refund status without overwriting the fulfilment status
+(`PAID -> SHIPPED -> COMPLETED`). Shipment projection uses a compare-and-set
+retry so concurrent CREATED/SHIPPED events cannot lose an update.

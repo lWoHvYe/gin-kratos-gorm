@@ -61,6 +61,7 @@ type orderRecord struct {
 	PayCent         int64
 	PaidCent        int64
 	RefundedCent    int64
+	RefundStatus    string
 	ReceiverName    string
 	ReceiverPhone   string
 	ReceiverAddress string
@@ -81,6 +82,7 @@ func (o *orderRecord) toProto(items []*pb.OrderItem) *pb.Order {
 		PayCent:         o.PayCent,
 		PaidCent:        o.PaidCent,
 		RefundedCent:    o.RefundedCent,
+		RefundStatus:    o.RefundStatus,
 		ReceiverName:    o.ReceiverName,
 		ReceiverPhone:   o.ReceiverPhone,
 		ReceiverAddress: o.ReceiverAddress,
@@ -91,13 +93,13 @@ func (o *orderRecord) toProto(items []*pb.OrderItem) *pb.Order {
 	}
 }
 
-const orderColumns = `order_no, user_id, status, total_cent, discount_cent, freight_cent, pay_cent, paid_cent, refunded_cent,
+const orderColumns = `order_no, user_id, status, total_cent, discount_cent, freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
 	receiver_name, receiver_phone, receiver_address, quote_id, client_request_id, created_at, expire_at`
 
 func scanOrder(row *sql.Row) (*orderRecord, error) {
 	var o orderRecord
 	err := row.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.FreightCent,
-		&o.PayCent, &o.PaidCent, &o.RefundedCent, &o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
+		&o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
 		&o.ClientRequestID, &o.CreatedAt, &o.ExpireAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -121,11 +123,11 @@ func findOrderByClientRequest(ctx context.Context, q querier, userID int64, clie
 
 func insertOrder(ctx context.Context, tx *sql.Tx, o *orderRecord, now time.Time) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO orders
-		(order_no, user_id, status, total_cent, discount_cent, freight_cent, pay_cent, paid_cent, refunded_cent,
+		(order_no, user_id, status, total_cent, discount_cent, freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
 		 receiver_name, receiver_phone, receiver_address, quote_id, client_request_id,
 		 expire_at, version, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-		o.OrderNo, o.UserID, o.Status, o.TotalCent, o.DiscountCent, o.FreightCent, o.PayCent, o.PaidCent, o.RefundedCent,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+		o.OrderNo, o.UserID, o.Status, o.TotalCent, o.DiscountCent, o.FreightCent, o.PayCent, o.PaidCent, o.RefundedCent, o.RefundStatus,
 		o.ReceiverName, o.ReceiverPhone, o.ReceiverAddress, o.QuoteID, o.ClientRequestID,
 		o.ExpireAt, now, now)
 	return err
@@ -224,7 +226,7 @@ func listOrders(ctx context.Context, q querier, where string, args []any, orderB
 	for rows.Next() {
 		var o orderRecord
 		if err := rows.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.FreightCent,
-			&o.PayCent, &o.PaidCent, &o.RefundedCent, &o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
+			&o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
 			&o.ClientRequestID, &o.CreatedAt, &o.ExpireAt); err != nil {
 			return nil, err
 		}

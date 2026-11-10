@@ -11,9 +11,8 @@ schema conventions live in [contracts.md](contracts.md); DTM design lives in
 - Go 1.27 for local builds/tests (`go.mod` pins the toolchain).
 - Roughly 4 GB of free RAM for the full stack, plus space for MySQL/NATS/
   Prometheus volumes.
-- Generated gRPC code under `api/gen` (git-ignored). A clean checkout must run
-  the `protoc` command from [contracts.md](contracts.md) once before `make
-  build` or a Docker image build.
+- Generated gRPC code under `api/gen` is committed. Regenerate it with the
+  `protoc` command from [contracts.md](contracts.md) after editing the proto.
 
 ## File map
 
@@ -288,7 +287,9 @@ docker compose -f deploy/compose/infra.yml exec mysql mysql -uroot -proot -e 'SH
 
 ```bash
 make build        # ./bin/<service> for every cmd
-make test         # unit tests only; no MySQL/NATS/etcd/DTM required
+make test         # unit tests only; no MySQL/NATS/DTM required
+make e2e-phase15  # opt-in B-end/C-end/return E2E; running stack required
+make concurrency-phase15 # opt-in one-unit oversell race check
 make fmt-check    # gofmt gate
 make vet          # go vet ./...
 ```
@@ -357,6 +358,16 @@ The script creates uniquely named data on every run (`E2E-<epoch>`), initializes
 inventory before publishing, and asserts the refund and stock projections. It
 leaves its test data in the database; use `make db-reset` for a disposable
 Compose environment.
+
+The complementary concurrency check creates a one-unit SKU and starts two
+checkout requests at the same time. Exactly one order may succeed, and the
+inventory row must end at `on_hand=1`, `reserved=1`, `available=0`:
+
+```bash
+BASE_URL=http://127.0.0.1:18080 \
+ADMIN_URL=http://127.0.0.1:18081 \
+make concurrency-phase15
+```
 
 ## Ambient certificate rotation on the test VM
 

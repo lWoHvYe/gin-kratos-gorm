@@ -18,12 +18,20 @@ func Open(dsn string) (*sql.DB, error) {
 	db.SetMaxIdleConns(10)
 	db.SetConnMaxLifetime(time.Hour)
 	db.SetConnMaxIdleTime(10 * time.Minute)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("ping mysql: %w", err)
+	var lastErr error
+	for attempt := 0; attempt < 10; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		lastErr = db.PingContext(ctx)
+		cancel()
+		if lastErr == nil {
+			return db, nil
+		}
+		select {
+		case <-time.After(time.Duration(attempt+1) * time.Second):
+		}
 	}
-	return db, nil
+	_ = db.Close()
+	return nil, fmt.Errorf("ping mysql after retries: %w", lastErr)
 }
 
 func WithTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {

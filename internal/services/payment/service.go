@@ -258,11 +258,8 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 		return nil, apperr.Invalid("amount_cent must be greater than 0")
 	}
 	amount := req.GetAmountCent()
-	reason := strings.TrimSpace(req.GetReason())
-	idempotencyKey := strings.TrimSpace(req.GetIdempotencyKey())
-	if idempotencyKey == "" {
-		idempotencyKey = paymentNo + ":" + strconv.FormatInt(amount, 10) + ":" + reason
-	}
+	reason := truncateReason(strings.TrimSpace(req.GetReason()))
+	idempotencyKey := refundKey(paymentNo, amount, reason, req.GetIdempotencyKey())
 	now := s.now()
 	r := newRepo(s.db)
 	var refundNo string
@@ -278,6 +275,14 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 			return apperr.NotFound("payment intent not found")
 		}
 		if err != nil {
+			return err
+		}
+		// Re-check under the intent row lock. A concurrent duplicate can commit
+		// between the pre-lock lookup and this transaction.
+		if existing, err := r.refundByKey(ctx, tx, paymentNo, idempotencyKey); err == nil {
+			refundNo = existing.RefundNo
+			return nil
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
 		if in.Status != statusSucceeded && in.Status != statusPartiallyRefunded {
@@ -350,6 +355,21 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 	return &pb.Empty{}, nil
 }
 
+func truncateReason(reason string) string {
+	r := []rune(reason)
+	if len(r) <= 255 {
+		return reason
+	}
+	return string(r[:255])
+}
+
+func refundKey(paymentNo string, amount int64, reason, provided string) string {
+	if key := strings.TrimSpace(provided); key != "" {
+		return key
+	}
+	return paymentNo + ":" + strconv.FormatInt(amount, 10) + ":" + reason
+}
+
 // inTx runs fn inside a DTM branch transaction when the RPC arrives as a DTM
 // branch, otherwise inside a local transaction. Channel callbacks are ordinary
 // top-level calls and take the local path.
@@ -409,14 +429,14 @@ func advance(current, cbStatus string) (next string, changed, ok bool) {
 		switch current {
 		case statusPending, statusFailed:
 			return statusSucceeded, true, true
-		case statusSucceeded, statusRefunded:
+		case statusSucceeded, statusPartiallyRefunded, statusRefunded:
 			return current, false, true
 		}
 	case statusFailed:
 		switch current {
 		case statusPending:
 			return statusFailed, true, true
-		case statusFailed, statusSucceeded, statusRefunded:
+		case statusFailed, statusSucceeded, statusPartiallyRefunded, statusRefunded:
 			return current, false, true
 		}
 	}
@@ -460,7 +480,7 @@ func payURL(paymentNo string) string {
 
 // RefundOrder refunds the settled payment for an order. It is used by
 // aftersales, where only order_no and the approved amount are known.
-func (s *Service) RefundOrder(ctx context.Context, req *pb.RefundOrderRequest) (*pb.Empty, error) {
+func (s *Service) RefundOrder(ctx context.Context, req *pb.RefundOrderRequest) (*pb.RefundOrderReply, error) {
 	orderNo := strings.TrimSpace(req.GetOrderNo())
 	if orderNo == "" {
 		return nil, apperr.Invalid("order_no is required")
@@ -473,6 +493,7 @@ func (s *Service) RefundOrder(ctx context.Context, req *pb.RefundOrderRequest) (
 	if reason == "" {
 		reason = "after-sale refund"
 	}
+	reason = truncateReason(reason)
 	r := newRepo(s.db)
 	in, err := r.intentByOrder(ctx, s.db, orderNo)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -481,12 +502,25 @@ func (s *Service) RefundOrder(ctx context.Context, req *pb.RefundOrderRequest) (
 	if err != nil {
 		return nil, apperr.Internal("query payment for order", err)
 	}
-	return s.Refund(ctx, &pb.RefundRequest{
+	key := refundKey(in.PaymentNo, amount, reason, req.GetIdempotencyKey())
+	if _, err := s.Refund(ctx, &pb.RefundRequest{
 		PaymentNo:      in.PaymentNo,
 		AmountCent:     amount,
 		Reason:         reason,
-		IdempotencyKey: req.GetIdempotencyKey(),
-	})
+		IdempotencyKey: key,
+	}); err != nil {
+		return nil, err
+	}
+	ref, err := newRepo(s.db).refundByKey(ctx, s.db, in.PaymentNo, key)
+	if err != nil {
+		return nil, apperr.Internal("load refund result", err)
+	}
+	return &pb.RefundOrderReply{
+		RefundNo:     ref.RefundNo,
+		PaymentNo:    ref.PaymentNo,
+		RefundedCent: ref.AmountCent,
+		Status:       ref.Status,
+	}, nil
 }
 
 // ListRefunds returns refund rows for operators and the order detail page.

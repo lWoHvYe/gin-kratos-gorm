@@ -75,18 +75,3 @@ CREATE TABLE IF NOT EXISTS outbox_events (
   UNIQUE KEY uk_outbox_event_id (event_id),
   KEY idx_outbox_pending (published_at, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- DTM creates this on demand; keeping it here makes fresh databases ready.
-CREATE TABLE IF NOT EXISTS dtm_barrier (
-  id BIGINT NOT NULL AUTO_INCREMENT,
-  trans_type VARCHAR(45) NOT NULL DEFAULT '',
-  gid VARCHAR(128) NOT NULL DEFAULT '',
-  branch_id VARCHAR(128) NOT NULL DEFAULT '',
-  op VARCHAR(45) NOT NULL DEFAULT '',
-  barrier_id VARCHAR(45) NOT NULL DEFAULT '',
-  reason VARCHAR(45) NOT NULL DEFAULT '',
-  create_time DATETIME(6) NULL DEFAULT NULL,
-  update_time DATETIME(6) NULL DEFAULT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY uid_barrier (trans_type, gid, branch_id, op, barrier_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

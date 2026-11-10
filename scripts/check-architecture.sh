@@ -9,14 +9,23 @@ fail=0
 
 # 1. No service may import another service package. Cross-service calls must go
 #    through generated gRPC clients or platform/contracts.
-if grep -R --include='*.go' -n 'gin-kratos-gorm/internal/services/' internal/services cmd \
-  | grep -v '^internal/services/[^:]*:' \
-  | grep -v '^cmd/' >/tmp/mall-cross-service.$$ 2>/dev/null; then
+cross="$(go list -f '{{.ImportPath}} {{join .Imports "\n"}}' ./internal/services/... 2>/dev/null | awk '
+  NF {
+    pkg=$1; if (substr(pkg,1,33)!="gin-kratos-gorm/internal/services/") next;
+    svc=pkg; sub("gin-kratos-gorm/internal/services/","",svc); sub("/.*","",svc);
+    for (i=2;i<=NF;i++) {
+      imp=$i;
+      if (substr(imp,1,33)=="gin-kratos-gorm/internal/services/") {
+        other=imp; sub("gin-kratos-gorm/internal/services/","",other); sub("/.*","",other);
+        if (other!=svc) print pkg " imports " imp;
+      }
+    }
+  }')"
+if [ -n "$cross" ]; then
   echo "[arch] cross-service imports found:"
-  cat /tmp/mall-cross-service.$$
+  echo "$cross"
   fail=1
 fi
-rm -f /tmp/mall-cross-service.$$
 
 # 2. Platform must not depend on service code.
 if grep -R --include='*.go' -n 'gin-kratos-gorm/internal/services/' internal/platform >/tmp/mall-platform.$$ 2>/dev/null; then
@@ -26,7 +35,7 @@ if grep -R --include='*.go' -n 'gin-kratos-gorm/internal/services/' internal/pla
 fi
 rm -f /tmp/mall-platform.$$
 
-# 3. GORM is allowed only in the catalog read-side repository. The
+# 3. GORM is allowed only in the catalog/cart read-side repositories. The
 # transactional core must stay on database/sql.
 gorm_hits="$(grep -R --include='*.go' -n 'gorm.io\|glebarez/sqlite' internal cmd 2>/dev/null | grep -v -E '^internal/services/(catalog|cart)/gorm_repo.go:' || true)"
 if [ -n "$gorm_hits" ]; then

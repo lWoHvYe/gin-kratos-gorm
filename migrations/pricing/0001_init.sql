@@ -63,20 +63,6 @@ CREATE TABLE IF NOT EXISTS outbox_events (
   KEY idx_outbox_pending (published_at, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- DTM creates this on demand; keeping it here makes fresh databases ready.
-CREATE TABLE IF NOT EXISTS dtm_barrier (
-  id BIGINT NOT NULL AUTO_INCREMENT,
-  trans_type VARCHAR(45) NOT NULL DEFAULT '',
-  gid VARCHAR(128) NOT NULL DEFAULT '',
-  branch_id VARCHAR(128) NOT NULL DEFAULT '',
-  op VARCHAR(45) NOT NULL DEFAULT '',
-  barrier_id VARCHAR(45) NOT NULL DEFAULT '',
-  reason VARCHAR(45) NOT NULL DEFAULT '',
-  create_time DATETIME(6) NULL DEFAULT NULL,
-  update_time DATETIME(6) NULL DEFAULT NULL,
-  PRIMARY KEY (id),
-  UNIQUE KEY uid_barrier (trans_type, gid, branch_id, op, barrier_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Public welcome coupon: 10.00 off when the order total reaches 50.00.
 INSERT INTO coupons (code, user_id, amount_cent, min_amount_cent, status, expire_at)

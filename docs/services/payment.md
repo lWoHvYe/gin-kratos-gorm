@@ -159,3 +159,13 @@ idempotent by `(payment_no, amount_cent, reason)`.
 Read-only TCC consistency check. It asks order/inventory/pricing for their
 `TccQuery*` prepared state and returns the intent status. Exposed to operators
 as `POST /api/admin/v1/payments/:paymentNo/verify`.
+
+## Phase 1.5 refunds
+
+The mock provider now supports cumulative partial refunds. `payment_intents`
+tracks `captured_cent`, `refunded_cent` and `payment_method`; `refunds` has an
+explicit `idempotency_key` and `completed_at`. Statuses include
+`PARTIALLY_REFUNDED` and `REFUNDED`, and status columns are widened to 32 chars
+by `0002_partial_refunds.sql`. `RefundOrder` returns `RefundOrderReply` with the
+refund number and amount; `ListRefunds` backs the admin view. The legacy
+`uk_refunds_idem` key is dropped in favour of `(payment_no, idempotency_key)`.

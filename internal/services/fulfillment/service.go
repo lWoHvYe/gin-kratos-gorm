@@ -60,15 +60,31 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 	if err != nil {
 		return nil, err
 	}
-	carrier := strings.TrimSpace(req.GetCarrier())
-	trackingNo := strings.TrimSpace(req.GetTrackingNo())
+	carrier := cutFulfillmentRunes(strings.TrimSpace(req.GetCarrier()), 64)
+	trackingNo := cutFulfillmentRunes(strings.TrimSpace(req.GetTrackingNo()), 128)
 	warehouseID := req.GetWarehouseId()
+	if warehouseID <= 0 {
+		warehouseID = 1
+	}
 
 	existing, err := s.shipmentNoByOrderNo(ctx, orderNo)
 	if err != nil {
 		return nil, err
 	}
 	if existing != "" {
+		// The order.paid consumer creates a CREATED placeholder. The back office
+		// may then supply the real carrier/tracking; update it while the parcel
+		// is still CREATED instead of silently discarding those fields.
+		if carrier != "" || trackingNo != "" {
+			if _, err := s.db.ExecContext(ctx, `UPDATE shipments
+				SET carrier = CASE WHEN ? <> '' THEN ? ELSE carrier END,
+				    tracking_no = CASE WHEN ? <> '' THEN ? ELSE tracking_no END,
+				    warehouse_id = ?, version = version + 1, updated_at = ?
+				WHERE shipment_no = ? AND status = ?`,
+				carrier, carrier, trackingNo, trackingNo, warehouseID, time.Now(), existing, statusCreated); err != nil {
+				return nil, apperr.Internal("update pending shipment", err)
+			}
+		}
 		return s.loadShipment(ctx, existing)
 	}
 
@@ -425,4 +441,12 @@ func (s *Service) ListShipments(ctx context.Context, req *pb.ListShipmentsReques
 		reply.Shipments = append(reply.Shipments, shipment)
 	}
 	return reply, rows.Err()
+}
+
+func cutFulfillmentRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }

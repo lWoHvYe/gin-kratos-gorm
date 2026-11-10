@@ -189,3 +189,12 @@ Consumer added:
 
 - catalog `catalog-stock-projection`.
 - order `order-refund-projection`.
+
+`orders.refund_status` (`0003_refund_status.sql`) is the refund projection,
+separate from the fulfilment `orders.status`. The order E2E checks both the
+asynchronous `refunded_cent`/`refund_status` and the catalog stock projection.
+
+Concurrency validation: `make concurrency-phase15` starts two checkouts for a
+one-unit SKU and requires exactly one order plus
+`on_hand=1,reserved=1,available=0`. It is opt-in because it needs a running
+stack, like the Phase 1.5 E2E.

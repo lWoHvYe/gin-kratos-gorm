@@ -253,7 +253,11 @@ func (h *handlers) setProductStatus(c *gin.Context) {
 			}
 			stock, err := h.clients.Inventory.GetStock(c.Request.Context(), &pb.GetStockRequest{SkuId: sku.GetId(), WarehouseId: 1})
 			if err != nil {
-				httpx.Error(c, apperr.Failed(fmt.Sprintf("sku %d has no initialized inventory; adjust stock before publishing", sku.GetId())))
+				if apperr.IsCode(err, apperr.CodeNotFound) {
+					httpx.Error(c, apperr.Failed(fmt.Sprintf("sku %d has no initialized inventory; adjust stock before publishing", sku.GetId())))
+					return
+				}
+				httpx.Error(c, remoteError(err))
 				return
 			}
 			if stock.GetAvailable() <= 0 {

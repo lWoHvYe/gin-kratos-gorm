@@ -70,18 +70,27 @@ func (s *Service) TccCancelConfirm(ctx context.Context, req *pb.TccPaymentReques
 			if r.status != statusHeld && r.status != statusConfirmed {
 				return apperr.Failed(fmt.Sprintf("reservation %s is %s", r.reservationNo, r.status))
 			}
-			if r.status == statusConfirmed {
-				if _, err := tx.ExecContext(ctx, `UPDATE inventory_stocks
+			wasConfirmed := r.status == statusConfirmed
+			if wasConfirmed {
+				res, err := tx.ExecContext(ctx, `UPDATE inventory_stocks
 					SET on_hand = on_hand + ?, version = version + 1 WHERE sku_id = ? AND warehouse_id = ?`,
-					r.quantity, r.skuID, r.warehouseID); err != nil {
+					r.quantity, r.skuID, r.warehouseID)
+				if err != nil {
 					return apperr.Internal("restock", err)
 				}
+				if n, _ := res.RowsAffected(); n == 0 {
+					return apperr.Failed("stock row missing while restocking")
+				}
 			} else {
-				if _, err := tx.ExecContext(ctx, `UPDATE inventory_stocks
+				res, err := tx.ExecContext(ctx, `UPDATE inventory_stocks
 					SET reserved = reserved - ?, version = version + 1
 					WHERE sku_id = ? AND warehouse_id = ? AND reserved >= ?`,
-					r.quantity, r.skuID, r.warehouseID, r.quantity); err != nil {
+					r.quantity, r.skuID, r.warehouseID, r.quantity)
+				if err != nil {
 					return apperr.Internal("release", err)
+				}
+				if n, _ := res.RowsAffected(); n == 0 {
+					return apperr.Failed("stock row missing or reserved quantity inconsistent")
 				}
 			}
 			if _, err := tx.ExecContext(ctx, `UPDATE stock_reservations SET status = ?, updated_at = ? WHERE id = ?`,
@@ -92,8 +101,15 @@ func (s *Service) TccCancelConfirm(ctx context.Context, req *pb.TccPaymentReques
 			if err != nil {
 				return err
 			}
+			entry := entryRelease
+			if wasConfirmed {
+				entry = entryRestock
+			}
 			r.status = statusReleased
-			if err := insertLedger(ctx, tx, r, entryRelease, st); err != nil {
+			if err := insertLedger(ctx, tx, r, entry, st); err != nil {
+				return err
+			}
+			if err := appendStockChanged(ctx, tx, st); err != nil {
 				return err
 			}
 			return appendEvent(ctx, tx, r, topicReleased, eventReleased)
@@ -110,7 +126,8 @@ func (s *Service) TccQueryConfirm(ctx context.Context, req *pb.TccPaymentRequest
 		return nil, apperr.Invalid("order_no is required")
 	}
 	for _, item := range req.GetItems() {
-		if _, err := s.reservationByOrderSku(ctx, s.db, orderNo, item.GetSkuId(), false); err != nil {
+		r, err := s.reservationByOrderSku(ctx, s.db, orderNo, item.GetSkuId(), false)
+		if err != nil || (r.status != statusHeld && r.status != statusConfirmed) {
 			return &pb.TccQueryReply{Prepared: false}, nil
 		}
 	}

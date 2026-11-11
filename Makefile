@@ -23,7 +23,8 @@ K8S_INFRA_VALUES := $(K8S_DIR)/charts/infra/values-single-node.yaml
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
 	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race verify wire arch clean \
-	k8s-images k8s-import k8s-render k8s-lint k8s-deploy mesh-smoke
+	k8s-images k8s-import k8s-render k8s-lint k8s-deploy mesh-smoke \
+	frontend-install frontend-build frontend-test frontend-images
 
 help:
 	@echo "mall - Go microservice mall (Kratos + Gin + database/sql + DTM)"
@@ -56,6 +57,10 @@ help:
 	@echo "  k8s-lint                          helm lint Kubernetes charts"
 	@echo "  k8s-deploy                        install/upgrade charts into an existing cluster"
 	@echo "  mesh-smoke                        run the Kubernetes/Ambient smoke script"
+	@echo "  frontend-install                  install pnpm workspace dependencies"
+	@echo "  frontend-build                    typecheck and build admin/storefront"
+	@echo "  frontend-test                     run frontend unit tests"
+	@echo "  frontend-images                   build admin-web/storefront-web images"
 	@echo "  clean                             remove ./bin"
 	@echo ""
 	@echo "Compose files: $(COMPOSE_DIR)/infra.yml + $(COMPOSE_DIR)/services.yml"
@@ -171,6 +176,19 @@ k8s-deploy:
 
 mesh-smoke:
 	./scripts/k8s-smoke.sh
+
+frontend-install:
+	cd frontend && pnpm install
+
+frontend-build:
+	cd frontend && pnpm build
+
+frontend-test:
+	cd frontend && pnpm test
+
+frontend-images:
+	cd frontend && docker build --platform linux/amd64 -f apps/admin-web/Dockerfile -t mall/admin-web:dev .
+	cd frontend && docker build --platform linux/amd64 -f apps/storefront-web/Dockerfile -t mall/storefront-web:dev .
 
 clean:
 	rm -rf bin

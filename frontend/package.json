@@ -1,0 +1,22 @@
+{
+  "name": "mall-frontend",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "scripts": {
+    "dev:admin": "pnpm --filter @mall/admin-web dev",
+    "dev:storefront": "pnpm --filter @mall/storefront-web dev",
+    "build": "turbo run build",
+    "build:admin": "pnpm --filter @mall/admin-web build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "playwright test --config=e2e/playwright.config.ts",
+    "lint": "turbo run lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "prettier": "^3.6.2",
+    "turbo": "2.11.10",
+    "typescript": "5.9.3"
+  }
+}

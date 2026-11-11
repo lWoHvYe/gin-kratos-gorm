@@ -126,6 +126,24 @@ services:
 
 # L7 service-to-service matrix. Each rule allows one source ServiceAccount to
 # call one service's gRPC methods. Ingress is handled separately.
+frontend:
+  admin:
+    enabled: true
+    image: mall/admin-web:dev
+    imagePullPolicy: IfNotPresent
+    replicas: 1
+    resources:
+      requests: { cpu: 20m, memory: 32Mi }
+      limits: { cpu: 200m, memory: 128Mi }
+  storefront:
+    enabled: true
+    image: mall/storefront-web:dev
+    imagePullPolicy: IfNotPresent
+    replicas: 1
+    resources:
+      requests: { cpu: 50m, memory: 96Mi }
+      limits: { cpu: 500m, memory: 384Mi }
+
 authz:
   rules:
     - name: identity

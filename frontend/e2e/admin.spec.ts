@@ -1,0 +1,17 @@
+import { expect, test } from '@playwright/test'
+
+test('admin can log in and open promotion operations', async ({ page }) => {
+  await page.goto('/admin/login')
+  const inputs = page.locator('input')
+  await inputs.nth(0).fill('admin')
+  await inputs.nth(1).fill('admin123')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin\/dashboard$/)
+  await expect(page.getByText('运营总览')).toBeVisible()
+  await page.goto('/admin/catalog/products')
+  await expect(page.getByText('商品 / SKU').first()).toBeVisible()
+  await page.goto('/admin/promotions/campaigns')
+  await expect(page.getByText('活动', { exact: true }).first()).toBeVisible()
+  await page.goto('/admin/promotions/simulator')
+  await expect(page.getByText('促销模拟器').first()).toBeVisible()
+})

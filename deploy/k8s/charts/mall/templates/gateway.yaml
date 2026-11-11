@@ -44,4 +44,18 @@ spec:
       backendRefs:
         - name: gateway
           port: 8080
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /admin
+      backendRefs:
+        - name: admin-web
+          port: 8080
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: storefront-web
+          port: 3000
 {{- end }}

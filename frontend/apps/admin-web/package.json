@@ -1,0 +1,40 @@
+{
+  "name": "@mall/admin-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "lint": "echo 'lint placeholder; add eslint config'"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "@mall/api": "workspace:*",
+    "@mall/design-tokens": "workspace:*",
+    "@mall/utils": "workspace:*",
+    "@tanstack/vue-query": "^5.107.1",
+    "@vueuse/core": "^15.0.0",
+    "echarts": "^6.1.0",
+    "element-plus": "^2.14.8",
+    "pinia": "^3.0.4",
+    "vee-validate": "^4.15.1",
+    "vue": "^3.5.45",
+    "vue-echarts": "^8.3.2",
+    "vue-router": "^4.5.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@mall/tsconfig": "workspace:*",
+    "@types/node": "^24.10.0",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "@vue/test-utils": "^2.5.1",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.8",
+    "vitest": "^3.2.7",
+    "vue-tsc": "^3.3.14"
+  }
+}

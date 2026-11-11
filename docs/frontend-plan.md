@@ -304,3 +304,32 @@ packages small.
 5. **Image upload**: keep URL-only for MVP or add object storage now?
 6. **Seckill timing**: business deadline; if urgent, backend seckill can run in
    parallel after B-end promotion UI, but not before the C-end shell.
+
+
+## Implementation status
+
+Implemented in this iteration:
+
+- `frontend/` pnpm workspace with Turborepo
+- `apps/admin-web`: Vue 3 + TypeScript + Vite + Element Plus, login/layout,
+  dashboard, categories/brands, product/SKU editor, inventory, orders/shipments,
+  after-sales, campaign/rule CRUD and promotion simulator
+- `apps/storefront-web`: Nuxt 3 + Vant, SSR product list/detail, login, cart,
+  checkout preview/place/mock pay, orders, after-sales, addresses
+- `packages/api`: typed BFF client with error envelope and token handling
+- `packages/utils`, `packages/design-tokens`
+- Admin/storefront Nginx/Nuxt Dockerfiles and K8s Deployment/Service/HTTPRoute
+  integration at `/admin` and `/`
+- Playwright smoke tests for admin login and storefront SSR/detail
+- GitHub Actions frontend typecheck/test/build
+
+Known follow-ups:
+
+- OpenAPI contract generation (the first client is hand-typed and centralized in
+  `packages/api`)
+- refresh-token HttpOnly cookie (current SPA stores the access token in
+  sessionStorage for the admin MVP)
+- image upload/object storage; product editor currently accepts URLs
+- admin RBAC (backend currently has one `admin` role)
+- C-end order payment status synchronization/after-sales creation UI
+- frontend E2E in a cluster CI job and strict helmet/CSP deployment headers

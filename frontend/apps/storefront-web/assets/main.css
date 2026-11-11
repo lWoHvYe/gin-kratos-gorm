@@ -1,0 +1,13 @@
+:root {
+  --mall-primary: #2563eb;
+  --mall-text: #111827;
+  --mall-muted: #6b7280;
+  --mall-bg: #f6f8fb;
+}
+* { box-sizing: border-box; }
+html, body, #__nuxt { min-height: 100%; margin: 0; }
+body { background: var(--mall-bg); color: var(--mall-text); font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+a { color: inherit; text-decoration: none; }
+.container { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+.price { color: #dc2626; font-weight: 700; }
+.muted { color: var(--mall-muted); }

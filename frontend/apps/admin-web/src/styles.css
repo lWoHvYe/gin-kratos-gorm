@@ -1,0 +1,22 @@
+:root {
+  color: var(--mall-text, #1f2937);
+  background: var(--mall-bg, #f6f8fb);
+  font-family: var(--mall-font, 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { min-height: 100%; margin: 0; }
+body { background: var(--mall-bg, #f6f8fb); }
+a { color: inherit; text-decoration: none; }
+
+.page { padding: 20px; }
+.page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.page-title { margin: 0; font-size: 22px; font-weight: 700; }
+.page-subtitle { color: var(--mall-muted, #6b7280); font-size: 13px; margin-top: 4px; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.panel { background: #fff; border: 1px solid var(--mall-border, #e5e7eb); border-radius: var(--mall-radius, 8px); padding: 16px; }
+.muted { color: var(--mall-muted, #6b7280); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.pre { white-space: pre-wrap; word-break: break-word; }

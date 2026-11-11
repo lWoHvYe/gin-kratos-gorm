@@ -204,3 +204,7 @@ Istio Ambient target: [docs/istio-ambient.md](docs/istio-ambient.md).
 Optional etcd configuration overlay: [docs/etcd-config.md](docs/etcd-config.md).
 Contracts and conventions: [docs/contracts.md](docs/contracts.md).
 File ownership: [docs/ownership.md](docs/ownership.md).
+
+## Frontend
+
+See [docs/frontend-plan.md](docs/frontend-plan.md) and [frontend/README.md](frontend/README.md).

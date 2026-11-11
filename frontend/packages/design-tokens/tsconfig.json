@@ -1,0 +1,5 @@
+{
+  "extends": "@mall/tsconfig/base.json",
+  "compilerOptions": { "types": [] },
+  "include": ["src/**/*.ts"]
+}

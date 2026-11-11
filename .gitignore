@@ -62,3 +62,22 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Frontend
+/.pnpm-store/
+frontend/node_modules/
+frontend/.pnpm-store/
+frontend/**/node_modules/
+frontend/**/dist/
+frontend/**/.nuxt/
+frontend/**/.output/
+frontend/**/coverage/
+frontend/**/playwright-report/
+frontend/**/test-results/
+frontend/e2e/test-results/
+frontend/e2e/playwright-report/
+frontend/test-results/
+frontend/playwright-report/
+frontend/.turbo/
+frontend/**/*.tsbuildinfo
+frontend/**/vite.config.ts.timestamp-*

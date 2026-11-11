@@ -26,7 +26,7 @@ spec:
       to:
         - operation:
             methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-            paths: ["/api/v1/*", "/api/admin/v1/*"]
+            paths: ["/api/v1/*", "/api/admin/v1/*", "/admin/*", "/*"]
 ---
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
@@ -46,7 +46,7 @@ spec:
               - "cluster.local/ns/{{ .Values.namespace }}/sa/mall-waypoint"
       to:
         - operation:
-            ports: ["8080", "8081"]
+            ports: ["8080", "8081", "3000"]
 ---
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
@@ -65,7 +65,7 @@ spec:
               - "cluster.local/ns/{{ .Values.namespace }}/sa/mall-waypoint"
       to:
         - operation:
-            ports: ["8080", "8081", "9001", "9002", "9003", "9004", "9005", "9006", "9007", "9008", "9009", "36789", "36790"]
+            ports: ["3000", "8080", "8081", "9001", "9002", "9003", "9004", "9005", "9006", "9007", "9008", "9009", "36789", "36790"]
 {{- range $rule := .Values.authz.rules }}
 ---
 apiVersion: security.istio.io/v1

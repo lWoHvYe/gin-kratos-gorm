@@ -198,3 +198,20 @@ Concurrency validation: `make concurrency-phase15` starts two checkouts for a
 one-unit SKU and requires exactly one order plus
 `on_hand=1,reserved=1,available=0`. It is opt-in because it needs a running
 stack, like the Phase 1.5 E2E.
+
+## Phase 2 promotion contracts
+
+`PromotionService` is registered on the pricing gRPC server (`pricing:9005`) and
+uses the `mall_pricing` schema. It exposes campaign/rule admin CRUD, evaluation,
+budget reservation (`ReservePromotions`), confirmation and release. Quotes carry
+`promotion_discount_cent`, `applied_promotions_json`, `promotion_version`; orders
+carry the applied promotion snapshot for history and refund allocation.
+
+Rules use `expr-lang/expr` for the condition expression and typed JSON for
+scope/effect. The current stacking policy is deterministic priority/id order with
+exclusive rules, stack groups and a hard stack cap. Budget reservation is
+idempotent by `(order_no, rule_id)` and uses a budget ledger; `0` budget means
+unlimited. Coupons remain separate instruments but participate through the
+`coupon_applied` context and `allow_with_coupon` rule flag. Activity type
+`SECKILL` is reserved for a future execution adapter; no seckill stock/queue is
+implemented in Phase 2.

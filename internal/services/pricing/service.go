@@ -44,18 +44,22 @@ const (
 type Service struct {
 	pb.UnimplementedPricingServiceServer
 
-	db      *sql.DB
-	catalog pb.CatalogServiceClient
-	log     *slog.Logger
-	now     func() time.Time
+	db        *sql.DB
+	catalog   pb.CatalogServiceClient
+	promotion *PromotionService
+	log       *slog.Logger
+	now       func() time.Time
 }
 
 func New(database *sql.DB, catalog pb.CatalogServiceClient, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{db: database, catalog: catalog, log: logger, now: time.Now}
+	return &Service{db: database, catalog: catalog, promotion: NewPromotionService(database, logger), log: logger, now: time.Now}
 }
+
+// Promotion exposes the engine to the pricing process for gRPC registration.
+func (s *Service) Promotion() *PromotionService { return s.promotion }
 
 // CreateQuote prices the requested items with the catalog service and stores
 // the quote (and its lines) for quoteTTL.
@@ -97,8 +101,8 @@ func (s *Service) CreateQuote(ctx context.Context, req *pb.QuoteRequest) (*pb.Qu
 	}
 
 	var (
-		discountCent int64
-		couponID     string
+		couponDiscountCent int64
+		couponID           string
 	)
 	if ref := strings.TrimSpace(req.GetCouponId()); ref != "" {
 		c, err := resolveCoupon(ctx, s.db, ref, userID)
@@ -108,23 +112,72 @@ func (s *Service) CreateQuote(ctx context.Context, req *pb.QuoteRequest) (*pb.Qu
 		if err := validateCoupon(c, userID, totalCent, now); err != nil {
 			return nil, err
 		}
-		discountCent = c.AmountCent
-		if discountCent > totalCent {
-			discountCent = totalCent
+		couponDiscountCent = c.AmountCent
+		if couponDiscountCent > totalCent {
+			couponDiscountCent = totalCent
 		}
 		couponID = c.Code
-		allocateDiscount(lines, totalCent, discountCent)
 	}
 
+	evalItems := make([]*pb.PromotionEvaluateItem, 0, len(lines))
+	for _, line := range lines {
+		sku, err := s.getSku(ctx, line.SkuID)
+		if err != nil {
+			return nil, err
+		}
+		evalItems = append(evalItems, &pb.PromotionEvaluateItem{
+			SkuId: line.SkuID, SpuId: sku.GetSpuId(), CategoryId: sku.GetCategoryId(),
+			BrandId: sku.GetBrandId(), PriceCent: line.PriceCent, Quantity: line.Quantity,
+		})
+	}
+	promotionDiscountCent, shippingDiscountCent, appliedJSON, promotionVersion := int64(0), int64(0), "", int64(0)
+	if s.promotion != nil {
+		eval, err := s.promotion.EvaluatePromotions(ctx, &pb.PromotionEvaluateRequest{
+			UserId: userID, Items: evalItems, CouponApplied: couponID != "", CouponDiscountCent: couponDiscountCent,
+		})
+		if err != nil {
+			return nil, err
+		}
+		promotionDiscountCent = eval.GetDiscountCent()
+		shippingDiscountCent = eval.GetShippingDiscountCent()
+		appliedJSON = eval.GetSnapshotJson()
+		promotionVersion = eval.GetPromotionVersion()
+	}
+	discountCent := promotionDiscountCent + couponDiscountCent
+	if discountCent > totalCent {
+		discountCent = totalCent
+	}
+	// Keep the two components consistent when the total cap is hit.
+	if discountCent < promotionDiscountCent+couponDiscountCent {
+		if promotionDiscountCent >= discountCent {
+			promotionDiscountCent = discountCent
+			couponDiscountCent = 0
+		} else {
+			couponDiscountCent = discountCent - promotionDiscountCent
+		}
+	}
+	allocateDiscount(lines, totalCent, discountCent)
+
+	freight := freightFor(totalCent)
+	if shippingDiscountCent > 0 {
+		freight -= shippingDiscountCent
+		if freight < 0 {
+			freight = 0
+		}
+	}
 	q := &quote{
-		QuoteID:      id.New("QTE"),
-		UserID:       userID,
-		TotalCent:    totalCent,
-		DiscountCent: discountCent,
-		FreightCent:  freightFor(totalCent),
-		CouponID:     couponID,
-		ExpiresAt:    now.Add(quoteTTL),
-		Lines:        lines,
+		QuoteID:               id.New("QTE"),
+		UserID:                userID,
+		TotalCent:             totalCent,
+		DiscountCent:          discountCent,
+		PromotionDiscountCent: promotionDiscountCent,
+		CouponDiscountCent:    couponDiscountCent,
+		FreightCent:           freight,
+		CouponID:              couponID,
+		AppliedPromotionsJSON: appliedJSON,
+		PromotionVersion:      promotionVersion,
+		ExpiresAt:             now.Add(quoteTTL),
+		Lines:                 lines,
 	}
 	q.PayCent = payFor(totalCent, discountCent, q.FreightCent)
 
@@ -478,13 +531,17 @@ func validateCoupon(c *coupon, userID, totalCent int64, now time.Time) error {
 
 func (q *quote) toProto() *pb.Quote {
 	out := &pb.Quote{
-		QuoteId:       q.QuoteID,
-		TotalCent:     q.TotalCent,
-		DiscountCent:  q.DiscountCent,
-		FreightCent:   q.FreightCent,
-		PayCent:       q.PayCent,
-		CouponId:      q.CouponID,
-		ExpiresAtUnix: q.ExpiresAt.Unix(),
+		QuoteId:               q.QuoteID,
+		TotalCent:             q.TotalCent,
+		DiscountCent:          q.DiscountCent,
+		PromotionDiscountCent: q.PromotionDiscountCent,
+		CouponDiscountCent:    q.CouponDiscountCent,
+		FreightCent:           q.FreightCent,
+		PayCent:               q.PayCent,
+		CouponId:              q.CouponID,
+		AppliedPromotionsJson: q.AppliedPromotionsJSON,
+		PromotionVersion:      q.PromotionVersion,
+		ExpiresAtUnix:         q.ExpiresAt.Unix(),
 	}
 	out.Lines = make([]*pb.QuoteLine, 0, len(q.Lines))
 	for _, line := range q.Lines {

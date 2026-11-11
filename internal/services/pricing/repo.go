@@ -41,15 +41,19 @@ type quoteLine struct {
 
 // quote is a priced basket with a fixed lifetime.
 type quote struct {
-	QuoteID      string
-	UserID       int64
-	TotalCent    int64
-	DiscountCent int64
-	FreightCent  int64
-	PayCent      int64
-	CouponID     string
-	ExpiresAt    time.Time
-	Lines        []quoteLine
+	QuoteID               string
+	UserID                int64
+	TotalCent             int64
+	DiscountCent          int64
+	FreightCent           int64
+	PayCent               int64
+	CouponID              string
+	PromotionDiscountCent int64
+	CouponDiscountCent    int64
+	AppliedPromotionsJSON string
+	PromotionVersion      int64
+	ExpiresAt             time.Time
+	Lines                 []quoteLine
 }
 
 // querier is satisfied by both *sql.DB and *sql.Tx.
@@ -122,10 +126,16 @@ func getCouponForUpdate(ctx context.Context, q querier, id int64) (*coupon, erro
 }
 
 func insertQuote(ctx context.Context, tx *sql.Tx, q *quote) error {
+	var applied any
+	if strings.TrimSpace(q.AppliedPromotionsJSON) != "" {
+		applied = q.AppliedPromotionsJSON
+	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO quotes
-		(quote_id, user_id, total_cent, discount_cent, freight_cent, pay_cent, coupon_id, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		q.QuoteID, q.UserID, q.TotalCent, q.DiscountCent, q.FreightCent, q.PayCent, q.CouponID, q.ExpiresAt)
+		(quote_id, user_id, total_cent, discount_cent, promotion_discount_cent, coupon_discount_cent,
+		 freight_cent, pay_cent, coupon_id, applied_promotions_json, promotion_version, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		q.QuoteID, q.UserID, q.TotalCent, q.DiscountCent, q.PromotionDiscountCent, q.CouponDiscountCent,
+		q.FreightCent, q.PayCent, q.CouponID, applied, q.PromotionVersion, q.ExpiresAt)
 	if err != nil {
 		return apperr.Internal("insert quote", err)
 	}
@@ -148,11 +158,14 @@ func loadQuote(ctx context.Context, q querier, quoteID string) (*quote, error) {
 	var (
 		out       quote
 		couponID  string
+		applied   sql.NullString
 		expiresAt time.Time
 	)
-	err := q.QueryRowContext(ctx, `SELECT quote_id, user_id, total_cent, discount_cent, freight_cent, pay_cent, coupon_id, expires_at
+	err := q.QueryRowContext(ctx, `SELECT quote_id, user_id, total_cent, discount_cent, promotion_discount_cent,
+		coupon_discount_cent, freight_cent, pay_cent, coupon_id, applied_promotions_json, promotion_version, expires_at
 		FROM quotes WHERE quote_id = ?`, quoteID).
-		Scan(&out.QuoteID, &out.UserID, &out.TotalCent, &out.DiscountCent, &out.FreightCent, &out.PayCent, &couponID, &expiresAt)
+		Scan(&out.QuoteID, &out.UserID, &out.TotalCent, &out.DiscountCent, &out.PromotionDiscountCent,
+			&out.CouponDiscountCent, &out.FreightCent, &out.PayCent, &couponID, &applied, &out.PromotionVersion, &expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("quote not found")
 	}
@@ -160,6 +173,9 @@ func loadQuote(ctx context.Context, q querier, quoteID string) (*quote, error) {
 		return nil, apperr.Internal("load quote", err)
 	}
 	out.CouponID = couponID
+	if applied.Valid {
+		out.AppliedPromotionsJSON = applied.String
+	}
 	out.ExpiresAt = expiresAt
 	return &out, nil
 }

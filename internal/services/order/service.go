@@ -64,6 +64,7 @@ type Service struct {
 	dtm       *dtm.Client
 	pricing   pricingPort
 	inventory inventoryPort
+	promotion pb.PromotionServiceClient
 
 	inventoryDTM string
 	orderDTM     string
@@ -72,7 +73,7 @@ type Service struct {
 // New builds the order service. pricing and inventory may be nil in tests that
 // only exercise local logic.
 func New(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client,
-	pricing pricingPort, inventory inventoryPort) *Service {
+	pricing pricingPort, inventory inventoryPort, promotion pb.PromotionServiceClient) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -83,6 +84,7 @@ func New(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dt
 		dtm:          dtmClient,
 		pricing:      pricing,
 		inventory:    inventory,
+		promotion:    promotion,
 		inventoryDTM: strings.TrimRight(env("INVENTORY_DTM_URL", defaultInventoryDTMURL), "/"),
 		orderDTM:     strings.TrimRight(env("ORDER_DTM_URL", defaultOrderDTMURL), "/"),
 	}
@@ -116,8 +118,33 @@ func (s *Service) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (
 		return nil, err
 	}
 	orderNo := id.Order()
+	couponLocked := false
+	if quote.GetCouponId() != "" {
+		if _, err := s.pricing.LockCoupon(ctx, &pb.LockCouponRequest{QuoteId: quote.GetQuoteId(), CouponId: quote.GetCouponId(), UserId: in.UserID}); err != nil {
+			return nil, remoteError("lock quote coupon", err)
+		}
+		couponLocked = true
+	}
+	promotionReserved := false
+	if s.promotion != nil {
+		if _, err := s.promotion.ReservePromotions(ctx, &pb.PromotionReserveRequest{
+			QuoteId: quote.GetQuoteId(), OrderNo: orderNo, UserId: in.UserID,
+		}); err != nil {
+			if couponLocked {
+				_, _ = s.pricing.UnlockCoupon(ctx, &pb.LockCouponRequest{QuoteId: quote.GetQuoteId(), CouponId: quote.GetCouponId(), UserId: in.UserID})
+			}
+			return nil, err
+		}
+		promotionReserved = true
+	}
 	inner := buildCreateOrderInner(orderNo, in, quote, quoteExpireAt(quote))
 	if err := s.submitCreateSaga(orderNo, in.ClientRequestID, quote.GetLines(), inner); err != nil {
+		if promotionReserved {
+			_, _ = s.promotion.ReleasePromotions(ctx, &pb.PromotionOrderRequest{OrderNo: orderNo})
+		}
+		if couponLocked {
+			_, _ = s.pricing.UnlockCoupon(ctx, &pb.LockCouponRequest{QuoteId: quote.GetQuoteId(), CouponId: quote.GetCouponId(), UserId: in.UserID})
+		}
 		// A concurrent request with the same idempotency key may have won the
 		// saga (the unique index then aborts ours); prefer returning its order.
 		if winner, ferr := findOrderByClientRequest(ctx, s.db, in.UserID, in.ClientRequestID); ferr == nil && winner != nil {
@@ -236,6 +263,7 @@ func (s *Service) CreateOrderInner(ctx context.Context, req *pb.CreateOrderInner
 			}
 			return nil, apperr.Conflict("order_no already exists")
 		}
+		s.log.Error("create order branch failed", "order_no", orderNo, "error", err)
 		return nil, branchError("create order branch", err)
 	}
 	if reply != nil {
@@ -412,6 +440,12 @@ func (s *Service) CancelOrder(ctx context.Context, req *pb.CancelOrderRequest) (
 	}
 	// Inventory release and coupon unlock are driven by the durable
 	// shop.order.cancelled.v1 event, not by best-effort calls after commit.
+	// Promotion release is also idempotent here for latency-sensitive callers.
+	if s.promotion != nil && cancelled {
+		if _, err := s.promotion.ReleasePromotions(ctx, &pb.PromotionOrderRequest{OrderNo: orderNo}); err != nil {
+			s.log.Warn("release promotions on cancel", "order_no", orderNo, "error", err)
+		}
+	}
 	reply, err := s.replyFor(ctx, s.db, updated)
 	if err != nil {
 		return nil, err
@@ -422,6 +456,12 @@ func (s *Service) CancelOrder(ctx context.Context, req *pb.CancelOrderRequest) (
 // CancelOrderInner is the DTM compensation of CreateOrderInner.
 func (s *Service) CancelOrderInner(ctx context.Context, req *pb.CancelOrderInnerRequest) (*pb.Empty, error) {
 	orderNo := strings.TrimSpace(req.GetOrderNo())
+	// DTM saga compensation reuses the action payload (CreateOrderInnerRequest).
+	// Decoding that as CancelOrderInnerRequest puts the real order number in the
+	// reason field. Tolerate both shapes so a failed create can be compensated.
+	if !strings.HasPrefix(orderNo, "ORD") && strings.HasPrefix(strings.TrimSpace(req.GetReason()), "ORD") {
+		orderNo = strings.TrimSpace(req.GetReason())
+	}
 	if orderNo == "" {
 		return nil, apperr.Invalid("order_no is required")
 	}
@@ -429,6 +469,9 @@ func (s *Service) CancelOrderInner(ctx context.Context, req *pb.CancelOrderInner
 		return nil, apperr.Unavailable("CancelOrderInner is a DTM branch and must be invoked by DTM", nil)
 	}
 	reason := strings.TrimSpace(req.GetReason())
+	if strings.HasPrefix(reason, "ORD") {
+		reason = "create order rolled back"
+	}
 	if reason == "" {
 		reason = "create order rolled back"
 	}
@@ -613,6 +656,11 @@ func (s *Service) afterPaid(ctx context.Context, record *orderRecord) {
 			}
 		}
 	}
+	if s.promotion != nil {
+		if _, err := s.promotion.ConfirmPromotions(ctx, &pb.PromotionOrderRequest{OrderNo: record.OrderNo}); err != nil {
+			s.log.Warn("confirm promotions", "order_no", record.OrderNo, "error", err)
+		}
+	}
 	if s.pricing != nil && record.QuoteID != "" {
 		couponID := s.couponForQuote(ctx, record.QuoteID)
 		_, err := s.pricing.ConsumeCoupon(ctx, &pb.LockCouponRequest{
@@ -794,19 +842,21 @@ func buildCreateOrderInner(orderNo string, in createOrderInput, quote *pb.Quote,
 		})
 	}
 	return &pb.CreateOrderInnerRequest{
-		UserId:          in.UserID,
-		OrderNo:         orderNo,
-		QuoteId:         in.QuoteID,
-		AddressId:       in.AddressID,
-		TotalCent:       total,
-		DiscountCent:    discount,
-		FreightCent:     freight,
-		PayCent:         pay,
-		ReceiverName:    in.ReceiverName,
-		ReceiverPhone:   in.ReceiverPhone,
-		ReceiverAddress: in.ReceiverAddress,
-		Items:           items,
-		ExpireAtUnix:    expireAt.Unix(),
+		UserId:                in.UserID,
+		OrderNo:               orderNo,
+		QuoteId:               in.QuoteID,
+		AddressId:             in.AddressID,
+		TotalCent:             total,
+		DiscountCent:          discount,
+		PromotionDiscountCent: quote.GetPromotionDiscountCent(),
+		AppliedPromotionsJson: quote.GetAppliedPromotionsJson(),
+		FreightCent:           freight,
+		PayCent:               pay,
+		ReceiverName:          in.ReceiverName,
+		ReceiverPhone:         in.ReceiverPhone,
+		ReceiverAddress:       in.ReceiverAddress,
+		Items:                 items,
+		ExpireAtUnix:          expireAt.Unix(),
 	}
 }
 
@@ -816,20 +866,22 @@ func recordFromInner(ctx context.Context, req *pb.CreateOrderInnerRequest) *orde
 		expireAt = time.Unix(unix, 0)
 	}
 	return &orderRecord{
-		OrderNo:         req.GetOrderNo(),
-		UserID:          req.GetUserId(),
-		Status:          statusPendingPayment,
-		TotalCent:       req.GetTotalCent(),
-		DiscountCent:    req.GetDiscountCent(),
-		FreightCent:     req.GetFreightCent(),
-		PayCent:         req.GetPayCent(),
-		PaidCent:        0,
-		ReceiverName:    req.GetReceiverName(),
-		ReceiverPhone:   req.GetReceiverPhone(),
-		ReceiverAddress: req.GetReceiverAddress(),
-		QuoteID:         strings.TrimSpace(req.GetQuoteId()),
-		ClientRequestID: clientRequestIDFromContext(ctx, req.GetOrderNo()),
-		ExpireAt:        expireAt,
+		OrderNo:               req.GetOrderNo(),
+		UserID:                req.GetUserId(),
+		Status:                statusPendingPayment,
+		TotalCent:             req.GetTotalCent(),
+		DiscountCent:          req.GetDiscountCent(),
+		PromotionDiscountCent: req.GetPromotionDiscountCent(),
+		AppliedPromotionsJSON: req.GetAppliedPromotionsJson(),
+		FreightCent:           req.GetFreightCent(),
+		PayCent:               req.GetPayCent(),
+		PaidCent:              0,
+		ReceiverName:          req.GetReceiverName(),
+		ReceiverPhone:         req.GetReceiverPhone(),
+		ReceiverAddress:       req.GetReceiverAddress(),
+		QuoteID:               strings.TrimSpace(req.GetQuoteId()),
+		ClientRequestID:       clientRequestIDFromContext(ctx, req.GetOrderNo()),
+		ExpireAt:              expireAt,
 	}
 }
 

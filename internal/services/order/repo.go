@@ -52,54 +52,59 @@ type querier interface {
 
 // orderRecord mirrors one orders row.
 type orderRecord struct {
-	OrderNo         string
-	UserID          int64
-	Status          string
-	TotalCent       int64
-	DiscountCent    int64
-	FreightCent     int64
-	PayCent         int64
-	PaidCent        int64
-	RefundedCent    int64
-	RefundStatus    string
-	ReceiverName    string
-	ReceiverPhone   string
-	ReceiverAddress string
-	QuoteID         string
-	ClientRequestID string
-	CreatedAt       time.Time
-	ExpireAt        time.Time
+	OrderNo               string
+	UserID                int64
+	Status                string
+	TotalCent             int64
+	DiscountCent          int64
+	PromotionDiscountCent int64
+	AppliedPromotionsJSON string
+	FreightCent           int64
+	PayCent               int64
+	PaidCent              int64
+	RefundedCent          int64
+	RefundStatus          string
+	ReceiverName          string
+	ReceiverPhone         string
+	ReceiverAddress       string
+	QuoteID               string
+	ClientRequestID       string
+	CreatedAt             time.Time
+	ExpireAt              time.Time
 }
 
 func (o *orderRecord) toProto(items []*pb.OrderItem) *pb.Order {
 	return &pb.Order{
-		OrderNo:         o.OrderNo,
-		UserId:          o.UserID,
-		Status:          o.Status,
-		TotalCent:       o.TotalCent,
-		DiscountCent:    o.DiscountCent,
-		FreightCent:     o.FreightCent,
-		PayCent:         o.PayCent,
-		PaidCent:        o.PaidCent,
-		RefundedCent:    o.RefundedCent,
-		RefundStatus:    o.RefundStatus,
-		ReceiverName:    o.ReceiverName,
-		ReceiverPhone:   o.ReceiverPhone,
-		ReceiverAddress: o.ReceiverAddress,
-		Items:           items,
-		QuoteId:         o.QuoteID,
-		CreatedAtUnix:   o.CreatedAt.Unix(),
-		ExpireAtUnix:    o.ExpireAt.Unix(),
+		OrderNo:               o.OrderNo,
+		UserId:                o.UserID,
+		Status:                o.Status,
+		TotalCent:             o.TotalCent,
+		DiscountCent:          o.DiscountCent,
+		PromotionDiscountCent: o.PromotionDiscountCent,
+		AppliedPromotionsJson: o.AppliedPromotionsJSON,
+		FreightCent:           o.FreightCent,
+		PayCent:               o.PayCent,
+		PaidCent:              o.PaidCent,
+		RefundedCent:          o.RefundedCent,
+		RefundStatus:          o.RefundStatus,
+		ReceiverName:          o.ReceiverName,
+		ReceiverPhone:         o.ReceiverPhone,
+		ReceiverAddress:       o.ReceiverAddress,
+		Items:                 items,
+		QuoteId:               o.QuoteID,
+		CreatedAtUnix:         o.CreatedAt.Unix(),
+		ExpireAtUnix:          o.ExpireAt.Unix(),
 	}
 }
 
-const orderColumns = `order_no, user_id, status, total_cent, discount_cent, freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
-	receiver_name, receiver_phone, receiver_address, quote_id, client_request_id, created_at, expire_at`
+const orderColumns = `order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent, applied_promotions_json,
+	freight_cent, pay_cent, paid_cent, refunded_cent, refund_status, receiver_name, receiver_phone, receiver_address, quote_id, client_request_id, created_at, expire_at`
 
 func scanOrder(row *sql.Row) (*orderRecord, error) {
 	var o orderRecord
-	err := row.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.FreightCent,
-		&o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
+	err := row.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
+		&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus,
+		&o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
 		&o.ClientRequestID, &o.CreatedAt, &o.ExpireAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -123,11 +128,13 @@ func findOrderByClientRequest(ctx context.Context, q querier, userID int64, clie
 
 func insertOrder(ctx context.Context, tx *sql.Tx, o *orderRecord, now time.Time) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO orders
-		(order_no, user_id, status, total_cent, discount_cent, freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
+		(order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent, applied_promotions_json,
+		 freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
 		 receiver_name, receiver_phone, receiver_address, quote_id, client_request_id,
 		 expire_at, version, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-		o.OrderNo, o.UserID, o.Status, o.TotalCent, o.DiscountCent, o.FreightCent, o.PayCent, o.PaidCent, o.RefundedCent, o.RefundStatus,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+		o.OrderNo, o.UserID, o.Status, o.TotalCent, o.DiscountCent, o.PromotionDiscountCent, o.AppliedPromotionsJSON,
+		o.FreightCent, o.PayCent, o.PaidCent, o.RefundedCent, o.RefundStatus,
 		o.ReceiverName, o.ReceiverPhone, o.ReceiverAddress, o.QuoteID, o.ClientRequestID,
 		o.ExpireAt, now, now)
 	return err
@@ -225,8 +232,9 @@ func listOrders(ctx context.Context, q querier, where string, args []any, orderB
 	var records []*orderRecord
 	for rows.Next() {
 		var o orderRecord
-		if err := rows.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.FreightCent,
-			&o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
+		if err := rows.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
+			&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus,
+			&o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
 			&o.ClientRequestID, &o.CreatedAt, &o.ExpireAt); err != nil {
 			return nil, err
 		}

@@ -105,7 +105,19 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 	if err != nil {
 		return nil, apperr.Internal("tcc confirm paid", err)
 	}
+	if record = recordWithStatus(record, statusPaid); record != nil {
+		s.afterPaid(ctx, record)
+	}
 	return &pb.Empty{}, nil
+}
+
+func recordWithStatus(record *orderRecord, status string) *orderRecord {
+	if record == nil {
+		return nil
+	}
+	copy := *record
+	copy.Status = status
+	return &copy
 }
 
 // TccCancelMarkPaid is the compensation side. The payment has already been

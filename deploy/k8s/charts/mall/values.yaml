@@ -141,8 +141,8 @@ authz:
       sources: [gateway]
       paths: ["/mall.v1.CartService/*"]
     - name: pricing
-      sources: [gateway, order, payment, dtm]
-      paths: ["/mall.v1.PricingService/*"]
+      sources: [gateway, admin, order, payment, dtm]
+      paths: ["/mall.v1.PricingService/*", "/mall.v1.PromotionService/*"]
     - name: order
       sources: [gateway, admin, payment, aftersales, dtm]
       paths: ["/mall.v1.OrderService/*"]

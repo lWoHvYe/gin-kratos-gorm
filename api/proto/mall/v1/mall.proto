@@ -130,6 +130,8 @@ message Sku {
   int64 stock = 6;
   string status = 7;
   string image_url = 8;
+  int64 category_id = 9;
+  int64 brand_id = 10;
 }
 message Product {
   int64 id = 1;
@@ -326,6 +328,10 @@ message Quote {
   string coupon_id = 6;
   int64 expires_at_unix = 7;
   repeated QuoteLine lines = 8;
+  int64 promotion_discount_cent = 9;
+  string applied_promotions_json = 10;
+  int64 promotion_version = 11;
+  int64 coupon_discount_cent = 12;
 }
 message GetQuoteRequest { string quote_id = 1; }
 message LockCouponRequest { string quote_id = 1; string coupon_id = 2; int64 user_id = 3; }
@@ -379,6 +385,8 @@ message Order {
   string quote_id = 15;
   int64 refunded_cent = 16;
   string refund_status = 17;
+  int64 promotion_discount_cent = 18;
+  string applied_promotions_json = 19;
 }
 message CreateOrderRequest {
   int64 user_id = 1;
@@ -403,6 +411,8 @@ message CreateOrderInnerRequest {
   string receiver_address = 11;
   repeated OrderItem items = 12;
   int64 expire_at_unix = 13;
+  int64 promotion_discount_cent = 14;
+  string applied_promotions_json = 15;
 }
 message CancelOrderRequest { string order_no = 1; int64 user_id = 2; string reason = 3; bool admin = 4; }
 message CancelOrderInnerRequest { string order_no = 1; string reason = 2; }
@@ -476,6 +486,123 @@ message Refund {
 }
 message ListRefundsRequest { string payment_no = 1; string order_no = 2; int32 page = 3; int32 page_size = 4; }
 message RefundList { repeated Refund refunds = 1; int64 total = 2; }
+
+// ---------------------------------------------------------------- promotion
+
+service PromotionService {
+  rpc EvaluatePromotions (PromotionEvaluateRequest) returns (PromotionEvaluation);
+  rpc ReservePromotions (PromotionReserveRequest) returns (PromotionReserveReply);
+  rpc ConfirmPromotions (PromotionOrderRequest) returns (Empty);
+  rpc ReleasePromotions (PromotionOrderRequest) returns (Empty);
+  rpc CreateCampaign (Campaign) returns (Campaign);
+  rpc UpdateCampaign (Campaign) returns (Campaign);
+  rpc SetCampaignStatus (SetPromotionStatusRequest) returns (Empty);
+  rpc ListCampaigns (Empty) returns (CampaignList);
+  rpc CreatePromotion (PromotionRule) returns (PromotionRule);
+  rpc UpdatePromotion (PromotionRule) returns (PromotionRule);
+  rpc SetPromotionStatus (SetPromotionStatusRequest) returns (Empty);
+  rpc ListPromotions (PromotionListRequest) returns (PromotionRuleList);
+  rpc ListPromotionReservations (ListPromotionReservationsRequest) returns (PromotionReservationList);
+}
+
+message Campaign {
+  int64 id = 1;
+  string code = 2;
+  string name = 3;
+  string type = 4;
+  string status = 5;
+  int64 start_at_unix = 6;
+  int64 end_at_unix = 7;
+  int32 priority = 8;
+  int64 budget_cent = 9;
+  int64 reserved_cent = 10;
+  int64 consumed_cent = 11;
+  int32 per_user_limit = 12;
+  string stack_mode = 13;
+  int64 version = 14;
+}
+
+message PromotionRule {
+  int64 id = 1;
+  int64 campaign_id = 2;
+  string code = 3;
+  string name = 4;
+  string type = 5;
+  string status = 6;
+  int32 priority = 7;
+  bool exclusive = 8;
+  string stack_group = 9;
+  string scope_json = 10;
+  string condition_expr = 11;
+  string effect_json = 12;
+  int64 max_discount_cent = 13;
+  int64 budget_cent = 14;
+  int64 reserved_cent = 15;
+  int64 consumed_cent = 16;
+  int32 per_user_limit = 17;
+  bool allow_with_coupon = 18;
+  int64 start_at_unix = 19;
+  int64 end_at_unix = 20;
+  int64 version = 21;
+}
+
+message CampaignList { repeated Campaign campaigns = 1; }
+message PromotionListRequest { int64 campaign_id = 1; string status = 2; int32 page = 3; int32 page_size = 4; }
+message PromotionRuleList { repeated PromotionRule promotions = 1; int64 total = 2; }
+message SetPromotionStatusRequest { int64 id = 1; string status = 2; }
+message PromotionEvaluateItem {
+  int64 sku_id = 1;
+  int64 spu_id = 2;
+  int64 category_id = 3;
+  int64 brand_id = 4;
+  int64 price_cent = 5;
+  int32 quantity = 6;
+}
+message PromotionEvaluateRequest {
+  int64 user_id = 1;
+  repeated PromotionEvaluateItem items = 2;
+  bool coupon_applied = 3;
+  int64 coupon_discount_cent = 4;
+}
+message PromotionAllocation { int64 sku_id = 1; int64 discount_cent = 2; }
+message AppliedPromotion {
+  int64 rule_id = 1;
+  int64 campaign_id = 2;
+  string code = 3;
+  string name = 4;
+  string type = 5;
+  int64 amount_cent = 6;
+  int64 shipping_cent = 7;
+  repeated PromotionAllocation allocations = 8;
+  int64 rule_version = 9;
+  string stack_group = 10;
+  int32 priority = 11;
+}
+message RejectedPromotion { int64 rule_id = 1; string code = 2; string reason = 3; }
+message PromotionEvaluation {
+  repeated AppliedPromotion applied = 1;
+  repeated RejectedPromotion rejected = 2;
+  int64 discount_cent = 3;
+  int64 shipping_discount_cent = 4;
+  int64 promotion_version = 5;
+  string snapshot_json = 6;
+}
+message PromotionReserveRequest { string quote_id = 1; string order_no = 2; int64 user_id = 3; }
+message PromotionReserveReply { repeated string reservation_nos = 1; int64 reserved_cent = 2; }
+message PromotionOrderRequest { string order_no = 1; }
+message ListPromotionReservationsRequest { string order_no = 1; int32 page = 2; int32 page_size = 3; }
+message PromotionReservation {
+  string reservation_no = 1;
+  string quote_id = 2;
+  string order_no = 3;
+  int64 user_id = 4;
+  int64 rule_id = 5;
+  int64 campaign_id = 6;
+  int64 amount_cent = 7;
+  string status = 8;
+  int64 created_at_unix = 9;
+}
+message PromotionReservationList { repeated PromotionReservation reservations = 1; int64 total = 2; }
 
 // ---------------------------------------------------------------- fulfillment
 service FulfillmentService {

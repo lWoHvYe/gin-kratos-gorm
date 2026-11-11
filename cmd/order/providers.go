@@ -83,12 +83,16 @@ func provideInventoryClient(conn *inventoryConn) pb.InventoryServiceClient {
 	return pb.NewInventoryServiceClient(conn.ClientConn)
 }
 
+func providePromotionClient(conn *pricingConn) pb.PromotionServiceClient {
+	return pb.NewPromotionServiceClient(conn.ClientConn)
+}
+
 func provideDTMClient(cfg *config.Config) *dtm.Client {
 	return dtm.New(cfg)
 }
 
-func provideOrderService(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client, pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient) *order.Service {
-	return order.New(database, client, logger, dtmClient, pricing, inventory)
+func provideOrderService(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client, pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient, promotion pb.PromotionServiceClient) *order.Service {
+	return order.New(database, client, logger, dtmClient, pricing, inventory, promotion)
 }
 
 func provideGRPCServer(logger *slog.Logger, svc *order.Service) *kratosgrpc.Server {

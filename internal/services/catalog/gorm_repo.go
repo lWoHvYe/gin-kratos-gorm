@@ -39,14 +39,16 @@ type gormSPU struct {
 func (gormSPU) TableName() string { return "spus" }
 
 type gormSKU struct {
-	ID        int64  `gorm:"column:id;primaryKey"`
-	SpuID     int64  `gorm:"column:spu_id"`
-	SkuCode   string `gorm:"column:sku_code"`
-	SpecsJSON string `gorm:"column:specs_json"`
-	PriceCent int64  `gorm:"column:price_cent"`
-	Stock     int64  `gorm:"column:stock"`
-	Status    string `gorm:"column:status"`
-	ImageURL  string `gorm:"column:image_url"`
+	ID         int64  `gorm:"column:id;primaryKey"`
+	SpuID      int64  `gorm:"column:spu_id"`
+	SkuCode    string `gorm:"column:sku_code"`
+	SpecsJSON  string `gorm:"column:specs_json"`
+	PriceCent  int64  `gorm:"column:price_cent"`
+	Stock      int64  `gorm:"column:stock"`
+	Status     string `gorm:"column:status"`
+	ImageURL   string `gorm:"column:image_url"`
+	CategoryID int64  `gorm:"column:category_id"`
+	BrandID    int64  `gorm:"column:brand_id"`
 }
 
 func (gormSKU) TableName() string { return "skus" }
@@ -235,5 +237,6 @@ func (row *gormSKU) toPB() *pb.Sku {
 	return &pb.Sku{
 		Id: row.ID, SpuId: row.SpuID, SkuCode: row.SkuCode, SpecsJson: row.SpecsJSON,
 		PriceCent: row.PriceCent, Stock: row.Stock, Status: row.Status, ImageUrl: row.ImageURL,
+		CategoryId: row.CategoryID, BrandId: row.BrandID,
 	}
 }

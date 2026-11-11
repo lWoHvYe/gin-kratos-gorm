@@ -38,6 +38,7 @@ const (
 var serviceAddrs = map[string]string{
 	"catalog":     "catalog:9002",
 	"inventory":   "inventory:9003",
+	"promotion":   "pricing:9005",
 	"order":       "order:9006",
 	"payment":     "payment:9007",
 	"fulfillment": "fulfillment:9008",
@@ -52,6 +53,7 @@ type Clients struct {
 	Payment     pb.PaymentServiceClient
 	Fulfillment pb.FulfillmentServiceClient
 	AfterSales  pb.AfterSalesServiceClient
+	Promotion   pb.PromotionServiceClient
 
 	conns []*grpc.ClientConn
 }
@@ -84,6 +86,7 @@ func Dial(ctx context.Context) (*Clients, error) {
 		{"payment", func(conn *grpc.ClientConn) { clients.Payment = pb.NewPaymentServiceClient(conn) }},
 		{"fulfillment", func(conn *grpc.ClientConn) { clients.Fulfillment = pb.NewFulfillmentServiceClient(conn) }},
 		{"aftersales", func(conn *grpc.ClientConn) { clients.AfterSales = pb.NewAfterSalesServiceClient(conn) }},
+		{"promotion", func(conn *grpc.ClientConn) { clients.Promotion = pb.NewPromotionServiceClient(conn) }},
 	}
 	for _, target := range targets {
 		conn, err := grpcx.Dial(ctx, targetFor(target.name))
@@ -155,6 +158,15 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	admin.POST("/after-sales/:no/receive", h.receiveReturn)
 	admin.POST("/after-sales/:no/refund", h.refundAfterSale)
 	admin.GET("/payments/refunds", h.listRefunds)
+	admin.GET("/campaigns", h.listCampaigns)
+	admin.POST("/campaigns", h.createCampaign)
+	admin.PUT("/campaigns/:id", h.updateCampaign)
+	admin.POST("/campaigns/:id/status", h.setCampaignStatus)
+	admin.GET("/promotions", h.listPromotions)
+	admin.POST("/promotions", h.createPromotion)
+	admin.PUT("/promotions/:id", h.updatePromotion)
+	admin.POST("/promotions/:id/status", h.setPromotionStatus)
+	admin.GET("/promotion-reservations", h.listPromotionReservations)
 
 	return engine
 }
@@ -971,6 +983,172 @@ func (h *handlers) listRefunds(c *gin.Context) {
 	reply, err := h.clients.Payment.ListRefunds(c.Request.Context(), &pb.ListRefundsRequest{
 		PaymentNo: strings.TrimSpace(c.Query("payment_no")), OrderNo: strings.TrimSpace(c.Query("order_no")),
 		Page: page, PageSize: pageSize,
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+// ---------------------------------------------------------------- promotion admin
+
+func (h *handlers) listCampaigns(c *gin.Context) {
+	reply, err := h.clients.Promotion.ListCampaigns(c.Request.Context(), &pb.Empty{})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) createCampaign(c *gin.Context) {
+	var campaign pb.Campaign
+	if err := bindJSON(c, &campaign); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	created, err := h.clients.Promotion.CreateCampaign(c.Request.Context(), &campaign)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.Created(c, created)
+}
+
+func (h *handlers) updateCampaign(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var campaign pb.Campaign
+	if err := bindJSON(c, &campaign); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	campaign.Id = id
+	updated, err := h.clients.Promotion.UpdateCampaign(c.Request.Context(), &campaign)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, updated)
+}
+
+type promotionStatusRequest struct {
+	Status string `json:"status"`
+}
+
+func (h *handlers) setCampaignStatus(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var in promotionStatusRequest
+	if err := bindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Promotion.SetCampaignStatus(c.Request.Context(), &pb.SetPromotionStatusRequest{Id: id, Status: in.Status}); err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": in.Status})
+}
+
+func (h *handlers) listPromotions(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	pageSize, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	campaignID, err := queryInt64(c, "campaign_id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Promotion.ListPromotions(c.Request.Context(), &pb.PromotionListRequest{
+		Page: page, PageSize: pageSize, CampaignId: campaignID, Status: strings.TrimSpace(c.Query("status")),
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) createPromotion(c *gin.Context) {
+	var rule pb.PromotionRule
+	if err := bindJSON(c, &rule); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	created, err := h.clients.Promotion.CreatePromotion(c.Request.Context(), &rule)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.Created(c, created)
+}
+
+func (h *handlers) updatePromotion(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var rule pb.PromotionRule
+	if err := bindJSON(c, &rule); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	rule.Id = id
+	updated, err := h.clients.Promotion.UpdatePromotion(c.Request.Context(), &rule)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, updated)
+}
+
+func (h *handlers) setPromotionStatus(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var in promotionStatusRequest
+	if err := bindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Promotion.SetPromotionStatus(c.Request.Context(), &pb.SetPromotionStatusRequest{Id: id, Status: in.Status}); err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": in.Status})
+}
+
+func (h *handlers) listPromotionReservations(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	pageSize, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Promotion.ListPromotionReservations(c.Request.Context(), &pb.ListPromotionReservationsRequest{
+		OrderNo: strings.TrimSpace(c.Query("order_no")), Page: page, PageSize: pageSize,
 	})
 	if err != nil {
 		httpx.Error(c, remoteError(err))

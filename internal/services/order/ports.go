@@ -18,6 +18,7 @@ type inventoryPort interface {
 
 type pricingPort interface {
 	GetQuote(ctx context.Context, in *pb.GetQuoteRequest, opts ...grpc.CallOption) (*pb.Quote, error)
+	LockCoupon(ctx context.Context, in *pb.LockCouponRequest, opts ...grpc.CallOption) (*pb.Empty, error)
 	ConsumeCoupon(ctx context.Context, in *pb.LockCouponRequest, opts ...grpc.CallOption) (*pb.Empty, error)
 	UnlockCoupon(ctx context.Context, in *pb.LockCouponRequest, opts ...grpc.CallOption) (*pb.Empty, error)
 }

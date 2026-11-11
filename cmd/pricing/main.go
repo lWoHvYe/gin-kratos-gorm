@@ -56,7 +56,9 @@ func main() {
 	gs := grpcx.NewServer(logger)
 	svc := pricing.New(database, catalog, logger)
 	go pricing.RunOrderCancelledConsumer(ctx, client, svc, logger)
+	go pricing.RunOrderPaidConsumer(ctx, client, svc, logger)
 	pb.RegisterPricingServiceServer(gs, svc)
+	pb.RegisterPromotionServiceServer(gs, svc.Promotion())
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)

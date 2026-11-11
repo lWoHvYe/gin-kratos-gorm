@@ -383,3 +383,16 @@ kubectl -n mall delete pod -l gateway.networking.k8s.io/gateway-name=mall-waypoi
 kubectl -n istio-system rollout restart deployment/mall-gateway-istio
 kubectl -n mall rollout restart deployment
 ```
+
+## Promotion/coupon checks
+
+The Phase 1.5 E2E also creates an active campaign and promotion, asserts the
+quote's `promotion_discount_cent`, and checks that promotion reservations reach
+`CONFIRMED` after payment. Campaigns created by previous E2E runs are paused at
+the start of each run and the new rule is scoped to that run's SKU.
+
+Coupon lifecycle is covered manually/against a live stack: placing an order
+locks the coupon, a second quote sees it unavailable, cancellation unlocks it,
+and paying a later order consumes it. The order create path now calls
+`LockCoupon`; the paid path calls `ConsumeCoupon`; the cancelled consumer calls
+`UnlockCoupon`.

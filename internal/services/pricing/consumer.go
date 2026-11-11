@@ -43,6 +43,11 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 				return
 			}
 		}
+		if err := svc.promotion.ReleaseByOrder(cctx, event.OrderNo); err != nil {
+			logger.Warn("release promotions", "order_no", event.OrderNo, "error", err)
+			_ = msg.NakWithDelay(5 * time.Second)
+			return
+		}
 		_ = msg.Ack()
 	}
 	if _, err := client.JS.QueueSubscribe("shop.order.cancelled.v1", "pricing-order-cancelled", handler,

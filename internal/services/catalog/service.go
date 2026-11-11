@@ -167,14 +167,16 @@ func (s *Service) GetSku(ctx context.Context, req *pb.GetSkuRequest) (*pb.Sku, e
 // activeOnly enforces the C-end rule: the SKU and its parent SPU must both be
 // sellable. Admin writes pass false so a DRAFT/disabled SKU can be read back.
 func (s *Service) loadSku(ctx context.Context, id int64, activeOnly bool) (*pb.Sku, error) {
-	query := `SELECT k.id, k.spu_id, k.sku_code, k.specs_json, k.price_cent, k.stock, k.status, k.image_url
+	query := `SELECT k.id, k.spu_id, k.sku_code, k.specs_json, k.price_cent, k.stock, k.status, k.image_url,
+		p.category_id, p.brand_id
 		FROM skus k JOIN spus p ON p.id = k.spu_id WHERE k.id = ?`
 	if activeOnly {
 		query += " AND k.status = 'ENABLED' AND p.status = 'ON_SALE'"
 	}
 	var sku pb.Sku
 	err := s.db.QueryRowContext(ctx, query, id).
-		Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status, &sku.ImageUrl)
+		Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status, &sku.ImageUrl,
+			&sku.CategoryId, &sku.BrandId)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

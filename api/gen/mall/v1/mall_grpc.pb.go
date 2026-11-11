@@ -3307,6 +3307,564 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	PromotionService_EvaluatePromotions_FullMethodName        = "/mall.v1.PromotionService/EvaluatePromotions"
+	PromotionService_ReservePromotions_FullMethodName         = "/mall.v1.PromotionService/ReservePromotions"
+	PromotionService_ConfirmPromotions_FullMethodName         = "/mall.v1.PromotionService/ConfirmPromotions"
+	PromotionService_ReleasePromotions_FullMethodName         = "/mall.v1.PromotionService/ReleasePromotions"
+	PromotionService_CreateCampaign_FullMethodName            = "/mall.v1.PromotionService/CreateCampaign"
+	PromotionService_UpdateCampaign_FullMethodName            = "/mall.v1.PromotionService/UpdateCampaign"
+	PromotionService_SetCampaignStatus_FullMethodName         = "/mall.v1.PromotionService/SetCampaignStatus"
+	PromotionService_ListCampaigns_FullMethodName             = "/mall.v1.PromotionService/ListCampaigns"
+	PromotionService_CreatePromotion_FullMethodName           = "/mall.v1.PromotionService/CreatePromotion"
+	PromotionService_UpdatePromotion_FullMethodName           = "/mall.v1.PromotionService/UpdatePromotion"
+	PromotionService_SetPromotionStatus_FullMethodName        = "/mall.v1.PromotionService/SetPromotionStatus"
+	PromotionService_ListPromotions_FullMethodName            = "/mall.v1.PromotionService/ListPromotions"
+	PromotionService_ListPromotionReservations_FullMethodName = "/mall.v1.PromotionService/ListPromotionReservations"
+)
+
+// PromotionServiceClient is the client API for PromotionService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type PromotionServiceClient interface {
+	EvaluatePromotions(ctx context.Context, in *PromotionEvaluateRequest, opts ...grpc.CallOption) (*PromotionEvaluation, error)
+	ReservePromotions(ctx context.Context, in *PromotionReserveRequest, opts ...grpc.CallOption) (*PromotionReserveReply, error)
+	ConfirmPromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error)
+	ReleasePromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error)
+	CreateCampaign(ctx context.Context, in *Campaign, opts ...grpc.CallOption) (*Campaign, error)
+	UpdateCampaign(ctx context.Context, in *Campaign, opts ...grpc.CallOption) (*Campaign, error)
+	SetCampaignStatus(ctx context.Context, in *SetPromotionStatusRequest, opts ...grpc.CallOption) (*Empty, error)
+	ListCampaigns(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*CampaignList, error)
+	CreatePromotion(ctx context.Context, in *PromotionRule, opts ...grpc.CallOption) (*PromotionRule, error)
+	UpdatePromotion(ctx context.Context, in *PromotionRule, opts ...grpc.CallOption) (*PromotionRule, error)
+	SetPromotionStatus(ctx context.Context, in *SetPromotionStatusRequest, opts ...grpc.CallOption) (*Empty, error)
+	ListPromotions(ctx context.Context, in *PromotionListRequest, opts ...grpc.CallOption) (*PromotionRuleList, error)
+	ListPromotionReservations(ctx context.Context, in *ListPromotionReservationsRequest, opts ...grpc.CallOption) (*PromotionReservationList, error)
+}
+
+type promotionServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewPromotionServiceClient(cc grpc.ClientConnInterface) PromotionServiceClient {
+	return &promotionServiceClient{cc}
+}
+
+func (c *promotionServiceClient) EvaluatePromotions(ctx context.Context, in *PromotionEvaluateRequest, opts ...grpc.CallOption) (*PromotionEvaluation, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromotionEvaluation)
+	err := c.cc.Invoke(ctx, PromotionService_EvaluatePromotions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) ReservePromotions(ctx context.Context, in *PromotionReserveRequest, opts ...grpc.CallOption) (*PromotionReserveReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromotionReserveReply)
+	err := c.cc.Invoke(ctx, PromotionService_ReservePromotions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) ConfirmPromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PromotionService_ConfirmPromotions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) ReleasePromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PromotionService_ReleasePromotions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) CreateCampaign(ctx context.Context, in *Campaign, opts ...grpc.CallOption) (*Campaign, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Campaign)
+	err := c.cc.Invoke(ctx, PromotionService_CreateCampaign_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) UpdateCampaign(ctx context.Context, in *Campaign, opts ...grpc.CallOption) (*Campaign, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Campaign)
+	err := c.cc.Invoke(ctx, PromotionService_UpdateCampaign_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) SetCampaignStatus(ctx context.Context, in *SetPromotionStatusRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PromotionService_SetCampaignStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) ListCampaigns(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*CampaignList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CampaignList)
+	err := c.cc.Invoke(ctx, PromotionService_ListCampaigns_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) CreatePromotion(ctx context.Context, in *PromotionRule, opts ...grpc.CallOption) (*PromotionRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromotionRule)
+	err := c.cc.Invoke(ctx, PromotionService_CreatePromotion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) UpdatePromotion(ctx context.Context, in *PromotionRule, opts ...grpc.CallOption) (*PromotionRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromotionRule)
+	err := c.cc.Invoke(ctx, PromotionService_UpdatePromotion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) SetPromotionStatus(ctx context.Context, in *SetPromotionStatusRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PromotionService_SetPromotionStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) ListPromotions(ctx context.Context, in *PromotionListRequest, opts ...grpc.CallOption) (*PromotionRuleList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromotionRuleList)
+	err := c.cc.Invoke(ctx, PromotionService_ListPromotions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) ListPromotionReservations(ctx context.Context, in *ListPromotionReservationsRequest, opts ...grpc.CallOption) (*PromotionReservationList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromotionReservationList)
+	err := c.cc.Invoke(ctx, PromotionService_ListPromotionReservations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PromotionServiceServer is the server API for PromotionService service.
+// All implementations must embed UnimplementedPromotionServiceServer
+// for forward compatibility.
+type PromotionServiceServer interface {
+	EvaluatePromotions(context.Context, *PromotionEvaluateRequest) (*PromotionEvaluation, error)
+	ReservePromotions(context.Context, *PromotionReserveRequest) (*PromotionReserveReply, error)
+	ConfirmPromotions(context.Context, *PromotionOrderRequest) (*Empty, error)
+	ReleasePromotions(context.Context, *PromotionOrderRequest) (*Empty, error)
+	CreateCampaign(context.Context, *Campaign) (*Campaign, error)
+	UpdateCampaign(context.Context, *Campaign) (*Campaign, error)
+	SetCampaignStatus(context.Context, *SetPromotionStatusRequest) (*Empty, error)
+	ListCampaigns(context.Context, *Empty) (*CampaignList, error)
+	CreatePromotion(context.Context, *PromotionRule) (*PromotionRule, error)
+	UpdatePromotion(context.Context, *PromotionRule) (*PromotionRule, error)
+	SetPromotionStatus(context.Context, *SetPromotionStatusRequest) (*Empty, error)
+	ListPromotions(context.Context, *PromotionListRequest) (*PromotionRuleList, error)
+	ListPromotionReservations(context.Context, *ListPromotionReservationsRequest) (*PromotionReservationList, error)
+	mustEmbedUnimplementedPromotionServiceServer()
+}
+
+// UnimplementedPromotionServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedPromotionServiceServer struct{}
+
+func (UnimplementedPromotionServiceServer) EvaluatePromotions(context.Context, *PromotionEvaluateRequest) (*PromotionEvaluation, error) {
+	return nil, status.Error(codes.Unimplemented, "method EvaluatePromotions not implemented")
+}
+func (UnimplementedPromotionServiceServer) ReservePromotions(context.Context, *PromotionReserveRequest) (*PromotionReserveReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReservePromotions not implemented")
+}
+func (UnimplementedPromotionServiceServer) ConfirmPromotions(context.Context, *PromotionOrderRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmPromotions not implemented")
+}
+func (UnimplementedPromotionServiceServer) ReleasePromotions(context.Context, *PromotionOrderRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleasePromotions not implemented")
+}
+func (UnimplementedPromotionServiceServer) CreateCampaign(context.Context, *Campaign) (*Campaign, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateCampaign not implemented")
+}
+func (UnimplementedPromotionServiceServer) UpdateCampaign(context.Context, *Campaign) (*Campaign, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateCampaign not implemented")
+}
+func (UnimplementedPromotionServiceServer) SetCampaignStatus(context.Context, *SetPromotionStatusRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetCampaignStatus not implemented")
+}
+func (UnimplementedPromotionServiceServer) ListCampaigns(context.Context, *Empty) (*CampaignList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCampaigns not implemented")
+}
+func (UnimplementedPromotionServiceServer) CreatePromotion(context.Context, *PromotionRule) (*PromotionRule, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreatePromotion not implemented")
+}
+func (UnimplementedPromotionServiceServer) UpdatePromotion(context.Context, *PromotionRule) (*PromotionRule, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdatePromotion not implemented")
+}
+func (UnimplementedPromotionServiceServer) SetPromotionStatus(context.Context, *SetPromotionStatusRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetPromotionStatus not implemented")
+}
+func (UnimplementedPromotionServiceServer) ListPromotions(context.Context, *PromotionListRequest) (*PromotionRuleList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPromotions not implemented")
+}
+func (UnimplementedPromotionServiceServer) ListPromotionReservations(context.Context, *ListPromotionReservationsRequest) (*PromotionReservationList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPromotionReservations not implemented")
+}
+func (UnimplementedPromotionServiceServer) mustEmbedUnimplementedPromotionServiceServer() {}
+func (UnimplementedPromotionServiceServer) testEmbeddedByValue()                          {}
+
+// UnsafePromotionServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to PromotionServiceServer will
+// result in compilation errors.
+type UnsafePromotionServiceServer interface {
+	mustEmbedUnimplementedPromotionServiceServer()
+}
+
+func RegisterPromotionServiceServer(s grpc.ServiceRegistrar, srv PromotionServiceServer) {
+	// If the following call panics, it indicates UnimplementedPromotionServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&PromotionService_ServiceDesc, srv)
+}
+
+func _PromotionService_EvaluatePromotions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromotionEvaluateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).EvaluatePromotions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_EvaluatePromotions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).EvaluatePromotions(ctx, req.(*PromotionEvaluateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_ReservePromotions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromotionReserveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).ReservePromotions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_ReservePromotions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).ReservePromotions(ctx, req.(*PromotionReserveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_ConfirmPromotions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromotionOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).ConfirmPromotions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_ConfirmPromotions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).ConfirmPromotions(ctx, req.(*PromotionOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_ReleasePromotions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromotionOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).ReleasePromotions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_ReleasePromotions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).ReleasePromotions(ctx, req.(*PromotionOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_CreateCampaign_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Campaign)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).CreateCampaign(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_CreateCampaign_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).CreateCampaign(ctx, req.(*Campaign))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_UpdateCampaign_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Campaign)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).UpdateCampaign(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_UpdateCampaign_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).UpdateCampaign(ctx, req.(*Campaign))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_SetCampaignStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPromotionStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).SetCampaignStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_SetCampaignStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).SetCampaignStatus(ctx, req.(*SetPromotionStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_ListCampaigns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).ListCampaigns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_ListCampaigns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).ListCampaigns(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_CreatePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromotionRule)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).CreatePromotion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_CreatePromotion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).CreatePromotion(ctx, req.(*PromotionRule))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_UpdatePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromotionRule)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).UpdatePromotion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_UpdatePromotion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).UpdatePromotion(ctx, req.(*PromotionRule))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_SetPromotionStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPromotionStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).SetPromotionStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_SetPromotionStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).SetPromotionStatus(ctx, req.(*SetPromotionStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_ListPromotions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromotionListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).ListPromotions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_ListPromotions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).ListPromotions(ctx, req.(*PromotionListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_ListPromotionReservations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPromotionReservationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).ListPromotionReservations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_ListPromotionReservations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).ListPromotionReservations(ctx, req.(*ListPromotionReservationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// PromotionService_ServiceDesc is the grpc.ServiceDesc for PromotionService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var PromotionService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "mall.v1.PromotionService",
+	HandlerType: (*PromotionServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "EvaluatePromotions",
+			Handler:    _PromotionService_EvaluatePromotions_Handler,
+		},
+		{
+			MethodName: "ReservePromotions",
+			Handler:    _PromotionService_ReservePromotions_Handler,
+		},
+		{
+			MethodName: "ConfirmPromotions",
+			Handler:    _PromotionService_ConfirmPromotions_Handler,
+		},
+		{
+			MethodName: "ReleasePromotions",
+			Handler:    _PromotionService_ReleasePromotions_Handler,
+		},
+		{
+			MethodName: "CreateCampaign",
+			Handler:    _PromotionService_CreateCampaign_Handler,
+		},
+		{
+			MethodName: "UpdateCampaign",
+			Handler:    _PromotionService_UpdateCampaign_Handler,
+		},
+		{
+			MethodName: "SetCampaignStatus",
+			Handler:    _PromotionService_SetCampaignStatus_Handler,
+		},
+		{
+			MethodName: "ListCampaigns",
+			Handler:    _PromotionService_ListCampaigns_Handler,
+		},
+		{
+			MethodName: "CreatePromotion",
+			Handler:    _PromotionService_CreatePromotion_Handler,
+		},
+		{
+			MethodName: "UpdatePromotion",
+			Handler:    _PromotionService_UpdatePromotion_Handler,
+		},
+		{
+			MethodName: "SetPromotionStatus",
+			Handler:    _PromotionService_SetPromotionStatus_Handler,
+		},
+		{
+			MethodName: "ListPromotions",
+			Handler:    _PromotionService_ListPromotions_Handler,
+		},
+		{
+			MethodName: "ListPromotionReservations",
+			Handler:    _PromotionService_ListPromotionReservations_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "mall/v1/mall.proto",
+}
+
+const (
 	FulfillmentService_CreateShipment_FullMethodName     = "/mall.v1.FulfillmentService/CreateShipment"
 	FulfillmentService_Ship_FullMethodName               = "/mall.v1.FulfillmentService/Ship"
 	FulfillmentService_Receive_FullMethodName            = "/mall.v1.FulfillmentService/Receive"

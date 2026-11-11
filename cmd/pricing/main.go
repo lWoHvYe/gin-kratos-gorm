@@ -57,6 +57,7 @@ func main() {
 	svc := pricing.New(database, catalog, logger)
 	go pricing.RunOrderCancelledConsumer(ctx, client, svc, logger)
 	go pricing.RunOrderPaidConsumer(ctx, client, svc, logger)
+	go pricing.RunPromotionExpiry(ctx, svc, logger, time.Minute)
 	pb.RegisterPricingServiceServer(gs, svc)
 	pb.RegisterPromotionServiceServer(gs, svc.Promotion())
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))

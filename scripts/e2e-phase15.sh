@@ -36,6 +36,9 @@ echo "== create product/SKU with image and attribute =="
 PRODUCT="$(curl -fsS -X POST "$ADMIN/api/admin/v1/products" -H "$AH" -H 'Content-Type: application/json' -d "{\"category_id\":$CID,\"brand_id\":$BID,\"name\":\"E2E Widget $SUFFIX\",\"subtitle\":\"phase15\",\"description\":\"e2e\",\"main_image\":\"https://example.invalid/main.png\",\"images\":[{\"url\":\"https://example.invalid/1.png\",\"sort\":1}],\"attributes\":[{\"name\":\"color\",\"value\":\"red\",\"sort\":1}],\"skus\":[{\"sku_code\":\"E2E-$SUFFIX\",\"specs_json\":\"{\\\"color\\\":\\\"red\\\"}\",\"price_cent\":1234}]}")"
 PID="$(echo "$PRODUCT" | json "d['id']")"
 SKU="$(echo "$PRODUCT" | json "d['skus'][0]['id']")"
+SPU="$PID"
+CAT_ID="$(echo "$PRODUCT" | json "d['category_id']")"
+BRAND_ID="$(echo "$PRODUCT" | json "d['brand_id']")"
 need "$PID" product
 need "$SKU" sku
 
@@ -83,6 +86,9 @@ QID="$(echo "$QUOTE" | json "d['quote_id']")"
 PAY_CENT="$(echo "$QUOTE" | json "d['pay_cent']")"
 PROMO_DISCOUNT="$(echo "$QUOTE" | json "d['promotion_discount_cent']")"
 [ "$PROMO_DISCOUNT" -ge 500 ] || { echo "promotion not applied: $QUOTE"; exit 1; }
+SIM="$(curl -fsS -X POST "$ADMIN/api/admin/v1/promotions/evaluate" -H "$AH" -H 'Content-Type: application/json' \
+  -d "{\"user_id\":2,\"items\":[{\"sku_id\":$SKU,\"spu_id\":$SPU,\"category_id\":$CAT_ID,\"brand_id\":$BRAND_ID,\"price_cent\":1234,\"quantity\":2}]}")"
+echo "$SIM" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["discount_cent"]>=500 and d["applied"], d'
 PLACE="$(curl -fsS -X POST "$BASE/api/v1/checkout/place" -H "$UH" -H 'Content-Type: application/json' \
   -H "Idempotency-Key: e2e-$SUFFIX" -d "{\"quote_id\":\"$QID\",\"address_id\":$AID,\"client_request_id\":\"e2e-$SUFFIX\"}")"
 ORDER="$(echo "$PLACE" | json "d['order']['order_no']")"

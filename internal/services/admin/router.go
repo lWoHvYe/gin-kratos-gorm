@@ -167,6 +167,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	admin.PUT("/promotions/:id", h.updatePromotion)
 	admin.POST("/promotions/:id/status", h.setPromotionStatus)
 	admin.GET("/promotion-reservations", h.listPromotionReservations)
+	admin.POST("/promotions/evaluate", h.evaluatePromotions)
 
 	return engine
 }
@@ -1150,6 +1151,20 @@ func (h *handlers) listPromotionReservations(c *gin.Context) {
 	reply, err := h.clients.Promotion.ListPromotionReservations(c.Request.Context(), &pb.ListPromotionReservationsRequest{
 		OrderNo: strings.TrimSpace(c.Query("order_no")), Page: page, PageSize: pageSize,
 	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) evaluatePromotions(c *gin.Context) {
+	var req pb.PromotionEvaluateRequest
+	if err := bindJSON(c, &req); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Promotion.EvaluatePromotions(c.Request.Context(), &req)
 	if err != nil {
 		httpx.Error(c, remoteError(err))
 		return

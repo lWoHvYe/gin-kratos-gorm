@@ -41,3 +41,29 @@ func TestPromotionEffectAndAllocation(t *testing.T) {
 		t.Fatalf("allocation sum=%d want %d", sum, amount)
 	}
 }
+
+func TestSelectBestChoosesHighestDiscount(t *testing.T) {
+	rule := func(id int64, amount int64, exclusive bool) candidate {
+		return candidate{rule: &promotionRule{ID: id, CampaignID: id, Exclusive: exclusive}, amount: amount}
+	}
+	cands := []candidate{
+		rule(1, 500, true),
+		rule(2, 600, false),
+		rule(3, 400, false),
+	}
+	selected, _ := selectBest(cands, nil)
+	if len(selected) != 2 || selected[0].rule.ID != 2 || selected[1].rule.ID != 3 {
+		t.Fatalf("unexpected best selection: %+v", selected)
+	}
+}
+
+func TestSelectPriorityDoesNotMixExclusive(t *testing.T) {
+	cands := []candidate{
+		{rule: &promotionRule{ID: 1}, amount: 500},
+		{rule: &promotionRule{ID: 2, Exclusive: true}, amount: 600},
+	}
+	selected, rejected := selectPriority(cands, nil)
+	if len(selected) != 1 || selected[0].rule.ID != 1 || len(rejected) != 1 || rejected[0].Reason != "EXCLUSIVE_CONFLICT" {
+		t.Fatalf("selected=%+v rejected=%+v", selected, rejected)
+	}
+}

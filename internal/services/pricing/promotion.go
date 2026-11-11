@@ -359,30 +359,14 @@ func (s *PromotionService) evaluate(ctx context.Context, req *pb.PromotionEvalua
 		return applied[i].rule.ID < applied[j].rule.ID
 	})
 
-	selected := make([]candidate, 0, len(applied))
-	groups := make(map[string]bool)
-	exclusiveSelected := false
+	useBest := false
 	for _, cand := range applied {
-		rule := cand.rule
-		if exclusiveSelected {
-			rejected = append(rejected, &pb.RejectedPromotion{RuleId: rule.ID, Code: rule.Code, Reason: "EXCLUSIVE_SELECTED"})
-			continue
-		}
-		if rule.StackGroup != "" && groups[rule.StackGroup] {
-			rejected = append(rejected, &pb.RejectedPromotion{RuleId: rule.ID, Code: rule.Code, Reason: "STACK_GROUP_CONFLICT"})
-			continue
-		}
-		selected = append(selected, cand)
-		if rule.StackGroup != "" {
-			groups[rule.StackGroup] = true
-		}
-		if rule.Exclusive {
-			exclusiveSelected = true
-		}
-		if len(selected) >= maxPromotionStack {
+		if strings.EqualFold(cand.rule.CampaignStackMode, "BEST") {
+			useBest = true
 			break
 		}
 	}
+	selected, rejected := selectPromotions(applied, rejected, useBest)
 
 	var discount, shippingDiscount int64
 	var version int64
@@ -405,6 +389,114 @@ func (s *PromotionService) evaluate(ctx context.Context, req *pb.PromotionEvalua
 		Applied: appliedPB, Rejected: rejected, DiscountCent: discount,
 		ShippingDiscountCent: shippingDiscount, PromotionVersion: version, SnapshotJson: string(snapshot),
 	}, nil
+}
+
+func selectPromotions(candidates []candidate, rejected []*pb.RejectedPromotion, best bool) ([]candidate, []*pb.RejectedPromotion) {
+	if best && len(candidates) <= 12 {
+		return selectBest(candidates, rejected)
+	}
+	return selectPriority(candidates, rejected)
+}
+
+func selectPriority(candidates []candidate, rejected []*pb.RejectedPromotion) ([]candidate, []*pb.RejectedPromotion) {
+	selected := make([]candidate, 0, len(candidates))
+	groups := make(map[string]bool)
+	exclusiveSelected := false
+	for _, cand := range candidates {
+		rule := cand.rule
+		if exclusiveSelected {
+			rejected = append(rejected, &pb.RejectedPromotion{RuleId: rule.ID, Code: rule.Code, Reason: "EXCLUSIVE_SELECTED"})
+			continue
+		}
+		if rule.Exclusive && len(selected) > 0 {
+			rejected = append(rejected, &pb.RejectedPromotion{RuleId: rule.ID, Code: rule.Code, Reason: "EXCLUSIVE_CONFLICT"})
+			continue
+		}
+		if rule.StackGroup != "" && groups[rule.StackGroup] {
+			rejected = append(rejected, &pb.RejectedPromotion{RuleId: rule.ID, Code: rule.Code, Reason: "STACK_GROUP_CONFLICT"})
+			continue
+		}
+		selected = append(selected, cand)
+		if rule.StackGroup != "" {
+			groups[rule.StackGroup] = true
+		}
+		if rule.Exclusive {
+			exclusiveSelected = true
+		}
+		if len(selected) >= maxPromotionStack {
+			break
+		}
+	}
+	return selected, rejected
+}
+
+// selectBest enumerates all valid subsets for small candidate sets. It is exact
+// and deterministic; for larger sets it falls back to the priority policy so a
+// quote cannot become unbounded.
+func selectBest(candidates []candidate, rejected []*pb.RejectedPromotion) ([]candidate, []*pb.RejectedPromotion) {
+	if len(candidates) == 0 {
+		return nil, rejected
+	}
+	var best []candidate
+	var bestScore int64 = -1
+	total := 1 << len(candidates)
+	for mask := 0; mask < total; mask++ {
+		chosen := make([]candidate, 0, len(candidates))
+		groups := make(map[string]bool)
+		campaigns := make(map[int64]int)
+		exclusive := 0
+		valid := true
+		var score int64
+		for i, cand := range candidates {
+			if mask&(1<<i) == 0 {
+				continue
+			}
+			rule := cand.rule
+			if exclusive > 0 || (rule.Exclusive && len(chosen) > 0) {
+				valid = false
+				break
+			}
+			if rule.Exclusive {
+				exclusive++
+			}
+			if rule.StackGroup != "" && groups[rule.StackGroup] {
+				valid = false
+				break
+			}
+			if strings.EqualFold(rule.CampaignStackMode, "EXCLUSIVE") && campaigns[rule.CampaignID] > 0 {
+				valid = false
+				break
+			}
+			groups[rule.StackGroup] = true
+			campaigns[rule.CampaignID]++
+			chosen = append(chosen, cand)
+			score += cand.amount + cand.shipping
+			if len(chosen) > maxPromotionStack {
+				valid = false
+				break
+			}
+		}
+		if !valid {
+			continue
+		}
+		if score > bestScore {
+			bestScore = score
+			best = chosen
+		}
+	}
+	if bestScore < 0 {
+		best = nil
+	}
+	chosenIDs := make(map[int64]bool, len(best))
+	for _, cand := range best {
+		chosenIDs[cand.rule.ID] = true
+	}
+	for _, cand := range candidates {
+		if !chosenIDs[cand.rule.ID] {
+			rejected = append(rejected, &pb.RejectedPromotion{RuleId: cand.rule.ID, Code: cand.rule.Code, Reason: "BEST_COMBINATION"})
+		}
+	}
+	return best, rejected
 }
 
 func (s *PromotionService) EvaluatePromotions(ctx context.Context, req *pb.PromotionEvaluateRequest) (*pb.PromotionEvaluation, error) {

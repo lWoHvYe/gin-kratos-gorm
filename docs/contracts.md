@@ -208,8 +208,10 @@ budget reservation (`ReservePromotions`), confirmation and release. Quotes carry
 carry the applied promotion snapshot for history and refund allocation.
 
 Rules use `expr-lang/expr` for the condition expression and typed JSON for
-scope/effect. The current stacking policy is deterministic priority/id order with
-exclusive rules, stack groups and a hard stack cap. Budget reservation is
+scope/effect. The stacking policy is deterministic priority/id order by default;
+campaigns can opt into `BEST`, which enumerates the highest-benefit valid subset
+for small candidate sets. Exclusive rules, stack groups, per-campaign
+exclusivity and a hard stack cap are enforced. Budget reservation is
 idempotent by `(order_no, rule_id)` and uses a budget ledger; `0` budget means
 unlimited. Coupons remain separate instruments but participate through the
 `coupon_applied` context and `allow_with_coupon` rule flag. Activity type

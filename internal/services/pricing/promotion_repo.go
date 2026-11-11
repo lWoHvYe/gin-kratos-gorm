@@ -55,6 +55,15 @@ func validCampaignStatus(v string) bool {
 	}
 }
 
+func validStackMode(v string) bool {
+	switch strings.ToUpper(strings.TrimSpace(v)) {
+	case "PRIORITY", "BEST", "EXCLUSIVE":
+		return true
+	default:
+		return false
+	}
+}
+
 func validRuleStatus(v string) bool {
 	switch strings.ToUpper(strings.TrimSpace(v)) {
 	case ruleStatusDraft, ruleStatusActive, ruleStatusPaused:
@@ -117,6 +126,9 @@ func (s *PromotionService) CreateCampaign(ctx context.Context, c *pb.Campaign) (
 	if c.GetEndAtUnix() <= c.GetStartAtUnix() {
 		return nil, apperr.Invalid("campaign end must be after start")
 	}
+	if !validStackMode(defaultString(c.GetStackMode(), "PRIORITY")) {
+		return nil, apperr.Invalid("invalid stack_mode")
+	}
 	res, err := s.db.ExecContext(ctx, `INSERT INTO promotion_campaigns
 		(code,name,type,status,start_at,end_at,priority,budget_cent,per_user_limit,stack_mode)
 		VALUES (?,?,?,?,?,?,?,?,?,?)`,
@@ -151,6 +163,9 @@ func (s *PromotionService) UpdateCampaign(ctx context.Context, c *pb.Campaign) (
 	}
 	if c.GetEndAtUnix() <= c.GetStartAtUnix() {
 		return nil, apperr.Invalid("campaign end must be after start")
+	}
+	if !validStackMode(defaultString(c.GetStackMode(), "PRIORITY")) {
+		return nil, apperr.Invalid("invalid stack_mode")
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE promotion_campaigns SET code=?,name=?,type=?,status=?,start_at=?,end_at=?,
 		priority=?,budget_cent=?,per_user_limit=?,stack_mode=?,version=version+1 WHERE id=?`,
@@ -411,6 +426,16 @@ func (s *PromotionService) ReservePromotions(ctx context.Context, req *pb.Promot
 					return apperr.Failed("promotion per-user limit reached")
 				}
 			}
+			if camp.PerUserLimit > 0 {
+				var used int64
+				if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM promotion_reservations
+					WHERE order_no<>? AND user_id=? AND campaign_id=? AND status IN ('HELD','CONFIRMED')`, orderNo, q.UserID, a.GetCampaignId()).Scan(&used); err != nil {
+					return apperr.Internal("count campaign user promotions", err)
+				}
+				if used >= int64(camp.PerUserLimit) {
+					return apperr.Failed("campaign per-user limit reached")
+				}
+			}
 			resNo := id.New("PR")
 			if _, err := tx.ExecContext(ctx, `INSERT INTO promotion_reservations
 				(reservation_no,quote_id,order_no,user_id,rule_id,campaign_id,amount_cent,status,idempotency_key,expires_at)
@@ -598,4 +623,35 @@ func defaultString(v, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+// ReleaseExpired releases HELD reservations whose quote/order window has
+// elapsed. It is safe to run periodically on every pricing replica because the
+// settle path locks the rows and only transitions HELD reservations.
+func (s *PromotionService) ReleaseExpired(ctx context.Context, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT order_no FROM promotion_reservations
+		WHERE status='HELD' AND expires_at IS NOT NULL AND expires_at <= NOW(3) ORDER BY id LIMIT ?`, limit)
+	if err != nil {
+		return 0, apperr.Internal("scan expired promotions", err)
+	}
+	var orders []string
+	for rows.Next() {
+		var orderNo string
+		if err := rows.Scan(&orderNo); err == nil && orderNo != "" {
+			orders = append(orders, orderNo)
+		}
+	}
+	rows.Close()
+	released := 0
+	for _, orderNo := range orders {
+		if err := s.settlePromotions(ctx, orderNo, "RELEASED"); err != nil {
+			s.log.Warn("release expired promotion", "order_no", orderNo, "error", err)
+			continue
+		}
+		released++
+	}
+	return released, rows.Err()
 }

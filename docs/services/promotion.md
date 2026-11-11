@@ -62,3 +62,16 @@ promotion engine remains the eligibility/price/budget source.
 
 The `PromotionService` is registered on the pricing gRPC server (`9005`) and
 uses the `mall_pricing` schema. No separate deployment is required in Phase 2.
+
+## BEST stacking and expiry
+
+Campaign `stack_mode=BEST` selects the exact highest-benefit valid subset for up
+to 12 candidates (exclusive rules, stack groups, per-campaign exclusivity and the
+stack cap are enforced); larger sets fall back to priority order. `PRIORITY`
+remains deterministic priority/id. The admin BFF exposes
+`POST /api/admin/v1/promotions/evaluate` as a simulator with applied and rejected
+candidates.
+
+The pricing process runs a one-minute reservation expiry sweeper. It releases
+`HELD` reservations whose quote window elapsed and writes `RELEASE` budget
+ledger rows; normal order cancellation/payment remains the primary path.

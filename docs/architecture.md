@@ -81,3 +81,10 @@ grow beyond the current shallow shape.
 contract check. `make test-race` runs the race detector. Wire generation is a
 separate explicit step (`make wire`) because it rewrites committed generated
 files.
+
+## Seckill
+
+Seckill is designed as an isolated admission/worker subsystem rather than a
+decorator on the quote path. See [seckill-design.md](seckill-design.md) for the
+stock bucket, Redis Lua, NATS JetStream, compensation, reconciliation and
+load/HA requirements.

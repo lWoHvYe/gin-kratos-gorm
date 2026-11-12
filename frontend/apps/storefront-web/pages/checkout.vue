@@ -1,7 +1,7 @@
 <script setup lang="ts">
 interface Address { id: number; receiver: string; phone: string; detail: string }
 interface QuoteLine { sku_id: number; name: string; price_cent: number; quantity: number; discount_cent: number }
-interface Quote { quote_id: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; freight_cent: number; pay_cent: number; lines: QuoteLine[] }
+interface Quote { quote_id: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; coupon_discount_cent: number; freight_cent: number; pay_cent: number; lines: QuoteLine[] }
 interface PlaceReply { order: { order_no: string }; payment: { payment_no: string; amount_cent: number } }
 const { request, token } = useApi()
 const addresses = ref<Address[]>([])
@@ -9,7 +9,18 @@ const addressId = ref<number | null>(null)
 const quote = ref<Quote | null>(null)
 const message = ref('')
 const loading = ref(false)
+const couponId = ref('')
 const router = useRouter()
+
+async function preview(): Promise<void> {
+  message.value = ''
+  try {
+    quote.value = await request<Quote>('/api/v1/checkout/preview', {
+      method: 'POST',
+      body: { address_id: addressId.value, coupon_id: couponId.value.trim() || undefined },
+    })
+  } catch (err) { message.value = err instanceof Error ? err.message : '结算预览失败' }
+}
 
 onMounted(async () => {
   if (!token.value) return
@@ -17,7 +28,7 @@ onMounted(async () => {
     const reply = await request<{ addresses: Address[] }>('/api/v1/addresses')
     addresses.value = reply.addresses ?? []
     addressId.value = addresses.value[0]?.id ?? null
-    quote.value = await request<Quote>('/api/v1/checkout/preview', { method: 'POST', body: { address_id: addressId.value } })
+    await preview()
   } catch (err) { message.value = err instanceof Error ? err.message : '结算预览失败' }
 })
 
@@ -53,12 +64,17 @@ async function place(): Promise<void> {
         </van-cell>
       </div>
       <div v-else class="panel-empty"><van-empty description="请先在账户中添加收货地址" /><NuxtLink to="/addresses"><van-button type="primary" block>去添加地址</van-button></NuxtLink></div>
+      <div class="coupon-row">
+        <van-field v-model="couponId" label="优惠券" placeholder="输入券码 / ID" />
+        <van-button size="small" @click="preview">应用</van-button>
+      </div>
       <template v-if="quote">
         <h3>商品</h3>
         <div v-for="line in quote.lines" :key="line.sku_id" class="line"><span>{{ line.name }} × {{ line.quantity }}</span><span>¥{{ ((line.price_cent * line.quantity - line.discount_cent) / 100).toFixed(2) }}</span></div>
         <div class="totals">
           <div><span>商品</span><span>¥{{ (quote.total_cent / 100).toFixed(2) }}</span></div>
           <div><span>促销优惠</span><span>-¥{{ (quote.promotion_discount_cent / 100).toFixed(2) }}</span></div>
+          <div><span>优惠券</span><span>-¥{{ (quote.coupon_discount_cent / 100).toFixed(2) }}</span></div>
           <div><span>运费</span><span>¥{{ (quote.freight_cent / 100).toFixed(2) }}</span></div>
           <div class="grand"><span>应付</span><span>¥{{ (quote.pay_cent / 100).toFixed(2) }}</span></div>
         </div>
@@ -71,6 +87,7 @@ async function place(): Promise<void> {
 <style scoped>
 .panel { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:16px; }
 h3 { margin:18px 0 8px; font-size:16px; }
+.coupon-row { display:flex; gap:8px; align-items:center; margin-top:12px; }
 .line { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f1f5f9; }
 .totals { display:grid; gap:6px; margin:16px 0; }
 .totals div { display:flex; justify-content:space-between; }

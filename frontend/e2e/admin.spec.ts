@@ -14,4 +14,6 @@ test('admin can log in and open promotion operations', async ({ page }) => {
   await expect(page.getByText('活动', { exact: true }).first()).toBeVisible()
   await page.goto('/admin/promotions/simulator')
   await expect(page.getByText('促销模拟器').first()).toBeVisible()
+  await page.goto('/admin/promotions/budget')
+  await expect(page.getByText('促销预算').first()).toBeVisible()
 })

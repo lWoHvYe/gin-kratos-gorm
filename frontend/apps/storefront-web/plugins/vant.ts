@@ -8,6 +8,7 @@ import {
   Form,
   NavBar,
   Search,
+  Stepper,
   Tabbar,
   TabbarItem,
   Tag,
@@ -24,6 +25,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     .use(Form)
     .use(NavBar)
     .use(Search)
+    .use(Stepper)
     .use(Tabbar)
     .use(TabbarItem)
     .use(Tag)

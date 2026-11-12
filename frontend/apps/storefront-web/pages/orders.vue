@@ -14,11 +14,11 @@ const { data, pending } = await useAsyncData('orders', async () => {
     <div v-else-if="pending" class="state">加载中…</div>
     <div v-else-if="!data?.orders?.length" class="panel"><van-empty description="暂无订单" /></div>
     <div v-else class="panel">
-      <div v-for="order in data?.orders ?? []" :key="order.order_no" class="order">
+      <NuxtLink v-for="order in data?.orders ?? []" :key="order.order_no" :to="`/orders/${order.order_no}`" class="order">
         <div class="mono">{{ order.order_no }}</div>
         <div class="row"><van-tag>{{ order.status }}</van-tag><span class="price">¥{{ (order.pay_cent / 100).toFixed(2) }}</span></div>
         <div class="muted">{{ new Date(order.created_at_unix * 1000).toLocaleString() }}</div>
-      </div>
+      </NuxtLink>
     </div>
   </div>
 </template>

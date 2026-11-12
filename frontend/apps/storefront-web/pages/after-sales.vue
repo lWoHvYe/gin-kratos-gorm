@@ -14,12 +14,12 @@ const { data, pending } = await useAsyncData('after-sales', async () => {
     <div v-else-if="pending" class="state">加载中…</div>
     <div v-else-if="!data?.after_sales?.length" class="panel"><van-empty description="暂无售后" /></div>
     <div v-else class="panel">
-      <div v-for="item in data?.after_sales ?? []" :key="item.after_sale_no" class="order">
+      <NuxtLink v-for="item in data?.after_sales ?? []" :key="item.after_sale_no" :to="`/after-sales/${item.after_sale_no}`" class="order">
         <div class="mono">{{ item.after_sale_no }}</div>
         <div class="row"><van-tag>{{ item.type }}</van-tag><van-tag type="warning">{{ item.status }}</van-tag></div>
         <div class="muted">订单 {{ item.order_no }}</div>
         <div class="price">退款 ¥{{ (item.refunded_cent / 100).toFixed(2) }}</div>
-      </div>
+      </NuxtLink>
     </div>
   </div>
 </template>

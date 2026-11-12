@@ -313,9 +313,12 @@ Implemented in this iteration:
 - `frontend/` pnpm workspace with Turborepo
 - `apps/admin-web`: Vue 3 + TypeScript + Vite + Element Plus, login/layout,
   dashboard, categories/brands, product/SKU editor, inventory, orders/shipments,
-  after-sales, campaign/rule CRUD and promotion simulator
+  after-sales, campaign/rule CRUD, structured scope/effect helpers, promotion
+  simulator and budget/reservation visibility
 - `apps/storefront-web`: Nuxt 3 + Vant, SSR product list/detail, login, cart,
-  checkout preview/place/mock pay, orders, after-sales, addresses
+  checkout preview/place/mock pay with coupon input, order detail and
+  cancel/receive actions, address management, after-sales application and
+  return tracking
 - `packages/api`: typed BFF client with error envelope and token handling
 - `packages/utils`, `packages/design-tokens`
 - Admin/storefront Nginx/Nuxt Dockerfiles and K8s Deployment/Service/HTTPRoute

@@ -53,9 +53,11 @@ in-cluster gateway for server-side rendering.
 ## Scope
 
 This is the initial admin/storefront foundation. The admin app currently covers
-login, catalog, inventory, orders, shipments, after-sales and promotion
-campaign/rule editing plus the promotion simulator. The storefront covers
-product browse/detail, login, cart, checkout preview/place/mock pay, orders and
-after-sales lists. Advanced storefront features, RBAC and a generated OpenAPI
+login, catalog, inventory, orders, shipments, after-sales, promotion
+campaign/rule editing, a structured scope/effect helper, the promotion simulator
+and budget/reservation visibility. The storefront covers product browse/detail,
+login, cart, checkout preview/place/mock pay with coupon selection, order detail
+and cancellation/receipt, address management, after-sales application and
+return tracking. Advanced storefront features, RBAC and a generated OpenAPI
 client are planned follow-ups; the API package is the single place to update
 when BFF contracts change.

@@ -16,6 +16,13 @@ const query = useQuery({
 })
 const dialog = ref(false)
 const editing = ref<PromotionRule | null>(null)
+const scopeType = ref('ALL')
+const scopeIds = ref('')
+const effectType = ref('FIXED_AMOUNT')
+const effectAmount = ref('5.00')
+const effectPercent = ref(10)
+const effectMax = ref('0.00')
+const effectShipping = ref('10.00')
 const form = reactive({
   campaign_id: 0, code: '', name: '', type: 'FIXED_AMOUNT', status: 'DRAFT', priority: 100,
   exclusive: false, stack_group: '', scope_json: '{"all":true}', condition_expr: 'subtotal_cent >= 1000',
@@ -31,6 +38,8 @@ function openCreate(): void {
     effect_json: '{"type":"FIXED_AMOUNT","amount_cent":500}', budget: '0', max_discount: '0', per_user_limit: 0,
     allow_with_coupon: true, start: new Date(), end: new Date(Date.now() + 24 * 3600 * 1000),
   })
+  scopeType.value = 'ALL'; scopeIds.value = ''
+  effectType.value = 'FIXED_AMOUNT'; effectAmount.value = '5.00'; effectPercent.value = 10; effectMax.value = '0.00'; effectShipping.value = '10.00'
   dialog.value = true
 }
 function openEdit(row: PromotionRule): void {
@@ -42,8 +51,35 @@ function openEdit(row: PromotionRule): void {
     max_discount: (row.max_discount_cent / 100).toFixed(2), per_user_limit: row.per_user_limit,
     allow_with_coupon: row.allow_with_coupon, start: new Date(row.start_at_unix * 1000), end: new Date(row.end_at_unix * 1000),
   })
+  try {
+    const scope = JSON.parse(row.scope_json) as { type?: string; ids?: number[]; all?: boolean }
+    scopeType.value = scope.all ? 'ALL' : (scope.type || 'ALL')
+    scopeIds.value = (scope.ids ?? []).join(',')
+    const effect = JSON.parse(row.effect_json) as { type?: string; amount_cent?: number; percent?: number; max_discount_cent?: number; shipping_cent?: number }
+    effectType.value = effect.type || 'FIXED_AMOUNT'
+    effectAmount.value = ((effect.amount_cent ?? 0) / 100).toFixed(2)
+    effectPercent.value = effect.percent ?? 10
+    effectMax.value = ((effect.max_discount_cent ?? 0) / 100).toFixed(2)
+    effectShipping.value = ((effect.shipping_cent ?? 1000) / 100).toFixed(2)
+  } catch { /* keep raw JSON; builder is optional */ }
   dialog.value = true
 }
+function buildScope(): void {
+  if (scopeType.value === 'ALL') { form.scope_json = '{"all":true}'; return }
+  const ids = scopeIds.value.split(',').map((v) => Number(v.trim())).filter((v) => Number.isFinite(v) && v > 0)
+  form.scope_json = JSON.stringify({ type: scopeType.value, ids })
+}
+
+function buildEffect(): void {
+  if (effectType.value === 'FIXED_AMOUNT') {
+    form.effect_json = JSON.stringify({ type: 'FIXED_AMOUNT', amount_cent: centsFromInput(effectAmount.value) })
+  } else if (effectType.value === 'PERCENT') {
+    form.effect_json = JSON.stringify({ type: 'PERCENT', percent: effectPercent.value, max_discount_cent: centsFromInput(effectMax.value) })
+  } else if (effectType.value === 'FREE_SHIPPING') {
+    form.effect_json = JSON.stringify({ type: 'FREE_SHIPPING', shipping_cent: centsFromInput(effectShipping.value) })
+  }
+}
+
 function validateJSON(value: string, label: string): void {
   try { JSON.parse(value) } catch { throw new Error(`${label} 不是合法 JSON`) }
 }
@@ -116,8 +152,29 @@ const campaignName = (id: number) => campaigns.data.value?.campaigns?.find((c) =
           <el-col :span="8"><el-form-item label="独占"><el-switch v-model="form.exclusive" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="可叠加券"><el-switch v-model="form.allow_with_coupon" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="叠加组"><el-input v-model="form.stack_group" placeholder="同组互斥" /></el-form-item></el-col>
+          <el-col :span="24">
+            <el-form-item label="可视化范围">
+              <div class="builder-row">
+                <el-select v-model="scopeType" style="width:130px"><el-option label="全部" value="ALL" /><el-option label="SKU" value="SKU" /><el-option label="SPU" value="SPU" /><el-option label="分类" value="CATEGORY" /><el-option label="品牌" value="BRAND" /></el-select>
+                <el-input v-if="scopeType !== 'ALL'" v-model="scopeIds" placeholder="ID，逗号分隔，例如 1,2,3" />
+                <el-button @click="buildScope">生成 scope JSON</el-button>
+              </div>
+            </el-form-item>
+          </el-col>
           <el-col :span="24"><el-form-item label="适用范围 scope_json"><el-input v-model="form.scope_json" type="textarea" :rows="2" placeholder='{"all":true} 或 {"type":"SKU","ids":[1,2]}' /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="条件表达式 condition_expr"><el-input v-model="form.condition_expr" type="textarea" :rows="2" placeholder="subtotal_cent >= 1000 && quantity >= 2" /></el-form-item></el-col>
+          <el-col :span="24">
+            <el-form-item label="可视化优惠效果">
+              <div class="builder-row">
+                <el-select v-model="effectType" style="width:150px"><el-option label="固定金额" value="FIXED_AMOUNT" /><el-option label="折扣率" value="PERCENT" /><el-option label="免运费" value="FREE_SHIPPING" /></el-select>
+                <el-input v-if="effectType === 'FIXED_AMOUNT'" v-model="effectAmount" placeholder="优惠金额（元）" style="width:150px" />
+                <el-input v-if="effectType === 'PERCENT'" v-model.number="effectPercent" type="number" placeholder="折扣百分比" style="width:130px" />
+                <el-input v-if="effectType === 'PERCENT'" v-model="effectMax" placeholder="最大优惠（元）" style="width:150px" />
+                <el-input v-if="effectType === 'FREE_SHIPPING'" v-model="effectShipping" placeholder="运费（元）" style="width:130px" />
+                <el-button @click="buildEffect">生成 effect JSON</el-button>
+              </div>
+            </el-form-item>
+          </el-col>
           <el-col :span="24"><el-form-item label="优惠效果 effect_json"><el-input v-model="form.effect_json" type="textarea" :rows="3" /></el-form-item></el-col>
         </el-row>
       </el-form>
@@ -126,4 +183,7 @@ const campaignName = (id: number) => campaigns.data.value?.campaigns?.find((c) =
   </div>
 </template>
 
-<style scoped>.pager { margin-top: 16px; justify-content: flex-end; }</style>
+<style scoped>
+.pager { margin-top: 16px; justify-content: flex-end; }
+.builder-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%; }
+</style>

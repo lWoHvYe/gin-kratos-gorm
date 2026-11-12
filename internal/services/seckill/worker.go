@@ -63,6 +63,7 @@ func (s *Service) handleCommand(ctx context.Context, msg *nats.Msg) {
 			_ = msg.NakWithDelay(5 * time.Second)
 			return
 		}
+		s.publishDLQ(ctx, cmd, err)
 		s.failQualification(ctx, cmd, err)
 		_ = msg.Term()
 		return
@@ -141,4 +142,22 @@ func delivery(msg *nats.Msg) uint64 {
 		return meta.NumDelivered
 	}
 	return 1
+}
+
+func (s *Service) publishDLQ(ctx context.Context, cmd orderCommand, cause error) {
+	if s.mq == nil || s.mq.JS == nil {
+		return
+	}
+	payload, err := json.Marshal(map[string]any{
+		"command": cmd, "error": cause.Error(), "failed_at": time.Now().Unix(),
+	})
+	if err != nil {
+		return
+	}
+	msg := nats.NewMsg(fmt.Sprintf("seckill.order.dlq.%d", cmd.ActivityID))
+	msg.Data = payload
+	msg.Header.Set("Nats-Msg-Id", "dlq-"+cmd.TokenHash)
+	if _, err := s.mq.JS.PublishMsg(msg, nats.Context(ctx)); err != nil {
+		s.log.Error("publish seckill DLQ", "activity_id", cmd.ActivityID, "error", err)
+	}
 }

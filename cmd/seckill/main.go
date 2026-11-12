@@ -91,6 +91,8 @@ func main() {
 	go svc.RunQualificationExpiry(ctx, 30*time.Second)
 	go svc.RunRepublisher(ctx, 10*time.Second)
 	go svc.RunOrderWorker(ctx, 4)
+	go seckill.RunOrderCancelledConsumer(ctx, client, svc, logger)
+	go svc.RunReconciler(ctx, 30*time.Second)
 	gs := grpcx.NewServer(logger)
 	pb.RegisterSeckillServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))

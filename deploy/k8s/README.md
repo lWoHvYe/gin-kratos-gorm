@@ -80,3 +80,7 @@ make mesh-smoke
 
 The smoke script waits for pods, checks Ambient enrollment and STRICT mTLS,
 port-forwards gateway/admin, and runs the existing C-end/DTM smoke.
+
+## Browser access
+
+The frontends are at `http://mall.local/` and `/admin/` when `mall.local` resolves to the Gateway LoadBalancer. See [../../docs/access.md](../../docs/access.md) for hosts and port-forward instructions.

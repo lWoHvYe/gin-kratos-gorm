@@ -1,8 +1,9 @@
 # Seckill service
 
-Status: S3 (activity lifecycle, inventory bucket, Redis Lua admission, durable
-holds/expiry, JetStream order worker, fixed-price order creation and payment
-intent). Production load/HA/reconciliation remain S4.
+Status: S3 plus S4 hardening (activity lifecycle, inventory bucket, Redis Lua
+admission, durable holds/expiry, JetStream order worker, fixed-price order
+creation and payment intent, cancellation projection, DLQ publish, report-only
+reconciler). Production load/HA/WAF remain open.
 
 ## Ports
 

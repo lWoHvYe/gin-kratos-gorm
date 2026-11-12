@@ -208,3 +208,7 @@ File ownership: [docs/ownership.md](docs/ownership.md).
 ## Frontend
 
 See [docs/frontend-plan.md](docs/frontend-plan.md) and [frontend/README.md](frontend/README.md).
+
+## Access
+
+See [docs/access.md](docs/access.md) for the live `mall.local` route and port-forward fallback.

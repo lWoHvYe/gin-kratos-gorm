@@ -23,6 +23,8 @@ const effectAmount = ref('5.00')
 const effectPercent = ref(10)
 const effectMax = ref('0.00')
 const effectShipping = ref('10.00')
+const conditionSubtotal = ref('10.00')
+const conditionQuantity = ref(1)
 const form = reactive({
   campaign_id: 0, code: '', name: '', type: 'FIXED_AMOUNT', status: 'DRAFT', priority: 100,
   exclusive: false, stack_group: '', scope_json: '{"all":true}', condition_expr: 'subtotal_cent >= 1000',
@@ -40,6 +42,7 @@ function openCreate(): void {
   })
   scopeType.value = 'ALL'; scopeIds.value = ''
   effectType.value = 'FIXED_AMOUNT'; effectAmount.value = '5.00'; effectPercent.value = 10; effectMax.value = '0.00'; effectShipping.value = '10.00'
+  conditionSubtotal.value = '10.00'; conditionQuantity.value = 1
   dialog.value = true
 }
 function openEdit(row: PromotionRule): void {
@@ -64,6 +67,13 @@ function openEdit(row: PromotionRule): void {
   } catch { /* keep raw JSON; builder is optional */ }
   dialog.value = true
 }
+function buildCondition(): void {
+  const parts: string[] = []
+  if (centsFromInput(conditionSubtotal.value) > 0) parts.push(`subtotal_cent >= ${centsFromInput(conditionSubtotal.value)}`)
+  if (conditionQuantity.value > 0) parts.push(`quantity >= ${conditionQuantity.value}`)
+  form.condition_expr = parts.length ? parts.join(' && ') : 'true'
+}
+
 function buildScope(): void {
   if (scopeType.value === 'ALL') { form.scope_json = '{"all":true}'; return }
   const ids = scopeIds.value.split(',').map((v) => Number(v.trim())).filter((v) => Number.isFinite(v) && v > 0)
@@ -162,6 +172,15 @@ const campaignName = (id: number) => campaigns.data.value?.campaigns?.find((c) =
             </el-form-item>
           </el-col>
           <el-col :span="24"><el-form-item label="适用范围 scope_json"><el-input v-model="form.scope_json" type="textarea" :rows="2" placeholder='{"all":true} 或 {"type":"SKU","ids":[1,2]}' /></el-form-item></el-col>
+          <el-col :span="24">
+            <el-form-item label="常用条件构建器">
+              <div class="builder-row">
+                <el-input v-model="conditionSubtotal" placeholder="最低金额（元）" style="width:150px" />
+                <el-input-number v-model="conditionQuantity" :min="0" placeholder="最低件数" />
+                <el-button @click="buildCondition">生成条件表达式</el-button>
+              </div>
+            </el-form-item>
+          </el-col>
           <el-col :span="24"><el-form-item label="条件表达式 condition_expr"><el-input v-model="form.condition_expr" type="textarea" :rows="2" placeholder="subtotal_cent >= 1000 && quantity >= 2" /></el-form-item></el-col>
           <el-col :span="24">
             <el-form-item label="可视化优惠效果">

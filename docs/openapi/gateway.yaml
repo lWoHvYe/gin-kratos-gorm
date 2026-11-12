@@ -1,0 +1,407 @@
+openapi: 3.0.3
+info:
+  title: Mall Gateway BFF
+  version: 1.0.0
+  description: Public/customer HTTP API exposed by the mall gateway.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+        request_id: { type: string }
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+    LoginReply:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        user:
+          type: object
+          properties:
+            id: { type: integer, format: int64 }
+            username: { type: string }
+            nickname: { type: string }
+            roles: { type: array, items: { type: string } }
+    Sku:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        spu_id: { type: integer, format: int64 }
+        sku_code: { type: string }
+        specs_json: { type: string }
+        price_cent: { type: integer, format: int64 }
+        stock: { type: integer, format: int64 }
+        status: { type: string }
+    Product:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        category_id: { type: integer, format: int64 }
+        brand_id: { type: integer, format: int64 }
+        name: { type: string }
+        subtitle: { type: string }
+        description: { type: string }
+        main_image: { type: string }
+        status: { type: string }
+        min_price_cent: { type: integer, format: int64 }
+        skus:
+          type: array
+          items: { $ref: '#/components/schemas/Sku' }
+    CartItem:
+      type: object
+      properties:
+        sku_id: { type: integer, format: int64 }
+        name: { type: string }
+        price_cent: { type: integer, format: int64 }
+        quantity: { type: integer }
+        selected: { type: boolean }
+    Cart:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CartItem' }
+        total_cent: { type: integer, format: int64 }
+    QuoteRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              sku_id: { type: integer, format: int64 }
+              quantity: { type: integer }
+        address_id: { type: integer, format: int64 }
+        coupon_id: { type: string }
+    Quote:
+      type: object
+      properties:
+        quote_id: { type: string }
+        total_cent: { type: integer, format: int64 }
+        discount_cent: { type: integer, format: int64 }
+        promotion_discount_cent: { type: integer, format: int64 }
+        coupon_discount_cent: { type: integer, format: int64 }
+        freight_cent: { type: integer, format: int64 }
+        pay_cent: { type: integer, format: int64 }
+        applied_promotions_json: { type: string }
+        promotion_version: { type: integer, format: int64 }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              sku_id: { type: integer, format: int64 }
+              name: { type: string }
+              price_cent: { type: integer, format: int64 }
+              quantity: { type: integer }
+              discount_cent: { type: integer, format: int64 }
+    Order:
+      type: object
+      properties:
+        order_no: { type: string }
+        user_id: { type: integer, format: int64 }
+        status: { type: string }
+        total_cent: { type: integer, format: int64 }
+        discount_cent: { type: integer, format: int64 }
+        promotion_discount_cent: { type: integer, format: int64 }
+        applied_promotions_json: { type: string }
+        freight_cent: { type: integer, format: int64 }
+        pay_cent: { type: integer, format: int64 }
+        paid_cent: { type: integer, format: int64 }
+        refunded_cent: { type: integer, format: int64 }
+        refund_status: { type: string }
+        receiver_name: { type: string }
+        receiver_phone: { type: string }
+        receiver_address: { type: string }
+        created_at_unix: { type: integer, format: int64 }
+        expire_at_unix: { type: integer, format: int64 }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              sku_id: { type: integer, format: int64 }
+              name: { type: string }
+              price_cent: { type: integer, format: int64 }
+              quantity: { type: integer }
+              discount_cent: { type: integer, format: int64 }
+    AfterSale:
+      type: object
+      properties:
+        after_sale_no: { type: string }
+        order_no: { type: string }
+        user_id: { type: integer, format: int64 }
+        type: { type: string }
+        status: { type: string }
+        amount_cent: { type: integer, format: int64 }
+        reason: { type: string }
+        return_carrier: { type: string }
+        return_tracking_no: { type: string }
+        refund_no: { type: string }
+        refunded_cent: { type: integer, format: int64 }
+        created_at_unix: { type: integer, format: int64 }
+    Address:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        receiver: { type: string }
+        phone: { type: string }
+        province: { type: string }
+        city: { type: string }
+        district: { type: string }
+        detail: { type: string }
+        is_default: { type: integer }
+paths:
+  /api/v1/auth/login:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginReply' }
+  /api/v1/products:
+    get:
+      security: []
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: category_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: brand_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  products:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+  /api/v1/products/{id}:
+    get:
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: product
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+  /api/v1/cart:
+    get:
+      responses:
+        '200':
+          description: cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+  /api/v1/checkout/preview:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuoteRequest' }
+      responses:
+        '200':
+          description: quote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+  /api/v1/checkout/place:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quote_id: { type: string }
+                address_id: { type: integer, format: int64 }
+                client_request_id: { type: string }
+      responses:
+        '201':
+          description: placed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+                  payment:
+                    type: object
+                    properties:
+                      payment_no: { type: string }
+                      amount_cent: { type: integer, format: int64 }
+  /api/v1/orders:
+    get:
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+      responses:
+        '200':
+          description: orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  orders:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+  /api/v1/orders/{orderNo}:
+    get:
+      parameters:
+        - { name: orderNo, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+  /api/v1/orders/{orderNo}/cancel:
+    post:
+      parameters:
+        - { name: orderNo, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { reason: { type: string } }
+      responses:
+        '200':
+          description: cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+  /api/v1/orders/{orderNo}/receive:
+    post:
+      parameters:
+        - { name: orderNo, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: received
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+  /api/v1/after-sales:
+    get:
+      responses:
+        '200':
+          description: after-sales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  after_sales:
+                    type: array
+                    items: { $ref: '#/components/schemas/AfterSale' }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order_no: { type: string }
+                type: { type: string }
+                reason: { type: string }
+                amount_cent: { type: integer, format: int64 }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      sku_id: { type: integer, format: int64 }
+                      quantity: { type: integer }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AfterSale' }
+  /api/v1/after-sales/{no}:
+    get:
+      parameters:
+        - { name: no, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: after-sale
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AfterSale' }
+  /api/v1/after-sales/{no}/return-tracking:
+    post:
+      parameters:
+        - { name: no, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                carrier: { type: string }
+                tracking_no: { type: string }
+      responses:
+        '200':
+          description: tracking submitted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AfterSale' }
+  /api/v1/addresses:
+    get:
+      responses:
+        '200':
+          description: addresses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  addresses:
+                    type: array
+                    items: { $ref: '#/components/schemas/Address' }
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Address' }
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }

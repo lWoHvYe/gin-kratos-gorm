@@ -10,11 +10,13 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "playwright test --config=e2e/playwright.config.ts",
+    "generate:api": "openapi-typescript ../docs/openapi/gateway.yaml -o packages/api/src/generated/gateway.ts && openapi-typescript ../docs/openapi/admin.yaml -o packages/api/src/generated/admin.ts",
     "lint": "turbo run lint",
     "format": "prettier --write ."
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.6.2",
     "turbo": "2.11.10",
     "typescript": "5.9.3"

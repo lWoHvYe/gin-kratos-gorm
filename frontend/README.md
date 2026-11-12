@@ -34,10 +34,15 @@ The storefront dev server proxies `/api` to the gateway; SSR uses
 ## Checks
 
 ```bash
+pnpm generate:api
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm test:e2e   # needs the live cluster and the host-resolver mapping in e2e config
 ```
+
+The OpenAPI documents live in `docs/openapi/`. CI regenerates the committed
+`packages/api/src/generated/` files and fails on drift.
 
 ## Images
 

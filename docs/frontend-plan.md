@@ -319,7 +319,8 @@ Implemented in this iteration:
   checkout preview/place/mock pay with coupon input, order detail and
   cancel/receive actions, address management, after-sales application and
   return tracking
-- `packages/api`: typed BFF client with error envelope and token handling
+- `packages/api`: typed BFF client with error envelope and token handling,
+  plus OpenAPI-generated path/component types (`docs/openapi`, `pnpm generate:api`)
 - `packages/utils`, `packages/design-tokens`
 - Admin/storefront Nginx/Nuxt Dockerfiles and K8s Deployment/Service/HTTPRoute
   integration at `/admin` and `/`
@@ -328,8 +329,9 @@ Implemented in this iteration:
 
 Known follow-ups:
 
-- OpenAPI contract generation (the first client is hand-typed and centralized in
-  `packages/api`)
+- Expand OpenAPI coverage as new BFF routes are added; generated types are in
+  `packages/api/src/generated/` and the hand-written client still owns runtime
+  behavior
 - refresh-token HttpOnly cookie (current SPA stores the access token in
   sessionStorage for the admin MVP)
 - image upload/object storage; product editor currently accepts URLs

@@ -1,0 +1,432 @@
+openapi: 3.0.3
+info:
+  title: Mall Admin BFF
+  version: 1.0.0
+  description: Internal admin HTTP API. All routes require an admin bearer token.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+        request_id: { type: string }
+    Category:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        parent_id: { type: integer, format: int64 }
+        name: { type: string }
+        level: { type: integer }
+        sort: { type: integer }
+        status: { type: string }
+    Brand:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        logo: { type: string }
+        status: { type: string }
+    Sku:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        spu_id: { type: integer, format: int64 }
+        sku_code: { type: string }
+        specs_json: { type: string }
+        price_cent: { type: integer, format: int64 }
+        stock: { type: integer, format: int64 }
+        status: { type: string }
+        image_url: { type: string }
+    Product:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        category_id: { type: integer, format: int64 }
+        brand_id: { type: integer, format: int64 }
+        name: { type: string }
+        subtitle: { type: string }
+        description: { type: string }
+        main_image: { type: string }
+        status: { type: string }
+        min_price_cent: { type: integer, format: int64 }
+        skus:
+          type: array
+          items: { $ref: '#/components/schemas/Sku' }
+    Stock:
+      type: object
+      properties:
+        sku_id: { type: integer, format: int64 }
+        warehouse_id: { type: integer, format: int64 }
+        on_hand: { type: integer, format: int64 }
+        reserved: { type: integer, format: int64 }
+        available: { type: integer, format: int64 }
+    OrderItem:
+      type: object
+      properties:
+        sku_id: { type: integer, format: int64 }
+        name: { type: string }
+        price_cent: { type: integer, format: int64 }
+        quantity: { type: integer }
+        discount_cent: { type: integer, format: int64 }
+    Order:
+      type: object
+      properties:
+        order_no: { type: string }
+        user_id: { type: integer, format: int64 }
+        status: { type: string }
+        total_cent: { type: integer, format: int64 }
+        discount_cent: { type: integer, format: int64 }
+        promotion_discount_cent: { type: integer, format: int64 }
+        applied_promotions_json: { type: string }
+        freight_cent: { type: integer, format: int64 }
+        pay_cent: { type: integer, format: int64 }
+        paid_cent: { type: integer, format: int64 }
+        refunded_cent: { type: integer, format: int64 }
+        refund_status: { type: string }
+        receiver_name: { type: string }
+        receiver_phone: { type: string }
+        receiver_address: { type: string }
+        created_at_unix: { type: integer, format: int64 }
+        expire_at_unix: { type: integer, format: int64 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+    Campaign:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string }
+        status: { type: string }
+        start_at_unix: { type: integer, format: int64 }
+        end_at_unix: { type: integer, format: int64 }
+        priority: { type: integer }
+        budget_cent: { type: integer, format: int64 }
+        reserved_cent: { type: integer, format: int64 }
+        consumed_cent: { type: integer, format: int64 }
+        per_user_limit: { type: integer }
+        stack_mode: { type: string }
+        version: { type: integer, format: int64 }
+    PromotionRule:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        campaign_id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string }
+        status: { type: string }
+        priority: { type: integer }
+        exclusive: { type: boolean }
+        stack_group: { type: string }
+        scope_json: { type: string }
+        condition_expr: { type: string }
+        effect_json: { type: string }
+        max_discount_cent: { type: integer, format: int64 }
+        budget_cent: { type: integer, format: int64 }
+        reserved_cent: { type: integer, format: int64 }
+        consumed_cent: { type: integer, format: int64 }
+        per_user_limit: { type: integer }
+        allow_with_coupon: { type: boolean }
+        start_at_unix: { type: integer, format: int64 }
+        end_at_unix: { type: integer, format: int64 }
+        version: { type: integer, format: int64 }
+    PromotionEvaluationRequest:
+      type: object
+      required: [user_id, items]
+      properties:
+        user_id: { type: integer, format: int64 }
+        coupon_applied: { type: boolean }
+        items:
+          type: array
+          items:
+            type: object
+            required: [sku_id, price_cent, quantity]
+            properties:
+              sku_id: { type: integer, format: int64 }
+              spu_id: { type: integer, format: int64 }
+              category_id: { type: integer, format: int64 }
+              brand_id: { type: integer, format: int64 }
+              price_cent: { type: integer, format: int64 }
+              quantity: { type: integer }
+    PromotionEvaluation:
+      type: object
+      properties:
+        applied:
+          type: array
+          items:
+            type: object
+            properties:
+              rule_id: { type: integer, format: int64 }
+              campaign_id: { type: integer, format: int64 }
+              code: { type: string }
+              name: { type: string }
+              type: { type: string }
+              amount_cent: { type: integer, format: int64 }
+              shipping_cent: { type: integer, format: int64 }
+        rejected:
+          type: array
+          items:
+            type: object
+            properties:
+              rule_id: { type: integer, format: int64 }
+              code: { type: string }
+              reason: { type: string }
+        discount_cent: { type: integer, format: int64 }
+        shipping_discount_cent: { type: integer, format: int64 }
+        promotion_version: { type: integer, format: int64 }
+        snapshot_json: { type: string }
+    PromotionReservation:
+      type: object
+      properties:
+        reservation_no: { type: string }
+        quote_id: { type: string }
+        order_no: { type: string }
+        user_id: { type: integer, format: int64 }
+        rule_id: { type: integer, format: int64 }
+        campaign_id: { type: integer, format: int64 }
+        amount_cent: { type: integer, format: int64 }
+        status: { type: string }
+        created_at_unix: { type: integer, format: int64 }
+paths:
+  /api/admin/v1/categories:
+    get:
+      responses:
+        '200':
+          description: categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { category: { $ref: '#/components/schemas/Category' } }
+      responses:
+        '200':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+  /api/admin/v1/brands:
+    get:
+      responses:
+        '200':
+          description: brands
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  brands:
+                    type: array
+                    items: { $ref: '#/components/schemas/Brand' }
+  /api/admin/v1/products:
+    get:
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: category_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: brand_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  products:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Product' }
+      responses:
+        '200':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+  /api/admin/v1/products/{id}:
+    get:
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: product
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+    put:
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Product' }
+      responses:
+        '200':
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+  /api/admin/v1/inventory/stocks:
+    get:
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: sku_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: warehouse_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: stocks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  stocks:
+                    type: array
+                    items: { $ref: '#/components/schemas/Stock' }
+  /api/admin/v1/orders:
+    get:
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  orders:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+  /api/admin/v1/orders/{orderNo}:
+    get:
+      parameters:
+        - { name: orderNo, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+  /api/admin/v1/campaigns:
+    get:
+      responses:
+        '200':
+          description: campaigns
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaigns:
+                    type: array
+                    items: { $ref: '#/components/schemas/Campaign' }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Campaign' }
+      responses:
+        '200':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Campaign' }
+  /api/admin/v1/promotions:
+    get:
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: campaign_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: promotions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  promotions:
+                    type: array
+                    items: { $ref: '#/components/schemas/PromotionRule' }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PromotionRule' }
+      responses:
+        '200':
+          description: created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PromotionRule' }
+  /api/admin/v1/promotions/evaluate:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PromotionEvaluationRequest' }
+      responses:
+        '200':
+          description: evaluation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PromotionEvaluation' }
+  /api/admin/v1/promotion-reservations:
+    get:
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: order_no, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: reservations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  reservations:
+                    type: array
+                    items: { $ref: '#/components/schemas/PromotionReservation' }

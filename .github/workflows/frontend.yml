@@ -27,6 +27,10 @@ jobs:
           corepack prepare pnpm@12.16.1 --activate
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Verify generated OpenAPI types
+        run: |
+          pnpm generate:api
+          git diff --exit-code -- packages/api/src/generated
       - name: Typecheck
         run: pnpm typecheck
       - name: Unit tests

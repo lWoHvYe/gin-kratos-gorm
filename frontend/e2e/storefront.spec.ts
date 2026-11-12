@@ -28,3 +28,19 @@ test('storefront opens an order detail and after-sales entry', async ({ page }) 
     await expect(page.getByText('订单详情').first()).toBeVisible()
   }
 })
+
+test('storefront after-sales entry is reachable from an order', async ({ page }) => {
+  await page.goto('/login')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await page.goto('/orders')
+  const firstOrder = page.locator('a.order').first()
+  if (!(await firstOrder.count())) return
+  await firstOrder.click()
+  const apply = page.getByText('申请售后').first()
+  if (await apply.count()) {
+    await apply.click()
+    await expect(page.getByText('申请售后').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: '提交申请' })).toBeVisible()
+  }
+})

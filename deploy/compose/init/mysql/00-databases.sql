@@ -13,6 +13,7 @@ CREATE DATABASE IF NOT EXISTS mall_order       CHARACTER SET utf8mb4 COLLATE utf
 CREATE DATABASE IF NOT EXISTS mall_payment     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mall_fulfillment CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mall_aftersales  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS mall_seckill     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mall_admin       CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- DTM server storage (trans_global / trans_branch_op, created by DTM itself).

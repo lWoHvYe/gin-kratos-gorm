@@ -270,3 +270,32 @@ export interface ProductCreateInput {
   attributes?: ProductAttribute[]
   skus: SkuInput[]
 }
+
+export interface SeckillActivity {
+  id: number
+  campaign_id: number
+  sku_id: number
+  warehouse_id: number
+  name: string
+  price_cent: number
+  stock_total: number
+  per_user_limit: number
+  start_at_unix: number
+  end_at_unix: number
+  status: string
+  version: number
+  created_at_unix: number
+  updated_at_unix: number
+}
+
+export interface SeckillStock {
+  activity_id: number
+  sku_id: number
+  warehouse_id: number
+  total: number
+  available: number
+  held: number
+  sold: number
+  status: string
+  version: number
+}

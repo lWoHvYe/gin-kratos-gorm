@@ -12,7 +12,7 @@ COMPOSE := docker compose $(COMPOSE_ENV_ARG) \
 	-f $(COMPOSE_DIR)/infra.yml \
 	-f $(COMPOSE_DIR)/services.yml
 
-SERVICES := gateway admin identity catalog inventory cart pricing order payment fulfillment aftersales
+SERVICES := gateway admin identity catalog inventory cart pricing order payment fulfillment aftersales seckill
 INFRA_SERVICES := mysql redis nats etcd dtm
 OBS_SERVICES := prometheus grafana
 K8S_DIR := deploy/k8s
@@ -24,7 +24,7 @@ K8S_INFRA_VALUES := $(K8S_DIR)/charts/infra/values-single-node.yaml
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
 	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race verify wire arch clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-deploy mesh-smoke \
-	frontend-install frontend-build frontend-test frontend-images
+	frontend-install frontend-build frontend-test frontend-images seckill-s1
 
 help:
 	@echo "mall - Go microservice mall (Kratos + Gin + database/sql + DTM)"
@@ -61,6 +61,7 @@ help:
 	@echo "  frontend-build                    typecheck and build admin/storefront"
 	@echo "  frontend-test                     run frontend unit tests"
 	@echo "  frontend-images                   build admin-web/storefront-web images"
+	@echo "  seckill-s1                        smoke seckill activity/bucket/warmup"
 	@echo "  clean                             remove ./bin"
 	@echo ""
 	@echo "Compose files: $(COMPOSE_DIR)/infra.yml + $(COMPOSE_DIR)/services.yml"
@@ -189,6 +190,9 @@ frontend-test:
 frontend-images:
 	cd frontend && docker build --platform linux/amd64 -f apps/admin-web/Dockerfile -t mall/admin-web:dev .
 	cd frontend && docker build --platform linux/amd64 -f apps/storefront-web/Dockerfile -t mall/storefront-web:dev .
+
+seckill-s1:
+	./scripts/seckill-s1.sh
 
 clean:
 	rm -rf bin

@@ -24,6 +24,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'promotions/rules', name: 'promotions', component: () => import('@/views/promotions/PromotionsView.vue') },
       { path: 'promotions/simulator', name: 'promotion-simulator', component: () => import('@/views/promotions/SimulatorView.vue') },
       { path: 'promotions/budget', name: 'promotion-budget', component: () => import('@/views/promotions/BudgetView.vue') },
+      { path: 'promotions/seckill', name: 'seckill', component: () => import('@/views/promotions/SeckillView.vue') },
       { path: 'orders', name: 'orders', component: () => import('@/views/orders/OrdersView.vue') },
       { path: 'orders/:orderNo', name: 'order-detail', component: () => import('@/views/orders/OrderDetailView.vue') },
       { path: 'aftersales', name: 'aftersales', component: () => import('@/views/aftersales/AfterSalesView.vue') },

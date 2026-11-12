@@ -56,6 +56,7 @@ Reference implementation: `internal/services/identity` and `cmd/identity`.
 | payment | 9007 | 9107 | mall_payment |
 | fulfillment | 9008 | 9108 | mall_fulfillment |
 | aftersales | 9009 | 9109 | mall_aftersales |
+| seckill | 9010 | 9110 | mall_seckill |
 | gateway | - | 8080 | - |
 | admin | - | 8081 | mall_admin |
 

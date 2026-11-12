@@ -64,8 +64,8 @@ make k8s-deploy
 This installs:
 
 - `mall-infra` in `mall-data`: MySQL, Redis, NATS, etcd, migration Job.
-- `mall` in `mall`: 11 services, DTM, waypoint, STRICT mTLS, L7 policies,
-  Gateway API route.
+- `mall` in `mall`: 12 services (including seckill), DTM, waypoint, STRICT mTLS,
+  L7 policies, Gateway API route.
 
 The migration Job is a Helm post-install/pre-upgrade hook and is safe to
 rerun.

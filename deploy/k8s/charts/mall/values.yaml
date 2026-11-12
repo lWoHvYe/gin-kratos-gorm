@@ -123,6 +123,11 @@ services:
     port: 9009
     healthPort: 9109
     mysqlDatabase: mall_aftersales
+  seckill:
+    protocol: grpc
+    port: 9010
+    healthPort: 9110
+    mysqlDatabase: mall_seckill
 
 # L7 service-to-service matrix. Each rule allows one source ServiceAccount to
 # call one service's gRPC methods. Ingress is handled separately.
@@ -153,7 +158,7 @@ authz:
       sources: [gateway, admin, cart, pricing]
       paths: ["/mall.v1.CatalogService/*"]
     - name: inventory
-      sources: [gateway, admin, order, payment, aftersales, dtm]
+      sources: [gateway, admin, order, payment, aftersales, dtm, seckill]
       paths: ["/mall.v1.InventoryService/*"]
     - name: cart
       sources: [gateway]
@@ -173,6 +178,9 @@ authz:
     - name: aftersales
       sources: [gateway, admin]
       paths: ["/mall.v1.AfterSalesService/*"]
+    - name: seckill
+      sources: [admin]
+      paths: ["/mall.v1.SeckillService/*"]
     - name: dtm
       sources: [order, payment]
       paths: ["/dtmgimp.Dtm/*"]

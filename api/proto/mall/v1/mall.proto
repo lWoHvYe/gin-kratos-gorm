@@ -230,6 +230,11 @@ service InventoryService {
   rpc TccConfirm (TccPaymentRequest) returns (Empty);
   rpc TccCancelConfirm (TccPaymentRequest) returns (Empty);
   rpc TccQueryConfirm (TccPaymentRequest) returns (TccQueryReply);
+  // Seckill stock is carved out of normal inventory before a sale starts.
+  // Allocation/release are idempotent by activity_id.
+  rpc AllocateSeckillStock (AllocateSeckillStockRequest) returns (SeckillStock);
+  rpc ReleaseSeckillStock (ReleaseSeckillStockRequest) returns (SeckillStock);
+  rpc GetSeckillStock (GetSeckillStockRequest) returns (SeckillStock);
 }
 message Stock {
   int64 sku_id = 1;
@@ -678,3 +683,84 @@ message ReceiveReturnRequest { string after_sale_no = 1; string condition = 2; }
 message ListAfterSalesRequest { int64 user_id = 1; bool admin = 2; int32 page = 3; int32 page_size = 4; string status = 5; }
 message ApproveRequest { string after_sale_no = 1; bool approved = 2; int64 amount_cent = 3; string reason = 4; }
 message RefundAfterSaleRequest { string after_sale_no = 1; }
+
+
+// ---------------------------------------------------------------- seckill
+service SeckillService {
+  rpc CreateActivity (CreateSeckillActivityRequest) returns (SeckillActivity);
+  rpc UpdateActivity (UpdateSeckillActivityRequest) returns (SeckillActivity);
+  rpc GetActivity (GetSeckillActivityRequest) returns (SeckillActivity);
+  rpc ListActivities (ListSeckillActivitiesRequest) returns (SeckillActivityList);
+  rpc PublishActivity (SeckillActivityCommand) returns (SeckillActivity);
+  rpc PauseActivity (SeckillActivityCommand) returns (SeckillActivity);
+  rpc WarmupActivity (SeckillActivityCommand) returns (SeckillActivity);
+  rpc GetActivityStock (SeckillActivityCommand) returns (SeckillStock);
+}
+message SeckillActivity {
+  int64 id = 1;
+  int64 campaign_id = 2;
+  int64 sku_id = 3;
+  int64 warehouse_id = 4;
+  string name = 5;
+  int64 price_cent = 6;
+  int64 stock_total = 7;
+  int32 per_user_limit = 8;
+  int64 start_at_unix = 9;
+  int64 end_at_unix = 10;
+  string status = 11;
+  int64 version = 12;
+  int64 created_at_unix = 13;
+  int64 updated_at_unix = 14;
+}
+message CreateSeckillActivityRequest {
+  int64 campaign_id = 1;
+  int64 sku_id = 2;
+  int64 warehouse_id = 3;
+  string name = 4;
+  int64 price_cent = 5;
+  int64 stock_total = 6;
+  int32 per_user_limit = 7;
+  int64 start_at_unix = 8;
+  int64 end_at_unix = 9;
+}
+message UpdateSeckillActivityRequest {
+  int64 id = 1;
+  int64 campaign_id = 2;
+  int64 sku_id = 3;
+  int64 warehouse_id = 4;
+  string name = 5;
+  int64 price_cent = 6;
+  int64 stock_total = 7;
+  int32 per_user_limit = 8;
+  int64 start_at_unix = 9;
+  int64 end_at_unix = 10;
+  int64 version = 11;
+}
+message GetSeckillActivityRequest { int64 id = 1; }
+message ListSeckillActivitiesRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string status = 3;
+}
+message SeckillActivityList { repeated SeckillActivity activities = 1; int64 total = 2; }
+message SeckillActivityCommand { int64 id = 1; }
+
+message SeckillStock {
+  int64 activity_id = 1;
+  int64 sku_id = 2;
+  int64 warehouse_id = 3;
+  int64 total = 4;
+  int64 available = 5;
+  int64 held = 6;
+  int64 sold = 7;
+  string status = 8;
+  int64 version = 9;
+}
+message AllocateSeckillStockRequest {
+  int64 activity_id = 1;
+  int64 sku_id = 2;
+  int64 warehouse_id = 3;
+  int64 quantity = 4;
+}
+message ReleaseSeckillStockRequest { int64 activity_id = 1; }
+message GetSeckillStockRequest { int64 activity_id = 1; }

@@ -90,6 +90,8 @@ services:
         condition: service_healthy
       aftersales:
         condition: service_healthy
+      seckill:
+        condition: service_healthy
     labels:
       traefik.enable: "true"
       traefik.http.routers.mall-gateway.rule: 'Host(`localhost`) && PathPrefix(`/api/v1`)'
@@ -330,6 +332,27 @@ services:
     depends_on:
       <<: *deps-core
       payment:
+        condition: service_healthy
+
+  seckill:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: seckill
+    image: mall/seckill:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_seckill?parseTime=true&loc=Local&charset=utf8mb4"
+      GRPC_ADDR: ":9010"
+      HTTP_ADDR: ":9110"
+      INVENTORY_ADDR: inventory:9003
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9110/healthz"]
+    depends_on:
+      <<: *deps-core
+      inventory:
         condition: service_healthy
 
   # ---------------------------------------------------------------- ingress

@@ -43,6 +43,7 @@ var serviceAddrs = map[string]string{
 	"payment":     "payment:9007",
 	"fulfillment": "fulfillment:9008",
 	"aftersales":  "aftersales:9009",
+	"seckill":     "seckill:9010",
 }
 
 // Clients bundles the downstream gRPC clients used by the admin BFF.
@@ -54,6 +55,7 @@ type Clients struct {
 	Fulfillment pb.FulfillmentServiceClient
 	AfterSales  pb.AfterSalesServiceClient
 	Promotion   pb.PromotionServiceClient
+	Seckill     pb.SeckillServiceClient
 
 	conns []*grpc.ClientConn
 }
@@ -87,6 +89,7 @@ func Dial(ctx context.Context) (*Clients, error) {
 		{"fulfillment", func(conn *grpc.ClientConn) { clients.Fulfillment = pb.NewFulfillmentServiceClient(conn) }},
 		{"aftersales", func(conn *grpc.ClientConn) { clients.AfterSales = pb.NewAfterSalesServiceClient(conn) }},
 		{"promotion", func(conn *grpc.ClientConn) { clients.Promotion = pb.NewPromotionServiceClient(conn) }},
+		{"seckill", func(conn *grpc.ClientConn) { clients.Seckill = pb.NewSeckillServiceClient(conn) }},
 	}
 	for _, target := range targets {
 		conn, err := grpcx.Dial(ctx, targetFor(target.name))
@@ -167,6 +170,14 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	admin.PUT("/promotions/:id", h.updatePromotion)
 	admin.POST("/promotions/:id/status", h.setPromotionStatus)
 	admin.GET("/promotion-reservations", h.listPromotionReservations)
+	admin.GET("/seckill/activities", h.listSeckillActivities)
+	admin.POST("/seckill/activities", h.createSeckillActivity)
+	admin.GET("/seckill/activities/:id", h.getSeckillActivity)
+	admin.PUT("/seckill/activities/:id", h.updateSeckillActivity)
+	admin.POST("/seckill/activities/:id/publish", h.publishSeckillActivity)
+	admin.POST("/seckill/activities/:id/pause", h.pauseSeckillActivity)
+	admin.POST("/seckill/activities/:id/warmup", h.warmupSeckillActivity)
+	admin.GET("/seckill/activities/:id/stock", h.getSeckillStock)
 	admin.POST("/promotions/evaluate", h.evaluatePromotions)
 
 	return engine
@@ -1165,6 +1176,117 @@ func (h *handlers) evaluatePromotions(c *gin.Context) {
 		return
 	}
 	reply, err := h.clients.Promotion.EvaluatePromotions(c.Request.Context(), &req)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+// ---------------------------------------------------------------- seckill
+
+func (h *handlers) listSeckillActivities(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	size, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Seckill.ListActivities(c.Request.Context(), &pb.ListSeckillActivitiesRequest{
+		Page: page, PageSize: size, Status: strings.TrimSpace(c.Query("status")),
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) createSeckillActivity(c *gin.Context) {
+	var in pb.CreateSeckillActivityRequest
+	if err := bindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Seckill.CreateActivity(c.Request.Context(), &in)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.Created(c, reply)
+}
+
+func (h *handlers) getSeckillActivity(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Seckill.GetActivity(c.Request.Context(), &pb.GetSeckillActivityRequest{Id: id})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) updateSeckillActivity(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var in pb.UpdateSeckillActivityRequest
+	if err := bindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	in.Id = id
+	reply, err := h.clients.Seckill.UpdateActivity(c.Request.Context(), &in)
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) publishSeckillActivity(c *gin.Context) {
+	h.seckillCommand(c, h.clients.Seckill.PublishActivity)
+}
+
+func (h *handlers) pauseSeckillActivity(c *gin.Context) {
+	h.seckillCommand(c, h.clients.Seckill.PauseActivity)
+}
+
+func (h *handlers) warmupSeckillActivity(c *gin.Context) {
+	h.seckillCommand(c, h.clients.Seckill.WarmupActivity)
+}
+
+func (h *handlers) seckillCommand(c *gin.Context, fn func(context.Context, *pb.SeckillActivityCommand, ...grpc.CallOption) (*pb.SeckillActivity, error)) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := fn(c.Request.Context(), &pb.SeckillActivityCommand{Id: id})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) getSeckillStock(c *gin.Context) {
+	id, err := pathID(c, "id")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Seckill.GetActivityStock(c.Request.Context(), &pb.SeckillActivityCommand{Id: id})
 	if err != nil {
 		httpx.Error(c, remoteError(err))
 		return

@@ -65,7 +65,7 @@ spec:
               - "cluster.local/ns/{{ .Values.namespace }}/sa/mall-waypoint"
       to:
         - operation:
-            ports: ["3000", "8080", "8081", "9001", "9002", "9003", "9004", "9005", "9006", "9007", "9008", "9009", "36789", "36790"]
+            ports: ["3000", "8080", "8081", "9001", "9002", "9003", "9004", "9005", "9006", "9007", "9008", "9009", "9010", "36789", "36790"]
 {{- range $rule := .Values.authz.rules }}
 ---
 apiVersion: security.istio.io/v1

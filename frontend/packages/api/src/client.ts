@@ -14,6 +14,8 @@ import type {
   PromotionReservation,
   PromotionRule,
   Refund,
+  SeckillActivity,
+  SeckillStock,
   Shipment,
   Sku,
   Stock,
@@ -190,6 +192,17 @@ export const adminApi = {
     update: (id: number, campaign: Partial<Campaign>) => adminPut<Campaign>(`/campaigns/${id}`, { ...campaign, id }),
     status: (id: number, status: string) => adminPost<unknown>(`/campaigns/${id}/status`, { status }),
   },
+  seckill: {
+    list: (query: PageQuery & { status?: string } = {}) =>
+      adminGet<{ activities: SeckillActivity[]; total: number }>('/seckill/activities', { params: query }),
+    get: (id: number) => adminGet<SeckillActivity>(`/seckill/activities/${id}`),
+    create: (activity: Partial<SeckillActivity>) => adminPost<SeckillActivity>('/seckill/activities', activity),
+    update: (id: number, activity: Partial<SeckillActivity>) => adminPut<SeckillActivity>(`/seckill/activities/${id}`, activity),
+    publish: (id: number) => adminPost<SeckillActivity>(`/seckill/activities/${id}/publish`, {}),
+    pause: (id: number) => adminPost<SeckillActivity>(`/seckill/activities/${id}/pause`, {}),
+    warmup: (id: number) => adminPost<SeckillActivity>(`/seckill/activities/${id}/warmup`, {}),
+    stock: (id: number) => adminGet<SeckillStock>(`/seckill/activities/${id}/stock`),
+  },
   promotions: {
     list: (query: PageQuery & { campaign_id?: number } = {}) =>
       adminGet<{ promotions: PromotionRule[]; total: number }>('/promotions', { params: query }),
@@ -203,4 +216,4 @@ export const adminApi = {
 }
 
 export { api as http, admin }
-export type { AfterSale, Brand, Campaign, Category, Order, Product, PromotionEvaluation, PromotionRule, Refund, Shipment, Sku, Stock }
+export type { AfterSale, Brand, Campaign, Category, Order, Product, PromotionEvaluation, PromotionRule, Refund, SeckillActivity, SeckillStock, Shipment, Sku, Stock }

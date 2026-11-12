@@ -1333,17 +1333,20 @@ var CatalogService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	InventoryService_GetStock_FullMethodName         = "/mall.v1.InventoryService/GetStock"
-	InventoryService_Reserve_FullMethodName          = "/mall.v1.InventoryService/Reserve"
-	InventoryService_Confirm_FullMethodName          = "/mall.v1.InventoryService/Confirm"
-	InventoryService_Release_FullMethodName          = "/mall.v1.InventoryService/Release"
-	InventoryService_AdminAdjustStock_FullMethodName = "/mall.v1.InventoryService/AdminAdjustStock"
-	InventoryService_ListStocks_FullMethodName       = "/mall.v1.InventoryService/ListStocks"
-	InventoryService_Restock_FullMethodName          = "/mall.v1.InventoryService/Restock"
-	InventoryService_TccTryConfirm_FullMethodName    = "/mall.v1.InventoryService/TccTryConfirm"
-	InventoryService_TccConfirm_FullMethodName       = "/mall.v1.InventoryService/TccConfirm"
-	InventoryService_TccCancelConfirm_FullMethodName = "/mall.v1.InventoryService/TccCancelConfirm"
-	InventoryService_TccQueryConfirm_FullMethodName  = "/mall.v1.InventoryService/TccQueryConfirm"
+	InventoryService_GetStock_FullMethodName             = "/mall.v1.InventoryService/GetStock"
+	InventoryService_Reserve_FullMethodName              = "/mall.v1.InventoryService/Reserve"
+	InventoryService_Confirm_FullMethodName              = "/mall.v1.InventoryService/Confirm"
+	InventoryService_Release_FullMethodName              = "/mall.v1.InventoryService/Release"
+	InventoryService_AdminAdjustStock_FullMethodName     = "/mall.v1.InventoryService/AdminAdjustStock"
+	InventoryService_ListStocks_FullMethodName           = "/mall.v1.InventoryService/ListStocks"
+	InventoryService_Restock_FullMethodName              = "/mall.v1.InventoryService/Restock"
+	InventoryService_TccTryConfirm_FullMethodName        = "/mall.v1.InventoryService/TccTryConfirm"
+	InventoryService_TccConfirm_FullMethodName           = "/mall.v1.InventoryService/TccConfirm"
+	InventoryService_TccCancelConfirm_FullMethodName     = "/mall.v1.InventoryService/TccCancelConfirm"
+	InventoryService_TccQueryConfirm_FullMethodName      = "/mall.v1.InventoryService/TccQueryConfirm"
+	InventoryService_AllocateSeckillStock_FullMethodName = "/mall.v1.InventoryService/AllocateSeckillStock"
+	InventoryService_ReleaseSeckillStock_FullMethodName  = "/mall.v1.InventoryService/ReleaseSeckillStock"
+	InventoryService_GetSeckillStock_FullMethodName      = "/mall.v1.InventoryService/GetSeckillStock"
 )
 
 // InventoryServiceClient is the client API for InventoryService service.
@@ -1363,6 +1366,11 @@ type InventoryServiceClient interface {
 	TccConfirm(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccCancelConfirm(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccQueryConfirm(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*TccQueryReply, error)
+	// Seckill stock is carved out of normal inventory before a sale starts.
+	// Allocation/release are idempotent by activity_id.
+	AllocateSeckillStock(ctx context.Context, in *AllocateSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error)
+	ReleaseSeckillStock(ctx context.Context, in *ReleaseSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error)
+	GetSeckillStock(ctx context.Context, in *GetSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error)
 }
 
 type inventoryServiceClient struct {
@@ -1483,6 +1491,36 @@ func (c *inventoryServiceClient) TccQueryConfirm(ctx context.Context, in *TccPay
 	return out, nil
 }
 
+func (c *inventoryServiceClient) AllocateSeckillStock(ctx context.Context, in *AllocateSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillStock)
+	err := c.cc.Invoke(ctx, InventoryService_AllocateSeckillStock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) ReleaseSeckillStock(ctx context.Context, in *ReleaseSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillStock)
+	err := c.cc.Invoke(ctx, InventoryService_ReleaseSeckillStock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) GetSeckillStock(ctx context.Context, in *GetSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillStock)
+	err := c.cc.Invoke(ctx, InventoryService_GetSeckillStock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InventoryServiceServer is the server API for InventoryService service.
 // All implementations must embed UnimplementedInventoryServiceServer
 // for forward compatibility.
@@ -1500,6 +1538,11 @@ type InventoryServiceServer interface {
 	TccConfirm(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccCancelConfirm(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccQueryConfirm(context.Context, *TccPaymentRequest) (*TccQueryReply, error)
+	// Seckill stock is carved out of normal inventory before a sale starts.
+	// Allocation/release are idempotent by activity_id.
+	AllocateSeckillStock(context.Context, *AllocateSeckillStockRequest) (*SeckillStock, error)
+	ReleaseSeckillStock(context.Context, *ReleaseSeckillStockRequest) (*SeckillStock, error)
+	GetSeckillStock(context.Context, *GetSeckillStockRequest) (*SeckillStock, error)
 	mustEmbedUnimplementedInventoryServiceServer()
 }
 
@@ -1542,6 +1585,15 @@ func (UnimplementedInventoryServiceServer) TccCancelConfirm(context.Context, *Tc
 }
 func (UnimplementedInventoryServiceServer) TccQueryConfirm(context.Context, *TccPaymentRequest) (*TccQueryReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method TccQueryConfirm not implemented")
+}
+func (UnimplementedInventoryServiceServer) AllocateSeckillStock(context.Context, *AllocateSeckillStockRequest) (*SeckillStock, error) {
+	return nil, status.Error(codes.Unimplemented, "method AllocateSeckillStock not implemented")
+}
+func (UnimplementedInventoryServiceServer) ReleaseSeckillStock(context.Context, *ReleaseSeckillStockRequest) (*SeckillStock, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleaseSeckillStock not implemented")
+}
+func (UnimplementedInventoryServiceServer) GetSeckillStock(context.Context, *GetSeckillStockRequest) (*SeckillStock, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSeckillStock not implemented")
 }
 func (UnimplementedInventoryServiceServer) mustEmbedUnimplementedInventoryServiceServer() {}
 func (UnimplementedInventoryServiceServer) testEmbeddedByValue()                          {}
@@ -1762,6 +1814,60 @@ func _InventoryService_TccQueryConfirm_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_AllocateSeckillStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AllocateSeckillStockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).AllocateSeckillStock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_AllocateSeckillStock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).AllocateSeckillStock(ctx, req.(*AllocateSeckillStockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_ReleaseSeckillStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseSeckillStockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ReleaseSeckillStock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ReleaseSeckillStock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ReleaseSeckillStock(ctx, req.(*ReleaseSeckillStockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_GetSeckillStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSeckillStockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).GetSeckillStock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_GetSeckillStock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).GetSeckillStock(ctx, req.(*GetSeckillStockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InventoryService_ServiceDesc is the grpc.ServiceDesc for InventoryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1812,6 +1918,18 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TccQueryConfirm",
 			Handler:    _InventoryService_TccQueryConfirm_Handler,
+		},
+		{
+			MethodName: "AllocateSeckillStock",
+			Handler:    _InventoryService_AllocateSeckillStock_Handler,
+		},
+		{
+			MethodName: "ReleaseSeckillStock",
+			Handler:    _InventoryService_ReleaseSeckillStock_Handler,
+		},
+		{
+			MethodName: "GetSeckillStock",
+			Handler:    _InventoryService_GetSeckillStock_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -4488,6 +4606,378 @@ var AfterSalesService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListAfterSales",
 			Handler:    _AfterSalesService_ListAfterSales_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "mall/v1/mall.proto",
+}
+
+const (
+	SeckillService_CreateActivity_FullMethodName   = "/mall.v1.SeckillService/CreateActivity"
+	SeckillService_UpdateActivity_FullMethodName   = "/mall.v1.SeckillService/UpdateActivity"
+	SeckillService_GetActivity_FullMethodName      = "/mall.v1.SeckillService/GetActivity"
+	SeckillService_ListActivities_FullMethodName   = "/mall.v1.SeckillService/ListActivities"
+	SeckillService_PublishActivity_FullMethodName  = "/mall.v1.SeckillService/PublishActivity"
+	SeckillService_PauseActivity_FullMethodName    = "/mall.v1.SeckillService/PauseActivity"
+	SeckillService_WarmupActivity_FullMethodName   = "/mall.v1.SeckillService/WarmupActivity"
+	SeckillService_GetActivityStock_FullMethodName = "/mall.v1.SeckillService/GetActivityStock"
+)
+
+// SeckillServiceClient is the client API for SeckillService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// ---------------------------------------------------------------- seckill
+type SeckillServiceClient interface {
+	CreateActivity(ctx context.Context, in *CreateSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error)
+	UpdateActivity(ctx context.Context, in *UpdateSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error)
+	GetActivity(ctx context.Context, in *GetSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error)
+	ListActivities(ctx context.Context, in *ListSeckillActivitiesRequest, opts ...grpc.CallOption) (*SeckillActivityList, error)
+	PublishActivity(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillActivity, error)
+	PauseActivity(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillActivity, error)
+	WarmupActivity(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillActivity, error)
+	GetActivityStock(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillStock, error)
+}
+
+type seckillServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewSeckillServiceClient(cc grpc.ClientConnInterface) SeckillServiceClient {
+	return &seckillServiceClient{cc}
+}
+
+func (c *seckillServiceClient) CreateActivity(ctx context.Context, in *CreateSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivity)
+	err := c.cc.Invoke(ctx, SeckillService_CreateActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seckillServiceClient) UpdateActivity(ctx context.Context, in *UpdateSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivity)
+	err := c.cc.Invoke(ctx, SeckillService_UpdateActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seckillServiceClient) GetActivity(ctx context.Context, in *GetSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivity)
+	err := c.cc.Invoke(ctx, SeckillService_GetActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seckillServiceClient) ListActivities(ctx context.Context, in *ListSeckillActivitiesRequest, opts ...grpc.CallOption) (*SeckillActivityList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivityList)
+	err := c.cc.Invoke(ctx, SeckillService_ListActivities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seckillServiceClient) PublishActivity(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillActivity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivity)
+	err := c.cc.Invoke(ctx, SeckillService_PublishActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seckillServiceClient) PauseActivity(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillActivity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivity)
+	err := c.cc.Invoke(ctx, SeckillService_PauseActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seckillServiceClient) WarmupActivity(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillActivity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivity)
+	err := c.cc.Invoke(ctx, SeckillService_WarmupActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seckillServiceClient) GetActivityStock(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillStock, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillStock)
+	err := c.cc.Invoke(ctx, SeckillService_GetActivityStock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SeckillServiceServer is the server API for SeckillService service.
+// All implementations must embed UnimplementedSeckillServiceServer
+// for forward compatibility.
+//
+// ---------------------------------------------------------------- seckill
+type SeckillServiceServer interface {
+	CreateActivity(context.Context, *CreateSeckillActivityRequest) (*SeckillActivity, error)
+	UpdateActivity(context.Context, *UpdateSeckillActivityRequest) (*SeckillActivity, error)
+	GetActivity(context.Context, *GetSeckillActivityRequest) (*SeckillActivity, error)
+	ListActivities(context.Context, *ListSeckillActivitiesRequest) (*SeckillActivityList, error)
+	PublishActivity(context.Context, *SeckillActivityCommand) (*SeckillActivity, error)
+	PauseActivity(context.Context, *SeckillActivityCommand) (*SeckillActivity, error)
+	WarmupActivity(context.Context, *SeckillActivityCommand) (*SeckillActivity, error)
+	GetActivityStock(context.Context, *SeckillActivityCommand) (*SeckillStock, error)
+	mustEmbedUnimplementedSeckillServiceServer()
+}
+
+// UnimplementedSeckillServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedSeckillServiceServer struct{}
+
+func (UnimplementedSeckillServiceServer) CreateActivity(context.Context, *CreateSeckillActivityRequest) (*SeckillActivity, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateActivity not implemented")
+}
+func (UnimplementedSeckillServiceServer) UpdateActivity(context.Context, *UpdateSeckillActivityRequest) (*SeckillActivity, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateActivity not implemented")
+}
+func (UnimplementedSeckillServiceServer) GetActivity(context.Context, *GetSeckillActivityRequest) (*SeckillActivity, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetActivity not implemented")
+}
+func (UnimplementedSeckillServiceServer) ListActivities(context.Context, *ListSeckillActivitiesRequest) (*SeckillActivityList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListActivities not implemented")
+}
+func (UnimplementedSeckillServiceServer) PublishActivity(context.Context, *SeckillActivityCommand) (*SeckillActivity, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishActivity not implemented")
+}
+func (UnimplementedSeckillServiceServer) PauseActivity(context.Context, *SeckillActivityCommand) (*SeckillActivity, error) {
+	return nil, status.Error(codes.Unimplemented, "method PauseActivity not implemented")
+}
+func (UnimplementedSeckillServiceServer) WarmupActivity(context.Context, *SeckillActivityCommand) (*SeckillActivity, error) {
+	return nil, status.Error(codes.Unimplemented, "method WarmupActivity not implemented")
+}
+func (UnimplementedSeckillServiceServer) GetActivityStock(context.Context, *SeckillActivityCommand) (*SeckillStock, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetActivityStock not implemented")
+}
+func (UnimplementedSeckillServiceServer) mustEmbedUnimplementedSeckillServiceServer() {}
+func (UnimplementedSeckillServiceServer) testEmbeddedByValue()                        {}
+
+// UnsafeSeckillServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to SeckillServiceServer will
+// result in compilation errors.
+type UnsafeSeckillServiceServer interface {
+	mustEmbedUnimplementedSeckillServiceServer()
+}
+
+func RegisterSeckillServiceServer(s grpc.ServiceRegistrar, srv SeckillServiceServer) {
+	// If the following call panics, it indicates UnimplementedSeckillServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&SeckillService_ServiceDesc, srv)
+}
+
+func _SeckillService_CreateActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSeckillActivityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).CreateActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_CreateActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).CreateActivity(ctx, req.(*CreateSeckillActivityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeckillService_UpdateActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSeckillActivityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).UpdateActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_UpdateActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).UpdateActivity(ctx, req.(*UpdateSeckillActivityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeckillService_GetActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSeckillActivityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).GetActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_GetActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).GetActivity(ctx, req.(*GetSeckillActivityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeckillService_ListActivities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSeckillActivitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).ListActivities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_ListActivities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).ListActivities(ctx, req.(*ListSeckillActivitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeckillService_PublishActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SeckillActivityCommand)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).PublishActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_PublishActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).PublishActivity(ctx, req.(*SeckillActivityCommand))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeckillService_PauseActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SeckillActivityCommand)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).PauseActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_PauseActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).PauseActivity(ctx, req.(*SeckillActivityCommand))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeckillService_WarmupActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SeckillActivityCommand)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).WarmupActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_WarmupActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).WarmupActivity(ctx, req.(*SeckillActivityCommand))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeckillService_GetActivityStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SeckillActivityCommand)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).GetActivityStock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_GetActivityStock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).GetActivityStock(ctx, req.(*SeckillActivityCommand))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// SeckillService_ServiceDesc is the grpc.ServiceDesc for SeckillService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var SeckillService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "mall.v1.SeckillService",
+	HandlerType: (*SeckillServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateActivity",
+			Handler:    _SeckillService_CreateActivity_Handler,
+		},
+		{
+			MethodName: "UpdateActivity",
+			Handler:    _SeckillService_UpdateActivity_Handler,
+		},
+		{
+			MethodName: "GetActivity",
+			Handler:    _SeckillService_GetActivity_Handler,
+		},
+		{
+			MethodName: "ListActivities",
+			Handler:    _SeckillService_ListActivities_Handler,
+		},
+		{
+			MethodName: "PublishActivity",
+			Handler:    _SeckillService_PublishActivity_Handler,
+		},
+		{
+			MethodName: "PauseActivity",
+			Handler:    _SeckillService_PauseActivity_Handler,
+		},
+		{
+			MethodName: "WarmupActivity",
+			Handler:    _SeckillService_WarmupActivity_Handler,
+		},
+		{
+			MethodName: "GetActivityStock",
+			Handler:    _SeckillService_GetActivityStock_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

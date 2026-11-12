@@ -1,6 +1,7 @@
 # Seckill design
 
-Status: design proposal, not implemented.
+Status: S1 implemented (activity lifecycle, inventory bucket, Redis warmup).
+S2+ (Lua admission, JetStream worker, order creation) are not implemented yet.
 
 This document is deliberately a production design rather than a demo sketch.
 Seckill is treated as a small, isolated, failure-aware subsystem that reuses the
@@ -620,11 +621,24 @@ Do not build:
 
 ## 17. Current repo gaps
 
-- Redis and NATS are single-replica dev deployments; not production seckill HA.
-- Inventory has no seckill bucket allocation API.
-- Order has no server-only seckill creation path.
-- No rate limiter, WAF integration, OpenTelemetry pipeline or k6 suite.
-- No reconciliation/lease worker.
+S1 now provides:
+
+- `mall_seckill.seckill_activities` and qualification table placeholder;
+- `mall_inventory.seckill_stocks` and stock ledger;
+- inventory `AllocateSeckillStock` / `ReleaseSeckillStock` / `GetSeckillStock`;
+- seckill activity admin API and scheduler;
+- Redis warmup keys and activity/bucket smoke test.
+
+Still missing:
+
+- Redis Lua admission/token issuance and the public reserve API;
+- JetStream command publishing and worker;
+- `CreateSeckillOrder` and compensation;
+- rate limiter/WAF/OpenTelemetry/k6 execution against the endpoint;
+- reconciliation/lease worker;
+- frontend seckill page.
+- Redis and NATS are still single-replica in the current dev cluster; production
+  HA is required before launch.
 - Promotion campaigns exist but must not be used as the seckill stock source.
 
 The next implementation step should be **S0 + S1**, not a synchronous

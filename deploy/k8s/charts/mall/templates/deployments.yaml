@@ -123,6 +123,10 @@ spec:
             - name: PAYMENT_ADDR
               value: "payment:9007"
             {{- end }}
+            {{- if eq $name "seckill" }}
+            - name: INVENTORY_ADDR
+              value: "inventory:9003"
+            {{- end }}
             {{- if $.Values.etcd.endpoints }}
             - name: ETCD_ENDPOINTS
               value: {{ $.Values.etcd.endpoints | quote }}

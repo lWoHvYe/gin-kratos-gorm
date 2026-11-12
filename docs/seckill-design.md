@@ -752,3 +752,168 @@ k6 scenarios:
 
 The load test must verify the 9,900 losers receive a fast business rejection,
 not a timeout or a 5xx.
+
+## 19. Scale-out design: 100x users, 10 SKUs, 100 units each
+
+This is a different regime from the first 10k-user/100-unit target:
+
+```text
+concurrent users       1,000,000            (100x)
+SKUs                    10
+stock per SKU           100
+successful orders       <= 1,000
+expected rejections     ~999,000
+```
+
+The stock is still tiny. The hard problem is **edge admission and fast
+rejection**, not order throughput. Do not scale the database or worker for
+999,000 losers; scale the edge, gateway and admission tier.
+
+### 19.1 Capacity shape
+
+If the 1M users arrive over 10 seconds, the origin sees roughly 100k RPS. If
+they arrive in one second, the origin cannot and should not absorb 1M RPS. The
+edge waiting room must shape the burst before it reaches `seckill-api`.
+
+Recommended starting topology (to be proven in a dedicated performance
+environment, not on the local k3s VM):
+
+```text
+Edge WAF / Waiting Room / CDN        managed or tested Envoy edge
+Gateway replicas                    20-40, pre-scaled before the sale
+seckill-api replicas                50-100, HPA + pre-scale, stateless
+Redis                               dedicated 3-master/3-replica Cluster
+NATS JetStream                      3 nodes, stream replicas=3
+seckill-worker                      2-4 replicas (only ~1k commands)
+MySQL                               ~1k holds/orders, normal HA
+Frontend                            CDN/static or cached SSR, not per-user SSR
+```
+
+These are design targets. They must be validated with distributed k6 in an
+isolated performance cluster; do not run a 1M-user test against the local VM.
+
+### 19.2 Ten SKUs: model them as ten activities under one campaign
+
+The current schema already has `UNIQUE(campaign_id, sku_id)` and one Redis stock
+key per activity. The lowest-risk scale change is:
+
+```text
+campaign C
+  ├─ seckill activity C/SKU-1  stock 100
+  ├─ seckill activity C/SKU-2  stock 100
+  └─ ... 10 rows
+```
+
+Each activity keeps:
+
+```text
+seckill:{activity_id}:meta
+seckill:{activity_id}:stock
+seckill:{activity_id}:users
+seckill:{activity_id}:tokens
+```
+
+This requires **no schema change**. Add a bulk-create/group-by-campaign admin
+operation and show the ten activities as one campaign group in the storefront.
+
+If the product requirement is a single page with a SKU picker and **one
+campaign-level per-user limit**, add a multi-SKU child table instead:
+
+```text
+seckill_activity_skus(activity_id, sku_id, price_cent, stock_total, ...)
+seckill_qualifications(activity_id, sku_id, user_id, ...)
+```
+
+Token and reservation keys must include `sku_id`. Do not overload the current
+single-SKU qualification with a nullable SKU; make the composite key explicit.
+For the first 100x rollout, prefer ten activities under one campaign: it avoids
+a schema migration while preserving the proven stock/order path.
+
+### 19.3 Redis
+
+Ten stock keys are not automatically a hot-key problem. At 100k RPS total, each
+SKU key sees roughly 10k RPS; a well-provisioned Redis Cluster can handle that.
+Do not shard stock into buckets before measuring per-key latency and CPU.
+
+Use:
+
+- dedicated Redis Cluster for seckill, not the catalog cache;
+- hash tags per activity so the Lua script stays single-slot;
+- 3 masters + 3 replicas, AOF, tested failover;
+- a short negative cache for `SOLD_OUT` to avoid 999k Lua calls after stock is
+  zero (invalidate on activity version/publish; never use local cache as the
+  source of truth before sold out);
+- Lua scripts unchanged; all stock mutations remain one round trip.
+
+Only if a single activity key is measured above the Redis shard ceiling should
+stock be sharded. Sharding requires per-shard stock, a user marker strategy and
+a cross-shard reconciliation design; it is not a first-response optimization.
+
+### 19.4 API and gateway
+
+- Make `seckill-api` stateless and independently scalable; no request affinity.
+- Pre-scale before the sale instead of relying on reactive CPU HPA; HPA is a
+  safety net, not the launch plan.
+- Keep JWT validation local; never call identity per admission.
+- Put a bounded admission rate at the edge. The origin should not accept more
+  than it can drain; return `429`/`503` with `Retry-After`.
+- The general gateway can remain the BFF, but at 100k+ RPS monitor its CPU and
+  connection pools and consider a dedicated seckill route; do not add another
+  synchronous service hop without a measured need.
+- Return `SOLD_OUT` immediately for the 999k losers; do not enqueue or write
+  MySQL for them.
+
+### 19.5 Frontend/CDN
+
+At 1M users, the landing page itself must not SSR per request:
+
+- serve storefront/static assets through a CDN;
+- cache public activity metadata for a short TTL;
+- make the seckill page hydrate from a cached activity snapshot;
+- only accepted qualifications poll `GET /qualifications/:token`;
+- losers should stop after `SOLD_OUT`/`ENDED`, not poll at high frequency;
+- use server time + offset; no client-side eligibility decisions.
+
+### 19.6 Queue and database
+
+The queue only carries about 1,000 commands, so NATS sizing is not the critical
+path. Keep:
+
+```text
+MaxAckPending bounded
+AckWait 30s
+MaxDeliver 5
+DLQ + replay
+```
+
+MySQL writes remain roughly 1,000 qualifications/orders; the 999k losers never
+touch it. If the queue or DB is slow, shed at admission; do not let HTTP
+requests accumulate.
+
+### 19.7 Multi-AZ / HA
+
+- Redis Cluster with replicas in separate zones.
+- NATS JetStream 3 replicas across zones.
+- MySQL primary + replicas/backup; bounded per-pod connections.
+- Gateway/API PodDisruptionBudget and topology spread.
+- Pre-warm connections and verify failover before the sale.
+- Fail closed on Redis loss; never fall back to MySQL for admission.
+
+### 19.8 What not to do
+
+- Do not run 1M VUs against the local k3s VM.
+- Do not create one Redis key shard per user.
+- Do not write a qualification row for every loser.
+- Do not build a custom WAF/waiting room or custom load generator.
+- Do not add Kafka for 1,000 order commands.
+- Do not scale MySQL for traffic that should have been rejected at the edge.
+
+### 19.9 Rollout sequence for this target
+
+1. Bulk-create ten activities under one campaign and group them in the storefront.
+2. Move admission behind a managed edge waiting room/WAF; cap origin RPS.
+3. Pre-scale gateway/seckill-api; add PDB/HPA and test failover.
+4. Move to dedicated HA Redis/NATS; add negative-cache sold-out behavior.
+5. Add dashboards/alerts for admission RPS, Redis p99/CPU, queue depth, 429/503.
+6. Run distributed k6 from an isolated performance environment; validate the
+   100k RPS origin target, not 1M RPS at the origin.

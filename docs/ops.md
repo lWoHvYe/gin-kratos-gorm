@@ -396,3 +396,35 @@ locks the coupon, a second quote sees it unavailable, cancellation unlocks it,
 and paying a later order consumes it. The order create path now calls
 `LockCoupon`; the paid path calls `ConsumeCoupon`; the cancelled consumer calls
 `UnlockCoupon`.
+
+## Seckill autoscaling
+
+HPA and PDB manifests are opt-in in `deploy/k8s/charts/mall`:
+
+```yaml
+autoscaling:
+  seckill:
+    enabled: true
+    minReplicas: 4
+    maxReplicas: 40
+    targetCPUUtilizationPercentage: 65
+podDisruptionBudgets:
+  seckill:
+    enabled: true
+    minAvailable: 1
+```
+
+HPA is a safety net, not a launch plan. Pre-scale the deployment before the
+sale; reactive CPU scaling is too slow for a flash crowd. The current
+single-node profile leaves these disabled.
+
+## Integration checks
+
+Run the seckill S1/S2/S3 checks against a running stack:
+
+```bash
+make seckill-integration
+```
+
+These cover activity/stock bucket/warmup, Redis admission/idempotency, and
+JetStream order/payment. They are integration checks, not a capacity test.

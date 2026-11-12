@@ -24,7 +24,7 @@ K8S_INFRA_VALUES := $(K8S_DIR)/charts/infra/values-single-node.yaml
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
 	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race verify wire arch clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-deploy mesh-smoke \
-	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3
+	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration
 
 help:
 	@echo "mall - Go microservice mall (Kratos + Gin + database/sql + DTM)"
@@ -64,6 +64,7 @@ help:
 	@echo "  seckill-s1                        smoke seckill activity/bucket/warmup"
 	@echo "  seckill-s2                        smoke seckill admission/idempotency"
 	@echo "  seckill-s3                        smoke qualification -> order -> payment"
+	@echo "  seckill-integration               run S1 + S2 + S3 integration smokes"
 	@echo "  clean                             remove ./bin"
 	@echo ""
 	@echo "Compose files: $(COMPOSE_DIR)/infra.yml + $(COMPOSE_DIR)/services.yml"
@@ -201,6 +202,8 @@ seckill-s2:
 
 seckill-s3:
 	./scripts/seckill-s3.sh
+
+seckill-integration: seckill-s1 seckill-s2 seckill-s3
 
 clean:
 	rm -rf bin

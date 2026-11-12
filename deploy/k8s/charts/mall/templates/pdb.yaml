@@ -1,0 +1,16 @@
+{{- range $name, $cfg := .Values.podDisruptionBudgets }}
+{{- if $cfg.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "mall.labels" $ | nindent 4 }}
+spec:
+  minAvailable: {{ $cfg.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "mall.selectorLabels" (dict "name" $name "root" $) | nindent 6 }}
+{{- end }}
+{{- end }}

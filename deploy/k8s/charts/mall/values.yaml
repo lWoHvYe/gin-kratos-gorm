@@ -149,6 +149,25 @@ frontend:
       requests: { cpu: 50m, memory: 96Mi }
       limits: { cpu: 500m, memory: 384Mi }
 
+# Opt-in production autoscaling. HPA is a safety net; pre-scale before a sale.
+autoscaling:
+  seckill:
+    enabled: false
+    minReplicas: 4
+    maxReplicas: 40
+    targetCPUUtilizationPercentage: 65
+
+podDisruptionBudgets:
+  seckill:
+    enabled: false
+    minAvailable: 1
+  admin-web:
+    enabled: false
+    minAvailable: 1
+  storefront-web:
+    enabled: false
+    minAvailable: 1
+
 authz:
   rules:
     - name: identity

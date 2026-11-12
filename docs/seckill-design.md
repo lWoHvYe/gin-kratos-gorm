@@ -606,7 +606,9 @@ Do not build:
 
 ## 16. Open decisions
 
-1. Expected peak RPS and concurrent users per sale.
+1. ~~Expected peak RPS and concurrent users per sale.~~ Resolved for first
+   target: 10,000 concurrent users, 100 units; design for 10k-20k admission RPS
+   with 2x headroom.
 2. Single SKU vs multi-SKU activity; first version assumes single SKU.
 3. One attempt per user vs retry after cancellation.
 4. Whether unpaid/cancelled stock is re-released while the activity is ACTIVE.
@@ -627,3 +629,112 @@ Do not build:
 
 The next implementation step should be **S0 + S1**, not a synchronous
 "decrement Redis and insert order" demo.
+
+## 18. Capacity decision: 10k concurrent users, 100 units
+
+The first production target is deliberately asymmetric:
+
+```text
+concurrent users      10,000
+seckill stock         100
+successful orders     <= 100
+expected rejections   ~9,900
+```
+
+This is a **low-stock, high-contention** sale. It is not a high-throughput stock
+problem; it is an admission/load-shedding problem. The design must make the
+9,900 losers cheap and fast, and make the 100 winners reliable.
+
+### 18.1 Target envelope
+
+These are design targets to prove with k6, not measured claims:
+
+```text
+admission burst        10k-20k requests/second for 5-10 seconds
+admission p99          <= 200 ms at the edge/API (excluding client network)
+successful orders      100
+queue messages         <= 200 (100 expected)
+API replicas           min 4, HPA 4-20
+worker replicas        min 2, HPA 2-8
+Redis                  HA primary/replica, one hot activity key
+NATS JetStream         3 nodes, stream replicas 3 in production
+MySQL                  only ~100 order writes, normal pool
+```
+
+The API must reject sold-out requests in the Redis Lua round trip. It must not
+enqueue, write MySQL, or call order/inventory for a request that lost the stock
+race.
+
+### 18.2 What this means
+
+- **Do not shard the stock key yet.** One Redis key and one Lua script can
+  serialize the 100 decrements. Cluster/sharding adds failure modes without
+  helping a 100-unit sale.
+- **Do not add Kafka.** Only ~100 order commands are produced; existing NATS
+  JetStream is more than sufficient.
+- **Do not build a lottery.** First-come-first-served is the business rule.
+- **Do not queue all 10k users.** Once stock reaches zero, return the business
+  result immediately. A waiting room may smooth the edge, but the origin should
+  not store 9,900 useless jobs.
+- **Do not write a qualification to MySQL on the hot path.** Redis admission +
+  asynchronous worker keeps DB writes at ~100.
+- **Do not use a process-local mutex or in-memory queue.** API and worker
+  replicas must share Redis/NATS state.
+
+### 18.3 Cluster behavior
+
+All application replicas are stateless:
+
+- JWT auth, no sticky session.
+- Activity metadata is cached with a version/TTL; Redis remains authoritative
+  for stock.
+- Admission always executes the shared Redis script; no replica-local counter.
+- Workers use a durable JetStream consumer; duplicate delivery is handled by
+  unique keys.
+- Reconciliation uses a Kubernetes Lease or DB advisory lock so only one
+  replica repairs at a time.
+- MySQL uniqueness enforces `(activity_id, user_id)` and order idempotency.
+
+The Redis key design already uses a hash tag:
+
+```text
+seckill:{activity_id}:stock
+seckill:{activity_id}:users
+seckill:{activity_id}:tokens
+```
+
+This works with a single Redis, Sentinel, and Redis Cluster without changing the
+Lua contract. The first deployment can use Sentinel for HA; Redis Cluster is a
+later infrastructure change, not an application rewrite.
+
+### 18.4 Middleware expansion contract
+
+Even though the first deployment may use single-replica dev Redis/NATS, the
+application must be written for the clustered future:
+
+- Redis scripts use only keys with the same `{activity_id}` hash tag and avoid
+  cross-slot `MULTI`.
+- NATS publish uses `Nats-Msg-Id`; consumers use durable names and explicit ack.
+- No local cache is treated as stock truth.
+- No background job assumes it is the only running instance; use a Lease.
+- MySQL connections are bounded per pod; no long transaction in admission.
+- Configuration comes from environment/ConfigMap, not pod-local files.
+- Readiness/liveness are independent of Redis/NATS connectivity so a transient
+  dependency failure does not remove every API pod and cause a total outage;
+  the endpoint returns 503 and metrics/alerts fire.
+
+### 18.5 Load and chaos acceptance for this envelope
+
+k6 scenarios:
+
+1. 10k VUs, stock 100, one activity, all unique users.
+2. Duplicate reserve by the same user.
+3. Redis fail/restart during the burst.
+4. Worker stop/restart while 100 commands are pending.
+5. NATS restart after publish before ack.
+6. MySQL latency injection during worker order creation.
+7. Assert: orders <= 100, stock never negative, no duplicate user order,
+   accepted qualification either ORDERED or explicitly RELEASED/FAILED.
+
+The load test must verify the 9,900 losers receive a fast business rejection,
+not a timeout or a 5xx.

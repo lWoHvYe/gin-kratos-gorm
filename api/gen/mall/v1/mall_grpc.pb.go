@@ -1333,22 +1333,24 @@ var CatalogService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	InventoryService_GetStock_FullMethodName             = "/mall.v1.InventoryService/GetStock"
-	InventoryService_Reserve_FullMethodName              = "/mall.v1.InventoryService/Reserve"
-	InventoryService_Confirm_FullMethodName              = "/mall.v1.InventoryService/Confirm"
-	InventoryService_Release_FullMethodName              = "/mall.v1.InventoryService/Release"
-	InventoryService_AdminAdjustStock_FullMethodName     = "/mall.v1.InventoryService/AdminAdjustStock"
-	InventoryService_ListStocks_FullMethodName           = "/mall.v1.InventoryService/ListStocks"
-	InventoryService_Restock_FullMethodName              = "/mall.v1.InventoryService/Restock"
-	InventoryService_TccTryConfirm_FullMethodName        = "/mall.v1.InventoryService/TccTryConfirm"
-	InventoryService_TccConfirm_FullMethodName           = "/mall.v1.InventoryService/TccConfirm"
-	InventoryService_TccCancelConfirm_FullMethodName     = "/mall.v1.InventoryService/TccCancelConfirm"
-	InventoryService_TccQueryConfirm_FullMethodName      = "/mall.v1.InventoryService/TccQueryConfirm"
-	InventoryService_AllocateSeckillStock_FullMethodName = "/mall.v1.InventoryService/AllocateSeckillStock"
-	InventoryService_ReleaseSeckillStock_FullMethodName  = "/mall.v1.InventoryService/ReleaseSeckillStock"
-	InventoryService_GetSeckillStock_FullMethodName      = "/mall.v1.InventoryService/GetSeckillStock"
-	InventoryService_HoldSeckillStock_FullMethodName     = "/mall.v1.InventoryService/HoldSeckillStock"
-	InventoryService_ReleaseSeckillHold_FullMethodName   = "/mall.v1.InventoryService/ReleaseSeckillHold"
+	InventoryService_GetStock_FullMethodName                  = "/mall.v1.InventoryService/GetStock"
+	InventoryService_Reserve_FullMethodName                   = "/mall.v1.InventoryService/Reserve"
+	InventoryService_Confirm_FullMethodName                   = "/mall.v1.InventoryService/Confirm"
+	InventoryService_Release_FullMethodName                   = "/mall.v1.InventoryService/Release"
+	InventoryService_AdminAdjustStock_FullMethodName          = "/mall.v1.InventoryService/AdminAdjustStock"
+	InventoryService_ListStocks_FullMethodName                = "/mall.v1.InventoryService/ListStocks"
+	InventoryService_Restock_FullMethodName                   = "/mall.v1.InventoryService/Restock"
+	InventoryService_TccTryConfirm_FullMethodName             = "/mall.v1.InventoryService/TccTryConfirm"
+	InventoryService_TccConfirm_FullMethodName                = "/mall.v1.InventoryService/TccConfirm"
+	InventoryService_TccCancelConfirm_FullMethodName          = "/mall.v1.InventoryService/TccCancelConfirm"
+	InventoryService_TccQueryConfirm_FullMethodName           = "/mall.v1.InventoryService/TccQueryConfirm"
+	InventoryService_AllocateSeckillStock_FullMethodName      = "/mall.v1.InventoryService/AllocateSeckillStock"
+	InventoryService_ReleaseSeckillStock_FullMethodName       = "/mall.v1.InventoryService/ReleaseSeckillStock"
+	InventoryService_GetSeckillStock_FullMethodName           = "/mall.v1.InventoryService/GetSeckillStock"
+	InventoryService_HoldSeckillStock_FullMethodName          = "/mall.v1.InventoryService/HoldSeckillStock"
+	InventoryService_ReleaseSeckillHold_FullMethodName        = "/mall.v1.InventoryService/ReleaseSeckillHold"
+	InventoryService_CreateSeckillReservation_FullMethodName  = "/mall.v1.InventoryService/CreateSeckillReservation"
+	InventoryService_ReleaseSeckillReservation_FullMethodName = "/mall.v1.InventoryService/ReleaseSeckillReservation"
 )
 
 // InventoryServiceClient is the client API for InventoryService service.
@@ -1375,6 +1377,8 @@ type InventoryServiceClient interface {
 	GetSeckillStock(ctx context.Context, in *GetSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error)
 	HoldSeckillStock(ctx context.Context, in *HoldSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error)
 	ReleaseSeckillHold(ctx context.Context, in *ReleaseSeckillHoldRequest, opts ...grpc.CallOption) (*SeckillStock, error)
+	CreateSeckillReservation(ctx context.Context, in *CreateSeckillReservationRequest, opts ...grpc.CallOption) (*ReserveReply, error)
+	ReleaseSeckillReservation(ctx context.Context, in *ReleaseSeckillReservationRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type inventoryServiceClient struct {
@@ -1545,6 +1549,26 @@ func (c *inventoryServiceClient) ReleaseSeckillHold(ctx context.Context, in *Rel
 	return out, nil
 }
 
+func (c *inventoryServiceClient) CreateSeckillReservation(ctx context.Context, in *CreateSeckillReservationRequest, opts ...grpc.CallOption) (*ReserveReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReserveReply)
+	err := c.cc.Invoke(ctx, InventoryService_CreateSeckillReservation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) ReleaseSeckillReservation(ctx context.Context, in *ReleaseSeckillReservationRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, InventoryService_ReleaseSeckillReservation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // InventoryServiceServer is the server API for InventoryService service.
 // All implementations must embed UnimplementedInventoryServiceServer
 // for forward compatibility.
@@ -1569,6 +1593,8 @@ type InventoryServiceServer interface {
 	GetSeckillStock(context.Context, *GetSeckillStockRequest) (*SeckillStock, error)
 	HoldSeckillStock(context.Context, *HoldSeckillStockRequest) (*SeckillStock, error)
 	ReleaseSeckillHold(context.Context, *ReleaseSeckillHoldRequest) (*SeckillStock, error)
+	CreateSeckillReservation(context.Context, *CreateSeckillReservationRequest) (*ReserveReply, error)
+	ReleaseSeckillReservation(context.Context, *ReleaseSeckillReservationRequest) (*Empty, error)
 	mustEmbedUnimplementedInventoryServiceServer()
 }
 
@@ -1626,6 +1652,12 @@ func (UnimplementedInventoryServiceServer) HoldSeckillStock(context.Context, *Ho
 }
 func (UnimplementedInventoryServiceServer) ReleaseSeckillHold(context.Context, *ReleaseSeckillHoldRequest) (*SeckillStock, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReleaseSeckillHold not implemented")
+}
+func (UnimplementedInventoryServiceServer) CreateSeckillReservation(context.Context, *CreateSeckillReservationRequest) (*ReserveReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSeckillReservation not implemented")
+}
+func (UnimplementedInventoryServiceServer) ReleaseSeckillReservation(context.Context, *ReleaseSeckillReservationRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleaseSeckillReservation not implemented")
 }
 func (UnimplementedInventoryServiceServer) mustEmbedUnimplementedInventoryServiceServer() {}
 func (UnimplementedInventoryServiceServer) testEmbeddedByValue()                          {}
@@ -1936,6 +1968,42 @@ func _InventoryService_ReleaseSeckillHold_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_CreateSeckillReservation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSeckillReservationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).CreateSeckillReservation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_CreateSeckillReservation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).CreateSeckillReservation(ctx, req.(*CreateSeckillReservationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_ReleaseSeckillReservation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseSeckillReservationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ReleaseSeckillReservation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ReleaseSeckillReservation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ReleaseSeckillReservation(ctx, req.(*ReleaseSeckillReservationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // InventoryService_ServiceDesc is the grpc.ServiceDesc for InventoryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2006,6 +2074,14 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReleaseSeckillHold",
 			Handler:    _InventoryService_ReleaseSeckillHold_Handler,
+		},
+		{
+			MethodName: "CreateSeckillReservation",
+			Handler:    _InventoryService_CreateSeckillReservation_Handler,
+		},
+		{
+			MethodName: "ReleaseSeckillReservation",
+			Handler:    _InventoryService_ReleaseSeckillReservation_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -2682,6 +2758,7 @@ var PricingService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	OrderService_CreateOrder_FullMethodName        = "/mall.v1.OrderService/CreateOrder"
+	OrderService_CreateSeckillOrder_FullMethodName = "/mall.v1.OrderService/CreateSeckillOrder"
 	OrderService_CreateOrderInner_FullMethodName   = "/mall.v1.OrderService/CreateOrderInner"
 	OrderService_CancelOrder_FullMethodName        = "/mall.v1.OrderService/CancelOrder"
 	OrderService_CancelOrderInner_FullMethodName   = "/mall.v1.OrderService/CancelOrderInner"
@@ -2701,6 +2778,7 @@ const (
 // ---------------------------------------------------------------- order
 type OrderServiceClient interface {
 	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*Order, error)
+	CreateSeckillOrder(ctx context.Context, in *CreateSeckillOrderRequest, opts ...grpc.CallOption) (*Order, error)
 	CreateOrderInner(ctx context.Context, in *CreateOrderInnerRequest, opts ...grpc.CallOption) (*Order, error)
 	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*Order, error)
 	CancelOrderInner(ctx context.Context, in *CancelOrderInnerRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -2725,6 +2803,16 @@ func (c *orderServiceClient) CreateOrder(ctx context.Context, in *CreateOrderReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Order)
 	err := c.cc.Invoke(ctx, OrderService_CreateOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orderServiceClient) CreateSeckillOrder(ctx context.Context, in *CreateSeckillOrderRequest, opts ...grpc.CallOption) (*Order, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Order)
+	err := c.cc.Invoke(ctx, OrderService_CreateSeckillOrder_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2838,6 +2926,7 @@ func (c *orderServiceClient) TccQueryMarkPaid(ctx context.Context, in *TccPaymen
 // ---------------------------------------------------------------- order
 type OrderServiceServer interface {
 	CreateOrder(context.Context, *CreateOrderRequest) (*Order, error)
+	CreateSeckillOrder(context.Context, *CreateSeckillOrderRequest) (*Order, error)
 	CreateOrderInner(context.Context, *CreateOrderInnerRequest) (*Order, error)
 	CancelOrder(context.Context, *CancelOrderRequest) (*Order, error)
 	CancelOrderInner(context.Context, *CancelOrderInnerRequest) (*Empty, error)
@@ -2860,6 +2949,9 @@ type UnimplementedOrderServiceServer struct{}
 
 func (UnimplementedOrderServiceServer) CreateOrder(context.Context, *CreateOrderRequest) (*Order, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateOrder not implemented")
+}
+func (UnimplementedOrderServiceServer) CreateSeckillOrder(context.Context, *CreateSeckillOrderRequest) (*Order, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateSeckillOrder not implemented")
 }
 func (UnimplementedOrderServiceServer) CreateOrderInner(context.Context, *CreateOrderInnerRequest) (*Order, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateOrderInner not implemented")
@@ -2926,6 +3018,24 @@ func _OrderService_CreateOrder_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrderServiceServer).CreateOrder(ctx, req.(*CreateOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OrderService_CreateSeckillOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateSeckillOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).CreateSeckillOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_CreateSeckillOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).CreateSeckillOrder(ctx, req.(*CreateSeckillOrderRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3120,6 +3230,10 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateOrder",
 			Handler:    _OrderService_CreateOrder_Handler,
+		},
+		{
+			MethodName: "CreateSeckillOrder",
+			Handler:    _OrderService_CreateSeckillOrder_Handler,
 		},
 		{
 			MethodName: "CreateOrderInner",

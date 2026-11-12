@@ -1357,6 +1357,13 @@ func (h *handlers) getSeckillActivity(c *gin.Context) {
 	httpx.OK(c, reply)
 }
 
+type reserveSeckillRequest struct {
+	AddressID       int64  `json:"address_id"`
+	ReceiverName    string `json:"receiver_name"`
+	ReceiverPhone   string `json:"receiver_phone"`
+	ReceiverAddress string `json:"receiver_address"`
+}
+
 func (h *handlers) reserveSeckill(c *gin.Context) {
 	uid, err := userID(c)
 	if err != nil {
@@ -1368,7 +1375,15 @@ func (h *handlers) reserveSeckill(c *gin.Context) {
 		httpx.Error(c, apperr.Invalid("invalid activity id"))
 		return
 	}
-	reply, err := h.clients.Seckill.Reserve(c.Request.Context(), &pb.ReserveSeckillRequest{ActivityId: id, UserId: uid})
+	var in reserveSeckillRequest
+	if err := bindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Seckill.Reserve(c.Request.Context(), &pb.ReserveSeckillRequest{
+		ActivityId: id, UserId: uid, AddressId: in.AddressID,
+		ReceiverName: in.ReceiverName, ReceiverPhone: in.ReceiverPhone, ReceiverAddress: in.ReceiverAddress,
+	})
 	if err != nil {
 		httpx.Error(c, remoteError(err))
 		return

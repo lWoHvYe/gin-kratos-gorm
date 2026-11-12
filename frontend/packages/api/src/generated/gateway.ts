@@ -678,7 +678,17 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        address_id?: number;
+                        receiver_name?: string;
+                        receiver_phone?: string;
+                        receiver_address?: string;
+                    };
+                };
+            };
             responses: {
                 /** @description qualification issued or already issued */
                 202: {
@@ -958,6 +968,12 @@ export interface components {
             order_no?: string;
             /** Format: int64 */
             expires_at_unix?: number;
+            /** Format: int64 */
+            address_id?: number;
+            receiver_name?: string;
+            receiver_phone?: string;
+            receiver_address?: string;
+            payment_no?: string;
         };
     };
     responses: never;

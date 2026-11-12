@@ -1,8 +1,9 @@
 # Seckill design
 
-Status: S2 implemented (activity lifecycle, inventory bucket, Redis Lua
-admission, durable qualification holds/expiry). S3+ (JetStream worker,
-CreateSeckillOrder, order/payment linkage) are not implemented yet.
+Status: S3 implemented (activity lifecycle, inventory bucket, Redis Lua
+admission, durable holds/expiry, JetStream order worker, fixed-price
+CreateSeckillOrder and payment intent). S4 (HA/load/chaos/reconciliation) and
+S5 (C-end page) remain.
 
 This document is deliberately a production design rather than a demo sketch.
 Seckill is treated as a small, isolated, failure-aware subsystem that reuses the
@@ -632,8 +633,6 @@ S1 now provides:
 
 Still missing:
 
-- JetStream command publishing and worker;
-- `CreateSeckillOrder` and order-level compensation;
 - WAF/OpenTelemetry/k6 execution against a production-like endpoint;
 - reconciliation/lease worker;
 - frontend seckill page.

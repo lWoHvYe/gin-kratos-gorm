@@ -347,6 +347,9 @@ services:
       GRPC_ADDR: ":9010"
       HTTP_ADDR: ":9110"
       INVENTORY_ADDR: inventory:9003
+      ORDER_ADDR: order:9006
+      PAYMENT_ADDR: payment:9007
+      SECKILL_STREAM_REPLICAS: "1"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9110/healthz"]

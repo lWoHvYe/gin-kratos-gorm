@@ -9,6 +9,7 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/mq"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -26,17 +27,20 @@ type Service struct {
 	pb.UnimplementedSeckillServiceServer
 	db          *sql.DB
 	inventory   pb.InventoryServiceClient
+	orders      pb.OrderServiceClient
+	payment     pb.PaymentServiceClient
+	mq          *mq.Client
 	cache       *redis.Client
 	tokenSecret []byte
 	log         *slog.Logger
 	now         func() time.Time
 }
 
-func New(database *sql.DB, inventory pb.InventoryServiceClient, cache *redis.Client, logger *slog.Logger, tokenSecret string) *Service {
+func New(database *sql.DB, inventory pb.InventoryServiceClient, orders pb.OrderServiceClient, payment pb.PaymentServiceClient, client *mq.Client, cache *redis.Client, logger *slog.Logger, tokenSecret string) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{db: database, inventory: inventory, cache: cache,
+	return &Service{db: database, inventory: inventory, orders: orders, payment: payment, mq: client, cache: cache,
 		tokenSecret: []byte(tokenSecret), log: logger, now: time.Now}
 }
 

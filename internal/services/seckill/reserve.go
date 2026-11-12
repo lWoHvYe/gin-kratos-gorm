@@ -73,18 +73,26 @@ return 0
 )
 
 type qualification struct {
-	activityID int64
-	userID     int64
-	tokenHash  string
-	status     string
-	orderNo    string
-	expiresAt  time.Time
+	activityID    int64
+	userID        int64
+	addressID     int64
+	receiverName  string
+	receiverPhone string
+	receiverAddr  string
+	tokenHash     string
+	status        string
+	orderNo       string
+	paymentNo     string
+	expiresAt     time.Time
+	publishedAt   sql.NullTime
 }
 
 func (q *qualification) toPB(rawToken string) *pb.SeckillQualification {
 	return &pb.SeckillQualification{
 		Token: rawToken, ActivityId: q.activityID, UserId: q.userID,
-		Status: q.status, OrderNo: q.orderNo, ExpiresAtUnix: q.expiresAt.Unix(),
+		Status: q.status, OrderNo: q.orderNo, PaymentNo: q.paymentNo, ExpiresAtUnix: q.expiresAt.Unix(),
+		AddressId: q.addressID, ReceiverName: q.receiverName,
+		ReceiverPhone: q.receiverPhone, ReceiverAddress: q.receiverAddr,
 	}
 }
 
@@ -160,11 +168,17 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 			s.compensate(ctx, a.id, req.GetUserId(), tokenHash)
 			return nil, err
 		}
-		q, err := s.saveQualification(ctx, a.id, req.GetUserId(), tokenHash, expiresAt)
+		q, err := s.saveQualification(ctx, a.id, req.GetUserId(), tokenHash, expiresAt, req)
 		if err != nil {
 			s.releaseQualification(ctx, a.id, tokenHash)
 			s.compensate(ctx, a.id, req.GetUserId(), tokenHash)
 			return nil, err
+		}
+		if !q.publishedAt.Valid {
+			if err := s.publishQualification(ctx, q, a); err != nil {
+				// The qualification is durable and the republisher will retry.
+				s.log.Warn("publish seckill command deferred", "activity_id", a.id, "error", err)
+			}
 		}
 		return q.toPB(rawToken), nil
 	case reserveExisting:
@@ -174,6 +188,11 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 			// idempotent by the token hash.
 			if err := s.holdQualification(ctx, a.id, tokenHash); err != nil {
 				return nil, err
+			}
+			if !q.publishedAt.Valid {
+				if err := s.publishQualification(ctx, q, a); err != nil {
+					s.log.Warn("republish seckill command deferred", "activity_id", a.id, "error", err)
+				}
 			}
 			return q.toPB(rawToken), nil
 		}
@@ -186,7 +205,7 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 		if err := s.holdQualification(ctx, a.id, tokenHash); err != nil {
 			return nil, err
 		}
-		q, err = s.saveQualification(ctx, a.id, req.GetUserId(), tokenHash, expiresAt)
+		q, err = s.saveQualification(ctx, a.id, req.GetUserId(), tokenHash, expiresAt, req)
 		if err != nil {
 			s.releaseQualification(ctx, a.id, tokenHash)
 			return nil, err
@@ -214,10 +233,12 @@ func (s *Service) GetQualification(ctx context.Context, req *pb.GetSeckillQualif
 	return q.toPB(req.GetToken()), nil
 }
 
-func (s *Service) saveQualification(ctx context.Context, activityID, userID int64, tokenHash string, expiresAt time.Time) (*qualification, error) {
+func (s *Service) saveQualification(ctx context.Context, activityID, userID int64, tokenHash string, expiresAt time.Time, req *pb.ReserveSeckillRequest) (*qualification, error) {
 	res, err := s.db.ExecContext(ctx, `INSERT IGNORE INTO seckill_qualifications
-		(activity_id, user_id, token_hash, status, expires_at) VALUES (?, ?, ?, 'ISSUED', ?)`,
-		activityID, userID, tokenHash, expiresAt)
+		(activity_id, user_id, address_id, receiver_name, receiver_phone, receiver_address, token_hash, status, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, 'ISSUED', ?)`,
+		activityID, userID, req.GetAddressId(), req.GetReceiverName(), req.GetReceiverPhone(),
+		req.GetReceiverAddress(), tokenHash, expiresAt)
 	if err != nil {
 		return nil, apperr.Internal("save seckill qualification", err)
 	}
@@ -231,9 +252,11 @@ func (s *Service) saveQualification(ctx context.Context, activityID, userID int6
 
 func (s *Service) getQualification(ctx context.Context, tokenHash string, userID int64) (*qualification, error) {
 	var q qualification
-	err := s.db.QueryRowContext(ctx, `SELECT activity_id, user_id, token_hash, status, order_no, expires_at
+	err := s.db.QueryRowContext(ctx, `SELECT activity_id, user_id, address_id, receiver_name, receiver_phone,
+		receiver_address, token_hash, status, order_no, payment_no, expires_at, published_at
 		FROM seckill_qualifications WHERE token_hash=? AND user_id=?`, tokenHash, userID).
-		Scan(&q.activityID, &q.userID, &q.tokenHash, &q.status, &q.orderNo, &q.expiresAt)
+		Scan(&q.activityID, &q.userID, &q.addressID, &q.receiverName, &q.receiverPhone,
+			&q.receiverAddr, &q.tokenHash, &q.status, &q.orderNo, &q.paymentNo, &q.expiresAt, &q.publishedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("seckill qualification not found")
 	}

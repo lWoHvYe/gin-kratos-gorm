@@ -194,6 +194,11 @@ components:
         status: { type: string }
         order_no: { type: string }
         expires_at_unix: { type: integer, format: int64 }
+        address_id: { type: integer, format: int64 }
+        receiver_name: { type: string }
+        receiver_phone: { type: string }
+        receiver_address: { type: string }
+        payment_no: { type: string }
 paths:
   /api/v1/auth/login:
     post:
@@ -446,6 +451,16 @@ paths:
     post:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address_id: { type: integer, format: int64 }
+                receiver_name: { type: string }
+                receiver_phone: { type: string }
+                receiver_address: { type: string }
       responses:
         '202':
           description: qualification issued or already issued

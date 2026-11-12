@@ -62,6 +62,12 @@ func (s *Service) markPaidTCC(ctx context.Context, in *intent) error {
 		if err := tcc.CallBranch(req, inventoryTry+"/TccTryConfirm", s.tcc.inventoryURL+"/TccConfirm", s.tcc.inventoryURL+"/TccCancelConfirm", &pb.Empty{}); err != nil {
 			return err
 		}
+		// Seckill orders have no pricing quote: price is fixed and coupons and
+		// promotion stacking are intentionally bypassed. The order/inventory
+		// branches remain mandatory.
+		if strings.HasPrefix(order.GetQuoteId(), "seckill:") {
+			return nil
+		}
 		return tcc.CallBranch(req, pricingTry+"/TccTryConsume", s.tcc.pricingURL+"/TccConfirmConsume", s.tcc.pricingURL+"/TccCancelConsume", &pb.Empty{})
 	})
 	if err != nil {

@@ -88,6 +88,8 @@ spec:
             {{- if eq $name "payment" }}
             - name: ORDER_ADDR
               value: "order:9006"
+            - name: PAYMENT_ADDR
+              value: "payment:9007"
             - name: INVENTORY_ADDR
               value: "inventory:9003"
             - name: PRICING_ADDR
@@ -126,6 +128,12 @@ spec:
             {{- if eq $name "seckill" }}
             - name: INVENTORY_ADDR
               value: "inventory:9003"
+            - name: ORDER_ADDR
+              value: "order:9006"
+            - name: PAYMENT_ADDR
+              value: "payment:9007"
+            - name: SECKILL_STREAM_REPLICAS
+              value: "1"
             {{- end }}
             {{- if $.Values.etcd.endpoints }}
             - name: ETCD_ENDPOINTS

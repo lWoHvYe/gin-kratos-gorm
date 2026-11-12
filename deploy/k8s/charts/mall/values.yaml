@@ -167,10 +167,10 @@ authz:
       sources: [gateway, admin, order, payment, dtm]
       paths: ["/mall.v1.PricingService/*", "/mall.v1.PromotionService/*"]
     - name: order
-      sources: [gateway, admin, payment, aftersales, dtm]
+      sources: [gateway, admin, payment, aftersales, dtm, seckill]
       paths: ["/mall.v1.OrderService/*"]
     - name: payment
-      sources: [gateway, admin, aftersales]
+      sources: [gateway, admin, aftersales, seckill]
       paths: ["/mall.v1.PaymentService/*"]
     - name: fulfillment
       sources: [gateway, admin]

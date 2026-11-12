@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/db"
+	"gin-kratos-gorm/internal/platform/id"
 )
 
 const (
@@ -307,3 +309,233 @@ func (s *Service) seckillLedgerExists(ctx context.Context, q rowQuerier, activit
 	}
 	return true, nil
 }
+
+type seckillOrderStock struct {
+	activityID int64
+	orderNo    string
+	skuID      int64
+	quantity   int64
+	refNo      string
+	status     string
+}
+
+func (s *Service) seckillOrderMapping(ctx context.Context, q rowQuerier, orderNo string, skuID int64, forUpdate bool) (*seckillOrderStock, error) {
+	query := `SELECT activity_id, order_no, sku_id, quantity, ref_no, status
+		FROM seckill_order_stock WHERE order_no=? AND sku_id=?`
+	if forUpdate {
+		query += " FOR UPDATE"
+	}
+	var m seckillOrderStock
+	err := q.QueryRowContext(ctx, query, orderNo, skuID).Scan(&m.activityID, &m.orderNo, &m.skuID, &m.quantity, &m.refNo, &m.status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, apperr.Internal("query seckill order stock", err)
+	}
+	return &m, nil
+}
+
+// confirmSeckillMapping commits a held seckill unit when its order is paid.
+func (s *Service) confirmSeckillMapping(ctx context.Context, tx *sql.Tx, r *reservation) error {
+	m, err := s.seckillOrderMapping(ctx, tx, r.orderNo, r.skuID, true)
+	if err != nil || m == nil {
+		return err
+	}
+	if m.status == statusConfirmed {
+		return nil
+	}
+	if m.status != statusHeld {
+		return apperr.Conflict("seckill order stock is not held")
+	}
+	st, err := s.getSeckillStock(ctx, tx, m.activityID, true)
+	if err != nil {
+		return err
+	}
+	if st.held < m.quantity {
+		return apperr.Conflict("seckill held stock is insufficient")
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+		SET held = held - ?, sold = sold + ?, version = version + 1
+		WHERE activity_id = ? AND held >= ?`,
+		m.quantity, m.quantity, m.activityID, m.quantity); err != nil {
+		return apperr.Internal("confirm seckill order stock", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE seckill_order_stock SET status=? WHERE order_no=? AND sku_id=?`,
+		statusConfirmed, m.orderNo, m.skuID); err != nil {
+		return apperr.Internal("confirm seckill order mapping", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_stock_ledger
+		(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,
+		m.activityID, -m.quantity, st.available, seckillLedgerSell, m.orderNo); err != nil {
+		return apperr.Internal("insert seckill sell ledger", err)
+	}
+	return nil
+}
+
+// releaseSeckillMapping returns an order-held unit to the activity bucket. It is
+// called by the normal reservation Release path and reports whether the
+// reservation is a seckill reservation (so inventory_stocks.reserved must not
+// be decremented a second time).
+func (s *Service) releaseSeckillMapping(ctx context.Context, tx *sql.Tx, r *reservation) (bool, error) {
+	m, err := s.seckillOrderMapping(ctx, tx, r.orderNo, r.skuID, true)
+	if err != nil || m == nil {
+		return false, err
+	}
+	switch m.status {
+	case statusReleased:
+		return true, nil
+	case statusConfirmed:
+		return true, apperr.Conflict("seckill order stock is already confirmed")
+	case statusHeld:
+	default:
+		return true, apperr.Conflict("unexpected seckill order stock status")
+	}
+	st, err := s.getSeckillStock(ctx, tx, m.activityID, true)
+	if err != nil {
+		return true, err
+	}
+	if st.held < m.quantity {
+		return true, apperr.Conflict("seckill held stock is insufficient")
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+		SET held = held - ?, available = available + ?, version = version + 1
+		WHERE activity_id = ? AND held >= ?`,
+		m.quantity, m.quantity, m.activityID, m.quantity); err != nil {
+		return true, apperr.Internal("release seckill order stock", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE seckill_order_stock SET status=? WHERE order_no=? AND sku_id=?`,
+		statusReleased, m.orderNo, m.skuID); err != nil {
+		return true, apperr.Internal("release seckill order mapping", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_stock_ledger
+		(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,
+		m.activityID, m.quantity, st.available+m.quantity, seckillLedgerReleaseOrder, m.orderNo); err != nil {
+		return true, apperr.Internal("insert seckill order-release ledger", err)
+	}
+	return true, nil
+}
+
+// CreateSeckillReservation converts an existing qualification hold into an
+// order reservation without incrementing inventory_stocks.reserved again. The
+// inventory reservation row is still the object the payment path confirms.
+func (s *Service) CreateSeckillReservation(ctx context.Context, req *pb.CreateSeckillReservationRequest) (*pb.ReserveReply, error) {
+	if req.GetActivityId() <= 0 || strings.TrimSpace(req.GetOrderNo()) == "" || req.GetSkuId() <= 0 ||
+		req.GetQuantity() <= 0 || strings.TrimSpace(req.GetRefNo()) == "" {
+		return nil, apperr.Invalid("activity_id, order_no, sku_id, quantity and ref_no are required")
+	}
+	existing, err := s.reservationByOrderSku(ctx, s.db, req.GetOrderNo(), req.GetSkuId(), false)
+	if err == nil {
+		return reservationReply(existing)
+	}
+	if !apperr.IsCode(err, apperr.CodeNotFound) {
+		return nil, err
+	}
+	ttl := defaultReservationTTL
+	if req.GetTtlSeconds() > 0 {
+		ttl = time.Duration(req.GetTtlSeconds()) * time.Second
+		if ttl > maxReservationTTL {
+			ttl = maxReservationTTL
+		}
+	}
+	var created *reservation
+	err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		m, err := s.seckillOrderMapping(ctx, tx, req.GetOrderNo(), req.GetSkuId(), true)
+		if err != nil {
+			return err
+		}
+		if m != nil && m.status == statusHeld {
+			// Already converted.
+			r, rerr := s.reservationByOrderSku(ctx, tx, req.GetOrderNo(), req.GetSkuId(), false)
+			created = r
+			return rerr
+		}
+		st, err := s.getSeckillStock(ctx, tx, req.GetActivityId(), true)
+		if err != nil {
+			return err
+		}
+		if st.held < req.GetQuantity() {
+			return apperr.Conflict("seckill held stock is insufficient")
+		}
+		held, err := s.seckillLedgerExists(ctx, tx, req.GetActivityId(), seckillLedgerHold, req.GetRefNo())
+		if err != nil {
+			return err
+		}
+		if !held {
+			return apperr.Conflict("seckill qualification hold is missing")
+		}
+		now := time.Now()
+		r := &reservation{
+			reservationNo: id.Reservation(),
+			orderNo:       req.GetOrderNo(),
+			skuID:         req.GetSkuId(),
+			warehouseID:   st.warehouseID,
+			quantity:      req.GetQuantity(),
+			status:        statusHeld,
+			expiresAt:     now.Add(ttl),
+			createdAt:     now,
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO stock_reservations
+			(reservation_no, order_no, sku_id, warehouse_id, quantity, status, expires_at, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			r.reservationNo, r.orderNo, r.skuID, r.warehouseID, r.quantity, r.status, r.expiresAt, now, now); err != nil {
+			return apperr.Internal("insert seckill reservation", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_order_stock
+			(activity_id, order_no, sku_id, quantity, ref_no, status) VALUES (?, ?, ?, ?, ?, ?)`,
+			req.GetActivityId(), r.orderNo, r.skuID, r.quantity, req.GetRefNo(), statusHeld); err != nil {
+			return apperr.Internal("insert seckill order mapping", err)
+		}
+		created = r
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if created == nil {
+		return nil, apperr.Internal("seckill reservation was not created", nil)
+	}
+	return reservationReply(created)
+}
+
+// ReleaseSeckillReservation is the failure path used when order creation fails
+// after the inventory reservation was created. It keeps the global allocation
+// intact and returns the unit to the seckill bucket.
+func (s *Service) ReleaseSeckillReservation(ctx context.Context, req *pb.ReleaseSeckillReservationRequest) (*pb.Empty, error) {
+	if strings.TrimSpace(req.GetOrderNo()) == "" || req.GetSkuId() <= 0 {
+		return nil, apperr.Invalid("order_no and sku_id are required")
+	}
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		r, err := s.reservationByOrderSku(ctx, tx, req.GetOrderNo(), req.GetSkuId(), true)
+		if err != nil {
+			return err
+		}
+		if r.status == statusReleased {
+			return nil
+		}
+		if r.status != statusHeld {
+			return apperr.Conflict("seckill reservation is not held")
+		}
+		seckill, err := s.releaseSeckillMapping(ctx, tx, r)
+		if err != nil {
+			return err
+		}
+		if !seckill {
+			return apperr.Conflict("reservation is not a seckill reservation")
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE stock_reservations SET status=?, updated_at=? WHERE id=? AND status=?`,
+			statusReleased, time.Now(), r.id, statusHeld); err != nil {
+			return apperr.Internal("release seckill reservation", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.Empty{}, nil
+}
+
+const (
+	seckillLedgerSell         = "SELL"
+	seckillLedgerReleaseOrder = "RELEASE_ORDER"
+)

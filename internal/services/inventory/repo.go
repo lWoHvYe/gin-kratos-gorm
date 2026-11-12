@@ -215,6 +215,9 @@ func (s *Service) confirmTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 	if affected == 0 {
 		return nil, apperr.Conflict(fmt.Sprintf("reservation %s changed concurrently", r.reservationNo))
 	}
+	if err := s.confirmSeckillMapping(ctx, tx, r); err != nil {
+		return nil, err
+	}
 	st, err := s.stock(ctx, tx, r.skuID, r.warehouseID)
 	if err != nil {
 		return nil, err
@@ -253,26 +256,32 @@ func (s *Service) releaseTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 		return nil, apperr.Internal("unexpected reservation status", fmt.Errorf("status %q", r.status))
 	}
 
-	res, err := tx.ExecContext(ctx, `UPDATE inventory_stocks
-		SET reserved = reserved - ?, version = version + 1
-		WHERE sku_id = ? AND warehouse_id = ? AND reserved >= ?`,
-		r.quantity, r.skuID, r.warehouseID, r.quantity)
+	seckill, err := s.releaseSeckillMapping(ctx, tx, r)
 	if err != nil {
-		return nil, apperr.Internal("release stock", err)
+		return nil, err
 	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return nil, apperr.Internal("release stock rows", err)
+	if !seckill {
+		res, err := tx.ExecContext(ctx, `UPDATE inventory_stocks
+			SET reserved = reserved - ?, version = version + 1
+			WHERE sku_id = ? AND warehouse_id = ? AND reserved >= ?`,
+			r.quantity, r.skuID, r.warehouseID, r.quantity)
+		if err != nil {
+			return nil, apperr.Internal("release stock", err)
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return nil, apperr.Internal("release stock rows", err)
+		}
+		if affected == 0 {
+			return nil, apperr.Failed(fmt.Sprintf("stock is inconsistent for reservation %s", r.reservationNo))
+		}
 	}
-	if affected == 0 {
-		return nil, apperr.Failed(fmt.Sprintf("stock is inconsistent for reservation %s", r.reservationNo))
-	}
-	res, err = tx.ExecContext(ctx, `UPDATE stock_reservations SET status = ?, updated_at = ?
+	res, err := tx.ExecContext(ctx, `UPDATE stock_reservations SET status = ?, updated_at = ?
 		WHERE id = ? AND status = ?`, statusReleased, time.Now(), r.id, statusHeld)
 	if err != nil {
 		return nil, apperr.Internal("release reservation", err)
 	}
-	affected, err = res.RowsAffected()
+	affected, err := res.RowsAffected()
 	if err != nil {
 		return nil, apperr.Internal("release reservation rows", err)
 	}

@@ -1,8 +1,8 @@
 # Seckill service
 
-Status: S2 (activity lifecycle, inventory bucket allocation, warmup, Redis Lua
-admission, durable qualification holds and expiry). Asynchronous order creation
-is S3, documented in [../seckill-design.md](../seckill-design.md).
+Status: S3 (activity lifecycle, inventory bucket, Redis Lua admission, durable
+holds/expiry, JetStream order worker, fixed-price order creation and payment
+intent). Production load/HA/reconciliation remain S4.
 
 ## Ports
 

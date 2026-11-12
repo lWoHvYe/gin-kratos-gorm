@@ -237,6 +237,8 @@ service InventoryService {
   rpc GetSeckillStock (GetSeckillStockRequest) returns (SeckillStock);
   rpc HoldSeckillStock (HoldSeckillStockRequest) returns (SeckillStock);
   rpc ReleaseSeckillHold (ReleaseSeckillHoldRequest) returns (SeckillStock);
+  rpc CreateSeckillReservation (CreateSeckillReservationRequest) returns (ReserveReply);
+  rpc ReleaseSeckillReservation (ReleaseSeckillReservationRequest) returns (Empty);
 }
 message Stock {
   int64 sku_id = 1;
@@ -346,6 +348,7 @@ message LockCouponRequest { string quote_id = 1; string coupon_id = 2; int64 use
 // ---------------------------------------------------------------- order
 service OrderService {
   rpc CreateOrder (CreateOrderRequest) returns (Order);
+  rpc CreateSeckillOrder (CreateSeckillOrderRequest) returns (Order);
   rpc CreateOrderInner (CreateOrderInnerRequest) returns (Order);
   rpc CancelOrder (CancelOrderRequest) returns (Order);
   rpc CancelOrderInner (CancelOrderInnerRequest) returns (Empty);
@@ -770,7 +773,14 @@ message ReleaseSeckillStockRequest { int64 activity_id = 1; }
 message GetSeckillStockRequest { int64 activity_id = 1; }
 
 
-message ReserveSeckillRequest { int64 activity_id = 1; int64 user_id = 2; }
+message ReserveSeckillRequest {
+  int64 activity_id = 1;
+  int64 user_id = 2;
+  int64 address_id = 3;
+  string receiver_name = 4;
+  string receiver_phone = 5;
+  string receiver_address = 6;
+}
 message GetSeckillQualificationRequest { string token = 1; int64 user_id = 2; }
 message SeckillQualification {
   string token = 1;
@@ -779,7 +789,35 @@ message SeckillQualification {
   string status = 4;
   string order_no = 5;
   int64 expires_at_unix = 6;
+  int64 address_id = 7;
+  string receiver_name = 8;
+  string receiver_phone = 9;
+  string receiver_address = 10;
+  string payment_no = 11;
 }
 
 message HoldSeckillStockRequest { int64 activity_id = 1; int64 quantity = 2; string ref_no = 3; }
 message ReleaseSeckillHoldRequest { int64 activity_id = 1; int64 quantity = 2; string ref_no = 3; }
+
+message CreateSeckillOrderRequest {
+  int64 activity_id = 1;
+  int64 user_id = 2;
+  int64 sku_id = 3;
+  int64 price_cent = 4;
+  int32 quantity = 5;
+  string token_hash = 6;
+  int64 address_id = 7;
+  string receiver_name = 8;
+  string receiver_phone = 9;
+  string receiver_address = 10;
+  int64 expire_at_unix = 11;
+}
+message CreateSeckillReservationRequest {
+  int64 activity_id = 1;
+  string order_no = 2;
+  int64 sku_id = 3;
+  int64 quantity = 4;
+  string ref_no = 5;
+  int64 ttl_seconds = 6;
+}
+message ReleaseSeckillReservationRequest { string order_no = 1; int64 sku_id = 2; }

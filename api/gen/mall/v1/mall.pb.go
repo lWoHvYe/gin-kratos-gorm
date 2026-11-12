@@ -9318,11 +9318,15 @@ func (x *GetSeckillStockRequest) GetActivityId() int64 {
 }
 
 type ReserveSeckillRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ActivityId    int64                  `protobuf:"varint,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
-	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ActivityId      int64                  `protobuf:"varint,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
+	UserId          int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	AddressId       int64                  `protobuf:"varint,3,opt,name=address_id,json=addressId,proto3" json:"address_id,omitempty"`
+	ReceiverName    string                 `protobuf:"bytes,4,opt,name=receiver_name,json=receiverName,proto3" json:"receiver_name,omitempty"`
+	ReceiverPhone   string                 `protobuf:"bytes,5,opt,name=receiver_phone,json=receiverPhone,proto3" json:"receiver_phone,omitempty"`
+	ReceiverAddress string                 `protobuf:"bytes,6,opt,name=receiver_address,json=receiverAddress,proto3" json:"receiver_address,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ReserveSeckillRequest) Reset() {
@@ -9367,6 +9371,34 @@ func (x *ReserveSeckillRequest) GetUserId() int64 {
 		return x.UserId
 	}
 	return 0
+}
+
+func (x *ReserveSeckillRequest) GetAddressId() int64 {
+	if x != nil {
+		return x.AddressId
+	}
+	return 0
+}
+
+func (x *ReserveSeckillRequest) GetReceiverName() string {
+	if x != nil {
+		return x.ReceiverName
+	}
+	return ""
+}
+
+func (x *ReserveSeckillRequest) GetReceiverPhone() string {
+	if x != nil {
+		return x.ReceiverPhone
+	}
+	return ""
+}
+
+func (x *ReserveSeckillRequest) GetReceiverAddress() string {
+	if x != nil {
+		return x.ReceiverAddress
+	}
+	return ""
 }
 
 type GetSeckillQualificationRequest struct {
@@ -9422,15 +9454,20 @@ func (x *GetSeckillQualificationRequest) GetUserId() int64 {
 }
 
 type SeckillQualification struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
-	ActivityId    int64                  `protobuf:"varint,2,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
-	UserId        int64                  `protobuf:"varint,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	OrderNo       string                 `protobuf:"bytes,5,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
-	ExpiresAtUnix int64                  `protobuf:"varint,6,opt,name=expires_at_unix,json=expiresAtUnix,proto3" json:"expires_at_unix,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Token           string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	ActivityId      int64                  `protobuf:"varint,2,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
+	UserId          int64                  `protobuf:"varint,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Status          string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	OrderNo         string                 `protobuf:"bytes,5,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
+	ExpiresAtUnix   int64                  `protobuf:"varint,6,opt,name=expires_at_unix,json=expiresAtUnix,proto3" json:"expires_at_unix,omitempty"`
+	AddressId       int64                  `protobuf:"varint,7,opt,name=address_id,json=addressId,proto3" json:"address_id,omitempty"`
+	ReceiverName    string                 `protobuf:"bytes,8,opt,name=receiver_name,json=receiverName,proto3" json:"receiver_name,omitempty"`
+	ReceiverPhone   string                 `protobuf:"bytes,9,opt,name=receiver_phone,json=receiverPhone,proto3" json:"receiver_phone,omitempty"`
+	ReceiverAddress string                 `protobuf:"bytes,10,opt,name=receiver_address,json=receiverAddress,proto3" json:"receiver_address,omitempty"`
+	PaymentNo       string                 `protobuf:"bytes,11,opt,name=payment_no,json=paymentNo,proto3" json:"payment_no,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *SeckillQualification) Reset() {
@@ -9503,6 +9540,41 @@ func (x *SeckillQualification) GetExpiresAtUnix() int64 {
 		return x.ExpiresAtUnix
 	}
 	return 0
+}
+
+func (x *SeckillQualification) GetAddressId() int64 {
+	if x != nil {
+		return x.AddressId
+	}
+	return 0
+}
+
+func (x *SeckillQualification) GetReceiverName() string {
+	if x != nil {
+		return x.ReceiverName
+	}
+	return ""
+}
+
+func (x *SeckillQualification) GetReceiverPhone() string {
+	if x != nil {
+		return x.ReceiverPhone
+	}
+	return ""
+}
+
+func (x *SeckillQualification) GetReceiverAddress() string {
+	if x != nil {
+		return x.ReceiverAddress
+	}
+	return ""
+}
+
+func (x *SeckillQualification) GetPaymentNo() string {
+	if x != nil {
+		return x.PaymentNo
+	}
+	return ""
 }
 
 type HoldSeckillStockRequest struct {
@@ -9623,6 +9695,266 @@ func (x *ReleaseSeckillHoldRequest) GetRefNo() string {
 		return x.RefNo
 	}
 	return ""
+}
+
+type CreateSeckillOrderRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ActivityId      int64                  `protobuf:"varint,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
+	UserId          int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	SkuId           int64                  `protobuf:"varint,3,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
+	PriceCent       int64                  `protobuf:"varint,4,opt,name=price_cent,json=priceCent,proto3" json:"price_cent,omitempty"`
+	Quantity        int32                  `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	TokenHash       string                 `protobuf:"bytes,6,opt,name=token_hash,json=tokenHash,proto3" json:"token_hash,omitempty"`
+	AddressId       int64                  `protobuf:"varint,7,opt,name=address_id,json=addressId,proto3" json:"address_id,omitempty"`
+	ReceiverName    string                 `protobuf:"bytes,8,opt,name=receiver_name,json=receiverName,proto3" json:"receiver_name,omitempty"`
+	ReceiverPhone   string                 `protobuf:"bytes,9,opt,name=receiver_phone,json=receiverPhone,proto3" json:"receiver_phone,omitempty"`
+	ReceiverAddress string                 `protobuf:"bytes,10,opt,name=receiver_address,json=receiverAddress,proto3" json:"receiver_address,omitempty"`
+	ExpireAtUnix    int64                  `protobuf:"varint,11,opt,name=expire_at_unix,json=expireAtUnix,proto3" json:"expire_at_unix,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CreateSeckillOrderRequest) Reset() {
+	*x = CreateSeckillOrderRequest{}
+	mi := &file_mall_v1_mall_proto_msgTypes[141]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateSeckillOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateSeckillOrderRequest) ProtoMessage() {}
+
+func (x *CreateSeckillOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mall_v1_mall_proto_msgTypes[141]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateSeckillOrderRequest.ProtoReflect.Descriptor instead.
+func (*CreateSeckillOrderRequest) Descriptor() ([]byte, []int) {
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{141}
+}
+
+func (x *CreateSeckillOrderRequest) GetActivityId() int64 {
+	if x != nil {
+		return x.ActivityId
+	}
+	return 0
+}
+
+func (x *CreateSeckillOrderRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *CreateSeckillOrderRequest) GetSkuId() int64 {
+	if x != nil {
+		return x.SkuId
+	}
+	return 0
+}
+
+func (x *CreateSeckillOrderRequest) GetPriceCent() int64 {
+	if x != nil {
+		return x.PriceCent
+	}
+	return 0
+}
+
+func (x *CreateSeckillOrderRequest) GetQuantity() int32 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *CreateSeckillOrderRequest) GetTokenHash() string {
+	if x != nil {
+		return x.TokenHash
+	}
+	return ""
+}
+
+func (x *CreateSeckillOrderRequest) GetAddressId() int64 {
+	if x != nil {
+		return x.AddressId
+	}
+	return 0
+}
+
+func (x *CreateSeckillOrderRequest) GetReceiverName() string {
+	if x != nil {
+		return x.ReceiverName
+	}
+	return ""
+}
+
+func (x *CreateSeckillOrderRequest) GetReceiverPhone() string {
+	if x != nil {
+		return x.ReceiverPhone
+	}
+	return ""
+}
+
+func (x *CreateSeckillOrderRequest) GetReceiverAddress() string {
+	if x != nil {
+		return x.ReceiverAddress
+	}
+	return ""
+}
+
+func (x *CreateSeckillOrderRequest) GetExpireAtUnix() int64 {
+	if x != nil {
+		return x.ExpireAtUnix
+	}
+	return 0
+}
+
+type CreateSeckillReservationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ActivityId    int64                  `protobuf:"varint,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
+	OrderNo       string                 `protobuf:"bytes,2,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
+	SkuId         int64                  `protobuf:"varint,3,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
+	Quantity      int64                  `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	RefNo         string                 `protobuf:"bytes,5,opt,name=ref_no,json=refNo,proto3" json:"ref_no,omitempty"`
+	TtlSeconds    int64                  `protobuf:"varint,6,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateSeckillReservationRequest) Reset() {
+	*x = CreateSeckillReservationRequest{}
+	mi := &file_mall_v1_mall_proto_msgTypes[142]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateSeckillReservationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateSeckillReservationRequest) ProtoMessage() {}
+
+func (x *CreateSeckillReservationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mall_v1_mall_proto_msgTypes[142]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateSeckillReservationRequest.ProtoReflect.Descriptor instead.
+func (*CreateSeckillReservationRequest) Descriptor() ([]byte, []int) {
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{142}
+}
+
+func (x *CreateSeckillReservationRequest) GetActivityId() int64 {
+	if x != nil {
+		return x.ActivityId
+	}
+	return 0
+}
+
+func (x *CreateSeckillReservationRequest) GetOrderNo() string {
+	if x != nil {
+		return x.OrderNo
+	}
+	return ""
+}
+
+func (x *CreateSeckillReservationRequest) GetSkuId() int64 {
+	if x != nil {
+		return x.SkuId
+	}
+	return 0
+}
+
+func (x *CreateSeckillReservationRequest) GetQuantity() int64 {
+	if x != nil {
+		return x.Quantity
+	}
+	return 0
+}
+
+func (x *CreateSeckillReservationRequest) GetRefNo() string {
+	if x != nil {
+		return x.RefNo
+	}
+	return ""
+}
+
+func (x *CreateSeckillReservationRequest) GetTtlSeconds() int64 {
+	if x != nil {
+		return x.TtlSeconds
+	}
+	return 0
+}
+
+type ReleaseSeckillReservationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderNo       string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
+	SkuId         int64                  `protobuf:"varint,2,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseSeckillReservationRequest) Reset() {
+	*x = ReleaseSeckillReservationRequest{}
+	mi := &file_mall_v1_mall_proto_msgTypes[143]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseSeckillReservationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseSeckillReservationRequest) ProtoMessage() {}
+
+func (x *ReleaseSeckillReservationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mall_v1_mall_proto_msgTypes[143]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseSeckillReservationRequest.ProtoReflect.Descriptor instead.
+func (*ReleaseSeckillReservationRequest) Descriptor() ([]byte, []int) {
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{143}
+}
+
+func (x *ReleaseSeckillReservationRequest) GetOrderNo() string {
+	if x != nil {
+		return x.OrderNo
+	}
+	return ""
+}
+
+func (x *ReleaseSeckillReservationRequest) GetSkuId() int64 {
+	if x != nil {
+		return x.SkuId
+	}
+	return 0
 }
 
 var File_mall_v1_mall_proto protoreflect.FileDescriptor
@@ -10426,14 +10758,19 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"activityId\"9\n" +
 	"\x16GetSeckillStockRequest\x12\x1f\n" +
 	"\vactivity_id\x18\x01 \x01(\x03R\n" +
-	"activityId\"Q\n" +
+	"activityId\"\xe7\x01\n" +
 	"\x15ReserveSeckillRequest\x12\x1f\n" +
 	"\vactivity_id\x18\x01 \x01(\x03R\n" +
 	"activityId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\"O\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1d\n" +
+	"\n" +
+	"address_id\x18\x03 \x01(\x03R\taddressId\x12#\n" +
+	"\rreceiver_name\x18\x04 \x01(\tR\freceiverName\x12%\n" +
+	"\x0ereceiver_phone\x18\x05 \x01(\tR\rreceiverPhone\x12)\n" +
+	"\x10receiver_address\x18\x06 \x01(\tR\x0freceiverAddress\"O\n" +
 	"\x1eGetSeckillQualificationRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\"\xc1\x01\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\"\xf6\x02\n" +
 	"\x14SeckillQualification\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1f\n" +
 	"\vactivity_id\x18\x02 \x01(\x03R\n" +
@@ -10441,7 +10778,15 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\auser_id\x18\x03 \x01(\x03R\x06userId\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x19\n" +
 	"\border_no\x18\x05 \x01(\tR\aorderNo\x12&\n" +
-	"\x0fexpires_at_unix\x18\x06 \x01(\x03R\rexpiresAtUnix\"m\n" +
+	"\x0fexpires_at_unix\x18\x06 \x01(\x03R\rexpiresAtUnix\x12\x1d\n" +
+	"\n" +
+	"address_id\x18\a \x01(\x03R\taddressId\x12#\n" +
+	"\rreceiver_name\x18\b \x01(\tR\freceiverName\x12%\n" +
+	"\x0ereceiver_phone\x18\t \x01(\tR\rreceiverPhone\x12)\n" +
+	"\x10receiver_address\x18\n" +
+	" \x01(\tR\x0freceiverAddress\x12\x1d\n" +
+	"\n" +
+	"payment_no\x18\v \x01(\tR\tpaymentNo\"m\n" +
 	"\x17HoldSeckillStockRequest\x12\x1f\n" +
 	"\vactivity_id\x18\x01 \x01(\x03R\n" +
 	"activityId\x12\x1a\n" +
@@ -10451,7 +10796,36 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\vactivity_id\x18\x01 \x01(\x03R\n" +
 	"activityId\x12\x1a\n" +
 	"\bquantity\x18\x02 \x01(\x03R\bquantity\x12\x15\n" +
-	"\x06ref_no\x18\x03 \x01(\tR\x05refNo2\xeb\x04\n" +
+	"\x06ref_no\x18\x03 \x01(\tR\x05refNo\"\x82\x03\n" +
+	"\x19CreateSeckillOrderRequest\x12\x1f\n" +
+	"\vactivity_id\x18\x01 \x01(\x03R\n" +
+	"activityId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x15\n" +
+	"\x06sku_id\x18\x03 \x01(\x03R\x05skuId\x12\x1d\n" +
+	"\n" +
+	"price_cent\x18\x04 \x01(\x03R\tpriceCent\x12\x1a\n" +
+	"\bquantity\x18\x05 \x01(\x05R\bquantity\x12\x1d\n" +
+	"\n" +
+	"token_hash\x18\x06 \x01(\tR\ttokenHash\x12\x1d\n" +
+	"\n" +
+	"address_id\x18\a \x01(\x03R\taddressId\x12#\n" +
+	"\rreceiver_name\x18\b \x01(\tR\freceiverName\x12%\n" +
+	"\x0ereceiver_phone\x18\t \x01(\tR\rreceiverPhone\x12)\n" +
+	"\x10receiver_address\x18\n" +
+	" \x01(\tR\x0freceiverAddress\x12$\n" +
+	"\x0eexpire_at_unix\x18\v \x01(\x03R\fexpireAtUnix\"\xc8\x01\n" +
+	"\x1fCreateSeckillReservationRequest\x12\x1f\n" +
+	"\vactivity_id\x18\x01 \x01(\x03R\n" +
+	"activityId\x12\x19\n" +
+	"\border_no\x18\x02 \x01(\tR\aorderNo\x12\x15\n" +
+	"\x06sku_id\x18\x03 \x01(\x03R\x05skuId\x12\x1a\n" +
+	"\bquantity\x18\x04 \x01(\x03R\bquantity\x12\x15\n" +
+	"\x06ref_no\x18\x05 \x01(\tR\x05refNo\x12\x1f\n" +
+	"\vttl_seconds\x18\x06 \x01(\x03R\n" +
+	"ttlSeconds\"T\n" +
+	" ReleaseSeckillReservationRequest\x12\x19\n" +
+	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x15\n" +
+	"\x06sku_id\x18\x02 \x01(\x03R\x05skuId2\xeb\x04\n" +
 	"\x0fIdentityService\x129\n" +
 	"\bRegister\x12\x18.mall.v1.RegisterRequest\x1a\x13.mall.v1.LoginReply\x123\n" +
 	"\x05Login\x12\x15.mall.v1.LoginRequest\x1a\x13.mall.v1.LoginReply\x127\n" +
@@ -10487,7 +10861,7 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\tCreateSku\x12\x19.mall.v1.CreateSkuRequest\x1a\f.mall.v1.Sku\x124\n" +
 	"\tUpdateSku\x12\x19.mall.v1.UpdateSkuRequest\x1a\f.mall.v1.Sku\x126\n" +
 	"\tDeleteSku\x12\x19.mall.v1.DeleteSkuRequest\x1a\x0e.mall.v1.Empty\x12:\n" +
-	"\fSetSkuStatus\x12\x1c.mall.v1.SetSkuStatusRequest\x1a\f.mall.v1.Sku2\xb2\b\n" +
+	"\fSetSkuStatus\x12\x1c.mall.v1.SetSkuStatusRequest\x1a\f.mall.v1.Sku2\xe7\t\n" +
 	"\x10InventoryService\x124\n" +
 	"\bGetStock\x12\x18.mall.v1.GetStockRequest\x1a\x0e.mall.v1.Stock\x129\n" +
 	"\aReserve\x12\x17.mall.v1.ReserveRequest\x1a\x15.mall.v1.ReserveReply\x122\n" +
@@ -10506,7 +10880,9 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x13ReleaseSeckillStock\x12#.mall.v1.ReleaseSeckillStockRequest\x1a\x15.mall.v1.SeckillStock\x12I\n" +
 	"\x0fGetSeckillStock\x12\x1f.mall.v1.GetSeckillStockRequest\x1a\x15.mall.v1.SeckillStock\x12K\n" +
 	"\x10HoldSeckillStock\x12 .mall.v1.HoldSeckillStockRequest\x1a\x15.mall.v1.SeckillStock\x12O\n" +
-	"\x12ReleaseSeckillHold\x12\".mall.v1.ReleaseSeckillHoldRequest\x1a\x15.mall.v1.SeckillStock2\xa1\x02\n" +
+	"\x12ReleaseSeckillHold\x12\".mall.v1.ReleaseSeckillHoldRequest\x1a\x15.mall.v1.SeckillStock\x12[\n" +
+	"\x18CreateSeckillReservation\x12(.mall.v1.CreateSeckillReservationRequest\x1a\x15.mall.v1.ReserveReply\x12V\n" +
+	"\x19ReleaseSeckillReservation\x12).mall.v1.ReleaseSeckillReservationRequest\x1a\x0e.mall.v1.Empty2\xa1\x02\n" +
 	"\vCartService\x121\n" +
 	"\aGetCart\x12\x17.mall.v1.GetCartRequest\x1a\r.mall.v1.Cart\x121\n" +
 	"\aAddItem\x12\x17.mall.v1.AddItemRequest\x1a\r.mall.v1.Cart\x127\n" +
@@ -10525,9 +10901,10 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\rTccTryConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x0e.mall.v1.Empty\x12?\n" +
 	"\x11TccConfirmConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x0e.mall.v1.Empty\x12>\n" +
 	"\x10TccCancelConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x0e.mall.v1.Empty\x12E\n" +
-	"\x0fTccQueryConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x16.mall.v1.TccQueryReply2\xc5\x05\n" +
+	"\x0fTccQueryConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x16.mall.v1.TccQueryReply2\x8f\x06\n" +
 	"\fOrderService\x12:\n" +
-	"\vCreateOrder\x12\x1b.mall.v1.CreateOrderRequest\x1a\x0e.mall.v1.Order\x12D\n" +
+	"\vCreateOrder\x12\x1b.mall.v1.CreateOrderRequest\x1a\x0e.mall.v1.Order\x12H\n" +
+	"\x12CreateSeckillOrder\x12\".mall.v1.CreateSeckillOrderRequest\x1a\x0e.mall.v1.Order\x12D\n" +
 	"\x10CreateOrderInner\x12 .mall.v1.CreateOrderInnerRequest\x1a\x0e.mall.v1.Order\x12:\n" +
 	"\vCancelOrder\x12\x1b.mall.v1.CancelOrderRequest\x1a\x0e.mall.v1.Order\x12D\n" +
 	"\x10CancelOrderInner\x12 .mall.v1.CancelOrderInnerRequest\x1a\x0e.mall.v1.Empty\x124\n" +
@@ -10600,7 +10977,7 @@ func file_mall_v1_mall_proto_rawDescGZIP() []byte {
 	return file_mall_v1_mall_proto_rawDescData
 }
 
-var file_mall_v1_mall_proto_msgTypes = make([]protoimpl.MessageInfo, 141)
+var file_mall_v1_mall_proto_msgTypes = make([]protoimpl.MessageInfo, 144)
 var file_mall_v1_mall_proto_goTypes = []any{
 	(*Empty)(nil),                            // 0: mall.v1.Empty
 	(*User)(nil),                             // 1: mall.v1.User
@@ -10743,6 +11120,9 @@ var file_mall_v1_mall_proto_goTypes = []any{
 	(*SeckillQualification)(nil),             // 138: mall.v1.SeckillQualification
 	(*HoldSeckillStockRequest)(nil),          // 139: mall.v1.HoldSeckillStockRequest
 	(*ReleaseSeckillHoldRequest)(nil),        // 140: mall.v1.ReleaseSeckillHoldRequest
+	(*CreateSeckillOrderRequest)(nil),        // 141: mall.v1.CreateSeckillOrderRequest
+	(*CreateSeckillReservationRequest)(nil),  // 142: mall.v1.CreateSeckillReservationRequest
+	(*ReleaseSeckillReservationRequest)(nil), // 143: mall.v1.ReleaseSeckillReservationRequest
 }
 var file_mall_v1_mall_proto_depIdxs = []int32{
 	1,   // 0: mall.v1.LoginReply.user:type_name -> mall.v1.User
@@ -10835,191 +11215,197 @@ var file_mall_v1_mall_proto_depIdxs = []int32{
 	135, // 87: mall.v1.InventoryService.GetSeckillStock:input_type -> mall.v1.GetSeckillStockRequest
 	139, // 88: mall.v1.InventoryService.HoldSeckillStock:input_type -> mall.v1.HoldSeckillStockRequest
 	140, // 89: mall.v1.InventoryService.ReleaseSeckillHold:input_type -> mall.v1.ReleaseSeckillHoldRequest
-	52,  // 90: mall.v1.CartService.GetCart:input_type -> mall.v1.GetCartRequest
-	53,  // 91: mall.v1.CartService.AddItem:input_type -> mall.v1.AddItemRequest
-	54,  // 92: mall.v1.CartService.UpdateItem:input_type -> mall.v1.UpdateItemRequest
-	55,  // 93: mall.v1.CartService.RemoveItem:input_type -> mall.v1.RemoveItemRequest
-	56,  // 94: mall.v1.CartService.ClearSelected:input_type -> mall.v1.ClearCartRequest
-	58,  // 95: mall.v1.PricingService.CreateQuote:input_type -> mall.v1.QuoteRequest
-	61,  // 96: mall.v1.PricingService.GetQuote:input_type -> mall.v1.GetQuoteRequest
-	62,  // 97: mall.v1.PricingService.LockCoupon:input_type -> mall.v1.LockCouponRequest
-	62,  // 98: mall.v1.PricingService.UnlockCoupon:input_type -> mall.v1.LockCouponRequest
-	62,  // 99: mall.v1.PricingService.ConsumeCoupon:input_type -> mall.v1.LockCouponRequest
-	63,  // 100: mall.v1.PricingService.TccTryConsume:input_type -> mall.v1.TccPaymentRequest
-	63,  // 101: mall.v1.PricingService.TccConfirmConsume:input_type -> mall.v1.TccPaymentRequest
-	63,  // 102: mall.v1.PricingService.TccCancelConsume:input_type -> mall.v1.TccPaymentRequest
-	63,  // 103: mall.v1.PricingService.TccQueryConsume:input_type -> mall.v1.TccPaymentRequest
-	67,  // 104: mall.v1.OrderService.CreateOrder:input_type -> mall.v1.CreateOrderRequest
-	68,  // 105: mall.v1.OrderService.CreateOrderInner:input_type -> mall.v1.CreateOrderInnerRequest
-	69,  // 106: mall.v1.OrderService.CancelOrder:input_type -> mall.v1.CancelOrderRequest
-	70,  // 107: mall.v1.OrderService.CancelOrderInner:input_type -> mall.v1.CancelOrderInnerRequest
-	71,  // 108: mall.v1.OrderService.MarkPaid:input_type -> mall.v1.MarkPaidRequest
-	72,  // 109: mall.v1.OrderService.GetOrder:input_type -> mall.v1.GetOrderRequest
-	73,  // 110: mall.v1.OrderService.ListOrders:input_type -> mall.v1.ListOrdersRequest
-	63,  // 111: mall.v1.OrderService.TccTryMarkPaid:input_type -> mall.v1.TccPaymentRequest
-	63,  // 112: mall.v1.OrderService.TccConfirmMarkPaid:input_type -> mall.v1.TccPaymentRequest
-	63,  // 113: mall.v1.OrderService.TccCancelMarkPaid:input_type -> mall.v1.TccPaymentRequest
-	63,  // 114: mall.v1.OrderService.TccQueryMarkPaid:input_type -> mall.v1.TccPaymentRequest
-	76,  // 115: mall.v1.PaymentService.CreateIntent:input_type -> mall.v1.CreateIntentRequest
-	77,  // 116: mall.v1.PaymentService.GetIntent:input_type -> mall.v1.GetIntentRequest
-	78,  // 117: mall.v1.PaymentService.Callback:input_type -> mall.v1.CallbackRequest
-	84,  // 118: mall.v1.PaymentService.Refund:input_type -> mall.v1.RefundRequest
-	80,  // 119: mall.v1.PaymentService.RefundOrder:input_type -> mall.v1.RefundOrderRequest
-	82,  // 120: mall.v1.PaymentService.VerifyPayment:input_type -> mall.v1.VerifyPaymentRequest
-	86,  // 121: mall.v1.PaymentService.ListRefunds:input_type -> mall.v1.ListRefundsRequest
-	95,  // 122: mall.v1.PromotionService.EvaluatePromotions:input_type -> mall.v1.PromotionEvaluateRequest
-	100, // 123: mall.v1.PromotionService.ReservePromotions:input_type -> mall.v1.PromotionReserveRequest
-	102, // 124: mall.v1.PromotionService.ConfirmPromotions:input_type -> mall.v1.PromotionOrderRequest
-	102, // 125: mall.v1.PromotionService.ReleasePromotions:input_type -> mall.v1.PromotionOrderRequest
-	88,  // 126: mall.v1.PromotionService.CreateCampaign:input_type -> mall.v1.Campaign
-	88,  // 127: mall.v1.PromotionService.UpdateCampaign:input_type -> mall.v1.Campaign
-	93,  // 128: mall.v1.PromotionService.SetCampaignStatus:input_type -> mall.v1.SetPromotionStatusRequest
-	0,   // 129: mall.v1.PromotionService.ListCampaigns:input_type -> mall.v1.Empty
-	89,  // 130: mall.v1.PromotionService.CreatePromotion:input_type -> mall.v1.PromotionRule
-	89,  // 131: mall.v1.PromotionService.UpdatePromotion:input_type -> mall.v1.PromotionRule
-	93,  // 132: mall.v1.PromotionService.SetPromotionStatus:input_type -> mall.v1.SetPromotionStatusRequest
-	91,  // 133: mall.v1.PromotionService.ListPromotions:input_type -> mall.v1.PromotionListRequest
-	103, // 134: mall.v1.PromotionService.ListPromotionReservations:input_type -> mall.v1.ListPromotionReservationsRequest
-	108, // 135: mall.v1.FulfillmentService.CreateShipment:input_type -> mall.v1.CreateShipmentRequest
-	109, // 136: mall.v1.FulfillmentService.Ship:input_type -> mall.v1.ShipRequest
-	110, // 137: mall.v1.FulfillmentService.Receive:input_type -> mall.v1.ReceiveRequest
-	111, // 138: mall.v1.FulfillmentService.GetShipment:input_type -> mall.v1.GetShipmentRequest
-	112, // 139: mall.v1.FulfillmentService.GetShipmentByOrder:input_type -> mall.v1.GetShipmentByOrderRequest
-	113, // 140: mall.v1.FulfillmentService.ListShipments:input_type -> mall.v1.ListShipmentsRequest
-	118, // 141: mall.v1.AfterSalesService.CreateAfterSale:input_type -> mall.v1.CreateAfterSaleRequest
-	119, // 142: mall.v1.AfterSalesService.GetAfterSale:input_type -> mall.v1.GetAfterSaleRequest
-	123, // 143: mall.v1.AfterSalesService.Approve:input_type -> mall.v1.ApproveRequest
-	120, // 144: mall.v1.AfterSalesService.SubmitReturnTracking:input_type -> mall.v1.SubmitReturnTrackingRequest
-	121, // 145: mall.v1.AfterSalesService.ReceiveReturn:input_type -> mall.v1.ReceiveReturnRequest
-	124, // 146: mall.v1.AfterSalesService.Refund:input_type -> mall.v1.RefundAfterSaleRequest
-	122, // 147: mall.v1.AfterSalesService.ListAfterSales:input_type -> mall.v1.ListAfterSalesRequest
-	126, // 148: mall.v1.SeckillService.CreateActivity:input_type -> mall.v1.CreateSeckillActivityRequest
-	127, // 149: mall.v1.SeckillService.UpdateActivity:input_type -> mall.v1.UpdateSeckillActivityRequest
-	128, // 150: mall.v1.SeckillService.GetActivity:input_type -> mall.v1.GetSeckillActivityRequest
-	129, // 151: mall.v1.SeckillService.ListActivities:input_type -> mall.v1.ListSeckillActivitiesRequest
-	131, // 152: mall.v1.SeckillService.PublishActivity:input_type -> mall.v1.SeckillActivityCommand
-	131, // 153: mall.v1.SeckillService.PauseActivity:input_type -> mall.v1.SeckillActivityCommand
-	131, // 154: mall.v1.SeckillService.WarmupActivity:input_type -> mall.v1.SeckillActivityCommand
-	131, // 155: mall.v1.SeckillService.GetActivityStock:input_type -> mall.v1.SeckillActivityCommand
-	136, // 156: mall.v1.SeckillService.Reserve:input_type -> mall.v1.ReserveSeckillRequest
-	137, // 157: mall.v1.SeckillService.GetQualification:input_type -> mall.v1.GetSeckillQualificationRequest
-	6,   // 158: mall.v1.IdentityService.Register:output_type -> mall.v1.LoginReply
-	6,   // 159: mall.v1.IdentityService.Login:output_type -> mall.v1.LoginReply
-	6,   // 160: mall.v1.IdentityService.Refresh:output_type -> mall.v1.LoginReply
-	0,   // 161: mall.v1.IdentityService.Logout:output_type -> mall.v1.Empty
-	1,   // 162: mall.v1.IdentityService.GetUser:output_type -> mall.v1.User
-	8,   // 163: mall.v1.IdentityService.CreateAddress:output_type -> mall.v1.Address
-	8,   // 164: mall.v1.IdentityService.UpdateAddress:output_type -> mall.v1.Address
-	0,   // 165: mall.v1.IdentityService.DeleteAddress:output_type -> mall.v1.Empty
-	0,   // 166: mall.v1.IdentityService.SetDefaultAddress:output_type -> mall.v1.Empty
-	13,  // 167: mall.v1.IdentityService.ListAddresses:output_type -> mall.v1.AddressList
-	27,  // 168: mall.v1.CatalogService.GetProduct:output_type -> mall.v1.Product
-	31,  // 169: mall.v1.CatalogService.ListProducts:output_type -> mall.v1.ProductList
-	26,  // 170: mall.v1.CatalogService.GetSku:output_type -> mall.v1.Sku
-	14,  // 171: mall.v1.CatalogService.CreateCategory:output_type -> mall.v1.Category
-	14,  // 172: mall.v1.CatalogService.UpdateCategory:output_type -> mall.v1.Category
-	0,   // 173: mall.v1.CatalogService.DeleteCategory:output_type -> mall.v1.Empty
-	15,  // 174: mall.v1.CatalogService.ListCategories:output_type -> mall.v1.CategoryList
-	19,  // 175: mall.v1.CatalogService.CreateBrand:output_type -> mall.v1.Brand
-	19,  // 176: mall.v1.CatalogService.UpdateBrand:output_type -> mall.v1.Brand
-	0,   // 177: mall.v1.CatalogService.DeleteBrand:output_type -> mall.v1.Empty
-	20,  // 178: mall.v1.CatalogService.ListBrands:output_type -> mall.v1.BrandList
-	27,  // 179: mall.v1.CatalogService.CreateProduct:output_type -> mall.v1.Product
-	27,  // 180: mall.v1.CatalogService.UpdateProduct:output_type -> mall.v1.Product
-	0,   // 181: mall.v1.CatalogService.DeleteProduct:output_type -> mall.v1.Empty
-	0,   // 182: mall.v1.CatalogService.SetProductStatus:output_type -> mall.v1.Empty
-	31,  // 183: mall.v1.CatalogService.ListAdminProducts:output_type -> mall.v1.ProductList
-	27,  // 184: mall.v1.CatalogService.GetAdminProduct:output_type -> mall.v1.Product
-	26,  // 185: mall.v1.CatalogService.CreateSku:output_type -> mall.v1.Sku
-	26,  // 186: mall.v1.CatalogService.UpdateSku:output_type -> mall.v1.Sku
-	0,   // 187: mall.v1.CatalogService.DeleteSku:output_type -> mall.v1.Empty
-	26,  // 188: mall.v1.CatalogService.SetSkuStatus:output_type -> mall.v1.Sku
-	42,  // 189: mall.v1.InventoryService.GetStock:output_type -> mall.v1.Stock
-	45,  // 190: mall.v1.InventoryService.Reserve:output_type -> mall.v1.ReserveReply
-	0,   // 191: mall.v1.InventoryService.Confirm:output_type -> mall.v1.Empty
-	0,   // 192: mall.v1.InventoryService.Release:output_type -> mall.v1.Empty
-	42,  // 193: mall.v1.InventoryService.AdminAdjustStock:output_type -> mall.v1.Stock
-	48,  // 194: mall.v1.InventoryService.ListStocks:output_type -> mall.v1.StockList
-	42,  // 195: mall.v1.InventoryService.Restock:output_type -> mall.v1.Stock
-	0,   // 196: mall.v1.InventoryService.TccTryConfirm:output_type -> mall.v1.Empty
-	0,   // 197: mall.v1.InventoryService.TccConfirm:output_type -> mall.v1.Empty
-	0,   // 198: mall.v1.InventoryService.TccCancelConfirm:output_type -> mall.v1.Empty
-	64,  // 199: mall.v1.InventoryService.TccQueryConfirm:output_type -> mall.v1.TccQueryReply
-	132, // 200: mall.v1.InventoryService.AllocateSeckillStock:output_type -> mall.v1.SeckillStock
-	132, // 201: mall.v1.InventoryService.ReleaseSeckillStock:output_type -> mall.v1.SeckillStock
-	132, // 202: mall.v1.InventoryService.GetSeckillStock:output_type -> mall.v1.SeckillStock
-	132, // 203: mall.v1.InventoryService.HoldSeckillStock:output_type -> mall.v1.SeckillStock
-	132, // 204: mall.v1.InventoryService.ReleaseSeckillHold:output_type -> mall.v1.SeckillStock
-	51,  // 205: mall.v1.CartService.GetCart:output_type -> mall.v1.Cart
-	51,  // 206: mall.v1.CartService.AddItem:output_type -> mall.v1.Cart
-	51,  // 207: mall.v1.CartService.UpdateItem:output_type -> mall.v1.Cart
-	51,  // 208: mall.v1.CartService.RemoveItem:output_type -> mall.v1.Cart
-	0,   // 209: mall.v1.CartService.ClearSelected:output_type -> mall.v1.Empty
-	60,  // 210: mall.v1.PricingService.CreateQuote:output_type -> mall.v1.Quote
-	60,  // 211: mall.v1.PricingService.GetQuote:output_type -> mall.v1.Quote
-	0,   // 212: mall.v1.PricingService.LockCoupon:output_type -> mall.v1.Empty
-	0,   // 213: mall.v1.PricingService.UnlockCoupon:output_type -> mall.v1.Empty
-	0,   // 214: mall.v1.PricingService.ConsumeCoupon:output_type -> mall.v1.Empty
-	0,   // 215: mall.v1.PricingService.TccTryConsume:output_type -> mall.v1.Empty
-	0,   // 216: mall.v1.PricingService.TccConfirmConsume:output_type -> mall.v1.Empty
-	0,   // 217: mall.v1.PricingService.TccCancelConsume:output_type -> mall.v1.Empty
-	64,  // 218: mall.v1.PricingService.TccQueryConsume:output_type -> mall.v1.TccQueryReply
-	66,  // 219: mall.v1.OrderService.CreateOrder:output_type -> mall.v1.Order
-	66,  // 220: mall.v1.OrderService.CreateOrderInner:output_type -> mall.v1.Order
-	66,  // 221: mall.v1.OrderService.CancelOrder:output_type -> mall.v1.Order
-	0,   // 222: mall.v1.OrderService.CancelOrderInner:output_type -> mall.v1.Empty
-	66,  // 223: mall.v1.OrderService.MarkPaid:output_type -> mall.v1.Order
-	66,  // 224: mall.v1.OrderService.GetOrder:output_type -> mall.v1.Order
-	74,  // 225: mall.v1.OrderService.ListOrders:output_type -> mall.v1.OrderList
-	0,   // 226: mall.v1.OrderService.TccTryMarkPaid:output_type -> mall.v1.Empty
-	0,   // 227: mall.v1.OrderService.TccConfirmMarkPaid:output_type -> mall.v1.Empty
-	0,   // 228: mall.v1.OrderService.TccCancelMarkPaid:output_type -> mall.v1.Empty
-	64,  // 229: mall.v1.OrderService.TccQueryMarkPaid:output_type -> mall.v1.TccQueryReply
-	75,  // 230: mall.v1.PaymentService.CreateIntent:output_type -> mall.v1.Intent
-	75,  // 231: mall.v1.PaymentService.GetIntent:output_type -> mall.v1.Intent
-	79,  // 232: mall.v1.PaymentService.Callback:output_type -> mall.v1.CallbackReply
-	0,   // 233: mall.v1.PaymentService.Refund:output_type -> mall.v1.Empty
-	81,  // 234: mall.v1.PaymentService.RefundOrder:output_type -> mall.v1.RefundOrderReply
-	83,  // 235: mall.v1.PaymentService.VerifyPayment:output_type -> mall.v1.VerifyPaymentReply
-	87,  // 236: mall.v1.PaymentService.ListRefunds:output_type -> mall.v1.RefundList
-	99,  // 237: mall.v1.PromotionService.EvaluatePromotions:output_type -> mall.v1.PromotionEvaluation
-	101, // 238: mall.v1.PromotionService.ReservePromotions:output_type -> mall.v1.PromotionReserveReply
-	0,   // 239: mall.v1.PromotionService.ConfirmPromotions:output_type -> mall.v1.Empty
-	0,   // 240: mall.v1.PromotionService.ReleasePromotions:output_type -> mall.v1.Empty
-	88,  // 241: mall.v1.PromotionService.CreateCampaign:output_type -> mall.v1.Campaign
-	88,  // 242: mall.v1.PromotionService.UpdateCampaign:output_type -> mall.v1.Campaign
-	0,   // 243: mall.v1.PromotionService.SetCampaignStatus:output_type -> mall.v1.Empty
-	90,  // 244: mall.v1.PromotionService.ListCampaigns:output_type -> mall.v1.CampaignList
-	89,  // 245: mall.v1.PromotionService.CreatePromotion:output_type -> mall.v1.PromotionRule
-	89,  // 246: mall.v1.PromotionService.UpdatePromotion:output_type -> mall.v1.PromotionRule
-	0,   // 247: mall.v1.PromotionService.SetPromotionStatus:output_type -> mall.v1.Empty
-	92,  // 248: mall.v1.PromotionService.ListPromotions:output_type -> mall.v1.PromotionRuleList
-	105, // 249: mall.v1.PromotionService.ListPromotionReservations:output_type -> mall.v1.PromotionReservationList
-	107, // 250: mall.v1.FulfillmentService.CreateShipment:output_type -> mall.v1.Shipment
-	107, // 251: mall.v1.FulfillmentService.Ship:output_type -> mall.v1.Shipment
-	107, // 252: mall.v1.FulfillmentService.Receive:output_type -> mall.v1.Shipment
-	107, // 253: mall.v1.FulfillmentService.GetShipment:output_type -> mall.v1.Shipment
-	107, // 254: mall.v1.FulfillmentService.GetShipmentByOrder:output_type -> mall.v1.Shipment
-	114, // 255: mall.v1.FulfillmentService.ListShipments:output_type -> mall.v1.ShipmentList
-	116, // 256: mall.v1.AfterSalesService.CreateAfterSale:output_type -> mall.v1.AfterSale
-	116, // 257: mall.v1.AfterSalesService.GetAfterSale:output_type -> mall.v1.AfterSale
-	116, // 258: mall.v1.AfterSalesService.Approve:output_type -> mall.v1.AfterSale
-	116, // 259: mall.v1.AfterSalesService.SubmitReturnTracking:output_type -> mall.v1.AfterSale
-	116, // 260: mall.v1.AfterSalesService.ReceiveReturn:output_type -> mall.v1.AfterSale
-	116, // 261: mall.v1.AfterSalesService.Refund:output_type -> mall.v1.AfterSale
-	117, // 262: mall.v1.AfterSalesService.ListAfterSales:output_type -> mall.v1.AfterSaleList
-	125, // 263: mall.v1.SeckillService.CreateActivity:output_type -> mall.v1.SeckillActivity
-	125, // 264: mall.v1.SeckillService.UpdateActivity:output_type -> mall.v1.SeckillActivity
-	125, // 265: mall.v1.SeckillService.GetActivity:output_type -> mall.v1.SeckillActivity
-	130, // 266: mall.v1.SeckillService.ListActivities:output_type -> mall.v1.SeckillActivityList
-	125, // 267: mall.v1.SeckillService.PublishActivity:output_type -> mall.v1.SeckillActivity
-	125, // 268: mall.v1.SeckillService.PauseActivity:output_type -> mall.v1.SeckillActivity
-	125, // 269: mall.v1.SeckillService.WarmupActivity:output_type -> mall.v1.SeckillActivity
-	132, // 270: mall.v1.SeckillService.GetActivityStock:output_type -> mall.v1.SeckillStock
-	138, // 271: mall.v1.SeckillService.Reserve:output_type -> mall.v1.SeckillQualification
-	138, // 272: mall.v1.SeckillService.GetQualification:output_type -> mall.v1.SeckillQualification
-	158, // [158:273] is the sub-list for method output_type
-	43,  // [43:158] is the sub-list for method input_type
+	142, // 90: mall.v1.InventoryService.CreateSeckillReservation:input_type -> mall.v1.CreateSeckillReservationRequest
+	143, // 91: mall.v1.InventoryService.ReleaseSeckillReservation:input_type -> mall.v1.ReleaseSeckillReservationRequest
+	52,  // 92: mall.v1.CartService.GetCart:input_type -> mall.v1.GetCartRequest
+	53,  // 93: mall.v1.CartService.AddItem:input_type -> mall.v1.AddItemRequest
+	54,  // 94: mall.v1.CartService.UpdateItem:input_type -> mall.v1.UpdateItemRequest
+	55,  // 95: mall.v1.CartService.RemoveItem:input_type -> mall.v1.RemoveItemRequest
+	56,  // 96: mall.v1.CartService.ClearSelected:input_type -> mall.v1.ClearCartRequest
+	58,  // 97: mall.v1.PricingService.CreateQuote:input_type -> mall.v1.QuoteRequest
+	61,  // 98: mall.v1.PricingService.GetQuote:input_type -> mall.v1.GetQuoteRequest
+	62,  // 99: mall.v1.PricingService.LockCoupon:input_type -> mall.v1.LockCouponRequest
+	62,  // 100: mall.v1.PricingService.UnlockCoupon:input_type -> mall.v1.LockCouponRequest
+	62,  // 101: mall.v1.PricingService.ConsumeCoupon:input_type -> mall.v1.LockCouponRequest
+	63,  // 102: mall.v1.PricingService.TccTryConsume:input_type -> mall.v1.TccPaymentRequest
+	63,  // 103: mall.v1.PricingService.TccConfirmConsume:input_type -> mall.v1.TccPaymentRequest
+	63,  // 104: mall.v1.PricingService.TccCancelConsume:input_type -> mall.v1.TccPaymentRequest
+	63,  // 105: mall.v1.PricingService.TccQueryConsume:input_type -> mall.v1.TccPaymentRequest
+	67,  // 106: mall.v1.OrderService.CreateOrder:input_type -> mall.v1.CreateOrderRequest
+	141, // 107: mall.v1.OrderService.CreateSeckillOrder:input_type -> mall.v1.CreateSeckillOrderRequest
+	68,  // 108: mall.v1.OrderService.CreateOrderInner:input_type -> mall.v1.CreateOrderInnerRequest
+	69,  // 109: mall.v1.OrderService.CancelOrder:input_type -> mall.v1.CancelOrderRequest
+	70,  // 110: mall.v1.OrderService.CancelOrderInner:input_type -> mall.v1.CancelOrderInnerRequest
+	71,  // 111: mall.v1.OrderService.MarkPaid:input_type -> mall.v1.MarkPaidRequest
+	72,  // 112: mall.v1.OrderService.GetOrder:input_type -> mall.v1.GetOrderRequest
+	73,  // 113: mall.v1.OrderService.ListOrders:input_type -> mall.v1.ListOrdersRequest
+	63,  // 114: mall.v1.OrderService.TccTryMarkPaid:input_type -> mall.v1.TccPaymentRequest
+	63,  // 115: mall.v1.OrderService.TccConfirmMarkPaid:input_type -> mall.v1.TccPaymentRequest
+	63,  // 116: mall.v1.OrderService.TccCancelMarkPaid:input_type -> mall.v1.TccPaymentRequest
+	63,  // 117: mall.v1.OrderService.TccQueryMarkPaid:input_type -> mall.v1.TccPaymentRequest
+	76,  // 118: mall.v1.PaymentService.CreateIntent:input_type -> mall.v1.CreateIntentRequest
+	77,  // 119: mall.v1.PaymentService.GetIntent:input_type -> mall.v1.GetIntentRequest
+	78,  // 120: mall.v1.PaymentService.Callback:input_type -> mall.v1.CallbackRequest
+	84,  // 121: mall.v1.PaymentService.Refund:input_type -> mall.v1.RefundRequest
+	80,  // 122: mall.v1.PaymentService.RefundOrder:input_type -> mall.v1.RefundOrderRequest
+	82,  // 123: mall.v1.PaymentService.VerifyPayment:input_type -> mall.v1.VerifyPaymentRequest
+	86,  // 124: mall.v1.PaymentService.ListRefunds:input_type -> mall.v1.ListRefundsRequest
+	95,  // 125: mall.v1.PromotionService.EvaluatePromotions:input_type -> mall.v1.PromotionEvaluateRequest
+	100, // 126: mall.v1.PromotionService.ReservePromotions:input_type -> mall.v1.PromotionReserveRequest
+	102, // 127: mall.v1.PromotionService.ConfirmPromotions:input_type -> mall.v1.PromotionOrderRequest
+	102, // 128: mall.v1.PromotionService.ReleasePromotions:input_type -> mall.v1.PromotionOrderRequest
+	88,  // 129: mall.v1.PromotionService.CreateCampaign:input_type -> mall.v1.Campaign
+	88,  // 130: mall.v1.PromotionService.UpdateCampaign:input_type -> mall.v1.Campaign
+	93,  // 131: mall.v1.PromotionService.SetCampaignStatus:input_type -> mall.v1.SetPromotionStatusRequest
+	0,   // 132: mall.v1.PromotionService.ListCampaigns:input_type -> mall.v1.Empty
+	89,  // 133: mall.v1.PromotionService.CreatePromotion:input_type -> mall.v1.PromotionRule
+	89,  // 134: mall.v1.PromotionService.UpdatePromotion:input_type -> mall.v1.PromotionRule
+	93,  // 135: mall.v1.PromotionService.SetPromotionStatus:input_type -> mall.v1.SetPromotionStatusRequest
+	91,  // 136: mall.v1.PromotionService.ListPromotions:input_type -> mall.v1.PromotionListRequest
+	103, // 137: mall.v1.PromotionService.ListPromotionReservations:input_type -> mall.v1.ListPromotionReservationsRequest
+	108, // 138: mall.v1.FulfillmentService.CreateShipment:input_type -> mall.v1.CreateShipmentRequest
+	109, // 139: mall.v1.FulfillmentService.Ship:input_type -> mall.v1.ShipRequest
+	110, // 140: mall.v1.FulfillmentService.Receive:input_type -> mall.v1.ReceiveRequest
+	111, // 141: mall.v1.FulfillmentService.GetShipment:input_type -> mall.v1.GetShipmentRequest
+	112, // 142: mall.v1.FulfillmentService.GetShipmentByOrder:input_type -> mall.v1.GetShipmentByOrderRequest
+	113, // 143: mall.v1.FulfillmentService.ListShipments:input_type -> mall.v1.ListShipmentsRequest
+	118, // 144: mall.v1.AfterSalesService.CreateAfterSale:input_type -> mall.v1.CreateAfterSaleRequest
+	119, // 145: mall.v1.AfterSalesService.GetAfterSale:input_type -> mall.v1.GetAfterSaleRequest
+	123, // 146: mall.v1.AfterSalesService.Approve:input_type -> mall.v1.ApproveRequest
+	120, // 147: mall.v1.AfterSalesService.SubmitReturnTracking:input_type -> mall.v1.SubmitReturnTrackingRequest
+	121, // 148: mall.v1.AfterSalesService.ReceiveReturn:input_type -> mall.v1.ReceiveReturnRequest
+	124, // 149: mall.v1.AfterSalesService.Refund:input_type -> mall.v1.RefundAfterSaleRequest
+	122, // 150: mall.v1.AfterSalesService.ListAfterSales:input_type -> mall.v1.ListAfterSalesRequest
+	126, // 151: mall.v1.SeckillService.CreateActivity:input_type -> mall.v1.CreateSeckillActivityRequest
+	127, // 152: mall.v1.SeckillService.UpdateActivity:input_type -> mall.v1.UpdateSeckillActivityRequest
+	128, // 153: mall.v1.SeckillService.GetActivity:input_type -> mall.v1.GetSeckillActivityRequest
+	129, // 154: mall.v1.SeckillService.ListActivities:input_type -> mall.v1.ListSeckillActivitiesRequest
+	131, // 155: mall.v1.SeckillService.PublishActivity:input_type -> mall.v1.SeckillActivityCommand
+	131, // 156: mall.v1.SeckillService.PauseActivity:input_type -> mall.v1.SeckillActivityCommand
+	131, // 157: mall.v1.SeckillService.WarmupActivity:input_type -> mall.v1.SeckillActivityCommand
+	131, // 158: mall.v1.SeckillService.GetActivityStock:input_type -> mall.v1.SeckillActivityCommand
+	136, // 159: mall.v1.SeckillService.Reserve:input_type -> mall.v1.ReserveSeckillRequest
+	137, // 160: mall.v1.SeckillService.GetQualification:input_type -> mall.v1.GetSeckillQualificationRequest
+	6,   // 161: mall.v1.IdentityService.Register:output_type -> mall.v1.LoginReply
+	6,   // 162: mall.v1.IdentityService.Login:output_type -> mall.v1.LoginReply
+	6,   // 163: mall.v1.IdentityService.Refresh:output_type -> mall.v1.LoginReply
+	0,   // 164: mall.v1.IdentityService.Logout:output_type -> mall.v1.Empty
+	1,   // 165: mall.v1.IdentityService.GetUser:output_type -> mall.v1.User
+	8,   // 166: mall.v1.IdentityService.CreateAddress:output_type -> mall.v1.Address
+	8,   // 167: mall.v1.IdentityService.UpdateAddress:output_type -> mall.v1.Address
+	0,   // 168: mall.v1.IdentityService.DeleteAddress:output_type -> mall.v1.Empty
+	0,   // 169: mall.v1.IdentityService.SetDefaultAddress:output_type -> mall.v1.Empty
+	13,  // 170: mall.v1.IdentityService.ListAddresses:output_type -> mall.v1.AddressList
+	27,  // 171: mall.v1.CatalogService.GetProduct:output_type -> mall.v1.Product
+	31,  // 172: mall.v1.CatalogService.ListProducts:output_type -> mall.v1.ProductList
+	26,  // 173: mall.v1.CatalogService.GetSku:output_type -> mall.v1.Sku
+	14,  // 174: mall.v1.CatalogService.CreateCategory:output_type -> mall.v1.Category
+	14,  // 175: mall.v1.CatalogService.UpdateCategory:output_type -> mall.v1.Category
+	0,   // 176: mall.v1.CatalogService.DeleteCategory:output_type -> mall.v1.Empty
+	15,  // 177: mall.v1.CatalogService.ListCategories:output_type -> mall.v1.CategoryList
+	19,  // 178: mall.v1.CatalogService.CreateBrand:output_type -> mall.v1.Brand
+	19,  // 179: mall.v1.CatalogService.UpdateBrand:output_type -> mall.v1.Brand
+	0,   // 180: mall.v1.CatalogService.DeleteBrand:output_type -> mall.v1.Empty
+	20,  // 181: mall.v1.CatalogService.ListBrands:output_type -> mall.v1.BrandList
+	27,  // 182: mall.v1.CatalogService.CreateProduct:output_type -> mall.v1.Product
+	27,  // 183: mall.v1.CatalogService.UpdateProduct:output_type -> mall.v1.Product
+	0,   // 184: mall.v1.CatalogService.DeleteProduct:output_type -> mall.v1.Empty
+	0,   // 185: mall.v1.CatalogService.SetProductStatus:output_type -> mall.v1.Empty
+	31,  // 186: mall.v1.CatalogService.ListAdminProducts:output_type -> mall.v1.ProductList
+	27,  // 187: mall.v1.CatalogService.GetAdminProduct:output_type -> mall.v1.Product
+	26,  // 188: mall.v1.CatalogService.CreateSku:output_type -> mall.v1.Sku
+	26,  // 189: mall.v1.CatalogService.UpdateSku:output_type -> mall.v1.Sku
+	0,   // 190: mall.v1.CatalogService.DeleteSku:output_type -> mall.v1.Empty
+	26,  // 191: mall.v1.CatalogService.SetSkuStatus:output_type -> mall.v1.Sku
+	42,  // 192: mall.v1.InventoryService.GetStock:output_type -> mall.v1.Stock
+	45,  // 193: mall.v1.InventoryService.Reserve:output_type -> mall.v1.ReserveReply
+	0,   // 194: mall.v1.InventoryService.Confirm:output_type -> mall.v1.Empty
+	0,   // 195: mall.v1.InventoryService.Release:output_type -> mall.v1.Empty
+	42,  // 196: mall.v1.InventoryService.AdminAdjustStock:output_type -> mall.v1.Stock
+	48,  // 197: mall.v1.InventoryService.ListStocks:output_type -> mall.v1.StockList
+	42,  // 198: mall.v1.InventoryService.Restock:output_type -> mall.v1.Stock
+	0,   // 199: mall.v1.InventoryService.TccTryConfirm:output_type -> mall.v1.Empty
+	0,   // 200: mall.v1.InventoryService.TccConfirm:output_type -> mall.v1.Empty
+	0,   // 201: mall.v1.InventoryService.TccCancelConfirm:output_type -> mall.v1.Empty
+	64,  // 202: mall.v1.InventoryService.TccQueryConfirm:output_type -> mall.v1.TccQueryReply
+	132, // 203: mall.v1.InventoryService.AllocateSeckillStock:output_type -> mall.v1.SeckillStock
+	132, // 204: mall.v1.InventoryService.ReleaseSeckillStock:output_type -> mall.v1.SeckillStock
+	132, // 205: mall.v1.InventoryService.GetSeckillStock:output_type -> mall.v1.SeckillStock
+	132, // 206: mall.v1.InventoryService.HoldSeckillStock:output_type -> mall.v1.SeckillStock
+	132, // 207: mall.v1.InventoryService.ReleaseSeckillHold:output_type -> mall.v1.SeckillStock
+	45,  // 208: mall.v1.InventoryService.CreateSeckillReservation:output_type -> mall.v1.ReserveReply
+	0,   // 209: mall.v1.InventoryService.ReleaseSeckillReservation:output_type -> mall.v1.Empty
+	51,  // 210: mall.v1.CartService.GetCart:output_type -> mall.v1.Cart
+	51,  // 211: mall.v1.CartService.AddItem:output_type -> mall.v1.Cart
+	51,  // 212: mall.v1.CartService.UpdateItem:output_type -> mall.v1.Cart
+	51,  // 213: mall.v1.CartService.RemoveItem:output_type -> mall.v1.Cart
+	0,   // 214: mall.v1.CartService.ClearSelected:output_type -> mall.v1.Empty
+	60,  // 215: mall.v1.PricingService.CreateQuote:output_type -> mall.v1.Quote
+	60,  // 216: mall.v1.PricingService.GetQuote:output_type -> mall.v1.Quote
+	0,   // 217: mall.v1.PricingService.LockCoupon:output_type -> mall.v1.Empty
+	0,   // 218: mall.v1.PricingService.UnlockCoupon:output_type -> mall.v1.Empty
+	0,   // 219: mall.v1.PricingService.ConsumeCoupon:output_type -> mall.v1.Empty
+	0,   // 220: mall.v1.PricingService.TccTryConsume:output_type -> mall.v1.Empty
+	0,   // 221: mall.v1.PricingService.TccConfirmConsume:output_type -> mall.v1.Empty
+	0,   // 222: mall.v1.PricingService.TccCancelConsume:output_type -> mall.v1.Empty
+	64,  // 223: mall.v1.PricingService.TccQueryConsume:output_type -> mall.v1.TccQueryReply
+	66,  // 224: mall.v1.OrderService.CreateOrder:output_type -> mall.v1.Order
+	66,  // 225: mall.v1.OrderService.CreateSeckillOrder:output_type -> mall.v1.Order
+	66,  // 226: mall.v1.OrderService.CreateOrderInner:output_type -> mall.v1.Order
+	66,  // 227: mall.v1.OrderService.CancelOrder:output_type -> mall.v1.Order
+	0,   // 228: mall.v1.OrderService.CancelOrderInner:output_type -> mall.v1.Empty
+	66,  // 229: mall.v1.OrderService.MarkPaid:output_type -> mall.v1.Order
+	66,  // 230: mall.v1.OrderService.GetOrder:output_type -> mall.v1.Order
+	74,  // 231: mall.v1.OrderService.ListOrders:output_type -> mall.v1.OrderList
+	0,   // 232: mall.v1.OrderService.TccTryMarkPaid:output_type -> mall.v1.Empty
+	0,   // 233: mall.v1.OrderService.TccConfirmMarkPaid:output_type -> mall.v1.Empty
+	0,   // 234: mall.v1.OrderService.TccCancelMarkPaid:output_type -> mall.v1.Empty
+	64,  // 235: mall.v1.OrderService.TccQueryMarkPaid:output_type -> mall.v1.TccQueryReply
+	75,  // 236: mall.v1.PaymentService.CreateIntent:output_type -> mall.v1.Intent
+	75,  // 237: mall.v1.PaymentService.GetIntent:output_type -> mall.v1.Intent
+	79,  // 238: mall.v1.PaymentService.Callback:output_type -> mall.v1.CallbackReply
+	0,   // 239: mall.v1.PaymentService.Refund:output_type -> mall.v1.Empty
+	81,  // 240: mall.v1.PaymentService.RefundOrder:output_type -> mall.v1.RefundOrderReply
+	83,  // 241: mall.v1.PaymentService.VerifyPayment:output_type -> mall.v1.VerifyPaymentReply
+	87,  // 242: mall.v1.PaymentService.ListRefunds:output_type -> mall.v1.RefundList
+	99,  // 243: mall.v1.PromotionService.EvaluatePromotions:output_type -> mall.v1.PromotionEvaluation
+	101, // 244: mall.v1.PromotionService.ReservePromotions:output_type -> mall.v1.PromotionReserveReply
+	0,   // 245: mall.v1.PromotionService.ConfirmPromotions:output_type -> mall.v1.Empty
+	0,   // 246: mall.v1.PromotionService.ReleasePromotions:output_type -> mall.v1.Empty
+	88,  // 247: mall.v1.PromotionService.CreateCampaign:output_type -> mall.v1.Campaign
+	88,  // 248: mall.v1.PromotionService.UpdateCampaign:output_type -> mall.v1.Campaign
+	0,   // 249: mall.v1.PromotionService.SetCampaignStatus:output_type -> mall.v1.Empty
+	90,  // 250: mall.v1.PromotionService.ListCampaigns:output_type -> mall.v1.CampaignList
+	89,  // 251: mall.v1.PromotionService.CreatePromotion:output_type -> mall.v1.PromotionRule
+	89,  // 252: mall.v1.PromotionService.UpdatePromotion:output_type -> mall.v1.PromotionRule
+	0,   // 253: mall.v1.PromotionService.SetPromotionStatus:output_type -> mall.v1.Empty
+	92,  // 254: mall.v1.PromotionService.ListPromotions:output_type -> mall.v1.PromotionRuleList
+	105, // 255: mall.v1.PromotionService.ListPromotionReservations:output_type -> mall.v1.PromotionReservationList
+	107, // 256: mall.v1.FulfillmentService.CreateShipment:output_type -> mall.v1.Shipment
+	107, // 257: mall.v1.FulfillmentService.Ship:output_type -> mall.v1.Shipment
+	107, // 258: mall.v1.FulfillmentService.Receive:output_type -> mall.v1.Shipment
+	107, // 259: mall.v1.FulfillmentService.GetShipment:output_type -> mall.v1.Shipment
+	107, // 260: mall.v1.FulfillmentService.GetShipmentByOrder:output_type -> mall.v1.Shipment
+	114, // 261: mall.v1.FulfillmentService.ListShipments:output_type -> mall.v1.ShipmentList
+	116, // 262: mall.v1.AfterSalesService.CreateAfterSale:output_type -> mall.v1.AfterSale
+	116, // 263: mall.v1.AfterSalesService.GetAfterSale:output_type -> mall.v1.AfterSale
+	116, // 264: mall.v1.AfterSalesService.Approve:output_type -> mall.v1.AfterSale
+	116, // 265: mall.v1.AfterSalesService.SubmitReturnTracking:output_type -> mall.v1.AfterSale
+	116, // 266: mall.v1.AfterSalesService.ReceiveReturn:output_type -> mall.v1.AfterSale
+	116, // 267: mall.v1.AfterSalesService.Refund:output_type -> mall.v1.AfterSale
+	117, // 268: mall.v1.AfterSalesService.ListAfterSales:output_type -> mall.v1.AfterSaleList
+	125, // 269: mall.v1.SeckillService.CreateActivity:output_type -> mall.v1.SeckillActivity
+	125, // 270: mall.v1.SeckillService.UpdateActivity:output_type -> mall.v1.SeckillActivity
+	125, // 271: mall.v1.SeckillService.GetActivity:output_type -> mall.v1.SeckillActivity
+	130, // 272: mall.v1.SeckillService.ListActivities:output_type -> mall.v1.SeckillActivityList
+	125, // 273: mall.v1.SeckillService.PublishActivity:output_type -> mall.v1.SeckillActivity
+	125, // 274: mall.v1.SeckillService.PauseActivity:output_type -> mall.v1.SeckillActivity
+	125, // 275: mall.v1.SeckillService.WarmupActivity:output_type -> mall.v1.SeckillActivity
+	132, // 276: mall.v1.SeckillService.GetActivityStock:output_type -> mall.v1.SeckillStock
+	138, // 277: mall.v1.SeckillService.Reserve:output_type -> mall.v1.SeckillQualification
+	138, // 278: mall.v1.SeckillService.GetQualification:output_type -> mall.v1.SeckillQualification
+	161, // [161:279] is the sub-list for method output_type
+	43,  // [43:161] is the sub-list for method input_type
 	43,  // [43:43] is the sub-list for extension type_name
 	43,  // [43:43] is the sub-list for extension extendee
 	0,   // [0:43] is the sub-list for field type_name
@@ -11036,7 +11422,7 @@ func file_mall_v1_mall_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mall_v1_mall_proto_rawDesc), len(file_mall_v1_mall_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   141,
+			NumMessages:   144,
 			NumExtensions: 0,
 			NumServices:   11,
 		},

@@ -235,6 +235,8 @@ service InventoryService {
   rpc AllocateSeckillStock (AllocateSeckillStockRequest) returns (SeckillStock);
   rpc ReleaseSeckillStock (ReleaseSeckillStockRequest) returns (SeckillStock);
   rpc GetSeckillStock (GetSeckillStockRequest) returns (SeckillStock);
+  rpc HoldSeckillStock (HoldSeckillStockRequest) returns (SeckillStock);
+  rpc ReleaseSeckillHold (ReleaseSeckillHoldRequest) returns (SeckillStock);
 }
 message Stock {
   int64 sku_id = 1;
@@ -695,6 +697,8 @@ service SeckillService {
   rpc PauseActivity (SeckillActivityCommand) returns (SeckillActivity);
   rpc WarmupActivity (SeckillActivityCommand) returns (SeckillActivity);
   rpc GetActivityStock (SeckillActivityCommand) returns (SeckillStock);
+  rpc Reserve (ReserveSeckillRequest) returns (SeckillQualification);
+  rpc GetQualification (GetSeckillQualificationRequest) returns (SeckillQualification);
 }
 message SeckillActivity {
   int64 id = 1;
@@ -764,3 +768,18 @@ message AllocateSeckillStockRequest {
 }
 message ReleaseSeckillStockRequest { int64 activity_id = 1; }
 message GetSeckillStockRequest { int64 activity_id = 1; }
+
+
+message ReserveSeckillRequest { int64 activity_id = 1; int64 user_id = 2; }
+message GetSeckillQualificationRequest { string token = 1; int64 user_id = 2; }
+message SeckillQualification {
+  string token = 1;
+  int64 activity_id = 2;
+  int64 user_id = 3;
+  string status = 4;
+  string order_no = 5;
+  int64 expires_at_unix = 6;
+}
+
+message HoldSeckillStockRequest { int64 activity_id = 1; int64 quantity = 2; string ref_no = 3; }
+message ReleaseSeckillHoldRequest { int64 activity_id = 1; int64 quantity = 2; string ref_no = 3; }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -51,6 +52,7 @@ var serviceAddrs = map[string]string{
 	"payment":     "payment:9007",
 	"fulfillment": "fulfillment:9008",
 	"aftersales":  "aftersales:9009",
+	"seckill":     "seckill:9010",
 }
 
 // Clients bundles every downstream gRPC client used by the public BFF.
@@ -64,6 +66,7 @@ type Clients struct {
 	Payment     pb.PaymentServiceClient
 	Fulfillment pb.FulfillmentServiceClient
 	AfterSales  pb.AfterSalesServiceClient
+	Seckill     pb.SeckillServiceClient
 
 	conns []*grpc.ClientConn
 }
@@ -99,6 +102,7 @@ func Dial(ctx context.Context) (*Clients, error) {
 		{"payment", func(conn *grpc.ClientConn) { clients.Payment = pb.NewPaymentServiceClient(conn) }},
 		{"fulfillment", func(conn *grpc.ClientConn) { clients.Fulfillment = pb.NewFulfillmentServiceClient(conn) }},
 		{"aftersales", func(conn *grpc.ClientConn) { clients.AfterSales = pb.NewAfterSalesServiceClient(conn) }},
+		{"seckill", func(conn *grpc.ClientConn) { clients.Seckill = pb.NewSeckillServiceClient(conn) }},
 	}
 	for _, target := range targets {
 		conn, err := grpcx.Dial(ctx, targetFor(target.name))
@@ -146,6 +150,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.GET("/api/v1/products", h.listProducts)
 	engine.GET("/api/v1/products/:id", h.getProduct)
 	engine.GET("/api/v1/skus/:id", h.getSku)
+	engine.GET("/api/v1/seckill/activities/:id", h.getSeckillActivity)
 
 	authed := engine.Group("/api/v1", httpx.Auth(jwt), requireUser())
 	authed.GET("/addresses", h.listAddresses)
@@ -170,6 +175,8 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	authed.GET("/after-sales/:no", h.getAfterSale)
 	authed.POST("/after-sales/:no/return-tracking", h.submitReturnTracking)
 	authed.GET("/orders/:orderNo/shipments", h.getOrderShipment)
+	authed.POST("/seckill/activities/:id/reserve", h.reserveSeckill)
+	authed.GET("/seckill/qualifications/:token", h.getSeckillQualification)
 
 	return engine
 }
@@ -1237,7 +1244,9 @@ func remoteError(err error) error {
 		return apperr.Conflict(st.Message())
 	case codes.FailedPrecondition, codes.OutOfRange:
 		return apperr.Failed(st.Message())
-	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted, codes.Canceled:
+	case codes.ResourceExhausted:
+		return apperr.RateLimited(st.Message())
+	case codes.Unavailable, codes.DeadlineExceeded, codes.Canceled:
 		return apperr.Unavailable("downstream unavailable", err)
 	default:
 		return apperr.Internal("downstream error", err)
@@ -1330,4 +1339,55 @@ func (h *handlers) getOrderShipment(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, shipment)
+}
+
+// ---------------------------------------------------------------- seckill
+
+func (h *handlers) getSeckillActivity(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.Error(c, apperr.Invalid("invalid activity id"))
+		return
+	}
+	reply, err := h.clients.Seckill.GetActivity(c.Request.Context(), &pb.GetSeckillActivityRequest{Id: id})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) reserveSeckill(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.Error(c, apperr.Invalid("invalid activity id"))
+		return
+	}
+	reply, err := h.clients.Seckill.Reserve(c.Request.Context(), &pb.ReserveSeckillRequest{ActivityId: id, UserId: uid})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	c.JSON(http.StatusAccepted, reply)
+}
+
+func (h *handlers) getSeckillQualification(c *gin.Context) {
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Seckill.GetQualification(c.Request.Context(), &pb.GetSeckillQualificationRequest{
+		Token: c.Param("token"), UserId: uid,
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
 }

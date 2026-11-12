@@ -49,8 +49,13 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	svc := seckill.New(database, inventory, cache, logger)
+	tokenSecret := os.Getenv("SECKILL_TOKEN_SECRET")
+	if tokenSecret == "" {
+		tokenSecret = cfg.JWTSecret
+	}
+	svc := seckill.New(database, inventory, cache, logger, tokenSecret)
 	go svc.RunScheduler(ctx, 5*time.Second)
+	go svc.RunQualificationExpiry(ctx, 30*time.Second)
 	gs := grpcx.NewServer(logger)
 	pb.RegisterSeckillServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))

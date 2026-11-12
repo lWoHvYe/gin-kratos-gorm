@@ -1,8 +1,8 @@
 # Seckill service
 
-Status: S1 (activity lifecycle, inventory bucket allocation, warmup). Admission
-and asynchronous order creation are S2/S3, documented in
-[../seckill-design.md](../seckill-design.md).
+Status: S2 (activity lifecycle, inventory bucket allocation, warmup, Redis Lua
+admission, durable qualification holds and expiry). Asynchronous order creation
+is S3, documented in [../seckill-design.md](../seckill-design.md).
 
 ## Ports
 
@@ -50,11 +50,36 @@ update is a conditional compare-and-set, so duplicate work is harmless.
 Inventory allocation increments `inventory_stocks.reserved` so normal sales
 cannot consume the seckill bucket. Release decrements only the unsold part.
 
+## S2 admission
+
+Customer routes (through gateway):
+
+```text
+GET  /api/v1/seckill/activities/:id
+POST /api/v1/seckill/activities/:id/reserve
+GET  /api/v1/seckill/qualifications/:token
+```
+
+- The Redis Lua script checks ACTIVE status, per-user marker and stock, then
+  decrements stock once.
+- The token is deterministic HMAC(activity,user,version), so an idempotent retry
+  returns the same token without touching stock.
+- After Redis admission, inventory `HoldSeckillStock` moves one unit from
+  `available` to `held`; the qualification row is persisted in `mall_seckill`.
+  If the DB step fails, the exact token's Redis stock and DB hold are released.
+- `go-redis/redis_rate` limits attempts per user (10/min).
+- A 30-second expiry worker releases `ISSUED` qualifications past
+  `expires_at`, returning both the Redis unit and the DB held unit.
+- S2 intentionally does not publish an order command yet. The qualification
+  remains `ISSUED`; S3 adds JetStream and `CreateSeckillOrder`.
+
+The public reserve endpoint returns `202 Accepted`; sold-out is `409`, rate
+limit is `429`, and Redis/NATS unavailability is `503`.
+
 ## Not yet implemented
 
-- `POST /api/v1/seckill/activities/:id/reserve`
-- Redis Lua admission/token issuance
-- JetStream command publishing
+- JetStream command publishing/worker
 - `CreateSeckillOrder`
-- compensation/reconciliation worker
-- frontend seckill page
+- order/payment linkage after qualification
+- reconciliation worker
+- C-end seckill page

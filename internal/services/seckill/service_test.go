@@ -30,3 +30,19 @@ func TestWarmupKeysUseClusterHashTag(t *testing.T) {
 		t.Fatalf("unexpected keys: %q %q", meta, stock)
 	}
 }
+
+func TestTokenIsDeterministicAndHashed(t *testing.T) {
+	s := &Service{tokenSecret: []byte("test-secret")}
+	a := &activity{id: 7, version: 3}
+	first := s.tokenFor(a, 42)
+	second := s.tokenFor(a, 42)
+	if first != second {
+		t.Fatalf("token must be deterministic for idempotent retries")
+	}
+	if first == "" || len(hashToken(first)) != 64 {
+		t.Fatalf("unexpected token/hash: %q %q", first, hashToken(first))
+	}
+	if first == s.tokenFor(a, 43) {
+		t.Fatalf("token must bind to user")
+	}
+}

@@ -20,6 +20,7 @@ const (
 	CodeFailedPrecondition Code = "FAILED_PRECONDITION"
 	CodeInternal           Code = "INTERNAL"
 	CodeUnavailable        Code = "UNAVAILABLE"
+	CodeRateLimited        Code = "RATE_LIMITED"
 )
 
 type Error struct {
@@ -48,6 +49,7 @@ func Conflict(msg string) *Error               { return New(CodeConflict, msg) }
 func Failed(msg string) *Error                 { return New(CodeFailedPrecondition, msg) }
 func Internal(msg string, err error) *Error    { return Wrap(CodeInternal, msg, err) }
 func Unavailable(msg string, err error) *Error { return Wrap(CodeUnavailable, msg, err) }
+func RateLimited(msg string) *Error            { return New(CodeRateLimited, msg) }
 
 func From(err error) *Error {
 	if err == nil {
@@ -79,6 +81,8 @@ func HTTPStatus(err error) int {
 		return http.StatusUnprocessableEntity
 	case CodeUnavailable:
 		return http.StatusServiceUnavailable
+	case CodeRateLimited:
+		return http.StatusTooManyRequests
 	default:
 		return http.StatusInternalServerError
 	}
@@ -104,6 +108,8 @@ func GRPC(err error) error {
 		c = codes.FailedPrecondition
 	case CodeUnavailable:
 		c = codes.Unavailable
+	case CodeRateLimited:
+		c = codes.ResourceExhausted
 	default:
 		c = codes.Internal
 	}

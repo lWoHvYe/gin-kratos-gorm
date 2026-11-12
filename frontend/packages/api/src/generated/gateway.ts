@@ -623,6 +623,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/seckill/activities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description seckill activity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SeckillActivity"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/seckill/activities/{id}/reserve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description qualification issued or already issued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SeckillQualification"];
+                    };
+                };
+                /** @description sold out or already participated */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/seckill/qualifications/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description qualification */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SeckillQualification"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -795,6 +920,44 @@ export interface components {
             district?: string;
             detail?: string;
             is_default?: number;
+        };
+        SeckillActivity: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            campaign_id?: number;
+            /** Format: int64 */
+            sku_id?: number;
+            /** Format: int64 */
+            warehouse_id?: number;
+            name?: string;
+            /** Format: int64 */
+            price_cent?: number;
+            /** Format: int64 */
+            stock_total?: number;
+            per_user_limit?: number;
+            /** Format: int64 */
+            start_at_unix?: number;
+            /** Format: int64 */
+            end_at_unix?: number;
+            status?: string;
+            /** Format: int64 */
+            version?: number;
+            /** Format: int64 */
+            created_at_unix?: number;
+            /** Format: int64 */
+            updated_at_unix?: number;
+        };
+        SeckillQualification: {
+            token?: string;
+            /** Format: int64 */
+            activity_id?: number;
+            /** Format: int64 */
+            user_id?: number;
+            status?: string;
+            order_no?: string;
+            /** Format: int64 */
+            expires_at_unix?: number;
         };
     };
     responses: never;

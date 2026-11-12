@@ -1,7 +1,9 @@
 # k6 seckill load tests
 
-The admission endpoint is introduced in S2. This harness is checked in during S0
-so the target envelope can be tested as soon as the endpoint exists.
+The admission endpoint exists in S2. This harness is checked in during S0 and
+now targets the live endpoint. It still needs a strategy for provisioning
+distinct authenticated users before it can represent a 10k-user sale; do not
+treat a single-token run as capacity evidence.
 
 ```bash
 k6 run \

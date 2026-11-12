@@ -24,18 +24,20 @@ const (
 // the later S2 reserve path.
 type Service struct {
 	pb.UnimplementedSeckillServiceServer
-	db        *sql.DB
-	inventory pb.InventoryServiceClient
-	cache     *redis.Client
-	log       *slog.Logger
-	now       func() time.Time
+	db          *sql.DB
+	inventory   pb.InventoryServiceClient
+	cache       *redis.Client
+	tokenSecret []byte
+	log         *slog.Logger
+	now         func() time.Time
 }
 
-func New(database *sql.DB, inventory pb.InventoryServiceClient, cache *redis.Client, logger *slog.Logger) *Service {
+func New(database *sql.DB, inventory pb.InventoryServiceClient, cache *redis.Client, logger *slog.Logger, tokenSecret string) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{db: database, inventory: inventory, cache: cache, log: logger, now: time.Now}
+	return &Service{db: database, inventory: inventory, cache: cache,
+		tokenSecret: []byte(tokenSecret), log: logger, now: time.Now}
 }
 
 var _ pb.SeckillServiceServer = (*Service)(nil)

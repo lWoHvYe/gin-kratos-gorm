@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
@@ -198,3 +199,111 @@ func (s *Service) getSeckillStock(ctx context.Context, q rowQuerier, activityID 
 }
 
 var errSeckillStockExists = errors.New("inventory: seckill stock already exists")
+
+const (
+	seckillLedgerHold        = "HOLD"
+	seckillLedgerReleaseHold = "RELEASE_HOLD"
+)
+
+// HoldSeckillStock moves one unit from available to held for a qualification.
+// The ref_no (token hash) makes the operation idempotent. This is the durable
+// side of S2 admission; Redis is only the fast gate.
+func (s *Service) HoldSeckillStock(ctx context.Context, req *pb.HoldSeckillStockRequest) (*pb.SeckillStock, error) {
+	if req.GetActivityId() <= 0 || req.GetQuantity() <= 0 || strings.TrimSpace(req.GetRefNo()) == "" {
+		return nil, apperr.Invalid("activity_id, quantity and ref_no are required")
+	}
+	var out *seckillStock
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		exists, err := s.seckillLedgerExists(ctx, tx, req.GetActivityId(), seckillLedgerHold, req.GetRefNo())
+		if err != nil {
+			return err
+		}
+		if exists {
+			out, err = s.getSeckillStock(ctx, tx, req.GetActivityId(), false)
+			return err
+		}
+		current, err := s.getSeckillStock(ctx, tx, req.GetActivityId(), true)
+		if err != nil {
+			return err
+		}
+		if current.status != seckillStatusAllocated {
+			return apperr.Conflict("seckill stock bucket is not open")
+		}
+		if current.available < req.GetQuantity() {
+			return apperr.Conflict("seckill stock is exhausted")
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+			SET available = available - ?, held = held + ?, version = version + 1
+			WHERE activity_id = ? AND available >= ?`,
+			req.GetQuantity(), req.GetQuantity(), req.GetActivityId(), req.GetQuantity()); err != nil {
+			return apperr.Internal("hold seckill stock", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_stock_ledger
+			(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,
+			req.GetActivityId(), -req.GetQuantity(), current.available-req.GetQuantity(), seckillLedgerHold, req.GetRefNo()); err != nil {
+			return apperr.Internal("insert seckill hold ledger", err)
+		}
+		out, err = s.getSeckillStock(ctx, tx, req.GetActivityId(), false)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out.toPB(), nil
+}
+
+// ReleaseSeckillHold returns a held qualification to available. It is
+// idempotent by ref_no and is used by qualification expiry/compensation.
+func (s *Service) ReleaseSeckillHold(ctx context.Context, req *pb.ReleaseSeckillHoldRequest) (*pb.SeckillStock, error) {
+	if req.GetActivityId() <= 0 || req.GetQuantity() <= 0 || strings.TrimSpace(req.GetRefNo()) == "" {
+		return nil, apperr.Invalid("activity_id, quantity and ref_no are required")
+	}
+	var out *seckillStock
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		released, err := s.seckillLedgerExists(ctx, tx, req.GetActivityId(), seckillLedgerReleaseHold, req.GetRefNo())
+		if err != nil {
+			return err
+		}
+		if released {
+			out, err = s.getSeckillStock(ctx, tx, req.GetActivityId(), false)
+			return err
+		}
+		current, err := s.getSeckillStock(ctx, tx, req.GetActivityId(), true)
+		if err != nil {
+			return err
+		}
+		if current.held < req.GetQuantity() {
+			return apperr.Conflict("seckill held stock is insufficient")
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+			SET available = available + ?, held = held - ?, version = version + 1
+			WHERE activity_id = ? AND held >= ?`,
+			req.GetQuantity(), req.GetQuantity(), req.GetActivityId(), req.GetQuantity()); err != nil {
+			return apperr.Internal("release seckill hold", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_stock_ledger
+			(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,
+			req.GetActivityId(), req.GetQuantity(), current.available+req.GetQuantity(), seckillLedgerReleaseHold, req.GetRefNo()); err != nil {
+			return apperr.Internal("insert seckill release-hold ledger", err)
+		}
+		out, err = s.getSeckillStock(ctx, tx, req.GetActivityId(), false)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out.toPB(), nil
+}
+
+func (s *Service) seckillLedgerExists(ctx context.Context, q rowQuerier, activityID int64, reason, refNo string) (bool, error) {
+	var one int
+	err := q.QueryRowContext(ctx, `SELECT 1 FROM seckill_stock_ledger
+		WHERE activity_id=? AND reason=? AND ref_no=? LIMIT 1`, activityID, reason, refNo).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, apperr.Internal("query seckill ledger", err)
+	}
+	return true, nil
+}

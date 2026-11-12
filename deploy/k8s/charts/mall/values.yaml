@@ -179,7 +179,7 @@ authz:
       sources: [gateway, admin]
       paths: ["/mall.v1.AfterSalesService/*"]
     - name: seckill
-      sources: [admin]
+      sources: [admin, gateway]
       paths: ["/mall.v1.SeckillService/*"]
     - name: dtm
       sources: [order, payment]

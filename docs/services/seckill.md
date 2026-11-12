@@ -90,7 +90,7 @@ limit is `429`, and Redis/NATS unavailability is `503`.
 Prometheus counters exposed on the seckill health/metrics port:
 
 ```text
-mall_seckill_admissions_total{result=accepted|existing|sold_out|not_warm|not_active|rate_limited}
+mall_seckill_admissions_total{result=accepted|existing|sold_out|sold_out_cached|not_warm|not_active|rate_limited}
 mall_seckill_order_commands_total{result=succeeded|dlq}
 mall_seckill_reconcile_mismatch_total{reason=invariant|redis_db}
 ```

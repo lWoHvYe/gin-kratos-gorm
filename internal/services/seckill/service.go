@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -34,6 +35,7 @@ type Service struct {
 	tokenSecret []byte
 	log         *slog.Logger
 	now         func() time.Time
+	soldOut     sync.Map
 }
 
 func New(database *sql.DB, inventory pb.InventoryServiceClient, orders pb.OrderServiceClient, payment pb.PaymentServiceClient, client *mq.Client, cache *redis.Client, logger *slog.Logger, tokenSecret string) *Service {

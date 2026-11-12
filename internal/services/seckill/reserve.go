@@ -146,6 +146,13 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 	} else if !apperr.IsCode(lookupErr, apperr.CodeNotFound) {
 		return nil, lookupErr
 	}
+	if until, ok := s.soldOut.Load(a.id); ok {
+		if t, ok := until.(time.Time); ok && now.Before(t) {
+			metrics.SeckillAdmissions.WithLabelValues("sold_out_cached").Inc()
+			return nil, apperr.Conflict("seckill is sold out")
+		}
+		s.soldOut.Delete(a.id)
+	}
 	expiresAt := now.Add(qualificationTTL)
 	if expiresAt.After(a.endAt) {
 		expiresAt = a.endAt
@@ -217,6 +224,7 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 		return q.toPB(rawToken), nil
 	case reserveSoldOut:
 		metrics.SeckillAdmissions.WithLabelValues("sold_out").Inc()
+		s.soldOut.Store(a.id, now.Add(time.Second))
 		return nil, apperr.Conflict("seckill is sold out")
 	case reserveNotWarm:
 		metrics.SeckillAdmissions.WithLabelValues("not_warm").Inc()

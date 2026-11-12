@@ -4,13 +4,15 @@ const message = ref('')
 const loading = ref(false)
 const { token } = useApi()
 const router = useRouter()
+const route = useRoute()
 async function submit(): Promise<void> {
   loading.value = true
   message.value = ''
   try {
     const reply = await $fetch<{ access_token: string; user: { nickname: string } }>('/api/v1/auth/login', { method: 'POST', body: form })
     token.value = reply.access_token
-    await router.push('/')
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    await router.push(redirect)
   } catch (err) {
     message.value = err instanceof Error ? err.message : '登录失败'
   } finally { loading.value = false }

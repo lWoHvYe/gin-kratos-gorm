@@ -44,3 +44,13 @@ test('storefront after-sales entry is reachable from an order', async ({ page })
     await expect(page.getByRole('button', { name: '提交申请' })).toBeVisible()
   }
 })
+
+test('storefront seckill list and detail are reachable', async ({ page }) => {
+  await page.goto('/seckill')
+  await expect(page.getByText('限时秒杀').first()).toBeVisible()
+  const first = page.locator('a.card').first()
+  if (await first.count()) {
+    await first.click()
+    await expect(page.getByText('剩余库存').first()).toBeVisible()
+  }
+})

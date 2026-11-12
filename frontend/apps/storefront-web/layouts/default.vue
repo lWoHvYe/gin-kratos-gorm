@@ -5,6 +5,7 @@
         <NuxtLink to="/" class="brand">Mall</NuxtLink>
         <nav class="nav">
           <NuxtLink to="/">商品</NuxtLink>
+          <NuxtLink to="/seckill">秒杀</NuxtLink>
           <NuxtLink to="/orders">订单</NuxtLink>
           <NuxtLink to="/addresses">地址</NuxtLink>
           <NuxtLink to="/after-sales">售后</NuxtLink>

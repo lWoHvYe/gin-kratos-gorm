@@ -221,3 +221,27 @@ func isDuplicate(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "1062")
 }
+
+func (s *Service) listPublicActivities(ctx context.Context, req *pb.ListSeckillActivitiesRequest) ([]*activity, int64, error) {
+	page, size := normalizePage(req.GetPage(), req.GetPageSize())
+	where := `status IN ('READY','ACTIVE') AND end_at > NOW(3)`
+	var total int64
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM seckill_activities WHERE `+where).Scan(&total); err != nil {
+		return nil, 0, apperr.Internal("count public seckill activities", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+activityColumns+` FROM seckill_activities WHERE `+where+
+		` ORDER BY start_at ASC, id ASC LIMIT ? OFFSET ?`, size, (page-1)*size)
+	if err != nil {
+		return nil, 0, apperr.Internal("list public seckill activities", err)
+	}
+	defer rows.Close()
+	var out []*activity
+	for rows.Next() {
+		a, err := scanActivity(rows)
+		if err != nil {
+			return nil, 0, apperr.Internal("scan public seckill activity", err)
+		}
+		out = append(out, a)
+	}
+	return out, total, rows.Err()
+}

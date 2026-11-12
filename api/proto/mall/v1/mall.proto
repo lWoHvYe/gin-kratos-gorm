@@ -702,6 +702,8 @@ service SeckillService {
   rpc GetActivityStock (SeckillActivityCommand) returns (SeckillStock);
   rpc Reserve (ReserveSeckillRequest) returns (SeckillQualification);
   rpc GetQualification (GetSeckillQualificationRequest) returns (SeckillQualification);
+  rpc GetPublicActivity (GetSeckillActivityRequest) returns (SeckillActivity);
+  rpc ListPublicActivities (ListSeckillActivitiesRequest) returns (SeckillActivityList);
 }
 message SeckillActivity {
   int64 id = 1;
@@ -718,6 +720,8 @@ message SeckillActivity {
   int64 version = 12;
   int64 created_at_unix = 13;
   int64 updated_at_unix = 14;
+  int64 available = 15;
+  int64 server_now_unix = 16;
 }
 message CreateSeckillActivityRequest {
   int64 campaign_id = 1;

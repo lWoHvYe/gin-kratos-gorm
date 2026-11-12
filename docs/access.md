@@ -23,8 +23,8 @@ sudo sh -c 'grep -q "10.211.55.29 mall.local" /etc/hosts || echo "10.211.55.29 m
 Then open:
 
 ```text
-http://mall.local/
-http://mall.local/admin/
+http://mall.local/            # C-end, including /seckill
+http://mall.local/admin/      # B-end
 ```
 
 On the VM itself use:

@@ -216,6 +216,8 @@ components:
         version: { type: integer, format: int64 }
         created_at_unix: { type: integer, format: int64 }
         updated_at_unix: { type: integer, format: int64 }
+        available: { type: integer, format: int64 }
+        server_now_unix: { type: integer, format: int64 }
     SeckillStock:
       type: object
       properties:

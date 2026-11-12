@@ -4803,16 +4803,18 @@ var AfterSalesService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	SeckillService_CreateActivity_FullMethodName   = "/mall.v1.SeckillService/CreateActivity"
-	SeckillService_UpdateActivity_FullMethodName   = "/mall.v1.SeckillService/UpdateActivity"
-	SeckillService_GetActivity_FullMethodName      = "/mall.v1.SeckillService/GetActivity"
-	SeckillService_ListActivities_FullMethodName   = "/mall.v1.SeckillService/ListActivities"
-	SeckillService_PublishActivity_FullMethodName  = "/mall.v1.SeckillService/PublishActivity"
-	SeckillService_PauseActivity_FullMethodName    = "/mall.v1.SeckillService/PauseActivity"
-	SeckillService_WarmupActivity_FullMethodName   = "/mall.v1.SeckillService/WarmupActivity"
-	SeckillService_GetActivityStock_FullMethodName = "/mall.v1.SeckillService/GetActivityStock"
-	SeckillService_Reserve_FullMethodName          = "/mall.v1.SeckillService/Reserve"
-	SeckillService_GetQualification_FullMethodName = "/mall.v1.SeckillService/GetQualification"
+	SeckillService_CreateActivity_FullMethodName       = "/mall.v1.SeckillService/CreateActivity"
+	SeckillService_UpdateActivity_FullMethodName       = "/mall.v1.SeckillService/UpdateActivity"
+	SeckillService_GetActivity_FullMethodName          = "/mall.v1.SeckillService/GetActivity"
+	SeckillService_ListActivities_FullMethodName       = "/mall.v1.SeckillService/ListActivities"
+	SeckillService_PublishActivity_FullMethodName      = "/mall.v1.SeckillService/PublishActivity"
+	SeckillService_PauseActivity_FullMethodName        = "/mall.v1.SeckillService/PauseActivity"
+	SeckillService_WarmupActivity_FullMethodName       = "/mall.v1.SeckillService/WarmupActivity"
+	SeckillService_GetActivityStock_FullMethodName     = "/mall.v1.SeckillService/GetActivityStock"
+	SeckillService_Reserve_FullMethodName              = "/mall.v1.SeckillService/Reserve"
+	SeckillService_GetQualification_FullMethodName     = "/mall.v1.SeckillService/GetQualification"
+	SeckillService_GetPublicActivity_FullMethodName    = "/mall.v1.SeckillService/GetPublicActivity"
+	SeckillService_ListPublicActivities_FullMethodName = "/mall.v1.SeckillService/ListPublicActivities"
 )
 
 // SeckillServiceClient is the client API for SeckillService service.
@@ -4831,6 +4833,8 @@ type SeckillServiceClient interface {
 	GetActivityStock(ctx context.Context, in *SeckillActivityCommand, opts ...grpc.CallOption) (*SeckillStock, error)
 	Reserve(ctx context.Context, in *ReserveSeckillRequest, opts ...grpc.CallOption) (*SeckillQualification, error)
 	GetQualification(ctx context.Context, in *GetSeckillQualificationRequest, opts ...grpc.CallOption) (*SeckillQualification, error)
+	GetPublicActivity(ctx context.Context, in *GetSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error)
+	ListPublicActivities(ctx context.Context, in *ListSeckillActivitiesRequest, opts ...grpc.CallOption) (*SeckillActivityList, error)
 }
 
 type seckillServiceClient struct {
@@ -4941,6 +4945,26 @@ func (c *seckillServiceClient) GetQualification(ctx context.Context, in *GetSeck
 	return out, nil
 }
 
+func (c *seckillServiceClient) GetPublicActivity(ctx context.Context, in *GetSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivity)
+	err := c.cc.Invoke(ctx, SeckillService_GetPublicActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *seckillServiceClient) ListPublicActivities(ctx context.Context, in *ListSeckillActivitiesRequest, opts ...grpc.CallOption) (*SeckillActivityList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SeckillActivityList)
+	err := c.cc.Invoke(ctx, SeckillService_ListPublicActivities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SeckillServiceServer is the server API for SeckillService service.
 // All implementations must embed UnimplementedSeckillServiceServer
 // for forward compatibility.
@@ -4957,6 +4981,8 @@ type SeckillServiceServer interface {
 	GetActivityStock(context.Context, *SeckillActivityCommand) (*SeckillStock, error)
 	Reserve(context.Context, *ReserveSeckillRequest) (*SeckillQualification, error)
 	GetQualification(context.Context, *GetSeckillQualificationRequest) (*SeckillQualification, error)
+	GetPublicActivity(context.Context, *GetSeckillActivityRequest) (*SeckillActivity, error)
+	ListPublicActivities(context.Context, *ListSeckillActivitiesRequest) (*SeckillActivityList, error)
 	mustEmbedUnimplementedSeckillServiceServer()
 }
 
@@ -4996,6 +5022,12 @@ func (UnimplementedSeckillServiceServer) Reserve(context.Context, *ReserveSeckil
 }
 func (UnimplementedSeckillServiceServer) GetQualification(context.Context, *GetSeckillQualificationRequest) (*SeckillQualification, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetQualification not implemented")
+}
+func (UnimplementedSeckillServiceServer) GetPublicActivity(context.Context, *GetSeckillActivityRequest) (*SeckillActivity, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPublicActivity not implemented")
+}
+func (UnimplementedSeckillServiceServer) ListPublicActivities(context.Context, *ListSeckillActivitiesRequest) (*SeckillActivityList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPublicActivities not implemented")
 }
 func (UnimplementedSeckillServiceServer) mustEmbedUnimplementedSeckillServiceServer() {}
 func (UnimplementedSeckillServiceServer) testEmbeddedByValue()                        {}
@@ -5198,6 +5230,42 @@ func _SeckillService_GetQualification_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SeckillService_GetPublicActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSeckillActivityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).GetPublicActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_GetPublicActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).GetPublicActivity(ctx, req.(*GetSeckillActivityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SeckillService_ListPublicActivities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSeckillActivitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).ListPublicActivities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_ListPublicActivities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).ListPublicActivities(ctx, req.(*ListSeckillActivitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SeckillService_ServiceDesc is the grpc.ServiceDesc for SeckillService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5244,6 +5312,14 @@ var SeckillService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetQualification",
 			Handler:    _SeckillService_GetQualification_Handler,
+		},
+		{
+			MethodName: "GetPublicActivity",
+			Handler:    _SeckillService_GetPublicActivity_Handler,
+		},
+		{
+			MethodName: "ListPublicActivities",
+			Handler:    _SeckillService_ListPublicActivities_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

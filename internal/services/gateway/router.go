@@ -150,6 +150,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.GET("/api/v1/products", h.listProducts)
 	engine.GET("/api/v1/products/:id", h.getProduct)
 	engine.GET("/api/v1/skus/:id", h.getSku)
+	engine.GET("/api/v1/seckill/activities", h.listPublicSeckillActivities)
 	engine.GET("/api/v1/seckill/activities/:id", h.getSeckillActivity)
 
 	authed := engine.Group("/api/v1", httpx.Auth(jwt), requireUser())
@@ -1349,7 +1350,7 @@ func (h *handlers) getSeckillActivity(c *gin.Context) {
 		httpx.Error(c, apperr.Invalid("invalid activity id"))
 		return
 	}
-	reply, err := h.clients.Seckill.GetActivity(c.Request.Context(), &pb.GetSeckillActivityRequest{Id: id})
+	reply, err := h.clients.Seckill.GetPublicActivity(c.Request.Context(), &pb.GetSeckillActivityRequest{Id: id})
 	if err != nil {
 		httpx.Error(c, remoteError(err))
 		return
@@ -1399,6 +1400,27 @@ func (h *handlers) getSeckillQualification(c *gin.Context) {
 	}
 	reply, err := h.clients.Seckill.GetQualification(c.Request.Context(), &pb.GetSeckillQualificationRequest{
 		Token: c.Param("token"), UserId: uid,
+	})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) listPublicSeckillActivities(c *gin.Context) {
+	page, err := queryInt32(c, "page")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	size, err := queryInt32(c, "page_size")
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Seckill.ListPublicActivities(c.Request.Context(), &pb.ListSeckillActivitiesRequest{
+		Page: page, PageSize: size,
 	})
 	if err != nil {
 		httpx.Error(c, remoteError(err))

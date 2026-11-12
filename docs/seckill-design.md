@@ -3,8 +3,8 @@
 Status: S3 implemented plus S4 hardening in progress (activity lifecycle,
 inventory bucket, Redis Lua admission, durable holds/expiry, JetStream order
 worker, fixed-price CreateSeckillOrder and payment intent, cancellation
-projection, DLQ publish, report-only reconciler). S4 HA/load/WAF and S5 C-end
-page remain.
+projection, DLQ publish, report-only reconciler, C-end seckill page). S4
+HA/load/WAF and automatic reconciliation remain.
 
 This document is deliberately a production design rather than a demo sketch.
 Seckill is treated as a small, isolated, failure-aware subsystem that reuses the

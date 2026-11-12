@@ -1094,6 +1094,10 @@ export interface components {
             created_at_unix?: number;
             /** Format: int64 */
             updated_at_unix?: number;
+            /** Format: int64 */
+            available?: number;
+            /** Format: int64 */
+            server_now_unix?: number;
         };
         SeckillStock: {
             /** Format: int64 */

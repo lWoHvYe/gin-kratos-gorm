@@ -337,3 +337,37 @@ func (s *Service) expireDue(ctx context.Context) {
 		s.clearWarmup(ctx, a.id)
 	}
 }
+
+func (s *Service) GetPublicActivity(ctx context.Context, req *pb.GetSeckillActivityRequest) (*pb.SeckillActivity, error) {
+	if req.GetId() <= 0 {
+		return nil, apperr.Invalid("id is required")
+	}
+	a, err := s.getActivity(ctx, req.GetId(), false)
+	if err != nil {
+		return nil, err
+	}
+	if a.status != statusReady && a.status != statusActive {
+		return nil, apperr.NotFound("seckill activity is not available")
+	}
+	reply := a.toPB()
+	reply.ServerNowUnix = s.now().Unix()
+	if stock, err := s.inventory.GetSeckillStock(ctx, &pb.GetSeckillStockRequest{ActivityId: a.id}); err == nil {
+		reply.Available = stock.GetAvailable()
+	}
+	return reply, nil
+}
+
+func (s *Service) ListPublicActivities(ctx context.Context, req *pb.ListSeckillActivitiesRequest) (*pb.SeckillActivityList, error) {
+	rows, total, err := s.listPublicActivities(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*pb.SeckillActivity, 0, len(rows))
+	now := s.now().Unix()
+	for _, a := range rows {
+		item := a.toPB()
+		item.ServerNowUnix = now
+		out = append(out, item)
+	}
+	return &pb.SeckillActivityList{Activities: out, Total: total}, nil
+}

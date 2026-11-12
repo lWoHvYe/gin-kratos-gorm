@@ -185,6 +185,8 @@ components:
         version: { type: integer, format: int64 }
         created_at_unix: { type: integer, format: int64 }
         updated_at_unix: { type: integer, format: int64 }
+        available: { type: integer, format: int64 }
+        server_now_unix: { type: integer, format: int64 }
     SeckillQualification:
       type: object
       properties:
@@ -481,3 +483,21 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SeckillQualification' }
+  /api/v1/seckill/activities:
+    get:
+      security: []
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+      responses:
+        '200':
+          description: public seckill activities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  activities:
+                    type: array
+                    items: { $ref: '#/components/schemas/SeckillActivity' }

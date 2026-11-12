@@ -6,6 +6,7 @@ import (
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/metrics"
 )
 
 // RunReconciler reports Redis/DB stock mismatches. It deliberately does not
@@ -48,6 +49,7 @@ func (s *Service) reconcileOnce(ctx context.Context) {
 			continue
 		}
 		if stock.GetTotal() != stock.GetAvailable()+stock.GetHeld()+stock.GetSold() {
+			metrics.SeckillReconcileMismatch.WithLabelValues("invariant").Inc()
 			s.log.Error("seckill bucket invariant violated", "activity_id", id,
 				"total", stock.GetTotal(), "available", stock.GetAvailable(), "held", stock.GetHeld(), "sold", stock.GetSold())
 		}
@@ -59,6 +61,7 @@ func (s *Service) reconcileOnce(ctx context.Context) {
 			continue
 		}
 		if raw != stock.GetAvailable() {
+			metrics.SeckillReconcileMismatch.WithLabelValues("redis_db").Inc()
 			s.log.Error("seckill redis/db stock mismatch", "activity_id", id, "redis", raw, "db", stock.GetAvailable())
 		}
 	}

@@ -9,6 +9,7 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/metrics"
 
 	"github.com/nats-io/nats.go"
 	"google.golang.org/grpc/codes"
@@ -63,6 +64,7 @@ func (s *Service) handleCommand(ctx context.Context, msg *nats.Msg) {
 			_ = msg.NakWithDelay(5 * time.Second)
 			return
 		}
+		metrics.SeckillOrderCommands.WithLabelValues("dlq").Inc()
 		s.publishDLQ(ctx, cmd, err)
 		s.failQualification(ctx, cmd, err)
 		_ = msg.Term()
@@ -77,6 +79,7 @@ func (s *Service) handleCommand(ctx context.Context, msg *nats.Msg) {
 		s.log.Error("create seckill payment intent", "order_no", order.GetOrderNo(), "error", payErr)
 	}
 	s.markOrdered(ctx, cmd, order.GetOrderNo(), paymentNo)
+	metrics.SeckillOrderCommands.WithLabelValues("succeeded").Inc()
 	_ = msg.Ack()
 }
 

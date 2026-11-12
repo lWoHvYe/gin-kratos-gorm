@@ -84,3 +84,16 @@ limit is `429`, and Redis/NATS unavailability is `503`.
 - order/payment linkage after qualification
 - reconciliation worker
 - C-end seckill page
+
+## Observability
+
+Prometheus counters exposed on the seckill health/metrics port:
+
+```text
+mall_seckill_admissions_total{result=accepted|existing|sold_out|not_warm|not_active|rate_limited}
+mall_seckill_order_commands_total{result=succeeded|dlq}
+mall_seckill_reconcile_mismatch_total{reason=invariant|redis_db}
+```
+
+The reconciler is report-only; alerts should page on `redis_db`/`invariant`
+mismatches and on DLQ counts.

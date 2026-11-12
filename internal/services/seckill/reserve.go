@@ -13,6 +13,7 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/metrics"
 
 	"github.com/go-redis/redis_rate/v10"
 	"github.com/redis/go-redis/v9"
@@ -131,6 +132,7 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 		return nil, apperr.Unavailable("seckill rate limiter unavailable", err)
 	}
 	if rate.Allowed == 0 {
+		metrics.SeckillAdmissions.WithLabelValues("rate_limited").Inc()
 		return nil, apperr.RateLimited("too many seckill attempts")
 	}
 
@@ -164,6 +166,7 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 	}
 	switch code {
 	case reserveAccepted:
+		metrics.SeckillAdmissions.WithLabelValues("accepted").Inc()
 		if err := s.holdQualification(ctx, a.id, tokenHash); err != nil {
 			s.compensate(ctx, a.id, req.GetUserId(), tokenHash)
 			return nil, err
@@ -182,6 +185,7 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 		}
 		return q.toPB(rawToken), nil
 	case reserveExisting:
+		metrics.SeckillAdmissions.WithLabelValues("existing").Inc()
 		q, err := s.getQualification(ctx, tokenHash, req.GetUserId())
 		if err == nil {
 			// Older S2 rows may predate the durable hold; ensuring it is
@@ -212,10 +216,13 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveSeckillRequest) (*
 		}
 		return q.toPB(rawToken), nil
 	case reserveSoldOut:
+		metrics.SeckillAdmissions.WithLabelValues("sold_out").Inc()
 		return nil, apperr.Conflict("seckill is sold out")
 	case reserveNotWarm:
+		metrics.SeckillAdmissions.WithLabelValues("not_warm").Inc()
 		return nil, apperr.Unavailable("seckill stock is not warmed up", fmt.Errorf("missing activity keys"))
 	case reserveNotActive:
+		metrics.SeckillAdmissions.WithLabelValues("not_active").Inc()
 		return nil, apperr.Failed("seckill activity is not active")
 	default:
 		return nil, apperr.Internal("unexpected seckill admission result", fmt.Errorf("code %d", code))

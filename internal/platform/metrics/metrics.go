@@ -21,6 +21,21 @@ var (
 		Help: "Outbox events successfully published to NATS.",
 	})
 
+	SeckillAdmissions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_seckill_admissions_total",
+		Help: "Seckill admission outcomes.",
+	}, []string{"result"})
+
+	SeckillOrderCommands = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_seckill_order_commands_total",
+		Help: "Seckill JetStream command outcomes.",
+	}, []string{"result"})
+
+	SeckillReconcileMismatch = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_seckill_reconcile_mismatch_total",
+		Help: "Seckill stock reconciliation mismatches by reason.",
+	}, []string{"reason"})
+
 	OutboxPublishErrors = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "mall_outbox_publish_errors_total",
 		Help: "Outbox publish attempts that failed and will be retried.",
@@ -28,5 +43,6 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors)
+	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
+		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch)
 }

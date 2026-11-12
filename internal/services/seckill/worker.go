@@ -119,8 +119,10 @@ func (s *Service) failQualification(ctx context.Context, cmd orderCommand, cause
 		SET status='FAILED' WHERE token_hash=? AND status IN ('ISSUED','ORDERING')`, cmd.TokenHash); err != nil {
 		s.log.Error("mark qualification failed", "error", err)
 	}
-	s.releaseQualification(ctx, cmd.ActivityID, cmd.TokenHash)
-	s.compensate(ctx, cmd.ActivityID, cmd.UserID, cmd.TokenHash)
+	// Keep the inventory hold and Redis unit until the qualification expiry
+	// worker runs. This lets an operator replay a DLQ command without
+	// re-acquiring stock; a permanent failure is released by expiry.
+
 }
 
 func transient(err error) bool {

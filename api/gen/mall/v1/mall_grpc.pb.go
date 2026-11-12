@@ -4815,6 +4815,7 @@ const (
 	SeckillService_GetQualification_FullMethodName     = "/mall.v1.SeckillService/GetQualification"
 	SeckillService_GetPublicActivity_FullMethodName    = "/mall.v1.SeckillService/GetPublicActivity"
 	SeckillService_ListPublicActivities_FullMethodName = "/mall.v1.SeckillService/ListPublicActivities"
+	SeckillService_ReplayDLQ_FullMethodName            = "/mall.v1.SeckillService/ReplayDLQ"
 )
 
 // SeckillServiceClient is the client API for SeckillService service.
@@ -4835,6 +4836,7 @@ type SeckillServiceClient interface {
 	GetQualification(ctx context.Context, in *GetSeckillQualificationRequest, opts ...grpc.CallOption) (*SeckillQualification, error)
 	GetPublicActivity(ctx context.Context, in *GetSeckillActivityRequest, opts ...grpc.CallOption) (*SeckillActivity, error)
 	ListPublicActivities(ctx context.Context, in *ListSeckillActivitiesRequest, opts ...grpc.CallOption) (*SeckillActivityList, error)
+	ReplayDLQ(ctx context.Context, in *ReplaySeckillDLQRequest, opts ...grpc.CallOption) (*ReplaySeckillDLQReply, error)
 }
 
 type seckillServiceClient struct {
@@ -4965,6 +4967,16 @@ func (c *seckillServiceClient) ListPublicActivities(ctx context.Context, in *Lis
 	return out, nil
 }
 
+func (c *seckillServiceClient) ReplayDLQ(ctx context.Context, in *ReplaySeckillDLQRequest, opts ...grpc.CallOption) (*ReplaySeckillDLQReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaySeckillDLQReply)
+	err := c.cc.Invoke(ctx, SeckillService_ReplayDLQ_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SeckillServiceServer is the server API for SeckillService service.
 // All implementations must embed UnimplementedSeckillServiceServer
 // for forward compatibility.
@@ -4983,6 +4995,7 @@ type SeckillServiceServer interface {
 	GetQualification(context.Context, *GetSeckillQualificationRequest) (*SeckillQualification, error)
 	GetPublicActivity(context.Context, *GetSeckillActivityRequest) (*SeckillActivity, error)
 	ListPublicActivities(context.Context, *ListSeckillActivitiesRequest) (*SeckillActivityList, error)
+	ReplayDLQ(context.Context, *ReplaySeckillDLQRequest) (*ReplaySeckillDLQReply, error)
 	mustEmbedUnimplementedSeckillServiceServer()
 }
 
@@ -5028,6 +5041,9 @@ func (UnimplementedSeckillServiceServer) GetPublicActivity(context.Context, *Get
 }
 func (UnimplementedSeckillServiceServer) ListPublicActivities(context.Context, *ListSeckillActivitiesRequest) (*SeckillActivityList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPublicActivities not implemented")
+}
+func (UnimplementedSeckillServiceServer) ReplayDLQ(context.Context, *ReplaySeckillDLQRequest) (*ReplaySeckillDLQReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReplayDLQ not implemented")
 }
 func (UnimplementedSeckillServiceServer) mustEmbedUnimplementedSeckillServiceServer() {}
 func (UnimplementedSeckillServiceServer) testEmbeddedByValue()                        {}
@@ -5266,6 +5282,24 @@ func _SeckillService_ListPublicActivities_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SeckillService_ReplayDLQ_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplaySeckillDLQRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SeckillServiceServer).ReplayDLQ(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SeckillService_ReplayDLQ_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SeckillServiceServer).ReplayDLQ(ctx, req.(*ReplaySeckillDLQRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SeckillService_ServiceDesc is the grpc.ServiceDesc for SeckillService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5320,6 +5354,10 @@ var SeckillService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPublicActivities",
 			Handler:    _SeckillService_ListPublicActivities_Handler,
+		},
+		{
+			MethodName: "ReplayDLQ",
+			Handler:    _SeckillService_ReplayDLQ_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

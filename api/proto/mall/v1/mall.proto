@@ -704,6 +704,7 @@ service SeckillService {
   rpc GetQualification (GetSeckillQualificationRequest) returns (SeckillQualification);
   rpc GetPublicActivity (GetSeckillActivityRequest) returns (SeckillActivity);
   rpc ListPublicActivities (ListSeckillActivitiesRequest) returns (SeckillActivityList);
+  rpc ReplayDLQ (ReplaySeckillDLQRequest) returns (ReplaySeckillDLQReply);
 }
 message SeckillActivity {
   int64 id = 1;
@@ -825,3 +826,6 @@ message CreateSeckillReservationRequest {
   int64 ttl_seconds = 6;
 }
 message ReleaseSeckillReservationRequest { string order_no = 1; int64 sku_id = 2; }
+
+message ReplaySeckillDLQRequest { int64 activity_id = 1; int32 limit = 2; }
+message ReplaySeckillDLQReply { int32 replayed = 1; int32 skipped = 2; string errors = 3; }

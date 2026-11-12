@@ -178,6 +178,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	admin.POST("/seckill/activities/:id/pause", h.pauseSeckillActivity)
 	admin.POST("/seckill/activities/:id/warmup", h.warmupSeckillActivity)
 	admin.GET("/seckill/activities/:id/stock", h.getSeckillStock)
+	admin.POST("/seckill/dlq/replay", h.replaySeckillDLQ)
 	admin.POST("/promotions/evaluate", h.evaluatePromotions)
 
 	return engine
@@ -1287,6 +1288,20 @@ func (h *handlers) getSeckillStock(c *gin.Context) {
 		return
 	}
 	reply, err := h.clients.Seckill.GetActivityStock(c.Request.Context(), &pb.SeckillActivityCommand{Id: id})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+func (h *handlers) replaySeckillDLQ(c *gin.Context) {
+	var in pb.ReplaySeckillDLQRequest
+	if err := bindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Seckill.ReplayDLQ(c.Request.Context(), &in)
 	if err != nil {
 		httpx.Error(c, remoteError(err))
 		return

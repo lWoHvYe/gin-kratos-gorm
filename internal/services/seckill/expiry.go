@@ -32,7 +32,7 @@ func (s *Service) RunQualificationExpiry(ctx context.Context, interval time.Dura
 
 func (s *Service) expireQualifications(ctx context.Context) {
 	rows, err := s.db.QueryContext(ctx, `SELECT activity_id, user_id, token_hash
-		FROM seckill_qualifications WHERE status='ISSUED' AND expires_at <= NOW(3)
+		FROM seckill_qualifications WHERE status IN ('ISSUED','FAILED') AND expires_at <= NOW(3)
 		ORDER BY id LIMIT 200`)
 	if err != nil {
 		s.log.Warn("query expired seckill qualifications", "error", err)

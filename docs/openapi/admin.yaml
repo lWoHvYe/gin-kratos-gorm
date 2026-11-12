@@ -554,3 +554,24 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SeckillStock' }
+  /api/admin/v1/seckill/dlq/replay:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                activity_id: { type: integer, format: int64 }
+                limit: { type: integer }
+      responses:
+        '200':
+          description: replay result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  replayed: { type: integer }
+                  skipped: { type: integer }
+                  errors: { type: string }

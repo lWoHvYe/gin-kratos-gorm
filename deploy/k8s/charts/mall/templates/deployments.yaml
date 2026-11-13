@@ -52,14 +52,60 @@ spec:
               value: {{ $.Values.appEnv | quote }}
             - name: LOG_LEVEL
               value: {{ $.Values.logLevel | quote }}
+            {{- if $.Values.mysql.credentialsSecret }}
+            - name: MYSQL_USER
+              value: {{ $.Values.mysql.user | quote }}
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.mysql.credentialsSecret }}
+                  key: {{ $.Values.mysql.credentialsSecretKey | default "password" }}
+            - name: MYSQL_DSN
+              value: "$(MYSQL_USER):$(MYSQL_PASSWORD)@tcp({{ $.Values.mysql.host }}:{{ $.Values.mysql.port }})/{{ $svc.mysqlDatabase }}?parseTime=true&loc=Local&charset=utf8mb4"
+            {{- else }}
             - name: MYSQL_DSN
               value: "{{ $.Values.mysql.user }}:{{ $.Values.mysql.password }}@tcp({{ $.Values.mysql.host }}:{{ $.Values.mysql.port }})/{{ $svc.mysqlDatabase }}?parseTime=true&loc=Local&charset=utf8mb4"
+            {{- end }}
+            {{- with $.Values.mysql.maxOpenConns }}
+            - name: MYSQL_MAX_OPEN_CONNS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $.Values.mysql.maxIdleConns }}
+            - name: MYSQL_MAX_IDLE_CONNS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if not $.Values.redis.mode }}
             - name: REDIS_ADDR
               value: {{ $.Values.redis.addr | quote }}
+            {{- end }}
+            {{- if $.Values.redis.passwordSecret }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.redis.passwordSecret }}
+                  key: {{ $.Values.redis.passwordSecretKey | default "password" }}
+            {{- else }}
             - name: REDIS_PASSWORD
               value: {{ $.Values.redis.password | quote }}
+            {{- end }}
+            {{- with $.Values.redis.mode }}
+            - name: REDIS_MODE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $.Values.redis.addrs }}
+            - name: REDIS_ADDRS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $.Values.redis.masterName }}
+            - name: REDIS_MASTER_NAME
+              value: {{ . | quote }}
+            {{- end }}
             - name: NATS_URL
               value: {{ $.Values.nats.url | quote }}
+            {{- with $.Values.nats.streamReplicas }}
+            - name: NATS_STREAM_REPLICAS
+              value: {{ . | quote }}
+            {{- end }}
             - name: DTM_ADDRESS
               value: {{ $.Values.dtm.address | quote }}
             - name: JWT_ISSUER

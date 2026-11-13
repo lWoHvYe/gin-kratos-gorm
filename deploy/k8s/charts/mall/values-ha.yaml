@@ -1,0 +1,105 @@
+# Production-HA reference overlay for the mall chart.
+#
+#   helm upgrade --install mall deploy/k8s/charts/mall -n mall \
+#     -f deploy/k8s/charts/mall/values.yaml \
+#     -f deploy/k8s/charts/mall/values-ha.yaml \
+#     -f /secure/mall-ha-secrets.yaml
+#
+# The Secret mall-mysql-credentials (key: password) must exist in the mall
+# namespace before install; see docs/production-ha.md.
+
+appEnv: production
+logLevel: info
+
+network:
+  # Default-deny egress blocks off-cluster traffic, including the external DB.
+  # Narrow this to the database subnet (or the managed-service endpoints).
+  externalMySQLCIDR: "10.0.0.0/8"
+
+mysql:
+  # Write endpoint of the external HA MySQL (same host as the infra overlay).
+  host: mysql.prod.internal
+  port: 3306
+  user: mall
+  credentialsSecret: mall-mysql-credentials
+  credentialsSecretKey: password
+  # Pool size per pod. Keep replicas * maxOpenConns below the server's
+  # max_connections (see docs/production-ha.md for the sizing formula).
+  maxOpenConns: "16"
+  maxIdleConns: "8"
+
+redis:
+  mode: sentinel
+  addrs: redis-sentinel.mall-data.svc.cluster.local:26379
+  masterName: mallmaster
+  # Secret references are namespace-local: create redis-credentials in the mall
+  # namespace with the same password as mall-data/redis-credentials.
+  passwordSecret: redis-credentials
+  passwordSecretKey: password
+
+nats:
+  # The nats Service load-balances across the three cluster nodes.
+  url: nats://nats.mall-data.svc.cluster.local:4222
+  streamReplicas: "3"
+
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: "1", memory: 512Mi}
+
+services:
+  gateway:
+    replicas: 3
+  admin:
+    replicas: 2
+  identity:
+    replicas: 2
+  catalog:
+    replicas: 2
+  inventory:
+    replicas: 2
+  cart:
+    replicas: 2
+  pricing:
+    replicas: 2
+  order:
+    replicas: 2
+  payment:
+    replicas: 2
+  fulfillment:
+    replicas: 2
+  aftersales:
+    replicas: 2
+  seckill:
+    replicas: 4
+
+frontend:
+  admin:
+    replicas: 2
+  storefront:
+    replicas: 2
+
+# HPA is intentionally left off: pre-scale before a sale (handoff item 3 covers
+# HPA/PDB validation). PDBs keep drains from taking the whole tier down.
+autoscaling:
+  seckill:
+    enabled: false
+
+podDisruptionBudgets:
+  gateway:
+    enabled: true
+    minAvailable: 2
+  seckill:
+    enabled: true
+    minAvailable: 2
+  order:
+    enabled: true
+    minAvailable: 1
+  inventory:
+    enabled: true
+    minAvailable: 1
+  admin-web:
+    enabled: true
+    minAvailable: 1
+  storefront-web:
+    enabled: true
+    minAvailable: 1

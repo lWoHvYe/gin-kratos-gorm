@@ -18,12 +18,14 @@ OBS_SERVICES := prometheus grafana
 K8S_DIR := deploy/k8s
 K8S_MALL_VALUES := $(K8S_DIR)/charts/mall/values-single-node.yaml
 K8S_INFRA_VALUES := $(K8S_DIR)/charts/infra/values-single-node.yaml
+K8S_MALL_HA_VALUES := $(K8S_DIR)/charts/mall/values-ha.yaml
+K8S_INFRA_HA_VALUES := $(K8S_DIR)/charts/infra/values-ha.yaml
 
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
 	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race verify wire arch clean \
-	k8s-images k8s-import k8s-render k8s-lint k8s-deploy mesh-smoke \
+	k8s-images k8s-import k8s-render k8s-lint k8s-render-ha k8s-lint-ha k8s-ha-verify k8s-deploy mesh-smoke \
 	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration status
 
 help:
@@ -55,6 +57,9 @@ help:
 	@echo "  k8s-import                        import images into a remote k3s containerd"
 	@echo "  k8s-render                        render Helm charts for the single-node values"
 	@echo "  k8s-lint                          helm lint Kubernetes charts"
+	@echo "  k8s-render-ha                     render the opt-in HA values overlays"
+	@echo "  k8s-lint-ha                       helm lint the opt-in HA values overlays"
+	@echo "  k8s-ha-verify                     assert HA topology renders without a cluster"
 	@echo "  k8s-deploy                        install/upgrade charts into an existing cluster"
 	@echo "  mesh-smoke                        run the Kubernetes/Ambient smoke script"
 	@echo "  frontend-install                  install pnpm workspace dependencies"
@@ -171,6 +176,18 @@ k8s-render:
 k8s-lint:
 	helm lint $(K8S_DIR)/charts/mall -f $(K8S_MALL_VALUES)
 	helm lint $(K8S_DIR)/charts/infra -f $(K8S_INFRA_VALUES)
+
+k8s-render-ha:
+	helm template mall $(K8S_DIR)/charts/mall -n mall -f $(K8S_MALL_HA_VALUES) > /tmp/mall-ha-rendered.yaml
+	helm template mall-infra $(K8S_DIR)/charts/infra -n mall-data -f $(K8S_INFRA_HA_VALUES) > /tmp/mall-infra-ha-rendered.yaml
+	@echo "rendered /tmp/mall-ha-rendered.yaml and /tmp/mall-infra-ha-rendered.yaml"
+
+k8s-lint-ha:
+	helm lint $(K8S_DIR)/charts/mall -f $(K8S_MALL_HA_VALUES)
+	helm lint $(K8S_DIR)/charts/infra -f $(K8S_INFRA_HA_VALUES)
+
+k8s-ha-verify:
+	./scripts/k8s-ha-verify.sh
 
 k8s-deploy:
 	kubectl apply -f $(K8S_DIR)/manifests/namespaces.yaml

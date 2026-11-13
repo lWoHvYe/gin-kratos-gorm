@@ -1,3 +1,278 @@
+# Redis topologies:
+#   standalone - the historical single StatefulSet
+#   sentinel   - 1 master + N replicas + M sentinels (self-managed reference)
+#   external   - nothing here; point the mall chart at an external endpoint
+{{- if eq .Values.redis.mode "sentinel" }}
+{{- $ns := .Values.namespace }}
+{{- $masterHost := printf "redis-master-0.redis-master-headless.%s.svc.cluster.local" $ns }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-master-headless
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: redis-master
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: redis-master
+  ports:
+    - name: redis
+      port: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-replica-headless
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: redis-replica
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: redis-replica
+  ports:
+    - name: redis
+      port: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: redis-sentinel
+spec:
+  selector:
+    app.kubernetes.io/name: redis-sentinel
+  ports:
+    - name: sentinel
+      port: 26379
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-sentinel-config
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: redis-sentinel
+data:
+  sentinel.conf: |
+    port 26379
+    dir /data
+    # Resolve the configured master hostname, but keep announcing IPs: clients
+    # live in another namespace and cannot resolve bare pod names. Prefer a
+    # managed/operator Redis when stable identities across restarts matter.
+    resolve-hostnames yes
+    sentinel monitor {{ .Values.redis.masterName }} {{ $masterHost }} 6379 2
+    sentinel down-after-milliseconds {{ .Values.redis.masterName }} 5000
+    sentinel failover-timeout {{ .Values.redis.masterName }} 60000
+    sentinel parallel-syncs {{ .Values.redis.masterName }} 1
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-master
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: redis-master
+spec:
+  serviceName: redis-master-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis-master
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis-master
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              if [ -n "$REDIS_PASSWORD" ]; then
+                exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"
+              fi
+              exec redis-server --appendonly yes
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+                  optional: true
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping; else redis-cli ping; fi"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-replica
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: redis-replica
+spec:
+  serviceName: redis-replica-headless
+  replicas: {{ .Values.redis.replicas }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis-replica
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis-replica
+    spec:
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: redis-replica
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              if [ -n "$REDIS_PASSWORD" ]; then
+                exec redis-server --appendonly yes --replicaof {{ $masterHost }} 6379 --requirepass "$REDIS_PASSWORD" --masterauth "$REDIS_PASSWORD"
+              fi
+              exec redis-server --appendonly yes --replicaof {{ $masterHost }} 6379
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+                  optional: true
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping; else redis-cli ping; fi"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-sentinel
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: redis-sentinel
+spec:
+  replicas: {{ .Values.redis.sentinels }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis-sentinel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis-sentinel
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: redis-sentinel
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: sentinel
+          image: {{ .Values.redis.image }}
+          command:
+            - sh
+            - -c
+            # Sentinel rewrites its config for failover, so it must run from a
+            # writable copy; auth-pass is injected from the Secret at startup.
+            - |
+              set -e
+              cp /config/sentinel.conf /data/sentinel.conf
+              if [ -n "$REDIS_PASSWORD" ]; then
+                printf 'sentinel auth-pass %s %s\n' "$REDIS_MASTER_NAME" "$REDIS_PASSWORD" >> /data/sentinel.conf
+              fi
+              exec redis-server /data/sentinel.conf --sentinel
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+                  optional: true
+            - name: REDIS_MASTER_NAME
+              value: {{ .Values.redis.masterName | quote }}
+          ports:
+            - name: sentinel
+              containerPort: 26379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-p", "26379", "ping"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: data
+              mountPath: /data
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+      volumes:
+        - name: config
+          configMap:
+            name: redis-sentinel-config
+        - name: data
+          emptyDir: {}
+{{- else if eq .Values.redis.mode "external" }}
+# Redis is external. Set mall.redis.addrs / mode in the mall chart and leave
+# this file out of the release.
+{{- else }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -51,3 +326,4 @@ spec:
         resources:
           requests:
             storage: {{ .Values.redis.storage }}
+{{- end }}

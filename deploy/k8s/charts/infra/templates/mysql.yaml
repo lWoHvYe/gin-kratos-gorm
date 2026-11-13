@@ -1,3 +1,7 @@
+{{- if eq .Values.mysql.mode "external" }}
+# MySQL is external (managed service or operator). The migration Job targets
+# mysql.external.host and reads its password from mysql.external.existingSecret.
+{{- else }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -36,6 +40,9 @@ spec:
           args:
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_unicode_ci
+            {{- with .Values.mysql.maxConnections }}
+            - --max-connections={{ . }}
+            {{- end }}
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
@@ -70,3 +77,4 @@ spec:
         resources:
           requests:
             storage: {{ .Values.mysql.storage }}
+{{- end }}

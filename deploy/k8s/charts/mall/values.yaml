@@ -13,13 +13,30 @@ mysql:
   port: 3306
   user: root
   password: root
+  # Optional Secret holding the MySQL password. When set, the DSN is assembled
+  # from $(MYSQL_USER)/$(MYSQL_PASSWORD) so no credential lands in values.
+  credentialsSecret: ""
+  credentialsSecretKey: password
+  # Optional per-pod pool limits; empty keeps the in-code defaults (30/10).
+  maxOpenConns: ""
+  maxIdleConns: ""
 
 redis:
   addr: redis.mall-data.svc.cluster.local:6379
   password: ""
+  # Optional password Secret (key defaults to "password").
+  passwordSecret: ""
+  passwordSecretKey: password
+  # HA endpoint settings. Leave empty for the standalone REDIS_ADDR path.
+  # mode: sentinel requires masterName and addrs. mode: cluster requires addrs.
+  mode: ""
+  addrs: ""
+  masterName: ""
 
 nats:
   url: nats://nats.mall-data.svc.cluster.local:4222
+  # >1 creates the durable streams with replicated JetStream storage.
+  streamReplicas: ""
 
 # Optional etcd configuration center. Leave empty to run without it.
 etcd:
@@ -58,6 +75,9 @@ network:
   # CIDR allowed to reach health probes when the CNI does not exempt host traffic.
   # Leave empty to rely on the CNI's probe exemption.
   nodeCIDR: ""
+  # Egress-only: CIDR of an external MySQL when mysql.mode is not in-cluster.
+  # Empty keeps the default-deny egress (in-cluster mall-data only).
+  externalMySQLCIDR: ""
 
 resources:
   requests:

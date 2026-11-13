@@ -1,16 +1,38 @@
 namespace: mall-data
 
 mysql:
+  # standalone: render the single-primary StatefulSet below.
+  # external:   do not render MySQL; the migration Job targets external.host.
+  mode: standalone
   image: mysql:8.4
   rootPassword: root
   storage: 5Gi
+  # 0 keeps the image default; the HA profile raises this.
+  maxConnections: 0
+  external:
+    host: ""
+    port: 3306
+    user: mall
+    existingSecret: mall-mysql-credentials
+    existingSecretKey: password
   resources:
     requests: {cpu: 250m, memory: 512Mi}
     limits: {cpu: "1", memory: 1Gi}
 
 redis:
+  # standalone: one StatefulSet and the `redis` headless Service.
+  # sentinel:   1 master, `replicas` replicas and `sentinels` sentinels.
+  # external:   do not render Redis; point the mall chart at redis.external.addrs.
+  mode: standalone
   image: redis:8.10.3-alpine
   storage: 1Gi
+  # Shared Redis AUTH. Empty keeps the current unauthenticated dev behavior.
+  password: ""
+  masterName: mallmaster
+  replicas: 2
+  sentinels: 3
+  external:
+    addrs: ""
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 500m, memory: 256Mi}
@@ -18,6 +40,9 @@ redis:
 nats:
   image: nats:2.10-alpine
   storage: 1Gi
+  # 1 keeps the current single node; 3 forms a JetStream cluster with routes.
+  replicas: 1
+  clusterName: mall
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 500m, memory: 256Mi}
@@ -36,3 +61,15 @@ etcd:
 migrate:
   image: mall/migrate:dev
   imagePullPolicy: IfNotPresent
+
+# Opt-in disruption budgets for the HA topology.
+podDisruptionBudgets:
+  redis-sentinel:
+    enabled: false
+    minAvailable: 2
+  redis-replica:
+    enabled: false
+    minAvailable: 1
+  nats:
+    enabled: false
+    minAvailable: 2

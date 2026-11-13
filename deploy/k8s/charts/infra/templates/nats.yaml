@@ -1,8 +1,10 @@
+{{- $replicas := int .Values.nats.replicas }}
+{{- $ns := .Values.namespace }}
 apiVersion: v1
 kind: Service
 metadata:
   name: nats
-  namespace: {{ .Values.namespace }}
+  namespace: {{ $ns }}
 spec:
   selector:
     app.kubernetes.io/name: nats
@@ -11,15 +13,39 @@ spec:
       port: 4222
     - name: monitoring
       port: 8222
+{{- if gt $replicas 1 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats-headless
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: nats
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: nats
+  ports:
+    - name: client
+      port: 4222
+    - name: cluster
+      port: 6222
+    - name: monitoring
+      port: 8222
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: nats
-  namespace: {{ .Values.namespace }}
+  namespace: {{ $ns }}
 spec:
-  serviceName: nats
-  replicas: 1
+  serviceName: {{ if gt $replicas 1 }}nats-headless{{ else }}nats{{ end }}
+  replicas: {{ $replicas }}
+  {{- if gt $replicas 1 }}
+  podManagementPolicy: Parallel
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: nats
@@ -28,13 +54,47 @@ spec:
       labels:
         app.kubernetes.io/name: nats
     spec:
+      {{- if gt $replicas 1 }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: nats
+                topologyKey: kubernetes.io/hostname
+      {{- end }}
       containers:
         - name: nats
           image: {{ .Values.nats.image }}
+          {{- if gt $replicas 1 }}
+          args:
+            - "-js"
+            - "-sd"
+            - "/data"
+            - "-m"
+            - "8222"
+            - "--cluster_name"
+            - {{ .Values.nats.clusterName | quote }}
+            - "--cluster"
+            - "nats://0.0.0.0:6222"
+            - "--routes"
+            {{- $routes := list }}
+            {{- range $i := until $replicas }}
+            {{- $routes = append $routes (printf "nats://nats-%d.nats-headless.%s.svc.cluster.local:6222" $i $ns) }}
+            {{- end }}
+            - {{ join "," $routes | quote }}
+          {{- else }}
           args: ["-js", "-sd", "/data", "-m", "8222"]
+          {{- end }}
           ports:
             - name: client
               containerPort: 4222
+            {{- if gt $replicas 1 }}
+            - name: cluster
+              containerPort: 6222
+            {{- end }}
             - name: monitoring
               containerPort: 8222
           readinessProbe:

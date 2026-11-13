@@ -1,0 +1,58 @@
+# Production-HA reference overlay for the infra chart.
+#
+#   helm upgrade --install mall-infra deploy/k8s/charts/infra -n mall-data \
+#     -f deploy/k8s/charts/infra/values.yaml \
+#     -f deploy/k8s/charts/infra/values-ha.yaml \
+#     -f /secure/mall-ha-secrets.yaml
+#
+# Read docs/production-ha.md before using this profile: it changes the data
+# topology, not just replica counts.
+
+mysql:
+  # MySQL HA is delegated to a managed service or a MySQL operator; this chart
+  # does not hand-roll group replication. Point this at the write endpoint and
+  # create the referenced Secret out of band (key: password).
+  mode: external
+  external:
+    host: mysql.prod.internal
+    port: 3306
+    user: mall
+    existingSecret: mall-mysql-credentials
+    existingSecretKey: password
+  # Applied only when mysql.mode=standalone (kept for reference/validation).
+  maxConnections: 500
+  resources:
+    requests: {cpu: "1", memory: 2Gi}
+    limits: {cpu: "4", memory: 8Gi}
+
+redis:
+  # Self-managed Sentinel reference: 1 master + 2 replicas + 3 sentinels.
+  # Set redis.password from a private values file. The Secret it creates lives in
+  # mall-data; Secret references are namespace-local, so create the matching
+  # redis-credentials Secret in the mall namespace too (see production-ha.md).
+  mode: sentinel
+  password: ""
+  masterName: mallmaster
+  replicas: 2
+  sentinels: 3
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "1", memory: 1Gi}
+
+nats:
+  replicas: 3
+  clusterName: mall
+  resources:
+    requests: {cpu: 250m, memory: 512Mi}
+    limits: {cpu: "2", memory: 2Gi}
+
+podDisruptionBudgets:
+  redis-sentinel:
+    enabled: true
+    minAvailable: 2
+  redis-replica:
+    enabled: true
+    minAvailable: 1
+  nats:
+    enabled: true
+    minAvailable: 2

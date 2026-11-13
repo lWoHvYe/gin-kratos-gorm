@@ -1,0 +1,17 @@
+{{- range $name, $cfg := .Values.podDisruptionBudgets }}
+{{- if $cfg.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/part-of: mall
+spec:
+  minAvailable: {{ $cfg.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+---
+{{- end }}
+{{- end }}

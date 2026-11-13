@@ -34,8 +34,16 @@ spec:
           port: 3306
         - protocol: TCP
           port: 6379
+        {{- if eq .Values.redis.mode "sentinel" }}
+        - protocol: TCP
+          port: 26379
+        {{- end }}
         - protocol: TCP
           port: 4222
+        {{- if gt (int .Values.nats.replicas) 1 }}
+        - protocol: TCP
+          port: 6222
+        {{- end }}
         - protocol: TCP
           port: 2379
   egress:

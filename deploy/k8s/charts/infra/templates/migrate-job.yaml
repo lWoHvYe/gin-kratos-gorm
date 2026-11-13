@@ -27,13 +27,30 @@ spec:
           imagePullPolicy: {{ .Values.migrate.imagePullPolicy }}
           env:
             - name: MYSQL_HOST
+              {{- if eq .Values.mysql.mode "external" }}
+              value: {{ required "mysql.external.host is required when mysql.mode=external" .Values.mysql.external.host | quote }}
+              {{- else }}
               value: mysql.{{ .Values.namespace }}.svc.cluster.local
+              {{- end }}
             - name: MYSQL_PORT
+              {{- if eq .Values.mysql.mode "external" }}
+              value: {{ .Values.mysql.external.port | default 3306 | quote }}
+              {{- else }}
               value: "3306"
+              {{- end }}
             - name: MYSQL_USER
+              {{- if eq .Values.mysql.mode "external" }}
+              value: {{ .Values.mysql.external.user | quote }}
+              {{- else }}
               value: root
+              {{- end }}
             - name: MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
+                  {{- if eq .Values.mysql.mode "external" }}
+                  name: {{ required "mysql.external.existingSecret is required when mysql.mode=external" .Values.mysql.external.existingSecret }}
+                  key: {{ .Values.mysql.external.existingSecretKey | default "password" }}
+                  {{- else }}
                   name: mysql-credentials
                   key: root-password
+                  {{- end }}

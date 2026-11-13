@@ -212,3 +212,7 @@ See [docs/frontend-plan.md](docs/frontend-plan.md) and [frontend/README.md](fron
 ## Access
 
 See [docs/access.md](docs/access.md) for the live `mall.local` route and port-forward fallback.
+
+## New session
+
+Start from [docs/handoff.md](docs/handoff.md) and run `make status`; this avoids re-planning completed work.

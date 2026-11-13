@@ -16,12 +16,12 @@ Repository:
 /Users/lWoHvYe/IdeaProjects/gin-kratos-gorm
 ```
 
-Last known commit:
+Last reviewed baseline (see `git log -1` for the actual HEAD):
 
 ```text
-629ed84 docs: add session handoff and bootstrap status
 3672848 ops: add optional seckill autoscaling and integration target
 39010a8 perf: add short-lived sold-out admission cache
+526e1be docs: design 100x seckill scale-out
 ```
 
 ## Live development stack

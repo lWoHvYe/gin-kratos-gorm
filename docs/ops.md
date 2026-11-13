@@ -397,6 +397,12 @@ and paying a later order consumes it. The order create path now calls
 `LockCoupon`; the paid path calls `ConsumeCoupon`; the cancelled consumer calls
 `UnlockCoupon`.
 
+## Production HA profile
+
+The opt-in production profile (Sentinel, NATS cluster, external MySQL) and its
+runbook live in [production-ha.md](production-ha.md). Validate the render with
+`make k8s-ha-verify`; it needs no cluster.
+
 ## Seckill autoscaling
 
 HPA and PDB manifests are opt-in in `deploy/k8s/charts/mall`:

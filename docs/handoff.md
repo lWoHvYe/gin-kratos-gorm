@@ -66,15 +66,20 @@ Both frontends proxy `/api` to the in-cluster gateway/admin services.
   - cancellation projection, DLQ publish/replay, report-only reconciler;
   - sold-out short cache and Prometheus counters.
 - Playwright covers the full seckill UI flow (reserve/poll/pay/order).
+- Production HA reference profile, opt-in and additive: Redis Sentinel (1M/2R/3S),
+  NATS 3-node JetStream cluster, external HA MySQL wiring, per-service pool caps,
+  PDBs, secret-based credentials. See [production-ha.md](production-ha.md).
+  Validation: `make k8s-ha-verify` (no cluster required).
 
 ## Read next
 
 1. [access.md](access.md) — where the UI is and how to reach it.
 2. [seckill-design.md](seckill-design.md) — especially section 19 for the 100x
    scale-out design (1M users, 10 SKUs, 100 units each).
-3. [services/seckill.md](services/seckill.md) — current S1-S4 API/behavior.
-4. [frontend-plan.md](frontend-plan.md) — frontend architecture and scope.
-5. [ops.md](ops.md) — cluster/runtime troubleshooting.
+3. [production-ha.md](production-ha.md) — the opt-in HA profile and runbook.
+4. [services/seckill.md](services/seckill.md) — current S1-S4 API/behavior.
+5. [frontend-plan.md](frontend-plan.md) — frontend architecture and scope.
+6. [ops.md](ops.md) — cluster/runtime troubleshooting.
 
 ## First commands in a new session
 
@@ -132,8 +137,11 @@ make seckill-integration          # S1 + S2 + S3
 
 This is the recommended continuation, in order:
 
-1. Production HA manifests/runbook: dedicated Redis Cluster/Sentinel, NATS 3
-   replicas, MySQL HA, resource/connection limits.
+1. Production HA: the opt-in overlay and runbook now exist
+   ([production-ha.md](production-ha.md)). Remaining work is environment
+   validation, not authoring: run the failover drills on a multi-node cluster,
+   pick the MySQL HA option (managed vs operator), and tune pool/connection
+   numbers from measured `sql.DBStats`.
 2. Edge admission: managed WAF/Waiting Room or tested Envoy+rate limit; origin
    cap around the measured target (currently design target ~100k RPS).
 3. Pre-scale/HPA/PDB validation for gateway and seckill-api; HPA/PDB templates

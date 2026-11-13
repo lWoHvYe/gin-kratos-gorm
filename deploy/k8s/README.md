@@ -81,6 +81,24 @@ make mesh-smoke
 The smoke script waits for pods, checks Ambient enrollment and STRICT mTLS,
 port-forwards gateway/admin, and runs the existing C-end/DTM smoke.
 
+## 6. Production HA overlay
+
+The charts ship an opt-in HA overlay; the default profile above is unchanged.
+
+```bash
+make k8s-ha-verify     # lint + render + topology assertions, no cluster needed
+make k8s-render-ha     # /tmp/{mall,mall-infra}-ha-rendered.yaml
+```
+
+- `charts/infra/values-ha.yaml`: Redis Sentinel (1 master / 2 replicas /
+  3 sentinels), NATS 3-node JetStream cluster, external MySQL, PDBs.
+- `charts/mall/values-ha.yaml`: 2-4 replicas per service, Sentinel/stream env,
+  Secret-based MySQL credentials, pool caps, PDBs.
+
+Read [docs/production-ha.md](../../docs/production-ha.md) before deploying it:
+it explains the secret prerequisites, connection-limit formula, failover drills
+and what is deliberately delegated to a managed MySQL/Redis.
+
 ## Browser access
 
 The frontends are at `http://mall.local/` and `/admin/` when `mall.local` resolves to the Gateway LoadBalancer. See [../../docs/access.md](../../docs/access.md) for hosts and port-forward instructions.

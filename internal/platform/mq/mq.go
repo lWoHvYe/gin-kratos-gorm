@@ -3,6 +3,8 @@ package mq
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,7 +41,7 @@ func (c *Client) ensureStream() error {
 	}
 	_, err = c.JS.AddStream(&nats.StreamConfig{
 		Name: "MALL", Subjects: []string{"shop.>"}, Retention: nats.LimitsPolicy,
-		Storage: nats.FileStorage, MaxAge: 7 * 24 * time.Hour, Replicas: 1,
+		Storage: nats.FileStorage, MaxAge: 7 * 24 * time.Hour, Replicas: streamReplicas(),
 	})
 	if err != nil {
 		msg := strings.ToLower(err.Error())
@@ -68,4 +70,14 @@ func (c *Client) Close() {
 	if c != nil && c.Conn != nil {
 		c.Conn.Close()
 	}
+}
+
+// streamReplicas is opt-in: NATS_STREAM_REPLICAS=3 creates the durable MALL
+// stream with three replicas on a JetStream cluster. Existing streams keep their
+// current replica count; migrate them explicitly (see docs/production-ha.md).
+func streamReplicas() int {
+	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv("NATS_STREAM_REPLICAS"))); err == nil && n > 0 {
+		return n
+	}
+	return 1
 }

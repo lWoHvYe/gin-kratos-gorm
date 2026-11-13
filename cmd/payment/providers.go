@@ -38,7 +38,7 @@ type paymentApp struct {
 func provideLogger(cfg *config.Config) *slog.Logger { return log.New(cfg.Service, cfg.Env) }
 
 func provideDB(cfg *config.Config) (*sql.DB, func(), error) {
-	database, err := db.Open(cfg.MySQLDSN)
+	database, err := db.OpenWithPool(cfg.MySQLDSN, cfg.MySQLMaxOpenConns, cfg.MySQLMaxIdleConns)
 	if err != nil {
 		return nil, nil, err
 	}

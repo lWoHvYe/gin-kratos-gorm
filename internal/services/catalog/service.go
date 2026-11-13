@@ -24,12 +24,12 @@ type Service struct {
 	pb.UnimplementedCatalogServiceServer
 	db    *sql.DB
 	mq    *mq.Client
-	cache *redis.Client
+	cache redis.UniversalClient
 	gorm  *gormReader
 	log   *slog.Logger
 }
 
-func New(db *sql.DB, client *mq.Client, cache *redis.Client, logger *slog.Logger) *Service {
+func New(db *sql.DB, client *mq.Client, cache redis.UniversalClient, logger *slog.Logger) *Service {
 	s := &Service{db: db, mq: client, cache: cache, log: logger}
 	reader, err := newGormReader(db)
 	if err != nil {

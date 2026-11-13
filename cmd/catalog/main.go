@@ -25,7 +25,7 @@ func main() {
 		panic(err)
 	}
 	logger := log.New(cfg.Service, cfg.Env)
-	database, err := db.Open(cfg.MySQLDSN)
+	database, err := db.OpenWithPool(cfg.MySQLDSN, cfg.MySQLMaxOpenConns, cfg.MySQLMaxIdleConns)
 	if err != nil {
 		logger.Error("open db", "error", err)
 		os.Exit(1)
@@ -37,7 +37,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer client.Close()
-	cache, err := redis.Open(cfg.RedisAddr, cfg.RedisPassword)
+	cache, err := redis.Open(redis.Config{Mode: cfg.RedisMode, Addrs: cfg.RedisAddrs, Password: cfg.RedisPassword, MasterName: cfg.RedisMasterName})
 	if err != nil {
 		logger.Error("connect redis", "error", err)
 		os.Exit(1)

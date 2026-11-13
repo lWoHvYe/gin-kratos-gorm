@@ -31,14 +31,14 @@ type Service struct {
 	orders      pb.OrderServiceClient
 	payment     pb.PaymentServiceClient
 	mq          *mq.Client
-	cache       *redis.Client
+	cache       redis.UniversalClient
 	tokenSecret []byte
 	log         *slog.Logger
 	now         func() time.Time
 	soldOut     sync.Map
 }
 
-func New(database *sql.DB, inventory pb.InventoryServiceClient, orders pb.OrderServiceClient, payment pb.PaymentServiceClient, client *mq.Client, cache *redis.Client, logger *slog.Logger, tokenSecret string) *Service {
+func New(database *sql.DB, inventory pb.InventoryServiceClient, orders pb.OrderServiceClient, payment pb.PaymentServiceClient, client *mq.Client, cache redis.UniversalClient, logger *slog.Logger, tokenSecret string) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}

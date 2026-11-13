@@ -29,7 +29,7 @@ func main() {
 		panic(err)
 	}
 	logger := log.New(cfg.Service, cfg.Env)
-	database, err := db.Open(cfg.MySQLDSN)
+	database, err := db.OpenWithPool(cfg.MySQLDSN, cfg.MySQLMaxOpenConns, cfg.MySQLMaxIdleConns)
 	if err != nil {
 		logger.Error("open db", "error", err)
 		os.Exit(1)

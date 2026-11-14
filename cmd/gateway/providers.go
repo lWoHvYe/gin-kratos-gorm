@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/config"
@@ -38,7 +39,8 @@ func provideEngine(cfg *config.Config, logger *slog.Logger, jwt *auth.Manager, c
 }
 
 func provideHTTPServer(cfg *config.Config, engine *gin.Engine) *khttp.Server {
-	srv := khttp.NewServer(khttp.Address(cfg.HTTPAddr))
+	// Kratos defaults to a 1s request timeout, which cuts off checkout sagas.
+	srv := khttp.NewServer(khttp.Address(cfg.HTTPAddr), khttp.Timeout(15*time.Second))
 	srv.HandlePrefix("/", otelhttp.NewHandler(engine, cfg.Service))
 	return srv
 }

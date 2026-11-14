@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 #
 # One image definition for every mall Go binary. The binary to build is chosen
 # at build time through the SERVICE build argument:

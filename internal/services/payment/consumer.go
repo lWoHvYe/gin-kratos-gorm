@@ -24,8 +24,11 @@ type orderRefundRequested struct {
 // this consumer refunds the captured payment idempotently.
 func RunRefundConsumer(ctx context.Context, client *mq.Client, svc *Service, logger *slog.Logger) {
 	err := consumer.Subscribe(ctx, client, logger, consumer.Config{
-		Subject:    "shop.order.refund_requested.v1",
-		Durable:    "payment-order-refund",
+		Subject: "shop.order.refund_requested.v1",
+		Durable: "payment-order-refund",
+		// Legacy queue name must be preserved: the durable consumer already
+		// exists with this deliver group.
+		Queue:      "payment-refund",
 		MaxDeliver: 10,
 	}, func(hctx context.Context, msg *nats.Msg) error {
 		var event orderRefundRequested

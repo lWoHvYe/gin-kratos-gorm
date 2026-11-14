@@ -431,6 +431,13 @@ kubectl -n istio-system rollout restart deployment/mall-gateway-istio
 kubectl -n mall rollout restart deployment
 ```
 
+### After draining the namespace
+
+`kubectl -n mall scale deployment --all --replicas=0` also scales the Ambient
+waypoint to zero; the mesh then reports `unknown waypoint` and gRPC calls reset.
+Restore `deployment/mall-waypoint` to one replica, wait for the `Gateway` to be
+`PROGRAMMED=True`, restart ztunnel, then roll the application deployments.
+
 ## Promotion/coupon checks
 
 The Phase 1.5 E2E also creates an active campaign and promotion, asserts the

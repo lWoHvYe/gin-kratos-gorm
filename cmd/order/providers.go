@@ -101,11 +101,11 @@ func provideGRPCServer(cfg *config.Config, logger *slog.Logger, svc *order.Servi
 	return gs
 }
 
-func provideHealthServer(cfg *config.Config, database *sql.DB, logger *slog.Logger) *khttp.Server {
+func provideHealthServer(cfg *config.Config, database *sql.DB, client *mq.Client, logger *slog.Logger) *khttp.Server {
 	// DTM is required per transaction, not for process readiness. A DTM
 	// readiness probe would flap the whole order/payment service on transient
 	// control-plane or waypoint issues.
-	return runtime.HealthServer(cfg, database, logger)
+	return runtime.HealthServer(cfg, database, logger, client.Healthy)
 }
 
 func provideApp(cfg *config.Config, logger *slog.Logger, gs *kratosgrpc.Server, hs *khttp.Server) *kratos.App {

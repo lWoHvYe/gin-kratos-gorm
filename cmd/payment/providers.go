@@ -103,9 +103,9 @@ func provideGRPCServer(cfg *config.Config, logger *slog.Logger, svc *payment.Ser
 	return gs
 }
 
-func provideHealth(cfg *config.Config, database *sql.DB, logger *slog.Logger) *khttp.Server {
+func provideHealth(cfg *config.Config, database *sql.DB, client *mq.Client, logger *slog.Logger) *khttp.Server {
 	// DTM is required per transaction, not for process readiness.
-	return runtime.HealthServer(cfg, database, logger)
+	return runtime.HealthServer(cfg, database, logger, client.Healthy)
 }
 
 func provideApp(cfg *config.Config, logger *slog.Logger, gs *kratosgrpc.Server, hs *khttp.Server) *kratos.App {

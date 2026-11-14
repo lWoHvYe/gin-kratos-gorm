@@ -43,7 +43,7 @@ func initialize(ctx context.Context, cfg *config.Config) (*orderApp, func(), err
 	promotionServiceClient := providePromotionClient(mainPricingConn)
 	service := provideOrderService(db, client, logger, dtmClient, pricingServiceClient, inventoryServiceClient, promotionServiceClient)
 	server := provideGRPCServer(cfg, logger, service)
-	httpServer := provideHealthServer(cfg, db, logger)
+	httpServer := provideHealthServer(cfg, db, client, logger)
 	app := provideApp(cfg, logger, server, httpServer)
 	mainOrderApp := provideOrderApp(app, service, db, client, logger)
 	return mainOrderApp, func() {

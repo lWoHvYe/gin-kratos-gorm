@@ -120,6 +120,39 @@ upgrade triggers for a per-user signed context.
   mapping. This removed ~200 duplicated lines and fixed a real drift (admin
   mapped ResourceExhausted to 503, gateway to 429; both now return 429).
 
+## Deployment verification (k3s VM, 2026-11)
+
+The new images were built, imported and rolled out to the single-node k3s VM.
+Results:
+
+- `make e2e-phase15` passes end to end (catalog → checkout → pay → ship →
+  receive → return/refund) against the deployed stack.
+- `make seckill-integration` passes S1/S2/S3.
+- login throttling returns 429 on the 11th bad attempt.
+- `/readyz` reports per-dependency gRPC states.
+- one checkout produced a 154-span trace across gateway, identity, cart, order,
+  inventory, pricing and payment (DTM server itself is not instrumented, but
+  branch calls carry `traceparent`).
+- migrations ran through the ledger; `schema_migrations` exists in every
+  service DB and the outbox lease/trace columns are present.
+
+Issues found and fixed while deploying:
+
+1. The migration job failed because outbox migrations were shipped for
+   `mall_identity` and `mall_seckill`, which have no `outbox_events`; the job
+   retried until its deadline. Those files were removed and
+   `scripts/check-migrations.sh` now guards it in `make verify`.
+2. The BFFs inherited Kratos HTTP's 1s request timeout, which cut off checkout
+   sagas; both now set 15s explicitly.
+3. `payment` and `fulfillment` durable consumers already existed with legacy
+   queue names; the new consumer defaulted the queue to the durable name and
+   failed to subscribe. They now pin the legacy queue names.
+4. `order`/`payment` build readiness in Wire providers, so they missed the NATS
+   subscription check; both now include it.
+5. Scaling all deployments to 0 also scaled the waypoint to 0, leaving
+   `Gateway PROGRAMMED=False` and resetting mesh traffic. The waypoint must be
+   scaled back to 1 (and ztunnel/istiod restarted) when draining the namespace.
+
 ## Verified findings deferred to later phases
 
 - **Tracing depth**: the chain is connected end to end (HTTP, gRPC, SQL, NATS,

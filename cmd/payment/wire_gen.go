@@ -47,7 +47,7 @@ func initialize(ctx context.Context, cfg *config.Config) (*paymentApp, func(), e
 	}
 	service := providePaymentService(db, client, mainOrderConn, mainInventoryConn, mainPricingConn, cfg, logger)
 	server := provideGRPCServer(cfg, logger, service)
-	httpServer := provideHealth(cfg, db, logger)
+	httpServer := provideHealth(cfg, db, client, logger)
 	app := provideApp(cfg, logger, server, httpServer)
 	mainPaymentApp := providePaymentApp(app, service, db, client, logger)
 	return mainPaymentApp, func() {

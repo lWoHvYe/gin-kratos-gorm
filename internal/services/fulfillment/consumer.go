@@ -26,8 +26,11 @@ type orderPaidEvent struct {
 // An operator still assigns carrier/tracking and calls Ship.
 func RunOrderPaidConsumer(ctx context.Context, client *mq.Client, svc *Service, logger *slog.Logger) {
 	err := consumer.Subscribe(ctx, client, logger, consumer.Config{
-		Subject:    "shop.order.paid.v1",
-		Durable:    "fulfillment-order-paid",
+		Subject: "shop.order.paid.v1",
+		Durable: "fulfillment-order-paid",
+		// Legacy queue name must be preserved: the durable consumer already
+		// exists with this deliver group.
+		Queue:      "fulfillment-auto-shipment",
 		MaxDeliver: 5,
 	}, func(hctx context.Context, msg *nats.Msg) error {
 		var event orderPaidEvent

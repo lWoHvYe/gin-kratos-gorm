@@ -93,7 +93,9 @@ upgrade triggers for a per-user signed context.
   checkout (it immediately caught a stale order graph: the promotion client was
   missing from `wire.go`), and CI now fails when committed `wire_gen.go` drifts.
 - Tracing depth: SQL statements are spanned through `otelsql`, NATS publishes
-  carry `traceparent`, and durable consumers extract and continue the trace.
+  carry `traceparent`, durable consumers continue the trace, and outbox rows
+  persist the producing context so the relay's publish span links back to the
+  original request.
 - Pool observability: `sql.DBStats` is exported as `mall_db_pool_*` gauges and
   counters.
 - Outbox integration tests: real-MySQL tests cover lease claiming, foreign
@@ -118,9 +120,8 @@ upgrade triggers for a per-user signed context.
 
 ## Verified findings deferred to later phases
 
-- **Tracing depth**: outbox relay publishes from a worker (original request
-  trace is lost unless stored), and DTM branch calls do not propagate
-  `traceparent`.
+- **Tracing depth**: DTM branch calls do not propagate `traceparent`; the rest
+  of the chain (HTTP, gRPC, SQL, NATS, outbox) is connected.
 - **Method-level AuthorizationPolicy**: current rules are service-prefixed; a
   DENY for system RPCs must be validated in staging before enabling.
 - **Startup retry**: `db.OpenWithPool` retries with a background context, so a

@@ -11,6 +11,9 @@ import (
 	"time"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // integrationDB connects to TEST_MYSQL_DSN (e.g.
@@ -64,6 +67,7 @@ func integrationDB(t *testing.T) *sql.DB {
 		dead_lettered_at DATETIME(3) NULL,
 		lease_owner VARCHAR(128) NULL,
 		lease_until DATETIME(3) NULL,
+		traceparent VARCHAR(256) NULL,
 		created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 		PRIMARY KEY (id),
 		UNIQUE KEY uk_outbox_event_id (event_id),
@@ -233,4 +237,60 @@ var errBoom = errors.New("boom")
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+func TestAppendPersistsTraceparentForTheRelay(t *testing.T) {
+	db := integrationDB(t)
+	previous := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	defer otel.SetTextMapPropagator(previous)
+
+	provider := sdktrace.NewTracerProvider()
+	defer func() { _ = provider.Shutdown(context.Background()) }()
+	ctx, span := provider.Tracer("test").Start(context.Background(), "request")
+	defer span.End()
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Append(ctx, tx, Event{Topic: "shop.test.v1", AggregateType: "test", AggregateID: "1", EventType: "test.created", Payload: map[string]any{"ok": true}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stored sql.NullString
+	if err := db.QueryRow("SELECT traceparent FROM outbox_events WHERE topic = 'shop.test.v1'").Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if !stored.Valid || stored.String == "" {
+		t.Fatal("Append did not persist the producing traceparent")
+	}
+	claimed, err := claimBatch(context.Background(), db)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim: %v (%d)", err, len(claimed))
+	}
+	if claimed[0].traceparent != stored.String {
+		t.Fatalf("claimed traceparent = %q, want %q", claimed[0].traceparent, stored.String)
+	}
+	// Without an active span the column stays NULL.
+	tx, err = db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Append(context.Background(), tx, Event{Topic: "shop.test.v2", AggregateType: "test", AggregateID: "2", EventType: "test.created", Payload: map[string]any{"ok": true}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var nullCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM outbox_events WHERE topic = 'shop.test.v2' AND traceparent IS NULL").Scan(&nullCount); err != nil {
+		t.Fatal(err)
+	}
+	if nullCount != 1 {
+		t.Fatalf("expected a NULL traceparent without a span, got %d", nullCount)
+	}
 }

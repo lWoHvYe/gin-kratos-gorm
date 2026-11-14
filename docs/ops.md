@@ -239,10 +239,10 @@ The Go services now export OTLP spans when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
 - NATS publishes carry `traceparent` in the message headers and durable
   consumers continue the trace.
 
-Two known gaps: the outbox relay publishes from a background worker, so an
-event loses the original request trace unless its payload carries the context;
-and DTM drives branch calls with its own client, which does not propagate
-`traceparent` today.
+Asynchronous events keep the trace: `outbox.Append` stores the producing
+`traceparent` on the row, the relay opens a producer span linked to it, and the
+consumer continues from the message header. One known gap remains: DTM drives
+branch calls with its own client, which does not propagate `traceparent`.
 
 With the endpoint empty the tracer stays a no-op, so local runs need no
 collector. The database pool is exported regardless of tracing:

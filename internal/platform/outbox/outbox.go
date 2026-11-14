@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -13,6 +14,12 @@ import (
 	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/mq"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Event struct {
@@ -32,8 +39,13 @@ func Append(ctx context.Context, tx *sql.Tx, e Event) error {
 	if e.ID == "" {
 		e.ID = id.Event()
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO outbox_events (event_id, topic, aggregate_type, aggregate_id, event_type, payload, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, e.ID, e.Topic, e.AggregateType, e.AggregateID, e.EventType, string(payload), time.Now())
+	// Persist the producing trace so the relay can link the publish and the
+	// consumer's span back to the original request. Store NULL when tracing is
+	// off instead of an empty string.
+	tp := traceparentFrom(ctx)
+	traceparent := sql.NullString{String: tp, Valid: tp != ""}
+	_, err = tx.ExecContext(ctx, `INSERT INTO outbox_events (event_id, topic, aggregate_type, aggregate_id, event_type, payload, traceparent, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, e.ID, e.Topic, e.AggregateType, e.AggregateID, e.EventType, string(payload), traceparent, time.Now())
 	if err != nil {
 		return fmt.Errorf("append outbox: %w", err)
 	}
@@ -98,10 +110,19 @@ func backoff(attempts int) time.Duration {
 }
 
 type claimedEvent struct {
-	id       int64
-	topic    string
-	payload  []byte
-	attempts int
+	id          int64
+	topic       string
+	payload     []byte
+	attempts    int
+	traceparent string
+}
+
+// traceparentFrom serialises the active span context into a W3C traceparent
+// header, or returns "" when no span is active.
+func traceparentFrom(ctx context.Context) string {
+	header := http.Header{}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(header))
+	return strings.TrimSpace(header.Get("traceparent"))
 }
 
 // relayOwner identifies this process as the lease holder.
@@ -127,9 +148,15 @@ func relayOnce(ctx context.Context, db *sql.DB, client *mq.Client, logger *slog.
 	}
 	published := 0
 	for _, event := range events {
-		publishCtx, cancel := context.WithTimeout(ctx, publishTimeout)
-		err := client.Publish(publishCtx, event.topic, event.payload)
+		publishCtx, span := publishSpan(event)
+		callCtx, cancel := context.WithTimeout(publishCtx, publishTimeout)
+		err := client.Publish(callCtx, event.topic, event.payload)
 		cancel()
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
 		if err != nil {
 			metrics.OutboxPublishErrors.Inc()
 			if ferr := markFailed(ctx, db, event, err, logger); ferr != nil {
@@ -157,7 +184,7 @@ func claimBatch(ctx context.Context, db *sql.DB) ([]claimedEvent, error) {
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err := tx.QueryContext(ctx, `SELECT id, topic, payload, attempts FROM outbox_events
+	rows, err := tx.QueryContext(ctx, `SELECT id, topic, payload, attempts, traceparent FROM outbox_events
 		WHERE published_at IS NULL AND dead_lettered_at IS NULL
 		  AND (next_attempt_at IS NULL OR next_attempt_at <= NOW(3))
 		  AND (lease_until IS NULL OR lease_until < NOW(3))
@@ -168,10 +195,12 @@ func claimBatch(ctx context.Context, db *sql.DB) ([]claimedEvent, error) {
 	var events []claimedEvent
 	for rows.Next() {
 		var event claimedEvent
-		if err := rows.Scan(&event.id, &event.topic, &event.payload, &event.attempts); err != nil {
+		var traceparent sql.NullString
+		if err := rows.Scan(&event.id, &event.topic, &event.payload, &event.attempts, &traceparent); err != nil {
 			rows.Close()
 			return nil, err
 		}
+		event.traceparent = traceparent.String
 		events = append(events, event)
 	}
 	rows.Close()
@@ -294,4 +323,26 @@ func encodePayload(v any) ([]byte, error) {
 		return nil, fmt.Errorf("marshal event: payload is not valid JSON")
 	}
 	return payload, nil
+}
+
+// publishSpan starts a producer span for one event. When the row carries a
+// traceparent, the span links to it (the original request already finished, so
+// a link is more accurate than a parent/child relationship).
+func publishSpan(event claimedEvent) (context.Context, trace.Span) {
+	opts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "nats"),
+			attribute.String("messaging.destination", event.topic),
+		),
+	}
+	if event.traceparent != "" {
+		header := http.Header{}
+		header.Set("traceparent", event.traceparent)
+		remote := otel.GetTextMapPropagator().Extract(context.Background(), propagation.HeaderCarrier(header))
+		if spanContext := trace.SpanContextFromContext(remote); spanContext.IsValid() {
+			opts = append(opts, trace.WithLinks(trace.Link{SpanContext: spanContext}))
+		}
+	}
+	return otel.Tracer("outbox").Start(context.Background(), "publish "+event.topic, opts...)
 }

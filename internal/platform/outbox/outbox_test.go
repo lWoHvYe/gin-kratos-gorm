@@ -1,11 +1,16 @@
 package outbox
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func TestEncodePayloadAcceptsRawJSON(t *testing.T) {
@@ -66,5 +71,21 @@ func TestRelayOwnerIsBounded(t *testing.T) {
 	}
 	if len(relayOwner) > 128 {
 		t.Fatalf("relay owner longer than the column: %d", len(relayOwner))
+	}
+}
+
+func TestTraceparentFromRequiresActiveSpan(t *testing.T) {
+	previous := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	defer otel.SetTextMapPropagator(previous)
+
+	if got := traceparentFrom(context.Background()); got != "" {
+		t.Fatalf("traceparent without a span = %q", got)
+	}
+	provider := sdktrace.NewTracerProvider()
+	ctx, span := provider.Tracer("test").Start(context.Background(), "request")
+	defer span.End()
+	if got := traceparentFrom(ctx); got == "" {
+		t.Fatal("active span must produce a traceparent")
 	}
 }

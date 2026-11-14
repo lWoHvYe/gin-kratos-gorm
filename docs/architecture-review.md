@@ -105,6 +105,9 @@ upgrade triggers for a per-user signed context.
 - Consumer DLQ: `internal/platform/consumer` applies one policy to all durable
   subscriptions - 10s per-message timeout, bounded retries, `<subject>.dlq`
   dead-lettering, panic recovery and `mall_consumer_messages_total`.
+- Gateway layout: `router.go` now only wires routes; handlers are grouped by
+  domain (auth, catalog, address, cart, checkout, order, payment, aftersales,
+  seckill) with `clients.go` and `handlers.go` alongside.
 - BFF platformization: `internal/platform/bff` now owns recovery, timeouts,
   JSON binding with the 1 MiB cap, path/query parsing and downstream error
   mapping. This removed ~200 duplicated lines and fixed a real drift (admin
@@ -119,8 +122,6 @@ upgrade triggers for a per-user signed context.
   DENY for system RPCs must be validated in staging before enabling.
 - **Startup retry**: `db.OpenWithPool` retries with a background context, so a
   shutdown during startup is not honoured (bounded to ~55s).
-- **Gateway handler layout**: `router.go` is still one file; handlers are not
-  grouped by domain.
 - **Fault-injection tests**: no chaos/integration suite for NATS loss, relay
   crash, Redis failover or slow downstreams.
 - **Checkout crash window**: coupon/promotion reservation happens before the

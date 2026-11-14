@@ -159,6 +159,9 @@ test-integration:
 	@echo ">> outbox lease + relay (MySQL, NATS)"
 	TEST_NATS_URL=$${TEST_NATS_URL:-nats://127.0.0.1:4222} \
 		$(GO) test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune|TestAppend|TestRelay' -count=1
+	@echo ">> consumer DLQ (NATS)"
+	TEST_NATS_URL=$${TEST_NATS_URL:-nats://127.0.0.1:4222} \
+		$(GO) test ./internal/platform/consumer -run TestConsumerDeadLetters -count=1
 	@echo ">> seckill admission Lua (Redis)"
 	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
 		$(GO) test ./internal/services/seckill -run TestReserveScript -count=1

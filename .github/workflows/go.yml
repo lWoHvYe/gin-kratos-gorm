@@ -109,6 +109,7 @@ jobs:
           TEST_REDIS_ADDR: 127.0.0.1:6379
         run: |
           go test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune|TestAppend|TestRelay' -count=1
+          go test ./internal/platform/consumer -run TestConsumerDeadLetters -count=1
           go test ./internal/services/seckill -run TestReserveScript -count=1
 
       - name: Vulnerability scan

@@ -19,13 +19,17 @@ import (
 
 type Service struct {
 	pb.UnimplementedIdentityServiceServer
-	db  *sql.DB
-	jwt *auth.Manager
-	log *slog.Logger
+	db      *sql.DB
+	jwt     *auth.Manager
+	log     *slog.Logger
+	limiter loginLimiter
 }
 
-func New(db *sql.DB, jwt *auth.Manager, logger *slog.Logger) *Service {
-	return &Service{db: db, jwt: jwt, log: logger}
+func New(db *sql.DB, jwt *auth.Manager, logger *slog.Logger, limiter loginLimiter) *Service {
+	if limiter == nil {
+		limiter = noopLimiter{}
+	}
+	return &Service{db: db, jwt: jwt, log: logger, limiter: limiter}
 }
 
 func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.LoginReply, error) {
@@ -61,12 +65,21 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Lo
 }
 
 func (s *Service) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
+	username := strings.TrimSpace(req.GetUsername())
+	allowed, err := s.limiter.Allow(ctx, username)
+	if err != nil {
+		// Fail open, but leave a trail: Redis being down must not block login.
+		s.log.Warn("login rate limiter unavailable", "error", err)
+	}
+	if !allowed {
+		return nil, apperr.RateLimited("too many login attempts; try again later")
+	}
 	var (
-		id                               int64
-		username, nickname, hash, status string
+		id                             int64
+		dbUser, nickname, hash, status string
 	)
-	err := s.db.QueryRowContext(ctx, `SELECT id, username, nickname, password_hash, status FROM users WHERE username = ?`, strings.TrimSpace(req.GetUsername())).
-		Scan(&id, &username, &nickname, &hash, &status)
+	err = s.db.QueryRowContext(ctx, `SELECT id, username, nickname, password_hash, status FROM users WHERE username = ?`, username).
+		Scan(&id, &dbUser, &nickname, &hash, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.Unauthenticated("invalid username or password")
 	}
@@ -327,6 +340,7 @@ func (s *Service) roles(ctx context.Context, userID int64) ([]string, error) {
 }
 
 func (s *Service) loginReply(ctx context.Context, id int64, username, nickname string, roles []string) (*pb.LoginReply, error) {
+	s.limiter.Reset(ctx, username)
 	access, refresh, err := s.jwt.Generate(uint64(id), roles)
 	if err != nil {
 		return nil, err

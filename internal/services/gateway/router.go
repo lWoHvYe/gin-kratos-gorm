@@ -26,6 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -1113,7 +1114,18 @@ func (h *handlers) createAfterSale(c *gin.Context) {
 		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
-	afterSale, err := h.clients.AfterSales.CreateAfterSale(c.Request.Context(), &pb.CreateAfterSaleRequest{
+	// Forward an idempotency key so a double submit (or a retry after a network
+	// error) returns the first after-sale instead of creating a second one.
+	ctx := c.Request.Context()
+	key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	if key == "" {
+		key = id.Event()
+	}
+	if len(key) > 64 {
+		key = key[:64]
+	}
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-client-request-id", key)
+	afterSale, err := h.clients.AfterSales.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
 		OrderNo:    orderNo,
 		UserId:     uid,
 		Type:       strings.TrimSpace(in.Type),

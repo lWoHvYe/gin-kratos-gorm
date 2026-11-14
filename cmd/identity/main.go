@@ -10,6 +10,7 @@ import (
 	"gin-kratos-gorm/internal/platform/db"
 	"gin-kratos-gorm/internal/platform/grpcx"
 	"gin-kratos-gorm/internal/platform/log"
+	"gin-kratos-gorm/internal/platform/redis"
 	"gin-kratos-gorm/internal/platform/runtime"
 	"gin-kratos-gorm/internal/platform/tracing"
 	"gin-kratos-gorm/internal/services/identity"
@@ -33,8 +34,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer database.Close()
+	// The login limiter is optional: identity must still start if Redis is
+	// unavailable (the limiter then fails open with a warning).
+	cache, cacheErr := redis.Open(redis.Config{
+		Mode: cfg.RedisMode, Addrs: cfg.RedisAddrs, Password: cfg.RedisPassword, MasterName: cfg.RedisMasterName,
+	})
+	if cacheErr != nil {
+		logger.Warn("redis unavailable; login rate limiting disabled", "error", cacheErr)
+	}
+	if cache != nil {
+		defer cache.Close()
+	}
 	gs := grpcx.NewServer(cfg, logger)
-	svc := identity.New(database, auth.NewManager(cfg), logger)
+	svc := identity.New(database, auth.NewManager(cfg), logger, identity.NewLoginLimiter(cache))
 	pb.RegisterIdentityServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {

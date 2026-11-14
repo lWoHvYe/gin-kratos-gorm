@@ -10,6 +10,9 @@ const form = reactive({ type: 'RETURN_REFUND', amount: '', reason: '' })
 const quantities = reactive<Record<number, number>>({})
 const message = ref('')
 const loading = ref(false)
+const idempotencyKey = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+  ? `as-${crypto.randomUUID()}`
+  : `as-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
 onMounted(async () => {
   if (!token.value || !orderNo) return
@@ -28,7 +31,9 @@ async function submit(): Promise<void> {
   message.value = ''
   try {
     const reply = await request<{ after_sale_no: string }>('/api/v1/after-sales', {
-      method: 'POST', body: { order_no: order.value.order_no, type: form.type, reason: form.reason, amount_cent: amountCent, items },
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: { order_no: order.value.order_no, type: form.type, reason: form.reason, amount_cent: amountCent, items },
     })
     await navigateTo(`/after-sales/${reply.after_sale_no}`)
   } catch (err) { message.value = err instanceof Error ? err.message : '提交失败' } finally { loading.value = false }

@@ -127,7 +127,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	engine.GET("/readyz", h.health)
 
-	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole))
+	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole), audit(logger))
 	admin.GET("/categories", h.listCategoriesAdmin)
 	admin.POST("/categories", h.createCategory)
 	admin.PUT("/categories/:id", h.updateCategory)
@@ -182,6 +182,25 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	admin.POST("/promotions/evaluate", h.evaluatePromotions)
 
 	return engine
+}
+
+// audit records privileged mutations with the acting admin and request id.
+// Read-only calls are skipped to keep the log signal high.
+func audit(logger *slog.Logger) gin.HandlerFunc {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return func(c *gin.Context) {
+		c.Next()
+		method := c.Request.Method
+		if method == "GET" || method == "HEAD" || method == "OPTIONS" {
+			return
+		}
+		uid, _ := auth.UserID(c.Request.Context())
+		logger.Info("admin audit", "user_id", uid, "method", method,
+			"path", c.FullPath(), "status", c.Writer.Status(),
+			"request_id", httpx.RequestIDFrom(c))
+	}
 }
 
 // handlers holds the downstream clients. It is stateless.

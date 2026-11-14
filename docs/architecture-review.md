@@ -59,6 +59,13 @@ Technology choices are kept:
 - Config/security: BFFs honour `HTTP_ADDR`, gRPC honours the config centre's
   `grpc_addr`, request bodies are capped at 1 MiB, CORS supports an allowlist.
 
+## Trust model
+
+Internal service authentication is recorded in
+[adr/0001-internal-trust.md](adr/0001-internal-trust.md): workload-level trust
+through mTLS + AuthorizationPolicy + NetworkPolicy, with the residual risks and
+upgrade triggers for a per-user signed context.
+
 ## Fixed in Phase 3 (in progress)
 
 - Worker lifecycle: `runtime.Workers` tracks background loops; shutdown now
@@ -76,6 +83,12 @@ Technology choices are kept:
 - Migration ledger: both the Compose init script and the Kubernetes migration
   image track `schema_migrations(filename, checksum, applied_at)`, skip applied
   files and fail on a changed checksum.
+- After-sale creation idempotency: the BFF forwards `Idempotency-Key` as gRPC
+  metadata, `after_sales` has a unique `(user_id, client_request_id)` key, and a
+  retried submit returns the first request.
+- Login throttling: identity allows 10 attempts per username per 5 minutes
+  through Redis, resets on success, and fails open with a warning if Redis is
+  unavailable.
 - Wire tooling: `tools.go` pins the generator, `make wire` works from a clean
   checkout (it immediately caught a stale order graph: the promotion client was
   missing from `wire.go`), and CI now fails when committed `wire_gen.go` drifts.
@@ -88,12 +101,8 @@ Technology choices are kept:
 
 - **Internal authentication** (Phase 3): gRPC still trusts `user_id`/`admin`
   request fields (mesh-only trust). Needs an explicit decision.
-- **OpenAPI coverage** (Phase 3): 18 of 32 gateway routes are documented; the
-  guard only prevents documented routes from disappearing.
-- **Aftersales idempotency** (Phase 3): creation has no client key, so a double
-  submit creates two after-sale rows (payment prevents a double payout).
-- **Security hardening** (Phase 3): no login rate limiting; internal gRPC still
-  trusts `user_id`/`admin` request fields (mesh-only trust).
+- **Security hardening** (Phase 3): internal gRPC still trusts `user_id`/`admin`
+  request fields; see the trust ADR for accepted risk and upgrade triggers.
 
 ## Needs a failing test before changing
 

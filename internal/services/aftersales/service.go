@@ -16,6 +16,8 @@ import (
 	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/outbox"
+
+	"google.golang.org/grpc/metadata"
 )
 
 // After-sale request types.
@@ -133,6 +135,18 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	if err := s.validateAgainstOrder(ctx, input.orderNo, input.userID, input.typ, input.amountCent, items); err != nil {
 		return nil, err
 	}
+	// A retried submit must return the first request instead of creating a
+	// second after-sale; the client sends the key as gRPC metadata.
+	requestID := clientRequestID(ctx)
+	if requestID != "" {
+		existing, err := s.findByClientRequest(ctx, input.userID, requestID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return existing, nil
+		}
+	}
 	afterSaleNo := id.AfterSale()
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -141,9 +155,21 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.ExecContext(ctx, "INSERT INTO after_sales (after_sale_no, order_no, user_id, `type`, status, amount_cent, reason) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		afterSaleNo, input.orderNo, input.userID, input.typ, statusRequested, input.amountCent, input.reason)
+	key := sql.NullString{String: requestID, Valid: requestID != ""}
+	res, err := tx.ExecContext(ctx, "INSERT INTO after_sales (after_sale_no, order_no, user_id, `type`, status, amount_cent, reason, client_request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		afterSaleNo, input.orderNo, input.userID, input.typ, statusRequested, input.amountCent, input.reason, key)
 	if err != nil {
+		if isDuplicateKey(err) && requestID != "" {
+			// Another replica won the race; return its row.
+			_ = tx.Rollback()
+			existing, ferr := s.findByClientRequest(ctx, input.userID, requestID)
+			if ferr != nil {
+				return nil, ferr
+			}
+			if existing != nil {
+				return existing, nil
+			}
+		}
 		return nil, apperr.Internal("create after sale", err)
 	}
 	afterSaleID, err := res.LastInsertId()
@@ -755,4 +781,40 @@ func cutRunes(s string, max int) string {
 		return s
 	}
 	return string(r[:max])
+}
+
+const clientRequestIDMetadata = "x-client-request-id"
+
+// clientRequestID reads the idempotency key forwarded by the BFF.
+func clientRequestID(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	values := md.Get(clientRequestIDMetadata)
+	if len(values) == 0 {
+		return ""
+	}
+	key := strings.TrimSpace(values[0])
+	if len(key) > 64 {
+		key = key[:64]
+	}
+	return key
+}
+
+func (s *Service) findByClientRequest(ctx context.Context, userID int64, requestID string) (*pb.AfterSale, error) {
+	var afterSaleNo string
+	err := s.db.QueryRowContext(ctx, `SELECT after_sale_no FROM after_sales
+		WHERE user_id = ? AND client_request_id = ? LIMIT 1`, userID, requestID).Scan(&afterSaleNo)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, apperr.Internal("query after sale by client request", err)
+	}
+	return s.loadAfterSale(ctx, afterSaleNo)
+}
+
+func isDuplicateKey(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "duplicate entry")
 }

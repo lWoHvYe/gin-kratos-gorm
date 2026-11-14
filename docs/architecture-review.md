@@ -76,14 +76,16 @@ Technology choices are kept:
 - Migration ledger: both the Compose init script and the Kubernetes migration
   image track `schema_migrations(filename, checksum, applied_at)`, skip applied
   files and fail on a changed checksum.
+- BFF platformization: `internal/platform/bff` now owns recovery, timeouts,
+  JSON binding with the 1 MiB cap, path/query parsing and downstream error
+  mapping. This removed ~200 duplicated lines and fixed a real drift (admin
+  mapped ResourceExhausted to 503, gateway to 429; both now return 429).
 
 ## Verified findings deferred to later phases
 
 - **CI tooling** (Phase 3): `make wire` cannot run from a clean checkout
   because the Wire tool dependencies are absent from `go.sum`; provider changes
   are mirrored into `wire_gen.go` manually. Add a `tools.go` and run it in CI.
-- **BFF platformization** (Phase 3): gateway/admin still duplicate ~250 lines
-  of client/middleware/error helpers.
 - **Internal authentication** (Phase 3): gRPC still trusts `user_id`/`admin`
   request fields (mesh-only trust). Needs an explicit decision.
 - **OpenAPI coverage** (Phase 3): 18 of 32 gateway routes are documented; the

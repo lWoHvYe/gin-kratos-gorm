@@ -6,7 +6,6 @@ package gateway
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -19,6 +18,7 @@ import (
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/auth"
+	"gin-kratos-gorm/internal/platform/bff"
 	"gin-kratos-gorm/internal/platform/grpcx"
 	"gin-kratos-gorm/internal/platform/httpx"
 	"gin-kratos-gorm/internal/platform/id"
@@ -26,8 +26,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -145,7 +143,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	h := &handlers{clients: clients, log: logger}
 
 	engine := gin.New()
-	engine.Use(recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), timeout(requestTimeout))
+	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), bff.Timeout(requestTimeout))
 	engine.NoRoute(func(c *gin.Context) { httpx.Error(c, apperr.NotFound("route not found")) })
 	engine.GET("/healthz", h.health)
 	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))
@@ -203,23 +201,8 @@ type handlers struct {
 // ---------------------------------------------------------------- middleware
 
 // recovery converts a panic into the regular JSON error envelope.
-func recovery() gin.HandlerFunc {
-	return gin.CustomRecovery(func(c *gin.Context, recovered any) {
-		httpx.Error(c, apperr.Internal("panic recovered", fmt.Errorf("%v", recovered)))
-	})
-}
-
 // timeout caps the request context so a slow downstream cannot pin a request
 // forever.
-func timeout(d time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), d)
-		defer cancel()
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-	}
-}
-
 // requireUser rejects unauthenticated requests before they reach a handler.
 func requireUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -237,13 +220,13 @@ func (h *handlers) health(c *gin.Context) { httpx.OK(c, gin.H{"status": "ok"}) }
 
 func (h *handlers) register(c *gin.Context) {
 	var req pb.RegisterRequest
-	if err := bindJSON(c, &req); err != nil {
+	if err := bff.BindJSON(c, &req); err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	reply, err := h.clients.Identity.Register(c.Request.Context(), &req)
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.Created(c, reply)
@@ -251,13 +234,13 @@ func (h *handlers) register(c *gin.Context) {
 
 func (h *handlers) login(c *gin.Context) {
 	var req pb.LoginRequest
-	if err := bindJSON(c, &req); err != nil {
+	if err := bff.BindJSON(c, &req); err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	reply, err := h.clients.Identity.Login(c.Request.Context(), &req)
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)
@@ -269,13 +252,13 @@ type refreshRequest struct {
 
 func (h *handlers) refresh(c *gin.Context) {
 	var in refreshRequest
-	if err := bindJSON(c, &in); err != nil {
+	if err := bff.BindJSON(c, &in); err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	reply, err := h.clients.Identity.Refresh(c.Request.Context(), &pb.RefreshRequest{RefreshToken: in.RefreshToken})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)
@@ -283,14 +266,14 @@ func (h *handlers) refresh(c *gin.Context) {
 
 func (h *handlers) logout(c *gin.Context) {
 	var in refreshRequest
-	if bodyPresent(c) {
-		if err := bindJSON(c, &in); err != nil {
+	if bff.BodyPresent(c) {
+		if err := bff.BindJSON(c, &in); err != nil {
 			httpx.Error(c, err)
 			return
 		}
 	}
 	if _, err := h.clients.Identity.Logout(c.Request.Context(), &pb.LogoutRequest{RefreshToken: in.RefreshToken}); err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, gin.H{"status": "logged out"})
@@ -299,7 +282,7 @@ func (h *handlers) logout(c *gin.Context) {
 func (h *handlers) listCategories(c *gin.Context) {
 	reply, err := h.clients.Catalog.ListCategories(c.Request.Context(), &pb.Empty{})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	filtered := make([]*pb.Category, 0, len(reply.GetCategories()))
@@ -315,7 +298,7 @@ func (h *handlers) listCategories(c *gin.Context) {
 func (h *handlers) listBrands(c *gin.Context) {
 	reply, err := h.clients.Catalog.ListBrands(c.Request.Context(), &pb.Empty{})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	filtered := make([]*pb.Brand, 0, len(reply.GetBrands()))
@@ -329,32 +312,32 @@ func (h *handlers) listBrands(c *gin.Context) {
 }
 
 func (h *handlers) listProducts(c *gin.Context) {
-	page, err := queryInt32(c, "page")
+	page, err := bff.QueryInt32(c, "page")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
-	pageSize, err := queryInt32(c, "page_size")
+	pageSize, err := bff.QueryInt32(c, "page_size")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
-	categoryID, err := queryInt64(c, "category_id")
+	categoryID, err := bff.QueryInt64(c, "category_id")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
-	brandID, err := queryInt64(c, "brand_id")
+	brandID, err := bff.QueryInt64(c, "brand_id")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
-	minPrice, err := queryInt64(c, "min_price_cent")
+	minPrice, err := bff.QueryInt64(c, "min_price_cent")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
-	maxPrice, err := queryInt64(c, "max_price_cent")
+	maxPrice, err := bff.QueryInt64(c, "max_price_cent")
 	if err != nil {
 		httpx.Error(c, err)
 		return
@@ -365,35 +348,35 @@ func (h *handlers) listProducts(c *gin.Context) {
 		Sort: strings.TrimSpace(c.Query("sort")),
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)
 }
 
 func (h *handlers) getProduct(c *gin.Context) {
-	productID, err := pathID(c, "id")
+	productID, err := bff.PathID(c, "id")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	product, err := h.clients.Catalog.GetProduct(c.Request.Context(), &pb.GetProductRequest{Id: productID})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, product)
 }
 
 func (h *handlers) getSku(c *gin.Context) {
-	skuID, err := pathID(c, "id")
+	skuID, err := bff.PathID(c, "id")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	sku, err := h.clients.Catalog.GetSku(c.Request.Context(), &pb.GetSkuRequest{SkuId: skuID})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, sku)
@@ -410,7 +393,7 @@ func (h *handlers) ensureStock(ctx context.Context, skuID int64, quantity int32)
 	}
 	stock, err := h.clients.Inventory.GetStock(ctx, &pb.GetStockRequest{SkuId: skuID, WarehouseId: 1})
 	if err != nil {
-		return remoteError(err)
+		return bff.RemoteError(err)
 	}
 	if stock.GetAvailable() < int64(quantity) {
 		return apperr.Failed(fmt.Sprintf("insufficient stock for sku %d: available %d", skuID, stock.GetAvailable()))
@@ -423,7 +406,7 @@ func (h *handlers) ensureStock(ctx context.Context, skuID int64, quantity int32)
 func (h *handlers) ensureCartStock(ctx context.Context, userID, skuID int64, delta int32) error {
 	cart, err := h.clients.Cart.GetCart(ctx, &pb.GetCartRequest{UserId: userID})
 	if err != nil {
-		return remoteError(err)
+		return bff.RemoteError(err)
 	}
 	var existing int32
 	for _, item := range cart.GetItems() {
@@ -444,7 +427,7 @@ func (h *handlers) listAddresses(c *gin.Context) {
 	}
 	reply, err := h.clients.Identity.ListAddresses(c.Request.Context(), &pb.GetUserRequest{UserId: uid})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)
@@ -457,14 +440,14 @@ func (h *handlers) createAddress(c *gin.Context) {
 		return
 	}
 	var address pb.Address
-	if err := bindJSON(c, &address); err != nil {
+	if err := bff.BindJSON(c, &address); err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	address.UserId = uid
 	created, err := h.clients.Identity.CreateAddress(c.Request.Context(), &pb.CreateAddressRequest{Address: &address})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.Created(c, created)
@@ -476,13 +459,13 @@ func (h *handlers) updateAddress(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	addressID, err := pathID(c, "id")
+	addressID, err := bff.PathID(c, "id")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	var address pb.Address
-	if err := bindJSON(c, &address); err != nil {
+	if err := bff.BindJSON(c, &address); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -490,7 +473,7 @@ func (h *handlers) updateAddress(c *gin.Context) {
 	address.UserId = uid
 	updated, err := h.clients.Identity.UpdateAddress(c.Request.Context(), &pb.UpdateAddressRequest{Address: &address})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, updated)
@@ -502,13 +485,13 @@ func (h *handlers) deleteAddress(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	addressID, err := pathID(c, "id")
+	addressID, err := bff.PathID(c, "id")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	if _, err := h.clients.Identity.DeleteAddress(c.Request.Context(), &pb.DeleteAddressRequest{UserId: uid, AddressId: addressID}); err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, gin.H{"status": "deleted"})
@@ -520,13 +503,13 @@ func (h *handlers) setDefaultAddress(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	addressID, err := pathID(c, "id")
+	addressID, err := bff.PathID(c, "id")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	if _, err := h.clients.Identity.SetDefaultAddress(c.Request.Context(), &pb.SetDefaultAddressRequest{UserId: uid, AddressId: addressID}); err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, gin.H{"status": "default"})
@@ -542,7 +525,7 @@ func (h *handlers) getCart(c *gin.Context) {
 	}
 	cart, err := h.clients.Cart.GetCart(c.Request.Context(), &pb.GetCartRequest{UserId: uid})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, cart)
@@ -555,7 +538,7 @@ func (h *handlers) addCartItem(c *gin.Context) {
 		return
 	}
 	var req pb.AddItemRequest
-	if err := bindJSON(c, &req); err != nil {
+	if err := bff.BindJSON(c, &req); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -566,7 +549,7 @@ func (h *handlers) addCartItem(c *gin.Context) {
 	}
 	cart, err := h.clients.Cart.AddItem(c.Request.Context(), &req)
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, cart)
@@ -579,7 +562,7 @@ func (h *handlers) updateCartItem(c *gin.Context) {
 		return
 	}
 	var req pb.UpdateItemRequest
-	if err := bindJSON(c, &req); err != nil {
+	if err := bff.BindJSON(c, &req); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -592,7 +575,7 @@ func (h *handlers) updateCartItem(c *gin.Context) {
 	}
 	cart, err := h.clients.Cart.UpdateItem(c.Request.Context(), &req)
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, cart)
@@ -605,15 +588,15 @@ func (h *handlers) removeCartItem(c *gin.Context) {
 		return
 	}
 	var req pb.RemoveItemRequest
-	if bodyPresent(c) {
-		if err := bindJSON(c, &req); err != nil {
+	if bff.BodyPresent(c) {
+		if err := bff.BindJSON(c, &req); err != nil {
 			httpx.Error(c, err)
 			return
 		}
 	}
 	if req.SkuId == 0 {
 		// DELETE requests often carry no body; allow ?sku_id=<id> as well.
-		skuID, err := queryInt64(c, "sku_id")
+		skuID, err := bff.QueryInt64(c, "sku_id")
 		if err != nil {
 			httpx.Error(c, err)
 			return
@@ -623,7 +606,7 @@ func (h *handlers) removeCartItem(c *gin.Context) {
 	req.UserId = uid
 	cart, err := h.clients.Cart.RemoveItem(c.Request.Context(), &req)
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, cart)
@@ -647,7 +630,7 @@ func (h *handlers) mergeCart(c *gin.Context) {
 		return
 	}
 	var in mergeRequest
-	if err := bindJSON(c, &in); err != nil {
+	if err := bff.BindJSON(c, &in); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -669,14 +652,14 @@ func (h *handlers) mergeCart(c *gin.Context) {
 			Quantity: item.Quantity,
 		})
 		if err != nil {
-			httpx.Error(c, remoteError(err))
+			httpx.Error(c, bff.RemoteError(err))
 			return
 		}
 	}
 	if cart == nil {
 		cart, err = h.clients.Cart.GetCart(c.Request.Context(), &pb.GetCartRequest{UserId: uid})
 		if err != nil {
-			httpx.Error(c, remoteError(err))
+			httpx.Error(c, bff.RemoteError(err))
 			return
 		}
 	}
@@ -705,7 +688,7 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 		return
 	}
 	var in previewRequest
-	if err := bindJSON(c, &in); err != nil {
+	if err := bff.BindJSON(c, &in); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -718,7 +701,7 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 		// server cart as the source of truth for the normal C-end checkout.
 		cart, err := h.clients.Cart.GetCart(c.Request.Context(), &pb.GetCartRequest{UserId: uid})
 		if err != nil {
-			httpx.Error(c, remoteError(err))
+			httpx.Error(c, bff.RemoteError(err))
 			return
 		}
 		for _, item := range cart.GetItems() {
@@ -748,7 +731,7 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 		CouponId:  strings.TrimSpace(in.CouponID),
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, quote)
@@ -772,7 +755,7 @@ func (h *handlers) placeOrder(c *gin.Context) {
 		return
 	}
 	var in placeOrderRequest
-	if err := bindJSON(c, &in); err != nil {
+	if err := bff.BindJSON(c, &in); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -814,7 +797,7 @@ func (h *handlers) placeOrder(c *gin.Context) {
 		ReceiverAddress: receiverAddress,
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	intent, err := h.clients.Payment.CreateIntent(c.Request.Context(), &pb.CreateIntentRequest{
@@ -824,7 +807,7 @@ func (h *handlers) placeOrder(c *gin.Context) {
 		Channel:    defaultPaymentChannel,
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	// The order is authoritative even if clearing the cart fails; keep the
@@ -845,7 +828,7 @@ func (h *handlers) resolveAddress(ctx context.Context, userID, addressID int64) 
 	}
 	list, err := h.clients.Identity.ListAddresses(ctx, &pb.GetUserRequest{UserId: userID})
 	if err != nil {
-		return nil, remoteError(err)
+		return nil, bff.RemoteError(err)
 	}
 	for _, address := range list.GetAddresses() {
 		if address.GetId() == addressID {
@@ -872,12 +855,12 @@ func (h *handlers) listOrders(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	page, err := queryInt32(c, "page")
+	page, err := bff.QueryInt32(c, "page")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
-	pageSize, err := queryInt32(c, "page_size")
+	pageSize, err := bff.QueryInt32(c, "page_size")
 	if err != nil {
 		httpx.Error(c, err)
 		return
@@ -889,7 +872,7 @@ func (h *handlers) listOrders(c *gin.Context) {
 		Status:   strings.TrimSpace(c.Query("status")),
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, orders)
@@ -908,7 +891,7 @@ func (h *handlers) getOrder(c *gin.Context) {
 	}
 	order, err := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: orderNo, UserId: uid})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, order)
@@ -926,9 +909,9 @@ func (h *handlers) cancelOrder(c *gin.Context) {
 		return
 	}
 	req := &pb.CancelOrderRequest{OrderNo: orderNo, UserId: uid}
-	if bodyPresent(c) {
+	if bff.BodyPresent(c) {
 		var in pb.CancelOrderRequest
-		if err := bindJSON(c, &in); err != nil {
+		if err := bff.BindJSON(c, &in); err != nil {
 			httpx.Error(c, err)
 			return
 		}
@@ -936,7 +919,7 @@ func (h *handlers) cancelOrder(c *gin.Context) {
 	}
 	order, err := h.clients.Order.CancelOrder(c.Request.Context(), req)
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, order)
@@ -961,12 +944,12 @@ func (h *handlers) receiveOrder(c *gin.Context) {
 	}
 	// Ownership check before touching another service's shipment.
 	if _, err := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: orderNo, UserId: uid}); err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	var in receiveRequest
-	if bodyPresent(c) {
-		if err := bindJSON(c, &in); err != nil {
+	if bff.BodyPresent(c) {
+		if err := bff.BindJSON(c, &in); err != nil {
 			httpx.Error(c, err)
 			return
 		}
@@ -982,7 +965,7 @@ func (h *handlers) receiveOrder(c *gin.Context) {
 		shipment, err = h.clients.Fulfillment.GetShipment(c.Request.Context(), &pb.GetShipmentRequest{ShipmentNo: shipmentNo})
 	}
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	if shipment.GetOrderNo() != orderNo {
@@ -992,7 +975,7 @@ func (h *handlers) receiveOrder(c *gin.Context) {
 	shipmentNo = shipment.GetShipmentNo()
 	received, err := h.clients.Fulfillment.Receive(c.Request.Context(), &pb.ReceiveRequest{ShipmentNo: shipmentNo})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, received)
@@ -1016,8 +999,8 @@ func (h *handlers) pay(c *gin.Context) {
 		return
 	}
 	var in payRequest
-	if bodyPresent(c) {
-		if err := bindJSON(c, &in); err != nil {
+	if bff.BodyPresent(c) {
+		if err := bff.BindJSON(c, &in); err != nil {
 			httpx.Error(c, err)
 			return
 		}
@@ -1038,7 +1021,7 @@ func (h *handlers) pay(c *gin.Context) {
 	// checked against the order.
 	intent, err := h.clients.Payment.GetIntent(c.Request.Context(), &pb.GetIntentRequest{PaymentNo: paymentNo})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	uid, err := userID(c)
@@ -1049,7 +1032,7 @@ func (h *handlers) pay(c *gin.Context) {
 	if intent.GetOrderNo() != "" {
 		order, oerr := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: intent.GetOrderNo(), UserId: uid})
 		if oerr != nil {
-			httpx.Error(c, remoteError(oerr))
+			httpx.Error(c, bff.RemoteError(oerr))
 			return
 		}
 		if order.GetUserId() != uid {
@@ -1081,7 +1064,7 @@ func (h *handlers) pay(c *gin.Context) {
 		Signature:  in.Signature,
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)
@@ -1111,7 +1094,7 @@ func (h *handlers) createAfterSale(c *gin.Context) {
 		return
 	}
 	var in createAfterSaleRequest
-	if err := bindJSON(c, &in); err != nil {
+	if err := bff.BindJSON(c, &in); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -1127,7 +1110,7 @@ func (h *handlers) createAfterSale(c *gin.Context) {
 	// The after-sales service does not consult orders, so ownership of the
 	// order is checked here before a request can be opened against it.
 	if _, err := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: orderNo, UserId: uid}); err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	afterSale, err := h.clients.AfterSales.CreateAfterSale(c.Request.Context(), &pb.CreateAfterSaleRequest{
@@ -1139,7 +1122,7 @@ func (h *handlers) createAfterSale(c *gin.Context) {
 		Items:      items,
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.Created(c, afterSale)
@@ -1158,7 +1141,7 @@ func (h *handlers) getAfterSale(c *gin.Context) {
 	}
 	afterSale, err := h.clients.AfterSales.GetAfterSale(c.Request.Context(), &pb.GetAfterSaleRequest{AfterSaleNo: afterSaleNo})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	if afterSale.GetUserId() != uid {
@@ -1185,95 +1168,12 @@ func userID(c *gin.Context) (int64, error) {
 
 // bindJSON decodes the request body into dst and maps decoding failures onto an
 // invalid-argument error.
-const maxBodyBytes = 1 << 20
-
-func bindJSON(c *gin.Context, dst any) error {
-	if c.Request != nil && c.Request.Body != nil {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBodyBytes)
-	}
-	if err := c.ShouldBindJSON(dst); err != nil {
-		return apperr.Invalid("invalid request body: %v", err)
-	}
-	return nil
-}
-
 // bodyPresent reports whether the request carries a body.
-func bodyPresent(c *gin.Context) bool {
-	return c.Request != nil && c.Request.Body != nil && c.Request.ContentLength != 0
-}
-
 // pathID parses a positive int64 path parameter.
-func pathID(c *gin.Context, name string) (int64, error) {
-	raw := strings.TrimSpace(c.Param(name))
-	id, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, apperr.Invalid("%s must be a positive integer", name)
-	}
-	return id, nil
-}
-
 // queryInt64 parses an optional int64 query parameter; an absent value is 0.
-func queryInt64(c *gin.Context, key string) (int64, error) {
-	raw := strings.TrimSpace(c.Query(key))
-	if raw == "" {
-		return 0, nil
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		return 0, apperr.Invalid("%s must be an integer", key)
-	}
-	return value, nil
-}
-
 // queryInt32 parses an optional int32 query parameter; an absent value is 0.
-func queryInt32(c *gin.Context, key string) (int32, error) {
-	raw := strings.TrimSpace(c.Query(key))
-	if raw == "" {
-		return 0, nil
-	}
-	value, err := strconv.ParseInt(raw, 10, 32)
-	if err != nil {
-		return 0, apperr.Invalid("%s must be an integer", key)
-	}
-	return int32(value), nil
-}
-
 // remoteError translates a downstream gRPC status into the domain error model
 // so httpx.Error emits the right HTTP status. Domain errors pass through.
-func remoteError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var ae *apperr.Error
-	if errors.As(err, &ae) {
-		return ae
-	}
-	st, ok := status.FromError(err)
-	if !ok {
-		return apperr.Unavailable("downstream call failed", err)
-	}
-	switch st.Code() {
-	case codes.InvalidArgument:
-		return apperr.Invalid("%s", st.Message())
-	case codes.Unauthenticated:
-		return apperr.Unauthenticated(st.Message())
-	case codes.PermissionDenied:
-		return apperr.Forbidden(st.Message())
-	case codes.NotFound:
-		return apperr.NotFound(st.Message())
-	case codes.AlreadyExists, codes.Aborted:
-		return apperr.Conflict(st.Message())
-	case codes.FailedPrecondition, codes.OutOfRange:
-		return apperr.Failed(st.Message())
-	case codes.ResourceExhausted:
-		return apperr.RateLimited(st.Message())
-	case codes.Unavailable, codes.DeadlineExceeded, codes.Canceled:
-		return apperr.Unavailable("downstream unavailable", err)
-	default:
-		return apperr.Internal("downstream error", err)
-	}
-}
-
 // ---------------------------------------------------------------- after-sales / shipment
 
 type returnTrackingRequest struct {
@@ -1289,13 +1189,13 @@ func (h *handlers) submitReturnTracking(c *gin.Context) {
 	}
 	no := strings.TrimSpace(c.Param("no"))
 	var in returnTrackingRequest
-	if err := bindJSON(c, &in); err != nil {
+	if err := bff.BindJSON(c, &in); err != nil {
 		httpx.Error(c, err)
 		return
 	}
 	afterSale, err := h.clients.AfterSales.GetAfterSale(c.Request.Context(), &pb.GetAfterSaleRequest{AfterSaleNo: no})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	if afterSale.GetUserId() != uid {
@@ -1306,7 +1206,7 @@ func (h *handlers) submitReturnTracking(c *gin.Context) {
 		AfterSaleNo: no, Carrier: strings.TrimSpace(in.Carrier), TrackingNo: strings.TrimSpace(in.TrackingNo),
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, updated)
@@ -1318,12 +1218,12 @@ func (h *handlers) listAfterSales(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	page, err := queryInt32(c, "page")
+	page, err := bff.QueryInt32(c, "page")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
-	pageSize, err := queryInt32(c, "page_size")
+	pageSize, err := bff.QueryInt32(c, "page_size")
 	if err != nil {
 		httpx.Error(c, err)
 		return
@@ -1332,7 +1232,7 @@ func (h *handlers) listAfterSales(c *gin.Context) {
 		UserId: uid, Page: page, PageSize: pageSize, Status: strings.TrimSpace(c.Query("status")),
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)
@@ -1347,7 +1247,7 @@ func (h *handlers) getOrderShipment(c *gin.Context) {
 	orderNo := strings.TrimSpace(c.Param("orderNo"))
 	order, err := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: orderNo, UserId: uid})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	if order.GetOrderNo() == "" {
@@ -1356,7 +1256,7 @@ func (h *handlers) getOrderShipment(c *gin.Context) {
 	}
 	shipment, err := h.clients.Fulfillment.GetShipmentByOrder(c.Request.Context(), &pb.GetShipmentByOrderRequest{OrderNo: orderNo})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, shipment)
@@ -1372,7 +1272,7 @@ func (h *handlers) getSeckillActivity(c *gin.Context) {
 	}
 	reply, err := h.clients.Seckill.GetPublicActivity(c.Request.Context(), &pb.GetSeckillActivityRequest{Id: id})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)
@@ -1397,7 +1297,7 @@ func (h *handlers) reserveSeckill(c *gin.Context) {
 		return
 	}
 	var in reserveSeckillRequest
-	if err := bindJSON(c, &in); err != nil {
+	if err := bff.BindJSON(c, &in); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -1406,7 +1306,7 @@ func (h *handlers) reserveSeckill(c *gin.Context) {
 		ReceiverName: in.ReceiverName, ReceiverPhone: in.ReceiverPhone, ReceiverAddress: in.ReceiverAddress,
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	c.JSON(http.StatusAccepted, reply)
@@ -1422,19 +1322,19 @@ func (h *handlers) getSeckillQualification(c *gin.Context) {
 		Token: c.Param("token"), UserId: uid,
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)
 }
 
 func (h *handlers) listPublicSeckillActivities(c *gin.Context) {
-	page, err := queryInt32(c, "page")
+	page, err := bff.QueryInt32(c, "page")
 	if err != nil {
 		httpx.Error(c, err)
 		return
 	}
-	size, err := queryInt32(c, "page_size")
+	size, err := bff.QueryInt32(c, "page_size")
 	if err != nil {
 		httpx.Error(c, err)
 		return
@@ -1443,7 +1343,7 @@ func (h *handlers) listPublicSeckillActivities(c *gin.Context) {
 		Page: page, PageSize: size,
 	})
 	if err != nil {
-		httpx.Error(c, remoteError(err))
+		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, reply)

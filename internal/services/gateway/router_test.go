@@ -9,6 +9,7 @@ import (
 
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/auth"
+	"gin-kratos-gorm/internal/platform/bff"
 	"gin-kratos-gorm/internal/platform/config"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +38,7 @@ func TestRemoteErrorMapping(t *testing.T) {
 		{status.Error(codes.Unavailable, "down"), apperr.CodeUnavailable},
 	}
 	for _, tc := range cases {
-		err := remoteError(tc.err)
+		err := bff.RemoteError(tc.err)
 		if !apperr.IsCode(err, tc.code) {
 			t.Fatalf("remoteError(%v) = %v, want %s", tc.err, err, tc.code)
 		}
@@ -59,10 +60,10 @@ func TestQueryParsing(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest("GET", "/?page=2&page_size=bad", nil)
-	if page, err := queryInt32(c, "page"); err != nil || page != 2 {
+	if page, err := bff.QueryInt32(c, "page"); err != nil || page != 2 {
 		t.Fatalf("page = %d, %v", page, err)
 	}
-	if _, err := queryInt32(c, "page_size"); err == nil {
+	if _, err := bff.QueryInt32(c, "page_size"); err == nil {
 		t.Fatal("expected invalid page_size")
 	}
 }

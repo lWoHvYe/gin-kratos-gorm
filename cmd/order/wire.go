@@ -19,6 +19,7 @@ func initialize(ctx context.Context, cfg *config.Config) (*orderApp, func(), err
 		provideInventoryConn,
 		providePricingClient,
 		provideInventoryClient,
+		providePromotionClient,
 		provideDTMClient,
 		provideOrderService,
 		provideGRPCServer,

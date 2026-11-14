@@ -32,7 +32,6 @@ func initialize(ctx context.Context, cfg *config.Config) (*orderApp, func(), err
 		return nil, nil, err
 	}
 	pricingServiceClient := providePricingClient(mainPricingConn)
-	promotionServiceClient := providePromotionClient(mainPricingConn)
 	mainInventoryConn, cleanup4, err := provideInventoryConn(ctx)
 	if err != nil {
 		cleanup3()
@@ -41,6 +40,7 @@ func initialize(ctx context.Context, cfg *config.Config) (*orderApp, func(), err
 		return nil, nil, err
 	}
 	inventoryServiceClient := provideInventoryClient(mainInventoryConn)
+	promotionServiceClient := providePromotionClient(mainPricingConn)
 	service := provideOrderService(db, client, logger, dtmClient, pricingServiceClient, inventoryServiceClient, promotionServiceClient)
 	server := provideGRPCServer(cfg, logger, service)
 	httpServer := provideHealthServer(cfg, db, logger)

@@ -76,6 +76,9 @@ Technology choices are kept:
 - Migration ledger: both the Compose init script and the Kubernetes migration
   image track `schema_migrations(filename, checksum, applied_at)`, skip applied
   files and fail on a changed checksum.
+- Wire tooling: `tools.go` pins the generator, `make wire` works from a clean
+  checkout (it immediately caught a stale order graph: the promotion client was
+  missing from `wire.go`), and CI now fails when committed `wire_gen.go` drifts.
 - BFF platformization: `internal/platform/bff` now owns recovery, timeouts,
   JSON binding with the 1 MiB cap, path/query parsing and downstream error
   mapping. This removed ~200 duplicated lines and fixed a real drift (admin
@@ -83,9 +86,6 @@ Technology choices are kept:
 
 ## Verified findings deferred to later phases
 
-- **CI tooling** (Phase 3): `make wire` cannot run from a clean checkout
-  because the Wire tool dependencies are absent from `go.sum`; provider changes
-  are mirrored into `wire_gen.go` manually. Add a `tools.go` and run it in CI.
 - **Internal authentication** (Phase 3): gRPC still trusts `user_id`/`admin`
   request fields (mesh-only trust). Needs an explicit decision.
 - **OpenAPI coverage** (Phase 3): 18 of 32 gateway routes are documented; the

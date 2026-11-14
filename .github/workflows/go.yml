@@ -61,6 +61,11 @@ jobs:
       - name: Build
         run: go build ./cmd/...
 
+      - name: Wire graph is current
+        run: |
+          make wire
+          git diff --exit-code -- cmd
+
       - name: Architecture guard
         run: ./scripts/check-architecture.sh
 

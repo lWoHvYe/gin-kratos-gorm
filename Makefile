@@ -156,7 +156,12 @@ dtm-contract:
 
 test-integration:
 	@test -n "$$TEST_MYSQL_DSN" || (echo "set TEST_MYSQL_DSN, e.g. root:root@tcp(127.0.0.1:3306)/mall_outbox_test?parseTime=true" >&2; exit 1)
-	$(GO) test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune' -count=1
+	@echo ">> outbox lease + relay (MySQL, NATS)"
+	TEST_NATS_URL=$${TEST_NATS_URL:-nats://127.0.0.1:4222} \
+		$(GO) test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune|TestAppend|TestRelay' -count=1
+	@echo ">> seckill admission Lua (Redis)"
+	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
+		$(GO) test ./internal/services/seckill -run TestReserveScript -count=1
 
 test-race:
 	$(GO) test -race ./internal/services/... ./internal/platform/...

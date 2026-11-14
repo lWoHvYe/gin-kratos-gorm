@@ -91,12 +91,25 @@ jobs:
           make proto
           git diff --exit-code -- api/gen
 
-      - name: Outbox lease integration tests
+      - name: Integration dependencies (NATS JetStream, Redis)
         run: |
-          TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/mall_outbox_test?parseTime=true' \
-            go test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune' -count=1
+          docker run -d --name nats -p 4222:4222 nats:2.10-alpine -js
+          docker run -d --name redis -p 6379:6379 redis:8.10.3-alpine
+          for i in $(seq 1 30); do
+            if nc -z 127.0.0.1 4222 && nc -z 127.0.0.1 6379; then break; fi
+            sleep 1
+          done
+          nc -z 127.0.0.1 4222
+          nc -z 127.0.0.1 6379
+
+      - name: Integration tests (MySQL, NATS, Redis)
         env:
-          MYSQL_ROOT_PASSWORD: root
+          TEST_MYSQL_DSN: root:root@tcp(127.0.0.1:3306)/mall_outbox_test?parseTime=true
+          TEST_NATS_URL: nats://127.0.0.1:4222
+          TEST_REDIS_ADDR: 127.0.0.1:6379
+        run: |
+          go test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune|TestAppend|TestRelay' -count=1
+          go test ./internal/services/seckill -run TestReserveScript -count=1
 
       - name: Vulnerability scan
         run: |

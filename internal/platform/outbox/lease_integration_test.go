@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
+
+	"gin-kratos-gorm/internal/platform/mq"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"go.opentelemetry.io/otel"
@@ -292,5 +295,75 @@ func TestAppendPersistsTraceparentForTheRelay(t *testing.T) {
 	}
 	if nullCount != 1 {
 		t.Fatalf("expected a NULL traceparent without a span, got %d", nullCount)
+	}
+}
+
+func natsClient(t *testing.T) *mq.Client {
+	t.Helper()
+	url := os.Getenv("TEST_NATS_URL")
+	if url == "" {
+		t.Skip("set TEST_NATS_URL to run relay integration tests")
+	}
+	client, err := mq.Connect(url)
+	if err != nil {
+		t.Fatalf("connect nats: %v", err)
+	}
+	t.Cleanup(client.Close)
+	return client
+}
+
+func TestRelayPublishesAndMarks(t *testing.T) {
+	db := integrationDB(t)
+	client := natsClient(t)
+	ctx := context.Background()
+	subject := fmt.Sprintf("shop.test.outbox.%d", time.Now().UnixNano())
+	id := insertEvent(t, db, "relay-"+subject)
+	if _, err := db.Exec("UPDATE outbox_events SET topic = ? WHERE id = ?", subject, id); err != nil {
+		t.Fatal(err)
+	}
+	n, err := relayOnce(ctx, db, client, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("published %d, want 1", n)
+	}
+	var published sql.NullTime
+	if err := db.QueryRow("SELECT published_at FROM outbox_events WHERE id = ?", id).Scan(&published); err != nil {
+		t.Fatal(err)
+	}
+	if !published.Valid {
+		t.Fatal("row was not marked published")
+	}
+	msg, err := client.JS.GetLastMsg("MALL", subject)
+	if err != nil {
+		t.Fatalf("message missing from stream: %v", err)
+	}
+	if len(msg.Data) == 0 {
+		t.Fatal("published message has no payload")
+	}
+}
+
+func TestRelayPublishFailureBacksOff(t *testing.T) {
+	db := integrationDB(t)
+	client := natsClient(t)
+	// A closed client makes PublishMsg fail without touching the server.
+	client.Close()
+	id := insertEvent(t, db, "relay-failure")
+	n, err := relayOnce(context.Background(), db, client, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("published %d on a closed client", n)
+	}
+	var attempts int
+	var next sql.NullTime
+	var lease sql.NullString
+	if err := db.QueryRow("SELECT attempts, next_attempt_at, lease_owner FROM outbox_events WHERE id = ?", id).Scan(&attempts, &next, &lease); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 || !next.Valid || lease.Valid {
+		t.Fatalf("attempts=%d next=%v lease=%v", attempts, next.Valid, lease.Valid)
 	}
 }

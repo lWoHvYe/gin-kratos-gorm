@@ -126,9 +126,9 @@ upgrade triggers for a per-user signed context.
   DENY for system RPCs must be validated in staging before enabling.
 - **Startup retry**: `db.OpenWithPool` retries with a background context, so a
   shutdown during startup is not honoured (bounded to ~55s).
-- **Fault-injection tests**: the outbox lease now has MySQL-backed integration
-  tests (claim races, foreign owner, backoff/dead-letter, pruning) running in
-  CI. Chaos scenarios (NATS loss, Redis failover, slow downstreams) still need
-  a staging environment.
+- **Fault-injection tests**: integration coverage now includes the outbox lease
+  and relay against MySQL + NATS (including a publish failure/backoff path) and
+  the seckill admission Lua against Redis. Service-level chaos (NATS partition,
+  Redis failover, slow downstreams) still needs a staging environment.
 - **Checkout crash window**: coupon/promotion reservation happens before the
   saga submit; the window needs a failing test before changing.

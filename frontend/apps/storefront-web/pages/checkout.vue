@@ -32,6 +32,15 @@ onMounted(async () => {
   } catch (err) { message.value = err instanceof Error ? err.message : '结算预览失败' }
 })
 
+const clientRequestId = useState('checkout-request-id', () => newRequestId())
+
+function newRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `web-${crypto.randomUUID()}`
+  }
+  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 async function place(): Promise<void> {
   if (!quote.value || !addressId.value) return
   loading.value = true
@@ -40,12 +49,20 @@ async function place(): Promise<void> {
     const placed = await request<PlaceReply>('/api/v1/checkout/place', {
       method: 'POST', body: {
         quote_id: quote.value.quote_id, address_id: addressId.value,
-        client_request_id: `web-${Date.now()}`,
+        client_request_id: clientRequestId.value,
       },
     })
-    await request(`/api/v1/payments/${placed.payment.payment_no}/pay`, {
-      method: 'POST', body: { amount_cent: placed.payment.amount_cent },
-    })
+    // The payment intent amount is authoritative; do not send an amount here.
+    // Mock pay is disabled in production, so a missing route means "go pay via
+    // the real channel" rather than a failed checkout.
+    try {
+      await request(`/api/v1/payments/${placed.payment.payment_no}/pay`, { method: 'POST', body: {} })
+    } catch (err) {
+      const status = (err as { response?: { status?: number }; statusCode?: number })?.response?.status
+        ?? (err as { statusCode?: number })?.statusCode
+      if (status !== 404) throw err
+    }
+    clientRequestId.value = newRequestId()
     await router.push('/orders')
   } catch (err) { message.value = err instanceof Error ? err.message : '下单失败' } finally { loading.value = false }
 }
@@ -73,8 +90,8 @@ async function place(): Promise<void> {
         <div v-for="line in quote.lines" :key="line.sku_id" class="line"><span>{{ line.name }} × {{ line.quantity }}</span><span>¥{{ ((line.price_cent * line.quantity - line.discount_cent) / 100).toFixed(2) }}</span></div>
         <div class="totals">
           <div><span>商品</span><span>¥{{ (quote.total_cent / 100).toFixed(2) }}</span></div>
-          <div><span>促销优惠</span><span>-¥{{ (quote.promotion_discount_cent / 100).toFixed(2) }}</span></div>
-          <div><span>优惠券</span><span>-¥{{ (quote.coupon_discount_cent / 100).toFixed(2) }}</span></div>
+          <div><span>促销优惠</span><span>-¥{{ ((quote.promotion_discount_cent ?? 0) / 100).toFixed(2) }}</span></div>
+          <div><span>优惠券</span><span>-¥{{ ((quote.coupon_discount_cent ?? 0) / 100).toFixed(2) }}</span></div>
           <div><span>运费</span><span>¥{{ (quote.freight_cent / 100).toFixed(2) }}</span></div>
           <div class="grand"><span>应付</span><span>¥{{ (quote.pay_cent / 100).toFixed(2) }}</span></div>
         </div>

@@ -11,6 +11,7 @@ var envKeys = []string{
 	"APP_ENV", "GRPC_ADDR", "HTTP_ADDR", "MYSQL_DSN",
 	"REDIS_MODE", "REDIS_ADDR", "REDIS_ADDRS", "REDIS_MASTER_NAME", "REDIS_PASSWORD",
 	"MYSQL_MAX_OPEN_CONNS", "MYSQL_MAX_IDLE_CONNS",
+	"PAYMENT_SECRET", "PAYMENT_MOCK_ENABLED", "SECKILL_TOKEN_SECRET",
 	"NATS_URL", "DTM_ADDRESS", "JWT_SECRET", "JWT_ISSUER",
 	"JWT_ACCESS_TTL", "JWT_REFRESH_TTL",
 	"ETCD_ENDPOINTS", "CONFIG_ETCD_PATH",
@@ -155,5 +156,84 @@ func TestSplitCSV(t *testing.T) {
 	got := splitCSV(" a , ,b,")
 	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("splitCSV = %v", got)
+	}
+}
+
+func TestProductionRequiresRealJWTSecret(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("APP_ENV", "production")
+	_, err := Load("order")
+	if err == nil || !strings.Contains(err.Error(), "JWT_SECRET") {
+		t.Fatalf("err = %v", err)
+	}
+	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	if _, err := Load("order"); err != nil {
+		t.Fatalf("valid secret rejected: %v", err)
+	}
+}
+
+func TestProductionSeckillNeedsOwnTokenSecret(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	if _, err := Load("seckill"); err == nil || !strings.Contains(err.Error(), "SECKILL_TOKEN_SECRET") {
+		t.Fatalf("err = %v", err)
+	}
+	t.Setenv("SECKILL_TOKEN_SECRET", "0123456789abcdef0123456789abcdef")
+	if _, err := Load("seckill"); err == nil || !strings.Contains(err.Error(), "must differ") {
+		t.Fatalf("err = %v", err)
+	}
+	t.Setenv("SECKILL_TOKEN_SECRET", "fedcba9876543210fedcba9876543210")
+	if _, err := Load("seckill"); err != nil {
+		t.Fatalf("valid seckill secret rejected: %v", err)
+	}
+}
+
+func TestProductionPaymentRequiresSecretUnlessMock(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	if _, err := Load("payment"); err == nil || !strings.Contains(err.Error(), "PAYMENT_SECRET") {
+		t.Fatalf("err = %v", err)
+	}
+	t.Setenv("PAYMENT_SECRET", "callback-secret")
+	if _, err := Load("payment"); err != nil {
+		t.Fatalf("valid payment secret rejected: %v", err)
+	}
+	// Explicit mock mode in production is allowed but must not be the default.
+	clearConfigEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	t.Setenv("PAYMENT_MOCK_ENABLED", "true")
+	if c, err := Load("payment"); err != nil || !c.PaymentMockEnabled {
+		t.Fatalf("mock opt-in failed: %v %+v", err, c)
+	}
+}
+
+func TestDevKeepsMockPaymentsAndSharedSeckillSecret(t *testing.T) {
+	clearConfigEnv(t)
+	c, err := Load("seckill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.PaymentMockEnabled {
+		t.Fatal("dev should default to mock payments")
+	}
+	if c.SeckillTokenSecret != "" {
+		t.Fatal("dev may leave SECKILL_TOKEN_SECRET empty (falls back to JWT)")
+	}
+}
+
+func TestProductionDefaultsMockPaymentsOff(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	t.Setenv("PAYMENT_SECRET", "callback-secret")
+	c, err := Load("gateway")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.PaymentMockEnabled {
+		t.Fatal("production must default mock payments off")
 	}
 }

@@ -73,9 +73,19 @@ kubectl -n mall create secret generic mall-mysql-credentials \
 # redis.password; create the matching Secret in the mall namespace.
 kubectl -n mall create secret generic redis-credentials \
   --from-literal=password='<redis-password>'
+
+# Application secrets. Production mode refuses to start with the dev JWT
+# default, and the payment service refuses to start without a callback secret
+# because mock payments are off in this profile.
+kubectl -n mall create secret generic mall-secrets \
+  --from-literal=jwt-secret="$(openssl rand -hex 32)" \
+  --from-literal=seckill-token-secret="$(openssl rand -hex 32)" \
+  --from-literal=payment-secret="$(openssl rand -hex 32)"
 ```
 
-`/secure/mall-ha-secrets.yaml` (not in git):
+The HA overlay sets `appEnv: production`, disables the mock pay route
+(`payment.mockEnabled: "false"`) and reads all three keys from `mall-secrets`.
+`/secure/mall-ha-secrets.yaml` only carries the Redis password (not in git):
 
 ```yaml
 redis:

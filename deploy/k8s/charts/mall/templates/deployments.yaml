@@ -131,6 +131,19 @@ spec:
             - name: ORDER_DTM_URL
               value: "order:9006/mall.v1.OrderService"
             {{- end }}
+            {{- if or (eq $name "gateway") (eq $name "payment") }}
+            - name: PAYMENT_MOCK_ENABLED
+              value: {{ $.Values.payment.mockEnabled | quote }}
+            {{- end }}
+            {{- if eq $name "seckill" }}
+            {{- with $.Values.seckill.tokenSecretName }}
+            - name: SECKILL_TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.seckill.tokenSecretKey | default "seckill-token-secret" }}
+            {{- end }}
+            {{- end }}
             {{- if eq $name "payment" }}
             - name: ORDER_ADDR
               value: "order:9006"
@@ -148,7 +161,13 @@ spec:
               value: "pricing:9005/mall.v1.PricingService"
             - name: PAYMENT_TCC_ENABLED
               value: {{ $.Values.payment.tccEnabled | quote }}
-            {{- if $.Values.payment.secret }}
+            {{- if $.Values.payment.existingSecret }}
+            - name: PAYMENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.payment.existingSecret }}
+                  key: {{ $.Values.payment.existingSecretKey | default "payment-secret" }}
+            {{- else if $.Values.payment.secret }}
             - name: PAYMENT_SECRET
               value: {{ $.Values.payment.secret | quote }}
             {{- end }}

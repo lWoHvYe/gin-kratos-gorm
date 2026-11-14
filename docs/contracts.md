@@ -216,5 +216,6 @@ exclusivity and a hard stack cap are enforced. Budget reservation is
 idempotent by `(order_no, rule_id)` and uses a budget ledger; `0` budget means
 unlimited. Coupons remain separate instruments but participate through the
 `coupon_applied` context and `allow_with_coupon` rule flag. Activity type
-`SECKILL` is reserved for a future execution adapter; no seckill stock/queue is
-implemented in Phase 2.
+`SECKILL` is executed by the dedicated seckill service; see
+[seckill.md](services/seckill.md) for S1-S4 (bucket, Redis admission, JetStream
+worker and payment linkage).

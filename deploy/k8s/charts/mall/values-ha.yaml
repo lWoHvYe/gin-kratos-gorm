@@ -11,6 +11,22 @@
 appEnv: production
 logLevel: info
 
+jwt:
+  # Production must not use the dev secret. Create mall-secrets with
+  # jwt-secret/seckill-token-secret/payment-secret before installing.
+  existingSecret: mall-secrets
+  devSecret: ""
+
+payment:
+  # Mock pay route and unsigned callbacks stay off in production.
+  mockEnabled: "false"
+  existingSecret: mall-secrets
+  existingSecretKey: payment-secret
+
+seckill:
+  tokenSecretName: mall-secrets
+  tokenSecretKey: seckill-token-secret
+
 network:
   # Default-deny egress blocks off-cluster traffic, including the external DB.
   # Narrow this to the database subnet (or the managed-service endpoints).

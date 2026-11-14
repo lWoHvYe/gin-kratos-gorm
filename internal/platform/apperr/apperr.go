@@ -66,7 +66,11 @@ func IsCode(err error, code Code) bool {
 	return errors.As(err, &ae) && ae.Code == code
 }
 func HTTPStatus(err error) int {
-	switch From(err).Code {
+	ae := From(err)
+	if ae == nil {
+		return http.StatusInternalServerError
+	}
+	switch ae.Code {
 	case CodeInvalidArgument:
 		return http.StatusBadRequest
 	case CodeUnauthenticated:

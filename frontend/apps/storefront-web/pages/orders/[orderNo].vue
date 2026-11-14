@@ -25,14 +25,14 @@ async function act(path: string, body: Record<string, unknown> = {}): Promise<vo
       <div class="order-head"><span class="mono">{{ order.order_no }}</span><van-tag type="primary">{{ order.status }}</van-tag></div>
       <div class="muted">{{ new Date(order.created_at_unix * 1000).toLocaleString() }}</div>
       <h3>商品</h3>
-      <div v-for="item in order.items" :key="item.sku_id" class="line"><span>{{ item.name }} × {{ item.quantity }}</span><span>¥{{ ((item.price_cent * item.quantity - item.discount_cent) / 100).toFixed(2) }}</span></div>
+      <div v-for="item in order.items" :key="item.sku_id" class="line"><span>{{ item.name }} × {{ item.quantity }}</span><span>¥{{ (((item.price_cent ?? 0) * item.quantity - (item.discount_cent ?? 0)) / 100).toFixed(2) }}</span></div>
       <div class="totals">
-        <div><span>商品</span><span>¥{{ (order.total_cent / 100).toFixed(2) }}</span></div>
-        <div><span>促销优惠</span><span>-¥{{ (order.promotion_discount_cent / 100).toFixed(2) }}</span></div>
-        <div><span>总优惠</span><span>-¥{{ (order.discount_cent / 100).toFixed(2) }}</span></div>
-        <div><span>运费</span><span>¥{{ (order.freight_cent / 100).toFixed(2) }}</span></div>
-        <div class="grand"><span>应付</span><span>¥{{ (order.pay_cent / 100).toFixed(2) }}</span></div>
-        <div v-if="order.refunded_cent"><span>已退款</span><span>¥{{ (order.refunded_cent / 100).toFixed(2) }}</span></div>
+        <div><span>商品</span><span>¥{{ ((order.total_cent ?? 0) / 100).toFixed(2) }}</span></div>
+        <div><span>促销优惠</span><span>-¥{{ ((order.promotion_discount_cent ?? 0) / 100).toFixed(2) }}</span></div>
+        <div><span>总优惠</span><span>-¥{{ ((order.discount_cent ?? 0) / 100).toFixed(2) }}</span></div>
+        <div><span>运费</span><span>¥{{ ((order.freight_cent ?? 0) / 100).toFixed(2) }}</span></div>
+        <div class="grand"><span>应付</span><span>¥{{ ((order.pay_cent ?? 0) / 100).toFixed(2) }}</span></div>
+        <div v-if="order.refunded_cent"><span>已退款</span><span>¥{{ ((order.refunded_cent ?? 0) / 100).toFixed(2) }}</span></div>
       </div>
       <h3>收货信息</h3>
       <p>{{ order.receiver_name }} {{ order.receiver_phone }}</p>

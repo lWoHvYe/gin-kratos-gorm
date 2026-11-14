@@ -12,10 +12,12 @@ import (
 	"gin-kratos-gorm/internal/platform/metrics"
 
 	"github.com/gin-gonic/gin"
+	"google.golang.org/protobuf/proto"
 )
 
 const RequestIDHeader = "X-Request-ID"
 const requestIDKey = "request_id"
+const loggerKey = "logger"
 
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -31,7 +33,11 @@ func RequestID() gin.HandlerFunc {
 func RequestIDFrom(c *gin.Context) string { v, _ := c.Get(requestIDKey); s, _ := v.(string); return s }
 
 func AccessLog(logger *slog.Logger) gin.HandlerFunc {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return func(c *gin.Context) {
+		c.Set(loggerKey, logger)
 		start := time.Now()
 		c.Next()
 		path := c.FullPath()
@@ -47,17 +53,51 @@ func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 	}
 }
 
+func loggerFrom(c *gin.Context) *slog.Logger {
+	if v, ok := c.Get(loggerKey); ok {
+		if l, ok := v.(*slog.Logger); ok && l != nil {
+			return l
+		}
+	}
+	return slog.Default()
+}
+
 func Error(c *gin.Context, err error) {
 	ae := apperr.From(err)
+	if ae == nil {
+		ae = apperr.Internal("internal error", err)
+	}
+	code := string(ae.Code)
+	metrics.Errors.WithLabelValues("http", code).Inc()
+	// 5xx root causes are logged with their chain; the client still receives a
+	// redacted message. 4xx stays at debug to keep auth noise out of the log.
+	if ae.Code == apperr.CodeInternal || ae.Code == apperr.CodeUnavailable {
+		loggerFrom(c).Error("http error", "code", code, "path", c.FullPath(),
+			"request_id", RequestIDFrom(c), "error", err)
+	} else {
+		loggerFrom(c).Debug("http error", "code", code, "path", c.FullPath(),
+			"request_id", RequestIDFrom(c), "error", err)
+	}
 	msg := ae.Message
 	if ae.Code == apperr.CodeInternal {
 		msg = "internal server error"
 	}
-	c.AbortWithStatusJSON(apperr.HTTPStatus(err), gin.H{"code": ae.Code, "message": msg, "request_id": RequestIDFrom(c)})
+	c.AbortWithStatusJSON(apperr.HTTPStatus(err), gin.H{"code": code, "message": msg, "request_id": RequestIDFrom(c)})
 }
 
-func OK(c *gin.Context, data any)      { c.JSON(http.StatusOK, data) }
-func Created(c *gin.Context, data any) { c.JSON(http.StatusCreated, data) }
+// OK and Created serialize protobuf replies through ProtoToMap so the contract
+// always contains zero-valued fields. Non-protobuf payloads (gin.H, DTOs) pass
+// through unchanged.
+func OK(c *gin.Context, data any)      { writeJSON(c, http.StatusOK, data) }
+func Created(c *gin.Context, data any) { writeJSON(c, http.StatusCreated, data) }
+
+func writeJSON(c *gin.Context, status int, data any) {
+	if msg, ok := data.(proto.Message); ok {
+		c.JSON(status, ProtoToMap(msg))
+		return
+	}
+	c.JSON(status, data)
+}
 
 func Auth(manager *auth.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {

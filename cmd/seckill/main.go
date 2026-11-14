@@ -82,9 +82,11 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	tokenSecret := os.Getenv("SECKILL_TOKEN_SECRET")
+	tokenSecret := cfg.SeckillTokenSecret
 	if tokenSecret == "" {
+		// Dev fallback only; production validation rejects an empty value.
 		tokenSecret = cfg.JWTSecret
+		logger.Warn("SECKILL_TOKEN_SECRET is unset; falling back to the JWT secret (dev only)")
 	}
 	svc := seckill.New(database, inventory, orders, payment, client, cache, logger, tokenSecret)
 	go svc.RunScheduler(ctx, 5*time.Second)

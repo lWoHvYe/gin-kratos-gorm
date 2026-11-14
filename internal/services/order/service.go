@@ -549,6 +549,13 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	default:
 		return nil, apperr.Failed(fmt.Sprintf("order cannot be paid in status %s", record.Status))
 	}
+	// Validate the payment before touching inventory: confirming first and
+	// rejecting the amount afterwards leaves stock consumed for an order that
+	// stays PENDING (and is later cancelled by the expiry sweeper).
+	paidCent, err := paidAmount(record, req.GetPaidCent())
+	if err != nil {
+		return nil, err
+	}
 	// Confirm stock before marking the order paid. A paid order must never
 	// leave the reservation in HELD state where the expiry sweeper could
 	// release it and oversell the SKU. Confirm is idempotent, so a payment
@@ -568,13 +575,6 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 				return nil, apperr.Unavailable("confirm inventory before payment: "+err.Error(), err)
 			}
 		}
-	}
-	paidCent := req.GetPaidCent()
-	if paidCent <= 0 {
-		paidCent = record.PayCent
-	}
-	if paidCent > record.PayCent {
-		return nil, apperr.Invalid("paid_cent exceeds pay_cent")
 	}
 	paymentNo := strings.TrimSpace(req.GetPaymentNo())
 	operator := "payment"
@@ -626,12 +626,47 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 		return nil, apperr.NotFound("order not found")
 	}
 	if updated.Status != statusPaid {
-		return nil, apperr.Failed(fmt.Sprintf("order cannot be paid in status %s", updated.Status))
+		if updated.Status == statusCancelled {
+			// Stock was already confirmed for an order that a concurrent cancel
+			// closed. Return the captured money instead of leaving the caller
+			// with a silently consumed reservation.
+			s.refundCancelledAfterConfirm(ctx, updated, paidCent, paymentNo)
+		}
+		return nil, apperr.Conflict(fmt.Sprintf("order cannot be paid in status %s", updated.Status))
 	}
 	if paid {
 		s.afterPaid(ctx, updated)
 	}
 	return s.replyFor(ctx, s.db, updated)
+}
+
+// refundCancelledAfterConfirm asks the payment service to refund a capture whose
+// order was cancelled between the inventory confirm and the status CAS.
+func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *orderRecord, paidCent int64, paymentNo string) {
+	if paidCent <= 0 || paymentNo == "" {
+		s.log.Error("payment captured for cancelled order without refund details",
+			"order_no", record.OrderNo, "paid_cent", paidCent, "payment_no", paymentNo)
+		return
+	}
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		return outbox.Append(ctx, tx, outbox.Event{
+			Topic:         topicOrderRefundRequested,
+			AggregateType: "order",
+			AggregateID:   record.OrderNo,
+			EventType:     "order.refund_requested",
+			Payload: map[string]any{
+				"order_no":   record.OrderNo,
+				"payment_no": paymentNo,
+				"reason":     "order cancelled after inventory confirm",
+				"status":     record.Status,
+				"paid_cent":  paidCent,
+				"created_at": time.Now().Unix(),
+			},
+		})
+	})
+	if err != nil {
+		s.log.Error("emit refund for cancelled order", "order_no", record.OrderNo, "error", err)
+	}
 }
 
 // afterPaid confirms the inventory reservations and consumes the quote coupon.
@@ -1010,4 +1045,16 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// paidAmount validates the captured amount against the order before any side
+// effect runs. Keeping it pure makes the "validate first" contract testable.
+func paidAmount(record *orderRecord, paidCent int64) (int64, error) {
+	if paidCent <= 0 {
+		paidCent = record.PayCent
+	}
+	if paidCent > record.PayCent {
+		return 0, apperr.Invalid("paid_cent exceeds pay_cent")
+	}
+	return paidCent, nil
 }

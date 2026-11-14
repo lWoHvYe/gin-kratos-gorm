@@ -40,9 +40,21 @@ var (
 		Name: "mall_outbox_publish_errors_total",
 		Help: "Outbox publish attempts that failed and will be retried.",
 	})
+
+	// PaymentRefundEvents tracks compensation events consumed by payment.
+	PaymentRefundEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_payment_refund_events_total",
+		Help: "order.refund_requested events handled by payment, by result.",
+	}, []string{"result"})
+
+	// Errors counts handled errors by surface (grpc/http) and domain code.
+	Errors = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_errors_total",
+		Help: "Errors returned to callers, by surface and domain code.",
+	}, []string{"surface", "code"})
 )
 
 func init() {
 	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
-		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch)
+		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents, Errors)
 }

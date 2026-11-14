@@ -129,7 +129,15 @@ func targetFor(name string) string {
 
 // NewEngine builds the public gateway Gin engine. The routes under /api/v1 that
 // are not explicitly public require a valid bearer token.
-func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.Engine {
+// Options toggles BFF capabilities that must not be on in production.
+type Options struct {
+	// PaymentMockEnabled exposes POST /payments/:paymentNo/pay, which settles
+	// an intent with the mock channel. Production channels call the payment
+	// service directly with a signature.
+	PaymentMockEnabled bool
+}
+
+func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Options) *gin.Engine {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -170,7 +178,9 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	authed.GET("/orders/:orderNo", h.getOrder)
 	authed.POST("/orders/:orderNo/cancel", h.cancelOrder)
 	authed.POST("/orders/:orderNo/receive", h.receiveOrder)
-	authed.POST("/payments/:paymentNo/pay", h.pay)
+	if opts.PaymentMockEnabled {
+		authed.POST("/payments/:paymentNo/pay", h.pay)
+	}
 	authed.POST("/after-sales", h.createAfterSale)
 	authed.GET("/after-sales", h.listAfterSales)
 	authed.GET("/after-sales/:no", h.getAfterSale)
@@ -1053,9 +1063,12 @@ func (h *handlers) pay(c *gin.Context) {
 		httpx.Error(c, apperr.Failed("payment intent has expired"))
 		return
 	}
-	amount := in.AmountCent
-	if amount <= 0 {
-		amount = intent.GetAmountCent()
+	// The intent is authoritative. A client-supplied amount is only accepted
+	// when it matches, so a caller cannot pick how much is settled.
+	amount := intent.GetAmountCent()
+	if in.AmountCent > 0 && in.AmountCent != amount {
+		httpx.Error(c, apperr.Invalid("amount_cent does not match the payment intent"))
+		return
 	}
 	reply, err := h.clients.Payment.Callback(c.Request.Context(), &pb.CallbackRequest{
 		PaymentNo:  paymentNo,

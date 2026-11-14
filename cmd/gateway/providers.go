@@ -32,8 +32,10 @@ func provideAuth(cfg *config.Config) *auth.Manager {
 	return auth.NewManager(cfg)
 }
 
-func provideEngine(logger *slog.Logger, jwt *auth.Manager, clients *gateway.Clients) *gin.Engine {
-	return gateway.NewEngine(logger, jwt, clients)
+func provideEngine(cfg *config.Config, logger *slog.Logger, jwt *auth.Manager, clients *gateway.Clients) *gin.Engine {
+	return gateway.NewEngine(logger, jwt, clients, gateway.Options{
+		PaymentMockEnabled: cfg.PaymentMockEnabled,
+	})
 }
 
 func provideHTTPServer(engine *gin.Engine) *khttp.Server {

@@ -54,11 +54,19 @@ jwt:
   refreshTTL: 720h
   secretName: mall-secrets
   secretKey: jwt-secret
+  # Set existingSecret when the Secret is managed out of band. Production
+  # overlays must do this; the chart refuses to render devSecret there.
+  existingSecret: ""
   # Local-only default; override with an external Secret for anything real.
   devSecret: dev-only-change-me-32-characters
 
 payment:
   secret: ""
+  # Secret-managed callback key (key defaults to payment-secret).
+  existingSecret: ""
+  existingSecretKey: payment-secret
+  # The BFF mock-pay route requires this flag; production overlays disable it.
+  mockEnabled: "true"
   tccEnabled: "true"
 
 ingress:
@@ -86,6 +94,11 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
+
+seckill:
+  # Optional Secret holding SECKILL_TOKEN_SECRET (admission HMAC key).
+  tokenSecretName: ""
+  tokenSecretKey: seckill-token-secret
 
 services:
   gateway:

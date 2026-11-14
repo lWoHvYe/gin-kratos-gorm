@@ -72,7 +72,15 @@ async function pay(): Promise<void> {
   if (!qualification.value?.payment_no) return
   loading.value = true
   try {
-    await request(`/api/v1/payments/${qualification.value.payment_no}/pay`, { method: 'POST', body: { amount_cent: activity.value?.price_cent ?? 0 } })
+    // The intent amount is authoritative; the client must not choose it.
+    // A 404 means the mock pay route is off; the order stays pending payment.
+    try {
+      await request(`/api/v1/payments/${qualification.value.payment_no}/pay`, { method: 'POST', body: {} })
+    } catch (err) {
+      const status = (err as { response?: { status?: number }; statusCode?: number })?.response?.status
+        ?? (err as { statusCode?: number })?.statusCode
+      if (status !== 404) throw err
+    }
     await navigateTo(`/orders/${qualification.value.order_no}`)
   } catch (err) { message.value = err instanceof Error ? err.message : '支付失败' } finally { loading.value = false }
 }

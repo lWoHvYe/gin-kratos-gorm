@@ -2,15 +2,16 @@
 const form = reactive({ username: 'demo', password: 'user123' })
 const message = ref('')
 const loading = ref(false)
-const { token } = useApi()
+const { token, refreshToken } = useApi()
 const router = useRouter()
 const route = useRoute()
 async function submit(): Promise<void> {
   loading.value = true
   message.value = ''
   try {
-    const reply = await $fetch<{ access_token: string; user: { nickname: string } }>('/api/v1/auth/login', { method: 'POST', body: form })
+    const reply = await $fetch<{ access_token: string; refresh_token: string; user: { nickname: string } }>('/api/v1/auth/login', { method: 'POST', body: form })
     token.value = reply.access_token
+    refreshToken.value = reply.refresh_token
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     await router.push(redirect)
   } catch (err) {

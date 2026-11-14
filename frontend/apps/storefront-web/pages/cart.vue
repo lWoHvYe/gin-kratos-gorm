@@ -23,7 +23,7 @@ async function remove(skuId: number): Promise<void> {
         <div><div class="name">{{ item.name }}</div><div class="muted">x{{ item.quantity }}</div></div>
         <div class="right"><span class="price">¥{{ ((item.price_cent * item.quantity) / 100).toFixed(2) }}</span><van-button size="small" plain type="danger" @click="remove(item.sku_id)">移除</van-button></div>
       </div>
-      <div class="total">合计 <span class="price">¥{{ (data?.total_cent ?? 0 / 100).toFixed(2) }}</span></div>
+      <div class="total">合计 <span class="price">¥{{ ((data?.total_cent ?? 0) / 100).toFixed(2) }}</span></div>
       <NuxtLink to="/checkout"><van-button type="primary" block style="margin-top:12px">去结算</van-button></NuxtLink>
     </div>
   </div>

@@ -19,6 +19,9 @@ const (
 const (
 	defaultMySQLMaxOpenConns = 30
 	defaultMySQLMaxIdleConns = 10
+	// DefaultDevJWTSecret is the shipped development secret. Production mode
+	// must override it; see validateSecrets.
+	DefaultDevJWTSecret = "dev-only-change-me-32-characters"
 )
 
 type Config struct {
@@ -33,13 +36,19 @@ type Config struct {
 	RedisPassword string
 	// RedisMasterName is the sentinel master set name; empty in the other modes.
 	RedisMasterName string
-	NATSURL         string
-	ETCDEndpoints   []string
-	DTMAddress      string
-	JWTSecret       string
-	JWTIssuer       string
-	AccessTTL       time.Duration
-	RefreshTTL      time.Duration
+	// PaymentSecret verifies payment channel callbacks. Empty means mock mode.
+	PaymentSecret string
+	// PaymentMockEnabled allows the BFF mock-pay route and unsigned callbacks.
+	PaymentMockEnabled bool
+	// SeckillTokenSecret signs admission tokens; must differ from JWTSecret.
+	SeckillTokenSecret string
+	NATSURL            string
+	ETCDEndpoints      []string
+	DTMAddress         string
+	JWTSecret          string
+	JWTIssuer          string
+	AccessTTL          time.Duration
+	RefreshTTL         time.Duration
 	// MySQLMaxOpenConns/MySQLMaxIdleConns bound each service's connection pool.
 	MySQLMaxOpenConns int
 	MySQLMaxIdleConns int
@@ -67,21 +76,22 @@ type etcdFile struct {
 
 func Load(service string) (*Config, error) {
 	c := &Config{
-		Service:           service,
-		Env:               "dev",
-		GRPCAddr:          ":9000",
-		HTTPAddr:          ":9100",
-		MySQLDSN:          "root:root@tcp(127.0.0.1:3306)/mall?parseTime=true&loc=Local&charset=utf8mb4",
-		RedisMode:         RedisModeStandalone,
-		RedisAddr:         "127.0.0.1:6379",
-		NATSURL:           "nats://127.0.0.1:4222",
-		DTMAddress:        "127.0.0.1:36790",
-		JWTSecret:         "dev-only-change-me-32-characters",
-		JWTIssuer:         "mall",
-		AccessTTL:         15 * time.Minute,
-		RefreshTTL:        720 * time.Hour,
-		MySQLMaxOpenConns: defaultMySQLMaxOpenConns,
-		MySQLMaxIdleConns: defaultMySQLMaxIdleConns,
+		Service:            service,
+		Env:                "dev",
+		GRPCAddr:           ":9000",
+		HTTPAddr:           ":9100",
+		MySQLDSN:           "root:root@tcp(127.0.0.1:3306)/mall?parseTime=true&loc=Local&charset=utf8mb4",
+		RedisMode:          RedisModeStandalone,
+		RedisAddr:          "127.0.0.1:6379",
+		NATSURL:            "nats://127.0.0.1:4222",
+		DTMAddress:         "127.0.0.1:36790",
+		JWTSecret:          DefaultDevJWTSecret,
+		PaymentMockEnabled: true,
+		JWTIssuer:          "mall",
+		AccessTTL:          15 * time.Minute,
+		RefreshTTL:         720 * time.Hour,
+		MySQLMaxOpenConns:  defaultMySQLMaxOpenConns,
+		MySQLMaxIdleConns:  defaultMySQLMaxIdleConns,
 	}
 	// Bootstrap endpoints are needed before the config center can be read.
 	if v := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS")); v != "" {
@@ -119,7 +129,33 @@ func Load(service string) (*Config, error) {
 		return nil, err
 	}
 	c.normalizePool()
+	if err := c.validateSecrets(); err != nil {
+		return nil, err
+	}
 	return c, nil
+}
+
+// validateSecrets makes production mode fail closed. Development keeps the
+// historical defaults so compose and unit tests start without configuration.
+func (c *Config) validateSecrets() error {
+	if c.Env == "dev" {
+		return nil
+	}
+	if c.JWTSecret == DefaultDevJWTSecret || len(c.JWTSecret) < 32 {
+		return fmt.Errorf("JWT_SECRET must be overridden (>=32 chars) when APP_ENV=%s", c.Env)
+	}
+	if c.Service == "seckill" {
+		if strings.TrimSpace(c.SeckillTokenSecret) == "" {
+			return fmt.Errorf("SECKILL_TOKEN_SECRET is required when APP_ENV=%s", c.Env)
+		}
+		if c.SeckillTokenSecret == c.JWTSecret {
+			return fmt.Errorf("SECKILL_TOKEN_SECRET must differ from JWT_SECRET")
+		}
+	}
+	if c.Service == "payment" && !c.PaymentMockEnabled && strings.TrimSpace(c.PaymentSecret) == "" {
+		return fmt.Errorf("PAYMENT_SECRET is required when mock payments are disabled (APP_ENV=%s)", c.Env)
+	}
+	return nil
 }
 
 // normalizeRedis resolves the endpoint list for the selected mode and rejects
@@ -252,6 +288,21 @@ func applyEnv(c *Config) {
 	}
 	if v := os.Getenv("MYSQL_MAX_IDLE_CONNS"); v != "" {
 		c.MySQLMaxIdleConns = EnvInt("MYSQL_MAX_IDLE_CONNS", c.MySQLMaxIdleConns)
+	}
+	if v := os.Getenv("PAYMENT_SECRET"); v != "" {
+		c.PaymentSecret = v
+	}
+	if v, ok := os.LookupEnv("PAYMENT_MOCK_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
+			c.PaymentMockEnabled = parsed
+		}
+	} else if c.Env != "dev" {
+		// Mock payments are a development capability; production must opt in
+		// explicitly and then also provide PAYMENT_SECRET.
+		c.PaymentMockEnabled = false
+	}
+	if v := os.Getenv("SECKILL_TOKEN_SECRET"); v != "" {
+		c.SeckillTokenSecret = v
 	}
 	if v := os.Getenv("NATS_URL"); v != "" {
 		c.NATSURL = v

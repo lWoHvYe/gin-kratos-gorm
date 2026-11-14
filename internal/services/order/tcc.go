@@ -143,9 +143,26 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 	if from != statusPendingPayment && from != statusPaid {
 		return &pb.Empty{}, nil
 	}
+
+	// Compensation refunds what was actually captured, never what is due.
 	paid := req.GetPaidCent()
 	if paid <= 0 {
 		paid = record.PaidCent
+	}
+	if paid > record.PaidCent {
+		return nil, apperr.Invalid("paid_cent exceeds captured amount")
+	}
+	switch tccCancelDecision(from, paid) {
+	case tccCancelLocal:
+		// Nothing was captured: cancel locally so order.cancelled releases the
+		// inventory hold. Parking an unpaid order in REFUNDING made it terminal
+		// and the refund consumer dropped zero-amount events.
+		return s.cancelPendingAfterTCC(ctx, record, req.GetPaymentNo())
+	case tccCancelKeepPaid:
+		// Fully discounted order: there is nothing to refund. Keep it paid
+		// instead of moving it to a terminal REFUNDING state.
+		s.log.Warn("payment tcc cancelled a zero-amount paid order", "order_no", orderNo)
+		return &pb.Empty{}, nil
 	}
 	err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
 		affected, err := updateOrderStatus(ctx, tx, orderNo, from, statusRefunding, paid)
@@ -186,5 +203,83 @@ func (s *Service) TccQueryMarkPaid(ctx context.Context, req *pb.TccPaymentReques
 		return &pb.TccQueryReply{Prepared: true}, nil
 	default:
 		return &pb.TccQueryReply{Prepared: false}, nil
+	}
+}
+
+// cancelPendingAfterTCC closes an unpaid order after the payment-confirm TCC
+// aborts. The durable order.cancelled event drives inventory and pricing
+// compensation, mirroring the normal cancel path.
+func (s *Service) cancelPendingAfterTCC(ctx context.Context, record *orderRecord, paymentNo string) (*pb.Empty, error) {
+	reason := "payment confirm tcc cancelled"
+	if paymentNo != "" {
+		reason = truncate(reason+" "+paymentNo, 255)
+	}
+	items, err := loadOrderItems(ctx, s.db, record.OrderNo)
+	if err != nil {
+		return nil, apperr.Internal("load order items for tcc cancel", err)
+	}
+	err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		affected, err := updateOrderStatus(ctx, tx, record.OrderNo, statusPendingPayment, statusCancelled, record.PaidCent)
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return nil
+		}
+		if err := insertStatusLog(ctx, tx, record.OrderNo, statusPendingPayment, statusCancelled, reason, "system"); err != nil {
+			return err
+		}
+		return outbox.Append(ctx, tx, outbox.Event{
+			Topic:         topicOrderCancelled,
+			AggregateType: "order",
+			AggregateID:   record.OrderNo,
+			EventType:     "order.cancelled",
+			Payload: map[string]any{
+				"order_no":     record.OrderNo,
+				"user_id":      record.UserID,
+				"quote_id":     record.QuoteID,
+				"reason":       reason,
+				"operator":     "system",
+				"status":       statusCancelled,
+				"cancelled_at": time.Now().Unix(),
+				"items":        orderItemsPayload(items),
+			},
+		})
+	})
+	if err != nil {
+		return nil, apperr.Internal("cancel unpaid order after tcc", err)
+	}
+	return &pb.Empty{}, nil
+}
+
+type tccCancelAction int
+
+const (
+	// tccCancelNone leaves a terminal order untouched.
+	tccCancelNone tccCancelAction = iota
+	// tccCancelLocal moves an unpaid order to CANCELLED.
+	tccCancelLocal
+	// tccCancelRefund moves a captured order to REFUNDING.
+	tccCancelRefund
+	// tccCancelKeepPaid leaves a zero-amount paid order alone.
+	tccCancelKeepPaid
+)
+
+// tccCancelDecision maps (status, captured amount) to the compensation path.
+// A PENDING order with no capture must be cancelled, not parked in REFUNDING.
+func tccCancelDecision(status string, paid int64) tccCancelAction {
+	switch status {
+	case statusPendingPayment:
+		if paid <= 0 {
+			return tccCancelLocal
+		}
+		return tccCancelRefund
+	case statusPaid:
+		if paid <= 0 {
+			return tccCancelKeepPaid
+		}
+		return tccCancelRefund
+	default:
+		return tccCancelNone
 	}
 }

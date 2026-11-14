@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { authApi, setAccessToken, type LoginUser } from '@mall/api'
+import { authApi, onTokenRefreshed, setAccessToken, setRefreshToken, type LoginUser } from '@mall/api'
 
 const STORAGE_KEY = 'mall.admin.session'
 
@@ -29,6 +29,12 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<LoginUser | null>(stored?.user ?? null)
   const busy = ref(false)
   setAccessToken(accessToken.value)
+  setRefreshToken(refreshToken.value)
+  onTokenRefreshed((access, refresh) => {
+    accessToken.value = access
+    refreshToken.value = refresh
+    persist()
+  })
 
   const isAuthenticated = computed(() => Boolean(accessToken.value && user.value))
   const isAdmin = computed(() => Boolean(user.value?.roles?.includes('admin')))
@@ -56,6 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
       refreshToken.value = reply.refresh_token
       user.value = reply.user
       setAccessToken(reply.access_token)
+      setRefreshToken(reply.refresh_token)
       persist()
     } finally {
       busy.value = false
@@ -78,6 +85,8 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken.value = ''
     refreshToken.value = ''
     user.value = null
+    setAccessToken('')
+    setRefreshToken('')
     setAccessToken('')
     sessionStorage.removeItem(STORAGE_KEY)
   }

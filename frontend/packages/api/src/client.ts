@@ -53,6 +53,7 @@ function baseURL(): string {
 }
 
 let accessToken = ''
+let refreshToken = ''
 
 export function setAccessToken(token: string): void {
   accessToken = token
@@ -60,6 +61,45 @@ export function setAccessToken(token: string): void {
 
 export function getAccessToken(): string {
   return accessToken
+}
+
+export function setRefreshToken(token: string): void {
+  refreshToken = token
+}
+
+type TokenRefreshedListener = (accessToken: string, refreshToken: string) => void
+let tokenRefreshedListener: TokenRefreshedListener | null = null
+
+// The store must persist rotated refresh tokens, otherwise a page reload would
+// resurrect a revoked token.
+export function onTokenRefreshed(listener: TokenRefreshedListener): void {
+  tokenRefreshedListener = listener
+}
+
+export function getRefreshToken(): string {
+  return refreshToken
+}
+
+// One refresh at a time: concurrent 401s share the same request so a rotating
+// refresh token is not spent twice.
+let refreshInFlight: Promise<string> | null = null
+
+async function refreshAccessToken(): Promise<string> {
+  if (!refreshToken) {
+    throw new ApiError('session expired', 'UNAUTHENTICATED', 401)
+  }
+  refreshInFlight ??= axios
+    .post<LoginReply>(baseURL() + '/api/v1/auth/refresh', { refresh_token: refreshToken }, { timeout: 15_000 })
+    .then(({ data }) => {
+      setAccessToken(data.access_token)
+      setRefreshToken(data.refresh_token)
+      tokenRefreshedListener?.(data.access_token, data.refresh_token)
+      return data.access_token
+    })
+    .finally(() => {
+      refreshInFlight = null
+    })
+  return refreshInFlight
 }
 
 function client(base: string): AxiosInstance {
@@ -72,9 +112,22 @@ function client(base: string): AxiosInstance {
   })
   instance.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
       const status = Number(error?.response?.status ?? 0)
       const body = (error?.response?.data ?? {}) as ApiErrorBody
+      const config = error?.config as (AxiosRequestConfig & { _retried?: boolean }) | undefined
+      const isAuthCall = String(config?.url ?? '').includes('/api/v1/auth/')
+      if (status === 401 && config && !config._retried && !isAuthCall) {
+        try {
+          const fresh = await refreshAccessToken()
+          config._retried = true
+          config.headers = { ...(config.headers ?? {}), Authorization: `Bearer ${fresh}` }
+          return instance.request(config)
+        } catch {
+          setAccessToken('')
+          setRefreshToken('')
+        }
+      }
       const message = body.message || error?.message || 'request failed'
       throw new ApiError(message, body.code || 'INTERNAL', status, body.request_id || '')
     },

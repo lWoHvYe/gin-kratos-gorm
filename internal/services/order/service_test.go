@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/apperr"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -292,5 +293,41 @@ func TestOrderItemsPayload(t *testing.T) {
 	}
 	if payload[0]["sku_id"] != int64(1) || payload[0]["quantity"] != int32(2) {
 		t.Fatalf("unexpected payload: %+v", payload[0])
+	}
+}
+
+func TestPaidAmountValidatesBeforeSideEffects(t *testing.T) {
+	record := &orderRecord{PayCent: 8_800}
+	if got, err := paidAmount(record, 0); err != nil || got != 8_800 {
+		t.Fatalf("default amount = %d, %v", got, err)
+	}
+	if got, err := paidAmount(record, 8_800); err != nil || got != 8_800 {
+		t.Fatalf("exact amount = %d, %v", got, err)
+	}
+	if _, err := paidAmount(record, 8_801); err == nil || !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("overpay err = %v", err)
+	}
+}
+
+func TestTccCancelDecision(t *testing.T) {
+	cases := []struct {
+		name   string
+		status string
+		paid   int64
+		want   tccCancelAction
+	}{
+		{"unpaid pending cancels locally", statusPendingPayment, 0, tccCancelLocal},
+		{"captured pending is refunded", statusPendingPayment, 100, tccCancelRefund},
+		{"paid order is refunded", statusPaid, 100, tccCancelRefund},
+		{"zero-amount paid stays paid", statusPaid, 0, tccCancelKeepPaid},
+		{"refunding is terminal", statusRefunding, 100, tccCancelNone},
+		{"cancelled is terminal", statusCancelled, 0, tccCancelNone},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tccCancelDecision(tc.status, tc.paid); got != tc.want {
+				t.Fatalf("tccCancelDecision(%q, %d) = %v, want %v", tc.status, tc.paid, got, tc.want)
+			}
+		})
 	}
 }

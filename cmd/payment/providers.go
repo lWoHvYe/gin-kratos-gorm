@@ -84,7 +84,10 @@ func providePricingConn(ctx context.Context) (*pricingConn, func(), error) {
 }
 
 func providePaymentService(database *sql.DB, client *mq.Client, order *orderConn, inventory *inventoryConn, pricing *pricingConn, cfg *config.Config, logger *slog.Logger) *payment.Service {
-	svc := payment.New(database, pb.NewOrderServiceClient(order.ClientConn), os.Getenv("PAYMENT_SECRET"), logger)
+	if cfg.PaymentMockEnabled && strings.TrimSpace(cfg.PaymentSecret) == "" {
+		logger.Warn("payment callbacks are unverified: mock mode without PAYMENT_SECRET; disable it outside dev")
+	}
+	svc := payment.New(database, pb.NewOrderServiceClient(order.ClientConn), cfg.PaymentSecret, logger)
 	svc.SetReconciliationClients(pb.NewInventoryServiceClient(inventory.ClientConn), pb.NewPricingServiceClient(pricing.ClientConn))
 	svc.EnableTCC(dtm.New(cfg),
 		envOr("ORDER_TCC_URL", "order:9006"),

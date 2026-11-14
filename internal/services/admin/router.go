@@ -150,6 +150,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	admin.GET("/inventory/stocks", h.listStocks)
 	admin.POST("/inventory/adjust", h.adjustStock)
 	admin.GET("/orders", h.listOrders)
+	admin.GET("/orders/:orderNo", h.getOrder)
 	admin.POST("/orders/:orderNo/cancel", h.cancelOrder)
 	admin.POST("/payments/:paymentNo/verify", h.verifyPayment)
 	admin.GET("/shipments", h.listShipments)
@@ -356,6 +357,22 @@ func (h *handlers) listOrders(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, orders)
+}
+
+// getOrder returns one order for the back office. The order service requires
+// Admin=true to skip the owner check.
+func (h *handlers) getOrder(c *gin.Context) {
+	orderNo := strings.TrimSpace(c.Param("orderNo"))
+	if orderNo == "" {
+		httpx.Error(c, apperr.Invalid("order_no is required"))
+		return
+	}
+	order, err := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: orderNo, Admin: true})
+	if err != nil {
+		httpx.Error(c, remoteError(err))
+		return
+	}
+	httpx.OK(c, order)
 }
 
 // createShipmentRequest is the body of POST /shipments. When "items" is omitted

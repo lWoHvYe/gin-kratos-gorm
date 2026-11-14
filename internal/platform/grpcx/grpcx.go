@@ -5,12 +5,14 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/metrics"
 
 	kratosmiddleware "github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/middleware/logging"
 	"github.com/go-kratos/kratos/v3/middleware/recovery"
+	"github.com/go-kratos/kratos/v3/transport"
 	kratosgrpc "github.com/go-kratos/kratos/v3/transport/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -20,7 +22,7 @@ func NewServer(logger *slog.Logger) *kratosgrpc.Server {
 	opts := []kratosgrpc.ServerOption{
 		kratosgrpc.Middleware(
 			recovery.Recovery(),
-			logging.Server(logger),
+			accessLog(logger),
 			errorMapper(),
 		),
 	}
@@ -28,6 +30,48 @@ func NewServer(logger *slog.Logger) *kratosgrpc.Server {
 		opts = append(opts, kratosgrpc.Address(addr))
 	}
 	return kratosgrpc.NewServer(opts...)
+}
+
+// accessLog records routing metadata only. Request and response payloads are
+// never logged: LoginRequest/RefreshRequest/CallbackRequest carry passwords,
+// refresh tokens and payment signatures.
+func accessLog(logger *slog.Logger) kratosmiddleware.Middleware {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return func(handler kratosmiddleware.Handler) kratosmiddleware.Handler {
+		return func(ctx context.Context, req any) (any, error) {
+			start := time.Now()
+			reply, err := handler(ctx, req)
+			operation := "unknown"
+			if tr, ok := transport.FromServerContext(ctx); ok {
+				operation = tr.Operation()
+			}
+			attrs := []any{
+				slog.String("kind", "server"),
+				slog.String("operation", operation),
+				slog.Float64("latency_ms", float64(time.Since(start).Milliseconds())),
+			}
+			if err != nil {
+				ae := apperr.From(err)
+				code := string(ae.Code)
+				attrs = append(attrs, slog.String("code", code))
+				metrics.Errors.WithLabelValues("grpc", code).Inc()
+				// The wrapped cause is logged here, before errorMapper replaces
+				// it with a bare gRPC status; otherwise 5xx root causes vanish.
+				attrs = append(attrs, slog.Any("error", err))
+				level := slog.LevelWarn
+				if ae.Code == apperr.CodeInternal || ae.Code == apperr.CodeUnavailable {
+					level = slog.LevelError
+				}
+				logger.Log(ctx, level, "grpc request", attrs...)
+				return reply, err
+			}
+			attrs = append(attrs, slog.String("code", "OK"))
+			logger.Log(ctx, slog.LevelInfo, "grpc request", attrs...)
+			return reply, nil
+		}
+	}
 }
 
 func errorMapper() kratosmiddleware.Middleware {

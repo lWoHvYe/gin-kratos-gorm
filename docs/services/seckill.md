@@ -77,13 +77,14 @@ GET  /api/v1/seckill/qualifications/:token
 The public reserve endpoint returns `202 Accepted`; sold-out is `409`, rate
 limit is `429`, and Redis/NATS unavailability is `503`.
 
-## Not yet implemented
+## Implemented after S2
 
-- JetStream command publishing/worker
-- `CreateSeckillOrder`
-- order/payment linkage after qualification
-- reconciliation worker
-- C-end seckill page
+- JetStream command publishing and the durable order worker
+  (`CreateSeckillOrder`).
+- Payment intent creation and the C-end seckill page.
+- Report-only reconciler, DLQ publish/replay and sold-out short cache.
+
+Remaining gaps are tracked in [../architecture-review.md](../architecture-review.md).
 
 ## Observability
 

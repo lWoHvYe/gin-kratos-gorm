@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/mq"
 
 	"github.com/nats-io/nats.go"
@@ -32,8 +33,18 @@ func RunRefundConsumer(ctx context.Context, client *mq.Client, svc *Service, log
 			_ = msg.Term()
 			return
 		}
-		if event.PaymentNo == "" || event.PaidCent <= 0 {
-			logger.Warn("order.refund_requested missing payment data", "order_no", event.OrderNo)
+		if event.PaidCent <= 0 {
+			// No money was captured (e.g. a zero-amount or cancelled-before-pay
+			// TCC branch). Acking is safe and avoids a poison loop; the order
+			// side no longer creates REFUNDING rows for this case.
+			metrics.PaymentRefundEvents.WithLabelValues("zero_amount").Inc()
+			logger.Warn("order.refund_requested without captured amount", "order_no", event.OrderNo)
+			_ = msg.Ack()
+			return
+		}
+		if event.PaymentNo == "" {
+			metrics.PaymentRefundEvents.WithLabelValues("invalid").Inc()
+			logger.Error("order.refund_requested missing payment_no", "order_no", event.OrderNo, "paid_cent", event.PaidCent)
 			_ = msg.Term()
 			return
 		}
@@ -42,10 +53,12 @@ func RunRefundConsumer(ctx context.Context, client *mq.Client, svc *Service, log
 			AmountCent: event.PaidCent,
 			Reason:     "order refund requested after TCC cancel",
 		}); err != nil {
+			metrics.PaymentRefundEvents.WithLabelValues("retry").Inc()
 			logger.Warn("refund order request", "order_no", event.OrderNo, "payment_no", event.PaymentNo, "error", err)
 			_ = msg.NakWithDelay(5 * time.Second)
 			return
 		}
+		metrics.PaymentRefundEvents.WithLabelValues("refunded").Inc()
 		_ = msg.Ack()
 	}
 	if _, err := client.JS.QueueSubscribe("shop.order.refund_requested.v1", "payment-refund", handler,

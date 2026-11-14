@@ -14,6 +14,11 @@ import (
 	"gin-kratos-gorm/internal/platform/mq"
 
 	"github.com/nats-io/nats.go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Config describes one durable subscription.
@@ -83,11 +88,25 @@ func Subscribe(ctx context.Context, client *mq.Client, logger *slog.Logger, cfg 
 	}
 
 	wrapped := func(msg *nats.Msg) {
-		// Detach from the worker context so a shutdown drain can finish, and
-		// bound each message independently.
-		hctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.HandlerTimeout)
+		// Continue the publisher's trace and bound each message independently.
+		// The worker context is detached so a shutdown drain can finish.
+		hctx := otel.GetTextMapPropagator().Extract(context.WithoutCancel(ctx), propagation.HeaderCarrier(msg.Header))
+		hctx, span := otel.Tracer("consumer").Start(hctx, "consume "+cfg.Subject,
+			trace.WithSpanKind(trace.SpanKindConsumer),
+			trace.WithAttributes(
+				attribute.String("messaging.system", "nats"),
+				attribute.String("messaging.destination", cfg.Subject),
+			))
+		defer span.End()
+		hctx, cancel := context.WithTimeout(hctx, cfg.HandlerTimeout)
 		defer cancel()
 		err := run(hctx, handler, msg)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
 		if err == nil {
 			metrics.ConsumerOutcomes.WithLabelValues(cfg.Subject, "ok").Inc()
 			_ = msg.Ack()

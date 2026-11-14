@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type Client struct {
@@ -58,14 +60,22 @@ func (c *Client) ensureStream() error {
 }
 
 func (c *Client) Publish(ctx context.Context, subject string, payload []byte) error {
+	msg := nats.NewMsg(subject)
+	msg.Data = payload
+	return c.PublishMsg(ctx, msg)
+}
+
+// PublishMsg publishes with W3C trace context in the message headers so an
+// asynchronous consumer can continue the trace.
+func (c *Client) PublishMsg(ctx context.Context, msg *nats.Msg) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
-	_, err := c.JS.Publish(subject, payload, nats.Context(ctx))
-	if err != nil {
-		return fmt.Errorf("publish %s: %w", subject, err)
+	injectTrace(ctx, msg.Header)
+	if _, err := c.JS.PublishMsg(msg, nats.Context(ctx)); err != nil {
+		return fmt.Errorf("publish %s: %w", msg.Subject, err)
 	}
 	return nil
 }
@@ -122,4 +132,9 @@ func streamReplicas() int {
 		return n
 	}
 	return 1
+}
+
+// injectTrace writes the W3C traceparent into NATS headers.
+func injectTrace(ctx context.Context, header nats.Header) {
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(header))
 }

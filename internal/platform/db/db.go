@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/XSAM/otelsql"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -16,6 +19,22 @@ const (
 	DefaultMaxOpenConns = 30
 	DefaultMaxIdleConns = 10
 )
+
+var (
+	driverOnce   sync.Once
+	driverName   = "mysql"
+	driverErr    error
+	statsMetrics sync.Once
+)
+
+// instrumentedDriver registers the MySQL driver once with OpenTelemetry spans.
+// It falls back to the plain driver if registration fails.
+func instrumentedDriver() (string, error) {
+	driverOnce.Do(func() {
+		driverName, driverErr = otelsql.Register("mysql")
+	})
+	return driverName, driverErr
+}
 
 // Open uses the default pool limits.
 func Open(dsn string) (*sql.DB, error) {
@@ -27,7 +46,11 @@ func Open(dsn string) (*sql.DB, error) {
 // idle connections are clamped to the open limit.
 func OpenWithPool(dsn string, maxOpen, maxIdle int) (*sql.DB, error) {
 	maxOpen, maxIdle = normalizePool(maxOpen, maxIdle)
-	db, err := sql.Open("mysql", dsn)
+	name, err := instrumentedDriver()
+	if err != nil {
+		return nil, fmt.Errorf("register otel mysql driver: %w", err)
+	}
+	db, err := sql.Open(name, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
 	}
@@ -38,6 +61,7 @@ func OpenWithPool(dsn string, maxOpen, maxIdle int) (*sql.DB, error) {
 		lastErr = db.PingContext(ctx)
 		cancel()
 		if lastErr == nil {
+			registerPoolMetrics(db)
 			return db, nil
 		}
 		select {
@@ -78,4 +102,48 @@ func WithTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// registerPoolMetrics exposes sql.DBStats on /metrics once per process. Each
+// service owns one database, so instance-level labels are added by Prometheus.
+func registerPoolMetrics(db *sql.DB) {
+	statsMetrics.Do(func() {
+		prometheus.MustRegister(poolCollector{db: db})
+	})
+}
+
+type poolCollector struct{ db *sql.DB }
+
+var (
+	poolOpenDesc = prometheus.NewDesc("mall_db_pool_open_connections",
+		"Open connections in the pool.", nil, nil)
+	poolInUseDesc = prometheus.NewDesc("mall_db_pool_in_use_connections",
+		"Connections currently in use.", nil, nil)
+	poolIdleDesc = prometheus.NewDesc("mall_db_pool_idle_connections",
+		"Idle connections in the pool.", nil, nil)
+	poolMaxOpenDesc = prometheus.NewDesc("mall_db_pool_max_open_connections",
+		"Configured maximum open connections.", nil, nil)
+	poolWaitCountDesc = prometheus.NewDesc("mall_db_pool_wait_count_total",
+		"Total waits for a connection.", nil, nil)
+	poolWaitDurationDesc = prometheus.NewDesc("mall_db_pool_wait_duration_seconds_total",
+		"Total time blocked waiting for a connection.", nil, nil)
+)
+
+func (c poolCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- poolOpenDesc
+	ch <- poolInUseDesc
+	ch <- poolIdleDesc
+	ch <- poolMaxOpenDesc
+	ch <- poolWaitCountDesc
+	ch <- poolWaitDurationDesc
+}
+
+func (c poolCollector) Collect(ch chan<- prometheus.Metric) {
+	stats := c.db.Stats()
+	ch <- prometheus.MustNewConstMetric(poolOpenDesc, prometheus.GaugeValue, float64(stats.OpenConnections))
+	ch <- prometheus.MustNewConstMetric(poolInUseDesc, prometheus.GaugeValue, float64(stats.InUse))
+	ch <- prometheus.MustNewConstMetric(poolIdleDesc, prometheus.GaugeValue, float64(stats.Idle))
+	ch <- prometheus.MustNewConstMetric(poolMaxOpenDesc, prometheus.GaugeValue, float64(stats.MaxOpenConnections))
+	ch <- prometheus.MustNewConstMetric(poolWaitCountDesc, prometheus.CounterValue, float64(stats.WaitCount))
+	ch <- prometheus.MustNewConstMetric(poolWaitDurationDesc, prometheus.CounterValue, stats.WaitDuration.Seconds())
 }

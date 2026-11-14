@@ -92,6 +92,10 @@ upgrade triggers for a per-user signed context.
 - Wire tooling: `tools.go` pins the generator, `make wire` works from a clean
   checkout (it immediately caught a stale order graph: the promotion client was
   missing from `wire.go`), and CI now fails when committed `wire_gen.go` drifts.
+- Tracing depth: SQL statements are spanned through `otelsql`, NATS publishes
+  carry `traceparent`, and durable consumers extract and continue the trace.
+- Pool observability: `sql.DBStats` is exported as `mall_db_pool_*` gauges and
+  counters.
 - Outbox lease relay: a short transaction claims a batch (`lease_owner`,
   `lease_until`), commits, then publishes outside the transaction; failures back
   off, dead-letter after 20 attempts, and an expired lease is reclaimed.
@@ -108,12 +112,13 @@ upgrade triggers for a per-user signed context.
 
 ## Verified findings deferred to later phases
 
-- **Tracing depth**: SQL statements and NATS message headers are not spanned;
-  asynchronous hops lose the trace unless the event carries `traceparent`.
+- **Tracing depth**: outbox relay publishes from a worker (original request
+  trace is lost unless stored), and DTM branch calls do not propagate
+  `traceparent`.
 - **Method-level AuthorizationPolicy**: current rules are service-prefixed; a
   DENY for system RPCs must be validated in staging before enabling.
-- **Connection-pool observability**: no `sql.DBStats` metrics (wait count,
-  wait duration, in-use/idle) and startup retry is not cancellable.
+- **Startup retry**: `db.OpenWithPool` retries with a background context, so a
+  shutdown during startup is not honoured (bounded to ~55s).
 - **Gateway handler layout**: `router.go` is still one file; handlers are not
   grouped by domain.
 - **Fault-injection tests**: no chaos/integration suite for NATS loss, relay

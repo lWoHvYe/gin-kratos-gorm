@@ -78,7 +78,7 @@ func (s *Service) publishQualification(ctx context.Context, q *qualification, a 
 	msg := nats.NewMsg(fmt.Sprintf("seckill.order.requested.%d", q.activityID))
 	msg.Data = payload
 	msg.Header.Set("Nats-Msg-Id", q.tokenHash)
-	if _, err := s.mq.JS.PublishMsg(msg, nats.Context(ctx)); err != nil {
+	if err := s.mq.PublishMsg(ctx, msg); err != nil {
 		return apperr.Unavailable("publish seckill order command", err)
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications SET published_at=NOW(3)

@@ -232,9 +232,25 @@ docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml \
 
 The Go services now export OTLP spans when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
 (for example `tempo:4317` with the tracing profile above). Sampling defaults to
-100%; set `OTEL_TRACES_SAMPLER_ARG` (0–1) to reduce it. HTTP and gRPC calls are
-instrumented, and `traceparent` propagates across service calls. With the
-endpoint empty the tracer stays a no-op, so local runs need no collector.
+100%; set `OTEL_TRACES_SAMPLER_ARG` (0–1) to reduce it. Instrumented hops:
+
+- HTTP (both BFFs) and gRPC servers/clients;
+- SQL statements through `otelsql` (each query is a child span);
+- NATS publishes carry `traceparent` in the message headers and durable
+  consumers continue the trace.
+
+Two known gaps: the outbox relay publishes from a background worker, so an
+event loses the original request trace unless its payload carries the context;
+and DTM drives branch calls with its own client, which does not propagate
+`traceparent` today.
+
+With the endpoint empty the tracer stays a no-op, so local runs need no
+collector. The database pool is exported regardless of tracing:
+
+```text
+mall_db_pool_open_connections / in_use / idle / max_open
+mall_db_pool_wait_count_total / wait_duration_seconds_total
+```
 
 CORS reflects any origin by default (dev). Set `CORS_ALLOWED_ORIGINS` to a
 comma-separated allowlist for shared environments; unknown origins receive no

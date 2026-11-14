@@ -169,7 +169,7 @@ func (s *Service) publishDLQ(ctx context.Context, cmd orderCommand, cause error)
 	msg := nats.NewMsg(fmt.Sprintf("seckill.order.dlq.%d", cmd.ActivityID))
 	msg.Data = payload
 	msg.Header.Set("Nats-Msg-Id", "dlq-"+cmd.TokenHash)
-	if _, err := s.mq.JS.PublishMsg(msg, nats.Context(ctx)); err != nil {
+	if err := s.mq.PublishMsg(ctx, msg); err != nil {
 		s.log.Error("publish seckill DLQ", "activity_id", cmd.ActivityID, "error", err)
 	}
 }

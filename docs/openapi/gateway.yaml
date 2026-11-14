@@ -501,3 +501,375 @@ paths:
                   activities:
                     type: array
                     items: { $ref: '#/components/schemas/SeckillActivity' }
+  /api/v1/addresses/{param}:
+    delete:
+      summary: Delete item
+      tags: [addresses]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    put:
+      summary: Update item
+      tags: [addresses]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/addresses/{param}/default:
+    post:
+      summary: Create default
+      tags: [addresses]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/after-sales/{param}:
+    get:
+      summary: Get item
+      tags: [after-sales]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/after-sales/{param}/return-tracking:
+    post:
+      summary: Create return-tracking
+      tags: [after-sales]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/auth/logout:
+    post:
+      summary: Create logout
+      tags: [auth]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/auth/refresh:
+    post:
+      summary: Create refresh
+      tags: [auth]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/auth/register:
+    post:
+      summary: Create register
+      tags: [auth]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/brands:
+    get:
+      summary: Get brands
+      tags: [brands]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/cart/items:
+    delete:
+      summary: Delete items
+      tags: [cart]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    patch:
+      summary: Update items
+      tags: [cart]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    post:
+      summary: Create items
+      tags: [cart]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/cart/merge:
+    post:
+      summary: Create merge
+      tags: [cart]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/categories:
+    get:
+      summary: Get categories
+      tags: [categories]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/orders/{param}:
+    get:
+      summary: Get item
+      tags: [orders]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/orders/{param}/cancel:
+    post:
+      summary: Create cancel
+      tags: [orders]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/orders/{param}/receive:
+    post:
+      summary: Create receive
+      tags: [orders]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/orders/{param}/shipments:
+    get:
+      summary: Get shipments
+      tags: [orders]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/payments/{param}/pay:
+    post:
+      summary: Create pay
+      tags: [payments]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/products/{param}:
+    get:
+      summary: Get item
+      tags: [products]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/seckill/activities/{param}:
+    get:
+      summary: Get item
+      tags: [seckill]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/seckill/activities/{param}/reserve:
+    post:
+      summary: Create reserve
+      tags: [seckill]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/seckill/qualifications/{param}:
+    get:
+      summary: Get item
+      tags: [seckill]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/v1/skus/{param}:
+    get:
+      summary: Get item
+      tags: [skus]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }

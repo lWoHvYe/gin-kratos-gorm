@@ -259,6 +259,19 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Category' }
   /api/admin/v1/brands:
+    post:
+      summary: Create brand
+      tags: [brands]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
     get:
       responses:
         '200':
@@ -575,3 +588,604 @@ paths:
                   replayed: { type: integer }
                   skipped: { type: integer }
                   errors: { type: string }
+  /api/admin/v1/after-sales:
+    get:
+      summary: Get after-sales
+      tags: [v1]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/after-sales/{param}/approve:
+    post:
+      summary: Create approve
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/after-sales/{param}/receive:
+    post:
+      summary: Create receive
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/after-sales/{param}/refund:
+    post:
+      summary: Create refund
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/brands/{param}:
+    delete:
+      summary: Delete item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    put:
+      summary: Update item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/campaigns/{param}:
+    put:
+      summary: Update item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/campaigns/{param}/status:
+    post:
+      summary: Create status
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/categories/{param}:
+    delete:
+      summary: Delete item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    put:
+      summary: Update item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/inventory/adjust:
+    post:
+      summary: Create adjust
+      tags: [v1]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/orders/{param}:
+    get:
+      summary: Get item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/orders/{param}/cancel:
+    post:
+      summary: Create cancel
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/payments/refunds:
+    get:
+      summary: Get refunds
+      tags: [v1]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/payments/{param}/verify:
+    post:
+      summary: Create verify
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/products/{param}:
+    delete:
+      summary: Delete item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    get:
+      summary: Get item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    put:
+      summary: Update item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/products/{param}/skus:
+    post:
+      summary: Create skus
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/products/{param}/status:
+    put:
+      summary: Update status
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/promotions/{param}:
+    put:
+      summary: Update item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/promotions/{param}/status:
+    post:
+      summary: Create status
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/seckill/activities/{param}:
+    get:
+      summary: Get item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    put:
+      summary: Update item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/seckill/activities/{param}/pause:
+    post:
+      summary: Create pause
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/seckill/activities/{param}/publish:
+    post:
+      summary: Create publish
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/seckill/activities/{param}/stock:
+    get:
+      summary: Get stock
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/seckill/activities/{param}/warmup:
+    post:
+      summary: Create warmup
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/shipments:
+    get:
+      summary: Get shipments
+      tags: [v1]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    post:
+      summary: Create shipments
+      tags: [v1]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/shipments/{param}:
+    get:
+      summary: Get item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/shipments/{param}/ship:
+    post:
+      summary: Create ship
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/skus/{param}:
+    delete:
+      summary: Delete item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    put:
+      summary: Update item
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/admin/v1/skus/{param}/status:
+    put:
+      summary: Update status
+      tags: [v1]
+      parameters:
+        - name: param
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }

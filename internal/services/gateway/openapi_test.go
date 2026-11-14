@@ -28,6 +28,10 @@ func TestOpenAPIDocumentedRoutesExist(t *testing.T) {
 
 	registered := make(map[string]bool, len(engine.Routes()))
 	for _, route := range engine.Routes() {
+		if !strings.HasPrefix(route.Path, "/api/v1/") {
+			// Health/metrics endpoints are infrastructure, not API contract.
+			continue
+		}
 		registered[route.Method+" "+normalizeParams(route.Path)] = true
 	}
 
@@ -39,6 +43,14 @@ func TestOpenAPIDocumentedRoutesExist(t *testing.T) {
 		if !registered[key] {
 			t.Errorf("documented route is not served: %s", key)
 		}
+	}
+	for key := range registered {
+		if !spec[key] {
+			t.Errorf("served route is not documented: %s", key)
+		}
+	}
+	if len(spec) != len(registered) {
+		t.Fatalf("route count: documented %d, served %d", len(spec), len(registered))
 	}
 }
 

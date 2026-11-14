@@ -33,7 +33,9 @@ func (s *Service) CreateSeckillOrder(ctx context.Context, req *pb.CreateSeckillO
 	if s.inventory == nil {
 		return nil, apperr.Unavailable("inventory client is not configured", nil)
 	}
-	orderNo := id.Order()
+	// Deterministic per qualification: a redelivered command must not create a
+	// second reservation for the same held unit.
+	orderNo := id.OrderForSeckill(tokenHash)
 	ttl := int64(orderExpireWindow.Seconds())
 	if _, err := s.inventory.CreateSeckillReservation(ctx, &pb.CreateSeckillReservationRequest{
 		ActivityId: req.GetActivityId(), OrderNo: orderNo, SkuId: req.GetSkuId(),
@@ -83,13 +85,17 @@ func (s *Service) CreateSeckillOrder(ctx context.Context, req *pb.CreateSeckillO
 		})
 	})
 	if err != nil {
-		_, _ = s.inventory.ReleaseSeckillReservation(ctx, &pb.ReleaseSeckillReservationRequest{OrderNo: orderNo, SkuId: req.GetSkuId()})
 		if errors.Is(err, errDuplicateOrder) {
+			// The order number is derived from the token, so the reservation
+			// belongs to the winner: never release it here. Return the winner
+			// (possibly committed by a concurrent delivery) instead.
 			winner, ferr := findOrderByClientRequest(ctx, s.db, req.GetUserId(), tokenHash)
 			if ferr == nil && winner != nil {
 				return s.replyFor(ctx, s.db, winner)
 			}
+			return nil, err
 		}
+		_, _ = s.inventory.ReleaseSeckillReservation(ctx, &pb.ReleaseSeckillReservationRequest{OrderNo: orderNo, SkuId: req.GetSkuId()})
 		return nil, err
 	}
 	created, err := findOrder(ctx, s.db, orderNo)

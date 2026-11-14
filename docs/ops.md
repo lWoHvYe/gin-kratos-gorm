@@ -118,7 +118,11 @@ Order of execution:
    `mall_aftersales`, `mall_admin`, `dtm`, `dtm_barrier`.
 2. `01-schemas.sh` walks `/migrations/<service>/*.sql` (mounted read-only from
    the repository), ensures `mall_<service>` exists, and applies files in
-   version order (`sort -V`) to that database.
+   version order (`sort -V`) to that database. Each database has a
+   `schema_migrations(filename, checksum, applied_at)` ledger: applied files are
+   skipped, and editing an applied file fails the job on its checksum. The
+   Kubernetes migration image (`deploy/k8s/images/migrate/run.sh`) uses the same
+   ledger, so Helm upgrades no longer replay DDL or data backfills.
 3. `02-dtm.sql` creates DTM's own store tables (`dtm.trans_global`,
    `dtm.trans_branch_op`, `dtm.kv`) and the shared `dtm_barrier.barrier`
    idempotency table.
@@ -131,8 +135,10 @@ docker compose -f deploy/compose/infra.yml exec mysql \
   bash /docker-entrypoint-initdb.d/01-schemas.sh
 ```
 
-The script is idempotent for `CREATE TABLE IF NOT EXISTS` migrations. Do not
-edit an already-applied migration; add a new numbered file.
+The ledger covers both runners. Do not edit an already-applied migration; add a
+new numbered file (the ledger fails the job when a checksum changes). A database
+that predates the ledger replays the existing files once (they are idempotent)
+and then records them.
 
 Reset everything (destroys all named volumes, including NATS/etcd/Prometheus):
 

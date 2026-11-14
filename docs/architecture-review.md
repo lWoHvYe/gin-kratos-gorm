@@ -68,12 +68,17 @@ Technology choices are kept:
 - Tracing: OpenTelemetry is wired into gRPC servers/clients and both BFFs, is
   opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` (Tempo is already provisioned in
   Compose), and propagates `traceparent` across service calls.
+- Seckill reservation idempotency: the order number is derived from the
+  qualification token, so a redelivered command reuses the same order and the
+  same `(order_no, sku_id)` reservation instead of creating a second one; a
+  unique `(activity_id, ref_no)` index is the database backstop. The duplicate
+  order path no longer releases the winner's reservation.
+- Migration ledger: both the Compose init script and the Kubernetes migration
+  image track `schema_migrations(filename, checksum, applied_at)`, skip applied
+  files and fail on a changed checksum.
 
 ## Verified findings deferred to later phases
 
-- **Seckill reservation idempotency** (Phase 3): the order-redelivery window can
-  create two reservations; needs a failing test plus a unique key on
-  `(activity_id, ref_no)`.
 - **CI tooling** (Phase 3): `make wire` cannot run from a clean checkout
   because the Wire tool dependencies are absent from `go.sum`; provider changes
   are mirrored into `wire_gen.go` manually. Add a `tools.go` and run it in CI.
@@ -83,8 +88,6 @@ Technology choices are kept:
   request fields (mesh-only trust). Needs an explicit decision.
 - **OpenAPI coverage** (Phase 3): 18 of 32 gateway routes are documented; the
   guard only prevents documented routes from disappearing.
-- **Migration ledger** (Phase 3): every deploy replays all migrations
-  (idempotent DDL + data backfills). Needs version+checksum tooling.
 - **Aftersales idempotency** (Phase 3): creation has no client key, so a double
   submit creates two after-sale rows (payment prevents a double payout).
 - **Security hardening** (Phase 3): no login rate limiting; internal gRPC still

@@ -81,3 +81,17 @@ frontend/playwright-report/
 frontend/.turbo/
 frontend/**/*.tsbuildinfo
 frontend/**/vite.config.ts.timestamp-*
+
+# Stray root-level binaries from `go build ./cmd/<service>` (no -o).
+/gateway
+/admin
+/identity
+/catalog
+/inventory
+/cart
+/pricing
+/order
+/payment
+/fulfillment
+/aftersales
+/seckill

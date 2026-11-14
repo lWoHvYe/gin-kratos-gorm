@@ -67,9 +67,21 @@ func (c *Client) Publish(ctx context.Context, subject string, payload []byte) er
 }
 
 func (c *Client) Close() {
-	if c != nil && c.Conn != nil {
-		c.Conn.Close()
+	if c == nil || c.Conn == nil {
+		return
 	}
+	// Drain waits for in-flight handlers and flushes pending publishes. Bound
+	// it so a stuck handler cannot hold a rolling update forever.
+	done := make(chan struct{})
+	go func() {
+		_ = c.Conn.Drain()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+	}
+	c.Conn.Close()
 }
 
 // streamReplicas is opt-in: NATS_STREAM_REPLICAS=3 creates the durable MALL

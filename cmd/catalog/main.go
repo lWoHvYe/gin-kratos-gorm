@@ -48,7 +48,7 @@ func main() {
 	go outbox.Relay(ctx, database, client, logger, time.Second)
 	svc := catalog.New(database, client, cache, logger)
 	go catalog.RunStockConsumer(ctx, client, svc, logger)
-	gs := grpcx.NewServer(logger)
+	gs := grpcx.NewServer(cfg, logger)
 	pb.RegisterCatalogServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {

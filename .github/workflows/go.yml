@@ -1,0 +1,80 @@
+name: Go
+
+on:
+  push:
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "api/**"
+      - "migrations/**"
+      - "scripts/**"
+      - "Makefile"
+      - ".github/workflows/go.yml"
+  pull_request:
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "api/**"
+      - "migrations/**"
+      - "scripts/**"
+      - "Makefile"
+      - ".github/workflows/go.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.1"
+          cache: true
+
+      # Committed api/gen must match api/proto; the plugins are pinned to the
+      # versions in the generated file headers.
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "36.2"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Format
+        run: |
+          unformatted="$(gofmt -l cmd internal api/gen 2>/dev/null || true)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt required for:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit tests
+        run: go test ./...
+
+      - name: Race tests
+        run: go test -race ./internal/...
+
+      - name: Build
+        run: go build ./cmd/...
+
+      - name: Architecture guard
+        run: ./scripts/check-architecture.sh
+
+      - name: DTM contract guard
+        run: ./scripts/check-dtm-contract.sh
+
+      - name: Generated protobuf is current
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+          make proto
+          git diff --exit-code -- api/gen
+
+      - name: Vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

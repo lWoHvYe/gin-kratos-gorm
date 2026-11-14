@@ -95,8 +95,8 @@ func provideOrderService(database *sql.DB, client *mq.Client, logger *slog.Logge
 	return order.New(database, client, logger, dtmClient, pricing, inventory, promotion)
 }
 
-func provideGRPCServer(logger *slog.Logger, svc *order.Service) *kratosgrpc.Server {
-	gs := grpcx.NewServer(logger)
+func provideGRPCServer(cfg *config.Config, logger *slog.Logger, svc *order.Service) *kratosgrpc.Server {
+	gs := grpcx.NewServer(cfg, logger)
 	pb.RegisterOrderServiceServer(gs, svc)
 	return gs
 }

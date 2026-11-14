@@ -201,13 +201,14 @@ fall back to local transactions. DTM calls branches by direct service DNS.
 
 Core metrics are exposed by each service on `/metrics`; Prometheus scrapes:
 
-- all nine gRPC services on `9101`–`9109`;
+- all ten gRPC services on `9101`–`9110` (including seckill);
+- the gateway/admin BFFs on `8080`/`8081`;
 - DTM on `dtm:36789/api/metrics`;
 - NATS on `nats:8222/metrics`;
 - etcd on `etcd:2379/metrics`;
 - itself on `localhost:9090`.
 
-Gateway/admin do not expose `/metrics`, only `/healthz`.
+Gateway/admin expose `/metrics` on their HTTP port next to `/healthz`.
 
 ```bash
 make run-observability
@@ -225,6 +226,13 @@ docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml \
 
 The Go services do not export traces yet; the Tempo OTLP endpoints (`4317`
 gRPC, `4318` HTTP) and Grafana datasource are ready for that work.
+
+CORS reflects any origin by default (dev). Set `CORS_ALLOWED_ORIGINS` to a
+comma-separated allowlist for shared environments; unknown origins receive no
+CORS headers. Request bodies are capped at 1 MiB per call.
+
+The outbox relay backs off exponentially and dead-letters after 20 attempts
+(`mall_outbox_dead_lettered_total`); terminal rows are pruned after 7 days.
 
 Logs are JSON (`slog`) on stdout and are capped by the compose `json-file`
 driver (10 MB × 3 per container):

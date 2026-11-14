@@ -25,7 +25,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer database.Close()
-	gs := grpcx.NewServer(logger)
+	gs := grpcx.NewServer(cfg, logger)
 	svc := identity.New(database, auth.NewManager(cfg), logger)
 	pb.RegisterIdentityServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))

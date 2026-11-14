@@ -97,8 +97,8 @@ func providePaymentService(database *sql.DB, client *mq.Client, order *orderConn
 	return svc
 }
 
-func provideGRPCServer(logger *slog.Logger, svc *payment.Service) *kratosgrpc.Server {
-	gs := grpcx.NewServer(logger)
+func provideGRPCServer(cfg *config.Config, logger *slog.Logger, svc *payment.Service) *kratosgrpc.Server {
+	gs := grpcx.NewServer(cfg, logger)
 	pb.RegisterPaymentServiceServer(gs, svc)
 	return gs
 }

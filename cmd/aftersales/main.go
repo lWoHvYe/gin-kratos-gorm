@@ -72,8 +72,10 @@ func main() {
 	}
 	defer orderConn.Close()
 	orders := pb.NewOrderServiceClient(orderConn)
-	gs := grpcx.NewServer(logger)
-	pb.RegisterAfterSalesServiceServer(gs, aftersales.New(database, client, payments, inventory, orders, logger))
+	svc := aftersales.New(database, client, payments, inventory, orders, logger)
+	go aftersales.RunRefundRecovery(ctx, database, svc, logger, time.Minute)
+	gs := grpcx.NewServer(cfg, logger)
+	pb.RegisterAfterSalesServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)

@@ -22,7 +22,7 @@ func initialize(ctx context.Context, cfg *config.Config) (*kratos.App, func(), e
 		return nil, nil, err
 	}
 	engine := provideEngine(logger, manager, clients)
-	server := provideHTTPServer(engine)
+	server := provideHTTPServer(cfg, engine)
 	app := provideApp(cfg, logger, server)
 	return app, func() {
 		cleanup()

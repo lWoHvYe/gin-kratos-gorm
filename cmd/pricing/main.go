@@ -53,7 +53,7 @@ func main() {
 	defer conn.Close()
 	catalog := pb.NewCatalogServiceClient(conn)
 
-	gs := grpcx.NewServer(logger)
+	gs := grpcx.NewServer(cfg, logger)
 	svc := pricing.New(database, catalog, logger)
 	go pricing.RunOrderCancelledConsumer(ctx, client, svc, logger)
 	go pricing.RunOrderPaidConsumer(ctx, client, svc, logger)

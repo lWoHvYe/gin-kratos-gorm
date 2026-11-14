@@ -76,7 +76,14 @@ func (s *Service) handleCommand(ctx context.Context, msg *nats.Msg) {
 			_ = msg.NakWithDelay(5 * time.Second)
 			return
 		}
-		s.log.Error("create seckill payment intent", "order_no", order.GetOrderNo(), "error", payErr)
+		// Without a payment intent the qualification must not become ORDERED:
+		// that left an order that could never be paid and no signal beyond a
+		// log line. Fail it into the same DLQ path as an order failure.
+		metrics.SeckillOrderCommands.WithLabelValues("dlq").Inc()
+		s.publishDLQ(ctx, cmd, payErr)
+		s.failQualification(ctx, cmd, payErr)
+		_ = msg.Term()
+		return
 	}
 	s.markOrdered(ctx, cmd, order.GetOrderNo(), paymentNo)
 	metrics.SeckillOrderCommands.WithLabelValues("succeeded").Inc()

@@ -39,7 +39,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	go outbox.Relay(ctx, database, client, logger, time.Second)
-	gs := grpcx.NewServer(logger)
+	gs := grpcx.NewServer(cfg, logger)
 	svc := fulfillment.New(database, client, logger)
 	go fulfillment.RunOrderPaidConsumer(ctx, client, svc, logger)
 	pb.RegisterFulfillmentServiceServer(gs, svc)

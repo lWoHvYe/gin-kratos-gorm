@@ -24,7 +24,7 @@ K8S_INFRA_HA_VALUES := $(K8S_DIR)/charts/infra/values-ha.yaml
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race verify wire arch clean \
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race verify wire proto arch clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-render-ha k8s-lint-ha k8s-ha-verify k8s-deploy mesh-smoke \
 	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration status
 
@@ -52,6 +52,7 @@ help:
 	@echo "  test-race                         unit tests with the race detector"
 	@echo "  arch                              architecture/import guard"
 	@echo "  wire                              regenerate Wire injectors for gateway/admin/order/payment"
+	@echo "  proto                             regenerate api/gen from api/proto (requires protoc)"
 	@echo "  verify                            fmt-check + vet + test + build + arch + dtm-contract"
 	@echo "  k8s-images                        build service and migration images for Kubernetes"
 	@echo "  k8s-import                        import images into a remote k3s containerd"
@@ -130,6 +131,12 @@ arch:
 
 wire:
 	$(GO) run github.com/google/wire/cmd/wire ./cmd/gateway ./cmd/admin ./cmd/order ./cmd/payment
+
+proto:
+	protoc --proto_path=api/proto --proto_path=third_party \
+		--go_out=api/gen --go_opt=paths=source_relative \
+		--go-grpc_out=api/gen --go-grpc_opt=paths=source_relative \
+		api/proto/mall/v1/mall.proto
 
 verify: fmt-check vet test test-race build arch dtm-contract
 	@echo "verify: OK"

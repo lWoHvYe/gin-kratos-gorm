@@ -3,11 +3,11 @@ package grpcx
 import (
 	"context"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/config"
 	"gin-kratos-gorm/internal/platform/metrics"
 
 	kratosmiddleware "github.com/go-kratos/kratos/v3/middleware"
@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func NewServer(logger *slog.Logger) *kratosgrpc.Server {
+func NewServer(cfg *config.Config, logger *slog.Logger) *kratosgrpc.Server {
 	opts := []kratosgrpc.ServerOption{
 		kratosgrpc.Middleware(
 			recovery.Recovery(),
@@ -26,8 +26,10 @@ func NewServer(logger *slog.Logger) *kratosgrpc.Server {
 			errorMapper(),
 		),
 	}
-	if addr := strings.TrimSpace(os.Getenv("GRPC_ADDR")); addr != "" {
-		opts = append(opts, kratosgrpc.Address(addr))
+	if cfg != nil {
+		if addr := strings.TrimSpace(cfg.GRPCAddr); addr != "" {
+			opts = append(opts, kratosgrpc.Address(addr))
+		}
 	}
 	return kratosgrpc.NewServer(opts...)
 }
@@ -55,6 +57,7 @@ func accessLog(logger *slog.Logger) kratosmiddleware.Middleware {
 			if err != nil {
 				ae := apperr.From(err)
 				code := string(ae.Code)
+				metrics.GRPCDuration.WithLabelValues(operation, code).Observe(time.Since(start).Seconds())
 				attrs = append(attrs, slog.String("code", code))
 				metrics.Errors.WithLabelValues("grpc", code).Inc()
 				// The wrapped cause is logged here, before errorMapper replaces
@@ -67,6 +70,7 @@ func accessLog(logger *slog.Logger) kratosmiddleware.Middleware {
 				logger.Log(ctx, level, "grpc request", attrs...)
 				return reply, err
 			}
+			metrics.GRPCDuration.WithLabelValues(operation, "OK").Observe(time.Since(start).Seconds())
 			attrs = append(attrs, slog.String("code", "OK"))
 			logger.Log(ctx, slog.LevelInfo, "grpc request", attrs...)
 			return reply, nil

@@ -52,7 +52,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = catalogConn.Close() }()
-	gs := grpcx.NewServer(logger)
+	gs := grpcx.NewServer(cfg, logger)
 	svc := cart.New(database, pb.NewCatalogServiceClient(catalogConn), logger)
 	pb.RegisterCartServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))

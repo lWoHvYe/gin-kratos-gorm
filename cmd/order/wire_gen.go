@@ -42,7 +42,7 @@ func initialize(ctx context.Context, cfg *config.Config) (*orderApp, func(), err
 	}
 	inventoryServiceClient := provideInventoryClient(mainInventoryConn)
 	service := provideOrderService(db, client, logger, dtmClient, pricingServiceClient, inventoryServiceClient, promotionServiceClient)
-	server := provideGRPCServer(logger, service)
+	server := provideGRPCServer(cfg, logger, service)
 	httpServer := provideHealthServer(cfg, db, logger)
 	app := provideApp(cfg, logger, server, httpServer)
 	mainOrderApp := provideOrderApp(app, service, db, client, logger)

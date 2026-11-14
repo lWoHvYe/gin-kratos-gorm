@@ -14,8 +14,6 @@ import (
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
 )
 
-const listenAddr = ":8080"
-
 func provideLogger(cfg *config.Config) *slog.Logger {
 	return log.New(cfg.Service, cfg.Env)
 }
@@ -38,8 +36,8 @@ func provideEngine(cfg *config.Config, logger *slog.Logger, jwt *auth.Manager, c
 	})
 }
 
-func provideHTTPServer(engine *gin.Engine) *khttp.Server {
-	srv := khttp.NewServer(khttp.Address(listenAddr))
+func provideHTTPServer(cfg *config.Config, engine *gin.Engine) *khttp.Server {
+	srv := khttp.NewServer(khttp.Address(cfg.HTTPAddr))
 	srv.HandlePrefix("/", engine)
 	return srv
 }

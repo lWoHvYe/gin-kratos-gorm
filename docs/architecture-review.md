@@ -39,31 +39,47 @@ Technology choices are kept:
 | Frontend session | Admin and storefront refresh the access token once on 401 (single-flight) and replay the request; checkout uses a stable idempotency key per attempt; cart total and money math fixed. |
 | Ops docs | Production runbook now documents the three application secrets and the mock-payment switch. |
 
+## Fixed in Phase 2
+
+- Go CI: `.github/workflows/go.yml` (format, vet, unit, race, build, arch, DTM
+  contract, protobuf drift, govulncheck); frontend workflow also runs on
+  `docs/openapi/**`.
+- Seckill: `FAILED` qualifications reach `EXPIRED` instead of being rescanned
+  forever; a permanent payment-intent failure now takes the DLQ/fail path
+  instead of acking an unpayable ORDERED qualification.
+- Outbox: exponential backoff, 20-attempt dead-letter with metric, 7-day
+  pruning; migration `0005_outbox_retry.sql` in every service DB.
+- Shutdown: NATS `Drain()` waits for in-flight handlers before closing.
+- Observability: BFF `/metrics`, gRPC duration histogram, Compose Prometheus
+  scrapes seckill and both BFFs.
+- Contracts: tests assert every documented OpenAPI path is still served
+  (gateway + admin).
+- Aftersales: stuck `REFUNDING` rows are retried by a recovery worker with a
+  metric.
+- Config/security: BFFs honour `HTTP_ADDR`, gRPC honours the config centre's
+  `grpc_addr`, request bodies are capped at 1 MiB, CORS supports an allowlist.
+
 ## Verified findings deferred to later phases
 
-- **Seckill lifecycle** (Phase 2): `FAILED` qualifications are re-scanned forever
-  because the expiry update only matches `ISSUED`; JetStream `MaxDeliver`
-  exhaustion bypasses the application DLQ and metrics; the order-redelivery
-  window can create two reservations (needs a failing test first).
-- **Outbox** (Phase 2): no attempts cap/backoff/dead-letter/pruning; publishing
-  happens while the claiming transaction holds row locks.
-- **Worker lifecycle** (Phase 2): consumer subscription failures are logged but
-  the pod stays Ready; SIGTERM does not drain consumers before DB/NATS close.
-- **CI** (Phase 2): only the frontend workflow exists. `make wire` cannot run
-  from a clean checkout because the Wire tool dependencies are absent from
-  `go.sum`; the Phase 1 gateway provider change was mirrored into
-  `wire_gen.go` manually. Add a `tools.go` and run `make wire` in CI.
-- **Observability** (Phase 2/3): no tracing despite a provisioned Tempo; BFF
-  `/metrics` is not exposed; the Compose Prometheus job omits `seckill:9110`.
-- **Contracts** (Phase 2): OpenAPI covers 18 of 32 gateway routes; generated TS
-  types are unused; no route-contract test exists yet.
+- **Worker lifecycle** (Phase 3): subscription failures are still only logged,
+  and shutdown signal still cancels worker contexts before the servers drain,
+  so in-flight handlers see a cancelled context. Needs a lifecycle refactor.
+- **Seckill reservation idempotency** (Phase 3): the order-redelivery window can
+  create two reservations; needs a failing test plus a unique key on
+  `(activity_id, ref_no)`.
+- **CI tooling** (Phase 3): `make wire` cannot run from a clean checkout
+  because the Wire tool dependencies are absent from `go.sum`; provider changes
+  are mirrored into `wire_gen.go` manually. Add a `tools.go` and run it in CI.
+- **Tracing** (Phase 3): Tempo is provisioned but no spans are exported;
+  request ids are not propagated as gRPC metadata.
+- **OpenAPI coverage** (Phase 3): 18 of 32 gateway routes are documented; the
+  guard only prevents documented routes from disappearing.
 - **Migration ledger** (Phase 3): every deploy replays all migrations
   (idempotent DDL + data backfills). Needs version+checksum tooling.
-- **Aftersales** (Phase 2): no idempotency key, no automatic retry for stuck
-  `REFUNDING`.
-- **Security hardening** (Phase 2): no login rate limiting, reflective CORS,
-  unbounded request bodies, internal gRPC trusts `user_id`/`admin` request
-  fields (mesh-only trust).
+- **Aftersales idempotency** (Phase 3): creation has no client key, so a double
+  submit creates two after-sale rows (payment prevents a double payout).
+- **Security hardening** (Phase 3): no login rate limiting; internal gRPC still
+  trusts `user_id`/`admin` request fields (mesh-only trust).
 
 ## Needs a failing test before changing
 

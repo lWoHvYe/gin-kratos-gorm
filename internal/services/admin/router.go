@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"gin-kratos-gorm/internal/platform/httpx"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -126,6 +128,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.Use(recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), timeout(requestTimeout))
 	engine.NoRoute(func(c *gin.Context) { httpx.Error(c, apperr.NotFound("route not found")) })
 	engine.GET("/healthz", h.health)
+	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	engine.GET("/readyz", h.health)
 
 	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole))
@@ -550,7 +553,12 @@ func (h *handlers) approveAfterSale(c *gin.Context) {
 
 // bindJSON decodes the request body into dst and maps decoding failures onto an
 // invalid-argument error.
+const maxBodyBytes = 1 << 20
+
 func bindJSON(c *gin.Context, dst any) error {
+	if c.Request != nil && c.Request.Body != nil {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBodyBytes)
+	}
 	if err := c.ShouldBindJSON(dst); err != nil {
 		return apperr.Invalid("invalid request body: %v", err)
 	}

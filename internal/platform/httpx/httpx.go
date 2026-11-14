@@ -3,6 +3,7 @@ package httpx
 import (
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -125,13 +126,19 @@ func RequireRole(role string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// CORS reflects the request origin only when CORS_ALLOWED_ORIGINS is unset
+// (dev). When the list is set, unknown origins get no CORS headers at all.
 func CORS() gin.HandlerFunc {
+	allowed := splitList(os.Getenv("CORS_ALLOWED_ORIGINS"))
 	return func(c *gin.Context) {
 		if origin := c.GetHeader("Origin"); origin != "" {
-			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Vary", "Origin")
-			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Request-ID")
-			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			if len(allowed) == 0 || contains(allowed, origin) {
+				c.Header("Access-Control-Allow-Origin", origin)
+				c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Request-ID")
+				c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			}
 		}
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -139,6 +146,25 @@ func CORS() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+func splitList(value string) []string {
+	var out []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func contains(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 func statusClass(status int) string {

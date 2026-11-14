@@ -39,7 +39,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	go outbox.Relay(ctx, database, client, logger, time.Second)
-	gs := grpcx.NewServer(logger)
+	gs := grpcx.NewServer(cfg, logger)
 	svc := inventory.New(database, logger)
 	go inventory.RunExpiry(ctx, database, svc, logger, time.Minute)
 	go inventory.RunOrderCancelledConsumer(ctx, client, svc, logger)

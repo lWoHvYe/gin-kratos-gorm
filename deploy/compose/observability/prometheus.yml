@@ -27,6 +27,15 @@ scrape_configs:
           - payment:9107
           - fulfillment:9108
           - aftersales:9109
+          - seckill:9110
+
+  # BFFs expose /metrics on their own HTTP port (no separate health port).
+  - job_name: mall-bff
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - gateway:8080
+          - admin:8081
 
   - job_name: dtm
     metrics_path: /api/metrics

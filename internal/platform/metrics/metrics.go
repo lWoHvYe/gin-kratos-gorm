@@ -41,11 +41,30 @@ var (
 		Help: "Outbox publish attempts that failed and will be retried.",
 	})
 
+	// OutboxDeadLettered counts events that exhausted their retry budget.
+	OutboxDeadLettered = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mall_outbox_dead_lettered_total",
+		Help: "Outbox events moved to the dead-letter state after max attempts.",
+	})
+
+	// AfterSaleRefundRecovery tracks the stuck-REFUNDING retry worker.
+	AfterSaleRefundRecovery = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_aftersale_refund_recovery_total",
+		Help: "Stuck after-sale refunds retried by result.",
+	}, []string{"result"})
+
 	// PaymentRefundEvents tracks compensation events consumed by payment.
 	PaymentRefundEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mall_payment_refund_events_total",
 		Help: "order.refund_requested events handled by payment, by result.",
 	}, []string{"result"})
+
+	// GRPCDuration tracks gRPC handler latency by operation and outcome.
+	GRPCDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "mall_grpc_request_duration_seconds",
+		Help:    "gRPC handler latency in seconds.",
+		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
+	}, []string{"operation", "code"})
 
 	// Errors counts handled errors by surface (grpc/http) and domain code.
 	Errors = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -56,5 +75,6 @@ var (
 
 func init() {
 	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
-		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents, Errors)
+		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
+		OutboxDeadLettered, AfterSaleRefundRecovery, GRPCDuration, Errors)
 }

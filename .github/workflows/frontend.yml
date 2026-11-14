@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "frontend/**"
+      - "docs/openapi/**"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "docs/openapi/**"
       - ".github/workflows/frontend.yml"
 
 jobs:

@@ -52,8 +52,10 @@ func (s *Service) expireQualifications(ctx context.Context) {
 			continue
 		}
 		s.compensate(ctx, q.activityID, q.userID, q.tokenHash)
+		// FAILED rows need the same terminal transition: otherwise every scan
+		// retries the release and compensation for a row that can never change.
 		if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications
-			SET status='EXPIRED' WHERE token_hash=? AND status='ISSUED'`, q.tokenHash); err != nil {
+			SET status='EXPIRED' WHERE token_hash=? AND status IN ('ISSUED','FAILED')`, q.tokenHash); err != nil {
 			s.log.Warn("mark seckill qualification expired", "activity_id", q.activityID, "error", err)
 		}
 	}

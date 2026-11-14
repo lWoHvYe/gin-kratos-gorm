@@ -59,3 +59,12 @@ func TestTruncateErrorFitsColumn(t *testing.T) {
 		t.Fatalf("short error = %q", got)
 	}
 }
+
+func TestRelayOwnerIsBounded(t *testing.T) {
+	if relayOwner == "" {
+		t.Fatal("relay owner must identify the process")
+	}
+	if len(relayOwner) > 128 {
+		t.Fatalf("relay owner longer than the column: %d", len(relayOwner))
+	}
+}

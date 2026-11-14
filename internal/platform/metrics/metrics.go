@@ -41,6 +41,12 @@ var (
 		Help: "Outbox publish attempts that failed and will be retried.",
 	})
 
+	// ConsumerOutcomes tracks durable consumer results per subject.
+	ConsumerOutcomes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_consumer_messages_total",
+		Help: "Consumer message outcomes by subject.",
+	}, []string{"subject", "result"})
+
 	// OutboxDeadLettered counts events that exhausted their retry budget.
 	OutboxDeadLettered = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "mall_outbox_dead_lettered_total",
@@ -76,5 +82,5 @@ var (
 func init() {
 	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
-		OutboxDeadLettered, AfterSaleRefundRecovery, GRPCDuration, Errors)
+		OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors)
 }

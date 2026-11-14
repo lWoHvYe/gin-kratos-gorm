@@ -55,7 +55,7 @@ type Clients struct {
 	Promotion   pb.PromotionServiceClient
 	Seckill     pb.SeckillServiceClient
 
-	conns []*grpc.ClientConn
+	conns map[string]*grpc.ClientConn
 }
 
 // Close releases every client connection.
@@ -72,10 +72,22 @@ func (c *Clients) Close() error {
 	return first
 }
 
+// States reports the gRPC connectivity state of every downstream client.
+func (c *Clients) States() map[string]string {
+	out := make(map[string]string, len(c.conns))
+	for name, conn := range c.conns {
+		if conn == nil {
+			continue
+		}
+		out[name] = conn.GetState().String()
+	}
+	return out
+}
+
 // Dial opens the downstream client connections using Kubernetes Service DNS or
 // <SERVICE>_ADDR overrides.
 func Dial(ctx context.Context) (*Clients, error) {
-	clients := &Clients{}
+	clients := &Clients{conns: map[string]*grpc.ClientConn{}}
 	targets := []struct {
 		name string
 		bind func(*grpc.ClientConn)
@@ -95,7 +107,7 @@ func Dial(ctx context.Context) (*Clients, error) {
 			_ = clients.Close()
 			return nil, fmt.Errorf("dial %s: %w", target.name, err)
 		}
-		clients.conns = append(clients.conns, conn)
+		clients.conns[target.name] = conn
 		target.bind(conn)
 	}
 	return clients, nil
@@ -125,7 +137,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.NoRoute(func(c *gin.Context) { httpx.Error(c, apperr.NotFound("route not found")) })
 	engine.GET("/healthz", h.health)
 	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))
-	engine.GET("/readyz", h.health)
+	engine.GET("/readyz", bff.Readiness(logger, clients.States, []string{"order", "payment"}))
 
 	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole), audit(logger))
 	admin.GET("/categories", h.listCategoriesAdmin)

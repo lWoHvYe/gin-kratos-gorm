@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
 
+	"gin-kratos-gorm/internal/platform/consumer"
 	"gin-kratos-gorm/internal/platform/mq"
 
 	"github.com/nats-io/nats.go"
@@ -23,40 +23,33 @@ type stockChangedEvent struct {
 // inventory service. Inventory remains authoritative; the projection is only
 // used for browsing and is revalidated by DTM Reserve at checkout.
 func RunStockConsumer(ctx context.Context, client *mq.Client, svc *Service, logger *slog.Logger) {
-	if client == nil || client.JS == nil {
-		return
-	}
-	handler := func(msg *nats.Msg) {
+	err := consumer.Subscribe(ctx, client, logger, consumer.Config{
+		Subject: "shop.inventory.stock.changed.v1",
+		Durable: "catalog-stock-projection",
+	}, func(hctx context.Context, msg *nats.Msg) error {
 		var event stockChangedEvent
 		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			logger.Error("decode inventory.stock_changed", "error", err)
-			_ = msg.Term()
-			return
+			return consumer.Permanent(err)
 		}
 		if event.SkuID <= 0 {
-			_ = msg.Ack()
-			return
+			return nil
 		}
 		// The current deployment is single-warehouse. Ignore other warehouses
 		// rather than overwriting the projection with a different location.
 		if event.WarehouseID > 0 && event.WarehouseID != 1 {
-			_ = msg.Ack()
-			return
+			return nil
 		}
 		available := event.Available
 		if available < 0 {
 			available = 0
 		}
-		if _, err := svc.db.ExecContext(ctx, `UPDATE skus SET stock = ? WHERE id = ?`, available, event.SkuID); err != nil {
-			logger.Warn("project inventory stock", "sku_id", event.SkuID, "error", err)
-			_ = msg.NakWithDelay(2 * time.Second)
-			return
+		if _, err := svc.db.ExecContext(hctx, `UPDATE skus SET stock = ? WHERE id = ?`, available, event.SkuID); err != nil {
+			return err
 		}
-		svc.cacheEvictProductBySku(ctx, event.SkuID)
-		_ = msg.Ack()
-	}
-	if _, err := client.QueueSubscribe("shop.inventory.stock.changed.v1", "catalog-stock-projection", handler,
-		nats.Durable("catalog-stock-projection"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
+		svc.cacheEvictProductBySku(hctx, event.SkuID)
+		return nil
+	})
+	if err != nil {
 		logger.Error("subscribe inventory.stock_changed", "error", err)
 	}
 }

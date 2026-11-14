@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
 
+	"gin-kratos-gorm/internal/platform/consumer"
 	"gin-kratos-gorm/internal/platform/mq"
 
 	"github.com/nats-io/nats.go"
@@ -21,27 +21,28 @@ type orderCancelledEvent struct {
 // qualification. Inventory release is owned by the inventory consumer; this
 // consumer only fixes the customer-visible qualification state.
 func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Service, logger *slog.Logger) {
-	if client == nil || client.JS == nil {
-		return
-	}
-	handler := func(msg *nats.Msg) {
+	err := consumer.Subscribe(ctx, client, logger, consumer.Config{
+		Subject: "shop.order.cancelled.v1",
+		Durable: "seckill-order-cancelled",
+	}, func(hctx context.Context, msg *nats.Msg) error {
 		var event orderCancelledEvent
-		if err := json.Unmarshal(msg.Data, &event); err != nil || event.OrderNo == "" {
-			_ = msg.Term()
-			return
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			return consumer.Permanent(err)
 		}
-		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if _, err := svc.db.ExecContext(cctx, `UPDATE seckill_qualifications
-			SET status='CANCELLED' WHERE order_no=? AND status IN ('ORDERED','ORDERING')`, event.OrderNo); err != nil {
-			logger.Warn("project seckill cancellation", "order_no", event.OrderNo, "error", err)
-			_ = msg.NakWithDelay(5 * time.Second)
-			return
+		if event.OrderNo == "" {
+			return consumer.Permanent(errMissingOrderNo)
 		}
-		_ = msg.Ack()
-	}
-	if _, err := client.QueueSubscribe("shop.order.cancelled.v1", "seckill-order-cancelled", handler,
-		nats.Durable("seckill-order-cancelled"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
+		_, err := svc.db.ExecContext(hctx, `UPDATE seckill_qualifications
+			SET status='CANCELLED' WHERE order_no=? AND status IN ('ORDERED','ORDERING')`, event.OrderNo)
+		return err
+	})
+	if err != nil {
 		logger.Error("subscribe seckill order cancellation", "error", err)
 	}
 }
+
+type missingOrderNoError struct{}
+
+func (missingOrderNoError) Error() string { return "order.cancelled missing order_no" }
+
+var errMissingOrderNo = missingOrderNoError{}

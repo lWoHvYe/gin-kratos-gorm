@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/consumer"
 	"gin-kratos-gorm/internal/platform/mq"
 
 	"github.com/nats-io/nats.go"
@@ -25,19 +25,17 @@ type orderPaidEvent struct {
 // The consumer is durable and idempotent: CreateShipment is keyed by order_no.
 // An operator still assigns carrier/tracking and calls Ship.
 func RunOrderPaidConsumer(ctx context.Context, client *mq.Client, svc *Service, logger *slog.Logger) {
-	if client == nil || client.JS == nil {
-		return
-	}
-	handler := func(msg *nats.Msg) {
+	err := consumer.Subscribe(ctx, client, logger, consumer.Config{
+		Subject:    "shop.order.paid.v1",
+		Durable:    "fulfillment-order-paid",
+		MaxDeliver: 5,
+	}, func(hctx context.Context, msg *nats.Msg) error {
 		var event orderPaidEvent
 		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			logger.Error("decode order.paid", "error", err)
-			_ = msg.Term()
-			return
+			return consumer.Permanent(err)
 		}
 		if event.OrderNo == "" {
-			_ = msg.Term()
-			return
+			return consumer.Permanent(errMissingOrderNo)
 		}
 		items := make([]*pb.ShipmentItem, 0, len(event.Items))
 		for _, item := range event.Items {
@@ -47,23 +45,23 @@ func RunOrderPaidConsumer(ctx context.Context, client *mq.Client, svc *Service, 
 		}
 		if len(items) == 0 {
 			logger.Warn("order.paid without items, shipment not auto-created", "order_no", event.OrderNo)
-			_ = msg.Ack()
-			return
+			return nil
 		}
-		if _, err := svc.CreateShipment(ctx, &pb.CreateShipmentRequest{
+		_, err := svc.CreateShipment(hctx, &pb.CreateShipmentRequest{
 			OrderNo:     event.OrderNo,
 			WarehouseId: 1,
 			Carrier:     "AUTO",
 			Items:       items,
-		}); err != nil {
-			logger.Warn("auto-create shipment", "order_no", event.OrderNo, "error", err)
-			_ = msg.NakWithDelay(5 * time.Second)
-			return
-		}
-		_ = msg.Ack()
-	}
-	if _, err := client.QueueSubscribe("shop.order.paid.v1", "fulfillment-auto-shipment", handler,
-		nats.Durable("fulfillment-order-paid"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(5)); err != nil {
+		})
+		return err
+	})
+	if err != nil {
 		logger.Error("subscribe order.paid", "error", err)
 	}
 }
+
+type missingOrderNoError struct{}
+
+func (missingOrderNoError) Error() string { return "order.paid missing order_no" }
+
+var errMissingOrderNo = missingOrderNoError{}

@@ -240,8 +240,22 @@ CORS reflects any origin by default (dev). Set `CORS_ALLOWED_ORIGINS` to a
 comma-separated allowlist for shared environments; unknown origins receive no
 CORS headers. Request bodies are capped at 1 MiB per call.
 
-The outbox relay backs off exponentially and dead-letters after 20 attempts
-(`mall_outbox_dead_lettered_total`); terminal rows are pruned after 7 days.
+The outbox relay claims batches under a lease and publishes outside the
+database transaction. Failures back off exponentially, dead-letter after 20
+attempts (`mall_outbox_dead_lettered_total`), and terminal rows are pruned after
+7 days.
+
+Durable consumers share one policy (`internal/platform/consumer`): a 10s
+per-message timeout, bounded retries, and dead-lettering to `<subject>.dlq`
+after `MaxDeliver`. Outcomes are counted by
+`mall_consumer_messages_total{subject,result}`. Inspect/replay a DLQ only after
+confirming the business state and the handler's idempotency:
+
+```bash
+nats -s nats://nats:4222 stream info MALL
+nats -s nats://nats:4222 consumer info MALL <durable>
+nats -s nats://nats:4222 sub shop.order.paid.v1.dlq --limit 1
+```
 
 Logs are JSON (`slog`) on stdout and are capped by the compose `json-file`
 driver (10 MB × 3 per container):

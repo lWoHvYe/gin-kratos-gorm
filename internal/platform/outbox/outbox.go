@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	"gin-kratos-gorm/internal/platform/id"
@@ -43,6 +45,9 @@ const (
 	maxAttempts = 20
 	// pruneAfter removes terminal rows so the table cannot grow forever.
 	pruneAfter = 7 * 24 * time.Hour
+	// leaseTTL must exceed publishTimeout so a live relay does not lose rows.
+	leaseTTL       = 60 * time.Second
+	publishTimeout = 10 * time.Second
 )
 
 // Relay claims pending rows with SKIP LOCKED, publishes them and marks them done.
@@ -92,68 +97,146 @@ func backoff(attempts int) time.Duration {
 	return d
 }
 
+type claimedEvent struct {
+	id       int64
+	topic    string
+	payload  []byte
+	attempts int
+}
+
+// relayOwner identifies this process as the lease holder.
+var relayOwner = func() string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = "unknown"
+	}
+	owner := fmt.Sprintf("%s:%d", host, os.Getpid())
+	if len(owner) > 128 {
+		owner = owner[:128]
+	}
+	return owner
+}()
+
+// relayOnce claims a batch under a short lease, commits (releasing row locks),
+// then publishes outside the transaction. A crashed relay leaves rows leased
+// until leaseTTL expires, so another replica retries them (at-least-once).
 func relayOnce(ctx context.Context, db *sql.DB, client *mq.Client, logger *slog.Logger) (int, error) {
-	tx, err := db.BeginTx(ctx, nil)
+	events, err := claimBatch(ctx, db)
 	if err != nil {
 		return 0, err
+	}
+	published := 0
+	for _, event := range events {
+		publishCtx, cancel := context.WithTimeout(ctx, publishTimeout)
+		err := client.Publish(publishCtx, event.topic, event.payload)
+		cancel()
+		if err != nil {
+			metrics.OutboxPublishErrors.Inc()
+			if ferr := markFailed(ctx, db, event, err, logger); ferr != nil {
+				return published, ferr
+			}
+			continue
+		}
+		ok, err := markPublished(ctx, db, event.id)
+		if err != nil {
+			return published, err
+		}
+		if ok {
+			metrics.OutboxPublished.Inc()
+			published++
+		}
+	}
+	return published, nil
+}
+
+// claimBatch leases pending rows. The transaction only performs the claim and
+// commits before any network call, so a slow NATS never holds MySQL locks.
+func claimBatch(ctx context.Context, db *sql.DB) ([]claimedEvent, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	rows, err := tx.QueryContext(ctx, `SELECT id, topic, payload, attempts FROM outbox_events
 		WHERE published_at IS NULL AND dead_lettered_at IS NULL
 		  AND (next_attempt_at IS NULL OR next_attempt_at <= NOW(3))
+		  AND (lease_until IS NULL OR lease_until < NOW(3))
 		ORDER BY id LIMIT 100 FOR UPDATE SKIP LOCKED`)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	type row struct {
-		id       int64
-		topic    string
-		payload  []byte
-		attempts int
-	}
-	var list []row
+	var events []claimedEvent
 	for rows.Next() {
-		var r row
-		if err := rows.Scan(&r.id, &r.topic, &r.payload, &r.attempts); err != nil {
+		var event claimedEvent
+		if err := rows.Scan(&event.id, &event.topic, &event.payload, &event.attempts); err != nil {
 			rows.Close()
-			return 0, err
+			return nil, err
 		}
-		list = append(list, r)
+		events = append(events, event)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return 0, err
+		return nil, err
 	}
-	n := 0
-	for _, r := range list {
-		if err := client.Publish(ctx, r.topic, r.payload); err != nil {
-			metrics.OutboxPublishErrors.Inc()
-			attempts := r.attempts + 1
-			if attempts >= maxAttempts {
-				if _, uerr := tx.ExecContext(ctx, `UPDATE outbox_events
-					SET attempts = ?, last_error = ?, dead_lettered_at = NOW(3) WHERE id = ?`,
-					attempts, truncateError(err), r.id); uerr != nil {
-					return n, uerr
-				}
-				metrics.OutboxDeadLettered.Inc()
-				logger.Error("outbox event dead-lettered", "event_id", r.id, "topic", r.topic, "attempts", attempts, "error", err)
-				continue
-			}
-			if _, uerr := tx.ExecContext(ctx, `UPDATE outbox_events
-				SET attempts = ?, last_error = ?, next_attempt_at = DATE_ADD(NOW(3), INTERVAL ? SECOND) WHERE id = ?`,
-				attempts, truncateError(err), int(backoff(attempts).Seconds()), r.id); uerr != nil {
-				return n, uerr
-			}
-			continue
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE outbox_events
-			SET published_at = NOW(3), attempts = attempts + 1, next_attempt_at = NULL WHERE id = ?`, r.id); err != nil {
-			return n, err
-		}
-		metrics.OutboxPublished.Inc()
-		n++
+	if len(events) == 0 {
+		return nil, tx.Commit()
 	}
-	return n, tx.Commit()
+	placeholders := make([]string, len(events))
+	args := make([]any, 0, len(events)+2)
+	args = append(args, relayOwner, int(leaseTTL.Seconds()))
+	for i, event := range events {
+		placeholders[i] = "?"
+		args = append(args, event.id)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE outbox_events
+		SET lease_owner = ?, lease_until = DATE_ADD(NOW(3), INTERVAL ? SECOND)
+		WHERE id IN (`+strings.Join(placeholders, ",")+`)`, args...); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+// markPublished clears the lease and records success; the lease guard makes a
+// reclaimed row (another owner) a no-op instead of a double completion.
+func markPublished(ctx context.Context, db *sql.DB, id int64) (bool, error) {
+	res, err := db.ExecContext(ctx, `UPDATE outbox_events
+		SET published_at = NOW(3), attempts = attempts + 1, next_attempt_at = NULL,
+		    lease_owner = NULL, lease_until = NULL
+		WHERE id = ? AND lease_owner = ?`, id, relayOwner)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
+func markFailed(ctx context.Context, db *sql.DB, event claimedEvent, cause error, logger *slog.Logger) error {
+	attempts := event.attempts + 1
+	if attempts >= maxAttempts {
+		if _, err := db.ExecContext(ctx, `UPDATE outbox_events
+			SET attempts = ?, last_error = ?, dead_lettered_at = NOW(3),
+			    lease_owner = NULL, lease_until = NULL
+			WHERE id = ? AND lease_owner = ?`, attempts, truncateError(cause), event.id, relayOwner); err != nil {
+			return err
+		}
+		metrics.OutboxDeadLettered.Inc()
+		logger.Error("outbox event dead-lettered", "event_id", event.id, "topic", event.topic, "attempts", attempts, "error", cause)
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE outbox_events
+		SET attempts = ?, last_error = ?, lease_owner = NULL, lease_until = NULL,
+		    next_attempt_at = DATE_ADD(NOW(3), INTERVAL ? SECOND)
+		WHERE id = ? AND lease_owner = ?`,
+		attempts, truncateError(cause), int(backoff(attempts).Seconds()), event.id, relayOwner); err != nil {
+		return err
+	}
+	return nil
 }
 
 // truncateError keeps last_error within its VARCHAR(1024) column.

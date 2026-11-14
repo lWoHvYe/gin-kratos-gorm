@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"gin-kratos-gorm/internal/platform/consumer"
 	"gin-kratos-gorm/internal/platform/db"
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/outbox"
@@ -29,29 +30,26 @@ func RunShipmentConsumer(ctx context.Context, client *mq.Client, svc *Service, l
 		return
 	}
 	bind := func(subject, durable, target string, from ...string) {
-		handler := func(msg *nats.Msg) {
+		statusTarget := target
+		statusFrom := from
+		err := consumer.Subscribe(ctx, client, logger, consumer.Config{
+			Subject: subject,
+			Durable: durable,
+		}, func(hctx context.Context, msg *nats.Msg) error {
 			var event shipmentStatusEvent
 			if err := json.Unmarshal(msg.Data, &event); err != nil {
-				logger.Error("decode shipment event", "subject", subject, "error", err)
-				_ = msg.Term()
-				return
+				return consumer.Permanent(err)
 			}
 			if event.OrderNo == "" {
-				_ = msg.Term()
-				return
+				return consumer.Permanent(fmt.Errorf("shipment event missing order_no"))
 			}
-			cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
-			if err := svc.applyShipmentStatus(cctx, event.OrderNo, target, from...); err != nil {
-				logger.Warn("apply shipment status", "order_no", event.OrderNo, "target", target, "error", err)
-				_ = msg.NakWithDelay(5 * time.Second)
-				return
+			if err := svc.applyShipmentStatus(hctx, event.OrderNo, statusTarget, statusFrom...); err != nil {
+				return err
 			}
-			logger.Info("shipment status projected", "order_no", event.OrderNo, "target", target)
-			_ = msg.Ack()
-		}
-		if _, err := client.QueueSubscribe(subject, durable, handler,
-			nats.Durable(durable), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
+			logger.Info("shipment status projected", "order_no", event.OrderNo, "target", statusTarget)
+			return nil
+		})
+		if err != nil {
 			logger.Error("subscribe shipment event", "subject", subject, "error", err)
 		}
 	}

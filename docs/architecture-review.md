@@ -92,6 +92,15 @@ upgrade triggers for a per-user signed context.
 - Wire tooling: `tools.go` pins the generator, `make wire` works from a clean
   checkout (it immediately caught a stale order graph: the promotion client was
   missing from `wire.go`), and CI now fails when committed `wire_gen.go` drifts.
+- Outbox lease relay: a short transaction claims a batch (`lease_owner`,
+  `lease_until`), commits, then publishes outside the transaction; failures back
+  off, dead-letter after 20 attempts, and an expired lease is reclaimed.
+- BFF readiness: `/healthz` is liveness, `/readyz` reports gRPC dependency
+  states, fails only for critical deps (identity/order/payment) and returns
+  `degraded` otherwise.
+- Consumer DLQ: `internal/platform/consumer` applies one policy to all durable
+  subscriptions - 10s per-message timeout, bounded retries, `<subject>.dlq`
+  dead-lettering, panic recovery and `mall_consumer_messages_total`.
 - BFF platformization: `internal/platform/bff` now owns recovery, timeouts,
   JSON binding with the 1 MiB cap, path/query parsing and downstream error
   mapping. This removed ~200 duplicated lines and fixed a real drift (admin
@@ -99,13 +108,15 @@ upgrade triggers for a per-user signed context.
 
 ## Verified findings deferred to later phases
 
-- **Internal authentication** (Phase 3): gRPC still trusts `user_id`/`admin`
-  request fields (mesh-only trust). Needs an explicit decision.
-- **Security hardening** (Phase 3): internal gRPC still trusts `user_id`/`admin`
-  request fields; see the trust ADR for accepted risk and upgrade triggers.
-
-## Needs a failing test before changing
-
-- Seckill order creation under JetStream redelivery (two reservations for one
-  held unit).
-- Checkout crash window between coupon/promotion reservation and saga submit.
+- **Tracing depth**: SQL statements and NATS message headers are not spanned;
+  asynchronous hops lose the trace unless the event carries `traceparent`.
+- **Method-level AuthorizationPolicy**: current rules are service-prefixed; a
+  DENY for system RPCs must be validated in staging before enabling.
+- **Connection-pool observability**: no `sql.DBStats` metrics (wait count,
+  wait duration, in-use/idle) and startup retry is not cancellable.
+- **Gateway handler layout**: `router.go` is still one file; handlers are not
+  grouped by domain.
+- **Fault-injection tests**: no chaos/integration suite for NATS loss, relay
+  crash, Redis failover or slow downstreams.
+- **Checkout crash window**: coupon/promotion reservation happens before the
+  saga submit; the window needs a failing test before changing.

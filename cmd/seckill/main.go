@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -15,6 +13,7 @@ import (
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/redis"
 	"gin-kratos-gorm/internal/platform/runtime"
+	"gin-kratos-gorm/internal/platform/tracing"
 	"gin-kratos-gorm/internal/services/seckill"
 )
 
@@ -24,6 +23,12 @@ func main() {
 		panic(err)
 	}
 	logger := log.New(cfg.Service, cfg.Env)
+	shutdownTracing, err := tracing.Init(context.Background(), cfg.Service)
+	if err != nil {
+		logger.Error("init tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
 	database, err := db.OpenWithPool(cfg.MySQLDSN, cfg.MySQLMaxOpenConns, cfg.MySQLMaxIdleConns)
 	if err != nil {
 		logger.Error("open db", "error", err)
@@ -80,8 +85,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+	workers := runtime.NewWorkers()
+	defer workers.Stop()
 	tokenSecret := cfg.SeckillTokenSecret
 	if tokenSecret == "" {
 		// Dev fallback only; production validation rejects an empty value.
@@ -89,15 +94,15 @@ func main() {
 		logger.Warn("SECKILL_TOKEN_SECRET is unset; falling back to the JWT secret (dev only)")
 	}
 	svc := seckill.New(database, inventory, orders, payment, client, cache, logger, tokenSecret)
-	go svc.RunScheduler(ctx, 5*time.Second)
-	go svc.RunQualificationExpiry(ctx, 30*time.Second)
-	go svc.RunRepublisher(ctx, 10*time.Second)
-	go svc.RunOrderWorker(ctx, 4)
-	go seckill.RunOrderCancelledConsumer(ctx, client, svc, logger)
-	go svc.RunReconciler(ctx, 30*time.Second)
+	workers.Go(func(ctx context.Context) { svc.RunScheduler(ctx, 5*time.Second) })
+	workers.Go(func(ctx context.Context) { svc.RunQualificationExpiry(ctx, 30*time.Second) })
+	workers.Go(func(ctx context.Context) { svc.RunRepublisher(ctx, 10*time.Second) })
+	workers.Go(func(ctx context.Context) { svc.RunOrderWorker(ctx, 4) })
+	workers.Go(func(ctx context.Context) { seckill.RunOrderCancelledConsumer(ctx, client, svc, logger) })
+	workers.Go(func(ctx context.Context) { svc.RunReconciler(ctx, 30*time.Second) })
 	gs := grpcx.NewServer(cfg, logger)
 	pb.RegisterSeckillServiceServer(gs, svc)
-	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
+	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger, client.Healthy))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)
 		os.Exit(1)

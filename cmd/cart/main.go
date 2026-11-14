@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -16,6 +14,7 @@ import (
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/outbox"
 	"gin-kratos-gorm/internal/platform/runtime"
+	"gin-kratos-gorm/internal/platform/tracing"
 	"gin-kratos-gorm/internal/services/cart"
 )
 
@@ -29,6 +28,12 @@ func main() {
 		panic(err)
 	}
 	logger := log.New(cfg.Service, cfg.Env)
+	shutdownTracing, err := tracing.Init(context.Background(), cfg.Service)
+	if err != nil {
+		logger.Error("init tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
 	database, err := db.OpenWithPool(cfg.MySQLDSN, cfg.MySQLMaxOpenConns, cfg.MySQLMaxIdleConns)
 	if err != nil {
 		logger.Error("open db", "error", err)
@@ -41,12 +46,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer client.Close()
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	go outbox.Relay(ctx, database, client, logger, time.Second)
+	workers := runtime.NewWorkers()
+	defer workers.Stop()
+	workers.Go(func(ctx context.Context) { outbox.Relay(ctx, database, client, logger, time.Second) })
 	// Cart talks to catalog directly by address; discovery is not used here.
 	catalogAddr := envOr("CATALOG_ADDR", defaultCatalogAddr)
-	catalogConn, err := grpcx.Dial(ctx, catalogAddr)
+	catalogConn, err := grpcx.Dial(context.Background(), catalogAddr)
 	if err != nil {
 		logger.Error("dial catalog", "addr", catalogAddr, "error", err)
 		os.Exit(1)
@@ -55,7 +60,7 @@ func main() {
 	gs := grpcx.NewServer(cfg, logger)
 	svc := cart.New(database, pb.NewCatalogServiceClient(catalogConn), logger)
 	pb.RegisterCartServiceServer(gs, svc)
-	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger))
+	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger, client.Healthy))
 	if err := app.Run(); err != nil {
 		logger.Error("run", "error", err)
 		os.Exit(1)

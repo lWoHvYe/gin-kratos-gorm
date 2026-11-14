@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"gin-kratos-gorm/internal/platform/config"
 	"gin-kratos-gorm/internal/platform/outbox"
+	"gin-kratos-gorm/internal/platform/runtime"
+	"gin-kratos-gorm/internal/platform/tracing"
 	"gin-kratos-gorm/internal/services/payment"
 )
 
@@ -17,15 +16,21 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+	ctx := context.Background()
+	shutdownTracing, err := tracing.Init(ctx, cfg.Service)
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
 	bundle, cleanup, err := initialize(ctx, cfg)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
-	go outbox.Relay(ctx, bundle.DB, bundle.MQ, bundle.Logger, time.Second)
-	go payment.RunRefundConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger)
+	workers := runtime.NewWorkers()
+	defer workers.Stop()
+	workers.Go(func(ctx context.Context) { outbox.Relay(ctx, bundle.DB, bundle.MQ, bundle.Logger, time.Second) })
+	workers.Go(func(ctx context.Context) { payment.RunRefundConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger) })
 	if err := bundle.App.Run(); err != nil {
 		panic(err)
 	}

@@ -102,6 +102,12 @@ spec:
             {{- end }}
             - name: NATS_URL
               value: {{ $.Values.nats.url | quote }}
+            {{- with $.Values.tracing.endpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: {{ $.Values.tracing.samplerArg | default "1" | quote }}
+            {{- end }}
             {{- with $.Values.nats.streamReplicas }}
             - name: NATS_STREAM_REPLICAS
               value: {{ . | quote }}

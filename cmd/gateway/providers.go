@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-kratos/kratos/v3"
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func provideLogger(cfg *config.Config) *slog.Logger {
@@ -38,7 +39,7 @@ func provideEngine(cfg *config.Config, logger *slog.Logger, jwt *auth.Manager, c
 
 func provideHTTPServer(cfg *config.Config, engine *gin.Engine) *khttp.Server {
 	srv := khttp.NewServer(khttp.Address(cfg.HTTPAddr))
-	srv.HandlePrefix("/", engine)
+	srv.HandlePrefix("/", otelhttp.NewHandler(engine, cfg.Service))
 	return srv
 }
 

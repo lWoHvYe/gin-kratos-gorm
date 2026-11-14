@@ -224,8 +224,11 @@ docker compose -f deploy/compose/infra.yml -f deploy/compose/services.yml \
   --profile tracing up -d tempo
 ```
 
-The Go services do not export traces yet; the Tempo OTLP endpoints (`4317`
-gRPC, `4318` HTTP) and Grafana datasource are ready for that work.
+The Go services now export OTLP spans when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
+(for example `tempo:4317` with the tracing profile above). Sampling defaults to
+100%; set `OTEL_TRACES_SAMPLER_ARG` (0–1) to reduce it. HTTP and gRPC calls are
+instrumented, and `traceparent` propagates across service calls. With the
+endpoint empty the tracer stays a no-op, so local runs need no collector.
 
 CORS reflects any origin by default (dev). Set `CORS_ALLOWED_ORIGINS` to a
 comma-separated allowlist for shared environments; unknown origins receive no

@@ -24,6 +24,9 @@ x-service-env: &service-env
   ETCD_ENDPOINTS: etcd:2379
   DTM_ADDRESS: dtm:36790
   JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-32-characters}
+  # Empty disables tracing. With the tracing profile enabled use tempo:4317.
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1}
 
 # Infrastructure every gRPC service relies on.
 x-deps-core: &deps-core

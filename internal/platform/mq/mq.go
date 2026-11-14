@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -14,6 +15,9 @@ import (
 type Client struct {
 	Conn *nats.Conn
 	JS   nats.JetStreamContext
+
+	mu       sync.Mutex
+	degraded []string
 }
 
 func Connect(url string) (*Client, error) {
@@ -62,6 +66,32 @@ func (c *Client) Publish(ctx context.Context, subject string, payload []byte) er
 	_, err := c.JS.Publish(subject, payload, nats.Context(ctx))
 	if err != nil {
 		return fmt.Errorf("publish %s: %w", subject, err)
+	}
+	return nil
+}
+
+// QueueSubscribe wraps the JetStream subscription and records failures so the
+// readiness probe can report a pod that never subscribed to its consumers.
+func (c *Client) QueueSubscribe(subject, queue string, handler nats.MsgHandler, opts ...nats.SubOpt) (*nats.Subscription, error) {
+	sub, err := c.JS.QueueSubscribe(subject, queue, handler, opts...)
+	if err != nil {
+		c.mu.Lock()
+		c.degraded = append(c.degraded, fmt.Sprintf("%s: %v", subject, err))
+		c.mu.Unlock()
+	}
+	return sub, err
+}
+
+// Healthy is a readiness check: a failed consumer subscription keeps failing
+// the probe until the pod is replaced.
+func (c *Client) Healthy(context.Context) error {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.degraded) > 0 {
+		return fmt.Errorf("nats subscriptions degraded: %s", strings.Join(c.degraded, "; "))
 	}
 	return nil
 }

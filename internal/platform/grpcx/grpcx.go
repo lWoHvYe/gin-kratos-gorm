@@ -14,6 +14,7 @@ import (
 	"github.com/go-kratos/kratos/v3/middleware/recovery"
 	"github.com/go-kratos/kratos/v3/transport"
 	kratosgrpc "github.com/go-kratos/kratos/v3/transport/grpc"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -25,6 +26,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) *kratosgrpc.Server {
 			accessLog(logger),
 			errorMapper(),
 		),
+		kratosgrpc.Options(grpc.StatsHandler(otelgrpc.NewServerHandler())),
 	}
 	if cfg != nil {
 		if addr := strings.TrimSpace(cfg.GRPCAddr); addr != "" {
@@ -93,5 +95,8 @@ func errorMapper() kratosmiddleware.Middleware {
 // Dial connects to a Kubernetes Service DNS name or a direct host:port. Service
 // discovery is owned by Kubernetes/Ambient, not by the application.
 func Dial(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-	return grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	return grpc.NewClient(endpoint,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
 }

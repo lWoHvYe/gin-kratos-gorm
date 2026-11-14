@@ -30,7 +30,7 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 			_ = msg.Term()
 			return
 		}
-		cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		if _, err := svc.db.ExecContext(cctx, `UPDATE seckill_qualifications
 			SET status='CANCELLED' WHERE order_no=? AND status IN ('ORDERED','ORDERING')`, event.OrderNo); err != nil {
@@ -40,7 +40,7 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 		}
 		_ = msg.Ack()
 	}
-	if _, err := client.JS.QueueSubscribe("shop.order.cancelled.v1", "seckill-order-cancelled", handler,
+	if _, err := client.QueueSubscribe("shop.order.cancelled.v1", "seckill-order-cancelled", handler,
 		nats.Durable("seckill-order-cancelled"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
 		logger.Error("subscribe seckill order cancellation", "error", err)
 	}

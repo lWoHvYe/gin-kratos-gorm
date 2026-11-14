@@ -34,7 +34,7 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 			_ = msg.Ack()
 			return
 		}
-		cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		if _, err := svc.UnlockCoupon(cctx, &pb.LockCouponRequest{QuoteId: event.QuoteID, UserId: event.UserID}); err != nil {
 			if !apperr.IsCode(err, apperr.CodeNotFound) {
@@ -50,7 +50,7 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 		}
 		_ = msg.Ack()
 	}
-	if _, err := client.JS.QueueSubscribe("shop.order.cancelled.v1", "pricing-order-cancelled", handler,
+	if _, err := client.QueueSubscribe("shop.order.cancelled.v1", "pricing-order-cancelled", handler,
 		nats.Durable("pricing-order-cancelled"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
 		logger.Error("subscribe order.cancelled", "error", err)
 	}

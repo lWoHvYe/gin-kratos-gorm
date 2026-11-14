@@ -39,7 +39,7 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 			_ = msg.Ack()
 			return
 		}
-		cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		for _, item := range event.Items {
 			if item.SkuID <= 0 || item.Quantity <= 0 {
@@ -56,7 +56,7 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 		}
 		_ = msg.Ack()
 	}
-	if _, err := client.JS.QueueSubscribe("shop.order.cancelled.v1", "inventory-order-cancelled", handler,
+	if _, err := client.QueueSubscribe("shop.order.cancelled.v1", "inventory-order-cancelled", handler,
 		nats.Durable("inventory-order-cancelled"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
 		logger.Error("subscribe order.cancelled", "error", err)
 	}

@@ -59,19 +59,28 @@ Technology choices are kept:
 - Config/security: BFFs honour `HTTP_ADDR`, gRPC honours the config centre's
   `grpc_addr`, request bodies are capped at 1 MiB, CORS supports an allowlist.
 
+## Fixed in Phase 3 (in progress)
+
+- Worker lifecycle: `runtime.Workers` tracks background loops; shutdown now
+  stops servers first, then cancels/waits for workers, then drains NATS and
+  closes the database. Consumer subscription failures are recorded and fail
+  `/readyz` instead of leaving a silent pod that never projects events.
+- Tracing: OpenTelemetry is wired into gRPC servers/clients and both BFFs, is
+  opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` (Tempo is already provisioned in
+  Compose), and propagates `traceparent` across service calls.
+
 ## Verified findings deferred to later phases
 
-- **Worker lifecycle** (Phase 3): subscription failures are still only logged,
-  and shutdown signal still cancels worker contexts before the servers drain,
-  so in-flight handlers see a cancelled context. Needs a lifecycle refactor.
 - **Seckill reservation idempotency** (Phase 3): the order-redelivery window can
   create two reservations; needs a failing test plus a unique key on
   `(activity_id, ref_no)`.
 - **CI tooling** (Phase 3): `make wire` cannot run from a clean checkout
   because the Wire tool dependencies are absent from `go.sum`; provider changes
   are mirrored into `wire_gen.go` manually. Add a `tools.go` and run it in CI.
-- **Tracing** (Phase 3): Tempo is provisioned but no spans are exported;
-  request ids are not propagated as gRPC metadata.
+- **BFF platformization** (Phase 3): gateway/admin still duplicate ~250 lines
+  of client/middleware/error helpers.
+- **Internal authentication** (Phase 3): gRPC still trusts `user_id`/`admin`
+  request fields (mesh-only trust). Needs an explicit decision.
 - **OpenAPI coverage** (Phase 3): 18 of 32 gateway routes are documented; the
   guard only prevents documented routes from disappearing.
 - **Migration ledger** (Phase 3): every deploy replays all migrations

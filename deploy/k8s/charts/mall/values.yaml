@@ -95,6 +95,11 @@ resources:
     cpu: 500m
     memory: 256Mi
 
+tracing:
+  # OTLP gRPC endpoint (e.g. an in-cluster collector). Empty disables tracing.
+  endpoint: ""
+  samplerArg: "1"
+
 seckill:
   # Optional Secret holding SECKILL_TOKEN_SECRET (admission HMAC key).
   tokenSecretName: ""

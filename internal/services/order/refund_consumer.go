@@ -80,7 +80,7 @@ func RunRefundConsumer(ctx context.Context, client *mq.Client, svc *Service, log
 		}
 		_ = msg.Ack()
 	}
-	if _, err := client.JS.QueueSubscribe("shop.payment.refunded.v1", "order-refund-projection", handler,
+	if _, err := client.QueueSubscribe("shop.payment.refunded.v1", "order-refund-projection", handler,
 		nats.Durable("order-refund-projection"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
 		logger.Error("subscribe payment.refunded", "error", err)
 	}

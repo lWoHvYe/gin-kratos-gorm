@@ -40,7 +40,7 @@ func RunShipmentConsumer(ctx context.Context, client *mq.Client, svc *Service, l
 				_ = msg.Term()
 				return
 			}
-			cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()
 			if err := svc.applyShipmentStatus(cctx, event.OrderNo, target, from...); err != nil {
 				logger.Warn("apply shipment status", "order_no", event.OrderNo, "target", target, "error", err)
@@ -50,7 +50,7 @@ func RunShipmentConsumer(ctx context.Context, client *mq.Client, svc *Service, l
 			logger.Info("shipment status projected", "order_no", event.OrderNo, "target", target)
 			_ = msg.Ack()
 		}
-		if _, err := client.JS.QueueSubscribe(subject, durable, handler,
+		if _, err := client.QueueSubscribe(subject, durable, handler,
 			nats.Durable(durable), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
 			logger.Error("subscribe shipment event", "subject", subject, "error", err)
 		}

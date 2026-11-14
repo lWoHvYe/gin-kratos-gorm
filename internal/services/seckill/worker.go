@@ -33,7 +33,7 @@ func (s *Service) RunOrderWorker(ctx context.Context, concurrency int) {
 	handler := func(msg *nats.Msg) {
 		s.handleCommand(ctx, msg)
 	}
-	_, err := s.mq.JS.QueueSubscribe("seckill.order.requested.>", "seckill-order-worker", handler,
+	_, err := s.mq.QueueSubscribe("seckill.order.requested.>", "seckill-order-worker", handler,
 		nats.Durable("seckill-order-worker"), nats.ManualAck(), nats.AckExplicit(),
 		nats.MaxAckPending(concurrency*8), nats.AckWait(30*time.Second), nats.MaxDeliver(5))
 	if err != nil {

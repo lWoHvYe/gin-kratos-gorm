@@ -55,7 +55,7 @@ func RunStockConsumer(ctx context.Context, client *mq.Client, svc *Service, logg
 		svc.cacheEvictProductBySku(ctx, event.SkuID)
 		_ = msg.Ack()
 	}
-	if _, err := client.JS.QueueSubscribe("shop.inventory.stock.changed.v1", "catalog-stock-projection", handler,
+	if _, err := client.QueueSubscribe("shop.inventory.stock.changed.v1", "catalog-stock-projection", handler,
 		nats.Durable("catalog-stock-projection"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(20)); err != nil {
 		logger.Error("subscribe inventory.stock_changed", "error", err)
 	}

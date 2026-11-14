@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -10,6 +11,7 @@ import (
 	"gin-kratos-gorm/internal/platform/grpcx"
 	"gin-kratos-gorm/internal/platform/log"
 	"gin-kratos-gorm/internal/platform/runtime"
+	"gin-kratos-gorm/internal/platform/tracing"
 	"gin-kratos-gorm/internal/services/identity"
 )
 
@@ -19,6 +21,12 @@ func main() {
 		panic(err)
 	}
 	logger := log.New(cfg.Service, cfg.Env)
+	shutdownTracing, err := tracing.Init(context.Background(), cfg.Service)
+	if err != nil {
+		logger.Error("init tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
 	database, err := db.OpenWithPool(cfg.MySQLDSN, cfg.MySQLMaxOpenConns, cfg.MySQLMaxIdleConns)
 	if err != nil {
 		logger.Error("open db", "error", err)

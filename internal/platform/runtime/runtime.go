@@ -25,8 +25,8 @@ func NewApp(cfg *config.Config, logger *slog.Logger, gs *kratosgrpc.Server, hs *
 
 type Check func(context.Context) error
 
-func HealthServer(cfg *config.Config, db *sql.DB, logger *slog.Logger) *khttp.Server {
-	return HealthServerWithChecks(cfg, db, logger)
+func HealthServer(cfg *config.Config, db *sql.DB, logger *slog.Logger, checks ...Check) *khttp.Server {
+	return HealthServerWithChecks(cfg, db, logger, checks...)
 }
 
 func HealthServerWithChecks(cfg *config.Config, db *sql.DB, logger *slog.Logger, checks ...Check) *khttp.Server {

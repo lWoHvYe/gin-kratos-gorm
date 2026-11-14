@@ -62,7 +62,7 @@ func RunOrderPaidConsumer(ctx context.Context, client *mq.Client, svc *Service, 
 		}
 		_ = msg.Ack()
 	}
-	if _, err := client.JS.QueueSubscribe("shop.order.paid.v1", "fulfillment-auto-shipment", handler,
+	if _, err := client.QueueSubscribe("shop.order.paid.v1", "fulfillment-auto-shipment", handler,
 		nats.Durable("fulfillment-order-paid"), nats.ManualAck(), nats.AckExplicit(), nats.MaxDeliver(5)); err != nil {
 		logger.Error("subscribe order.paid", "error", err)
 	}

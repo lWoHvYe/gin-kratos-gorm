@@ -241,8 +241,8 @@ The Go services now export OTLP spans when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
 
 Asynchronous events keep the trace: `outbox.Append` stores the producing
 `traceparent` on the row, the relay opens a producer span linked to it, and the
-consumer continues from the message header. One known gap remains: DTM drives
-branch calls with its own client, which does not propagate `traceparent`.
+consumer continues from the message header. DTM transactions carry the context
+in `BranchHeaders`, which DTM forwards to every saga/TCC branch call.
 
 With the endpoint empty the tracer stays a no-op, so local runs need no
 collector. The database pool is exported regardless of tracing:

@@ -138,7 +138,7 @@ func (s *Service) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (
 		promotionReserved = true
 	}
 	inner := buildCreateOrderInner(orderNo, in, quote, quoteExpireAt(quote))
-	if err := s.submitCreateSaga(orderNo, in.ClientRequestID, quote.GetLines(), inner); err != nil {
+	if err := s.submitCreateSaga(ctx, orderNo, in.ClientRequestID, quote.GetLines(), inner); err != nil {
 		if promotionReserved {
 			_, _ = s.promotion.ReleasePromotions(ctx, &pb.PromotionOrderRequest{OrderNo: orderNo})
 		}
@@ -175,15 +175,19 @@ func (s *Service) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (
 
 // submitCreateSaga registers every quote line as an inventory reservation and
 // finally the order itself, then submits the saga to DTM.
-func (s *Service) submitCreateSaga(orderNo, clientRequestID string, lines []*pb.QuoteLine, inner *pb.CreateOrderInnerRequest) error {
+func (s *Service) submitCreateSaga(ctx context.Context, orderNo, clientRequestID string, lines []*pb.QuoteLine, inner *pb.CreateOrderInnerRequest) error {
 	if s.dtm == nil {
 		return apperr.Unavailable("dtm client is not configured", nil)
 	}
-	saga := s.dtm.Saga(createOrderGID(orderNo))
+	saga := s.dtm.Saga(ctx, createOrderGID(orderNo))
 	// Branch headers are forwarded by DTM to every branch; they carry the
-	// idempotency key that CreateOrderInnerRequest does not expose.
+	// idempotency key that CreateOrderInnerRequest does not expose. Merge instead
+	// of replacing: Saga() already put traceparent there.
 	if clientRequestID != "" {
-		saga.BranchHeaders = map[string]string{clientRequestIDHeader: clientRequestID}
+		if saga.BranchHeaders == nil {
+			saga.BranchHeaders = map[string]string{}
+		}
+		saga.BranchHeaders[clientRequestIDHeader] = clientRequestID
 	}
 	for _, line := range lines {
 		reserve := &pb.ReserveRequest{

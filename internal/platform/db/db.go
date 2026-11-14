@@ -45,6 +45,12 @@ func Open(dsn string) (*sql.DB, error) {
 // the first successful ping. Non-positive values fall back to the defaults and
 // idle connections are clamped to the open limit.
 func OpenWithPool(dsn string, maxOpen, maxIdle int) (*sql.DB, error) {
+	return OpenWithPoolContext(context.Background(), dsn, maxOpen, maxIdle)
+}
+
+// OpenWithPoolContext is OpenWithPool with a cancellable startup: a SIGTERM
+// during the retry loop aborts the wait instead of blocking shutdown.
+func OpenWithPoolContext(ctx context.Context, dsn string, maxOpen, maxIdle int) (*sql.DB, error) {
 	maxOpen, maxIdle = normalizePool(maxOpen, maxIdle)
 	name, err := instrumentedDriver()
 	if err != nil {
@@ -57,14 +63,17 @@ func OpenWithPool(dsn string, maxOpen, maxIdle int) (*sql.DB, error) {
 	configurePool(db, maxOpen, maxIdle)
 	var lastErr error
 	for attempt := 0; attempt < 10; attempt++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		lastErr = db.PingContext(ctx)
+		pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		lastErr = db.PingContext(pingCtx)
 		cancel()
 		if lastErr == nil {
 			registerPoolMetrics(db)
 			return db, nil
 		}
 		select {
+		case <-ctx.Done():
+			_ = db.Close()
+			return nil, fmt.Errorf("open mysql cancelled: %w", ctx.Err())
 		case <-time.After(time.Duration(attempt+1) * time.Second):
 		}
 	}

@@ -8,11 +8,14 @@ import (
 	"gin-kratos-gorm/internal/platform/config"
 
 	"github.com/dtm-labs/client/dtmgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func TestNewSagaOptions(t *testing.T) {
 	c := New(&config.Config{DTMAddress: "127.0.0.1:36790"})
-	s := c.Saga("order-create:TEST")
+	s := c.Saga(context.Background(), "order-create:TEST")
 	if s == nil {
 		t.Fatal("nil saga")
 	}
@@ -44,7 +47,24 @@ func TestProbeRejectsUnreachable(t *testing.T) {
 
 func TestTCCRejectsEmptyGID(t *testing.T) {
 	c := New(&config.Config{DTMAddress: "127.0.0.1:36790"})
-	if err := c.TCC("", func(*dtmgrpc.TccGrpc) error { return nil }); err == nil {
+	if err := c.TCC(context.Background(), "", func(*dtmgrpc.TccGrpc) error { return nil }); err == nil {
 		t.Fatal("expected empty gid error")
+	}
+}
+
+func TestTraceHeadersCarryTraceparent(t *testing.T) {
+	previous := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	defer otel.SetTextMapPropagator(previous)
+
+	if got := traceHeaders(context.Background()); got != nil {
+		t.Fatalf("headers without a span = %v", got)
+	}
+	provider := sdktrace.NewTracerProvider()
+	ctx, span := provider.Tracer("test").Start(context.Background(), "checkout")
+	defer span.End()
+	headers := traceHeaders(ctx)
+	if headers["traceparent"] == "" {
+		t.Fatalf("traceparent missing: %v", headers)
 	}
 }

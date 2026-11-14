@@ -52,7 +52,7 @@ func (s *Service) markPaidTCC(ctx context.Context, in *intent) error {
 	orderTry := strings.TrimRight(envOr("ORDER_TCC_TRY_URL", s.tcc.orderURL), "/")
 	inventoryTry := strings.TrimRight(envOr("INVENTORY_TCC_TRY_URL", s.tcc.inventoryURL), "/")
 	pricingTry := strings.TrimRight(envOr("PRICING_TCC_TRY_URL", s.tcc.pricingURL), "/")
-	err = s.tcc.client.TCC("payment-confirm:"+in.PaymentNo, func(tcc *dtmgrpc.TccGrpc) error {
+	err = s.tcc.client.TCC(ctx, "payment-confirm:"+in.PaymentNo, func(tcc *dtmgrpc.TccGrpc) error {
 		// Try runs in this process, while Confirm/Cancel run from the DTM
 		// container. In Compose these are different addresses; in Kubernetes
 		// both are the same Service DNS name.

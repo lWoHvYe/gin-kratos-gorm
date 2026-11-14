@@ -16,7 +16,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	ctx := context.Background()
+	ctx, stopStartup := runtime.StartupContext()
+	defer stopStartup()
 	shutdownTracing, err := tracing.Init(ctx, cfg.Service)
 	if err != nil {
 		panic(err)

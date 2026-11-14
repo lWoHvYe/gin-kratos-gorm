@@ -28,7 +28,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = shutdownTracing(context.Background()) }()
-	database, err := db.OpenWithPool(cfg.MySQLDSN, cfg.MySQLMaxOpenConns, cfg.MySQLMaxIdleConns)
+	startupCtx, stopStartup := runtime.StartupContext()
+	defer stopStartup()
+	database, err := db.OpenWithPoolContext(startupCtx, cfg.MySQLDSN, cfg.MySQLMaxOpenConns, cfg.MySQLMaxIdleConns)
 	if err != nil {
 		logger.Error("open db", "error", err)
 		os.Exit(1)

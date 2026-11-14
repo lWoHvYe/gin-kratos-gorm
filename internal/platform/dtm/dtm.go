@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 
 	"github.com/dtm-labs/client/dtmcli"
 	"github.com/dtm-labs/client/dtmgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -21,8 +24,18 @@ type Client struct {
 
 func New(cfg *config.Config) *Client { return &Client{Address: cfg.DTMAddress} }
 
-func (c *Client) Saga(gid string) *dtmgrpc.SagaGrpc {
-	s := dtmgrpc.NewSagaGrpc(c.Address, gid)
+// traceHeaders returns the W3C traceparent that DTM forwards to branch calls.
+func traceHeaders(ctx context.Context) map[string]string {
+	header := http.Header{}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(header))
+	if value := strings.TrimSpace(header.Get("traceparent")); value != "" {
+		return map[string]string{"traceparent": value}
+	}
+	return nil
+}
+
+func (c *Client) Saga(ctx context.Context, gid string) *dtmgrpc.SagaGrpc {
+	s := dtmgrpc.NewSagaGrpc(c.Address, gid, dtmgrpc.WithBranchHeaders(traceHeaders(ctx)))
 	s.WaitResult = true
 	s.TimeoutToFail = 30
 	s.RetryLimit = 3
@@ -82,10 +95,16 @@ func Probe(ctx context.Context, address string, timeout time.Duration) error {
 }
 
 // TCC runs a DTM TCC global transaction. The callback registers branches with
-// CallBranch; DTM performs Prepare/Try, then Confirm or Cancel.
-func (c *Client) TCC(gid string, fn func(*dtmgrpc.TccGrpc) error) error {
+// CallBranch; DTM performs Prepare/Try, then Confirm or Cancel. Branch headers
+// carry the trace context so Confirm/Cancel spans join the original request.
+func (c *Client) TCC(ctx context.Context, gid string, fn func(*dtmgrpc.TccGrpc) error) error {
 	if gid == "" {
 		return fmt.Errorf("empty tcc gid")
 	}
-	return dtmgrpc.TccGlobalTransaction2(c.Address, gid, func(tg *dtmgrpc.TccGrpc) {}, fn)
+	headers := traceHeaders(ctx)
+	return dtmgrpc.TccGlobalTransaction2(c.Address, gid, func(tg *dtmgrpc.TccGrpc) {
+		if len(headers) > 0 {
+			tg.BranchHeaders = headers
+		}
+	}, fn)
 }

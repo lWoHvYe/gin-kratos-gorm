@@ -15,7 +15,7 @@ import (
 
 func initialize(ctx context.Context, cfg *config.Config) (*paymentApp, func(), error) {
 	logger := provideLogger(cfg)
-	db, cleanup, err := provideDB(cfg)
+	db, cleanup, err := provideDB(ctx, cfg)
 	if err != nil {
 		return nil, nil, err
 	}

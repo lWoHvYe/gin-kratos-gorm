@@ -98,6 +98,8 @@ upgrade triggers for a per-user signed context.
   original request.
 - Pool observability: `sql.DBStats` is exported as `mall_db_pool_*` gauges and
   counters.
+- Cancellable startup: all services open MySQL with `runtime.StartupContext`,
+  and DTM transactions carry `traceparent` in branch headers.
 - Outbox integration tests: real-MySQL tests cover lease claiming, foreign
   owner completion, backoff/dead-letter and pruning; CI runs them against a
   MySQL service container.
@@ -120,12 +122,12 @@ upgrade triggers for a per-user signed context.
 
 ## Verified findings deferred to later phases
 
-- **Tracing depth**: DTM branch calls do not propagate `traceparent`; the rest
-  of the chain (HTTP, gRPC, SQL, NATS, outbox) is connected.
+- **Tracing depth**: the chain is connected end to end (HTTP, gRPC, SQL, NATS,
+  outbox, DTM branch headers).
 - **Method-level AuthorizationPolicy**: current rules are service-prefixed; a
   DENY for system RPCs must be validated in staging before enabling.
-- **Startup retry**: `db.OpenWithPool` retries with a background context, so a
-  shutdown during startup is not honoured (bounded to ~55s).
+- **Startup retry** is cancellable: `runtime.StartupContext` is wired into
+  `db.OpenWithPoolContext`, so SIGTERM aborts a boot-time MySQL wait.
 - **Fault-injection tests**: integration coverage now includes the outbox lease
   and relay against MySQL + NATS (including a publish failure/backoff path) and
   the seckill admission Lua against Redis. Service-level chaos (NATS partition,

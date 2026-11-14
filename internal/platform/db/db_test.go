@@ -1,8 +1,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"testing"
+	"time"
 )
 
 func TestNormalizePool(t *testing.T) {
@@ -30,5 +32,17 @@ func TestConfigurePoolAppliesLimits(t *testing.T) {
 	configurePool(conn, 42, 7)
 	if got := conn.Stats().MaxOpenConnections; got != 42 {
 		t.Fatalf("MaxOpenConnections = %d", got)
+	}
+}
+
+func TestOpenWithPoolContextHonoursCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	if _, err := OpenWithPoolContext(ctx, "user:pass@tcp(127.0.0.1:1)/mall", 4, 2); err == nil {
+		t.Fatal("expected cancellation error")
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("cancelled open took %s", elapsed)
 	}
 }

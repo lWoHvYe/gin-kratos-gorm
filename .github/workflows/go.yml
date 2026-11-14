@@ -25,6 +25,18 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@v4
 
@@ -78,6 +90,13 @@ jobs:
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
           make proto
           git diff --exit-code -- api/gen
+
+      - name: Outbox lease integration tests
+        run: |
+          TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/mall_outbox_test?parseTime=true' \
+            go test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune' -count=1
+        env:
+          MYSQL_ROOT_PASSWORD: root
 
       - name: Vulnerability scan
         run: |

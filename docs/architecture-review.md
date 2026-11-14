@@ -96,6 +96,9 @@ upgrade triggers for a per-user signed context.
   carry `traceparent`, and durable consumers extract and continue the trace.
 - Pool observability: `sql.DBStats` is exported as `mall_db_pool_*` gauges and
   counters.
+- Outbox integration tests: real-MySQL tests cover lease claiming, foreign
+  owner completion, backoff/dead-letter and pruning; CI runs them against a
+  MySQL service container.
 - Outbox lease relay: a short transaction claims a batch (`lease_owner`,
   `lease_until`), commits, then publishes outside the transaction; failures back
   off, dead-letter after 20 attempts, and an expired lease is reclaimed.
@@ -122,7 +125,9 @@ upgrade triggers for a per-user signed context.
   DENY for system RPCs must be validated in staging before enabling.
 - **Startup retry**: `db.OpenWithPool` retries with a background context, so a
   shutdown during startup is not honoured (bounded to ~55s).
-- **Fault-injection tests**: no chaos/integration suite for NATS loss, relay
-  crash, Redis failover or slow downstreams.
+- **Fault-injection tests**: the outbox lease now has MySQL-backed integration
+  tests (claim races, foreign owner, backoff/dead-letter, pruning) running in
+  CI. Chaos scenarios (NATS loss, Redis failover, slow downstreams) still need
+  a staging environment.
 - **Checkout crash window**: coupon/promotion reservation happens before the
   saga submit; the window needs a failing test before changing.

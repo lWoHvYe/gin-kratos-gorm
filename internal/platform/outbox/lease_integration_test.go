@@ -1,0 +1,236 @@
+package outbox
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"io"
+	"log/slog"
+	"os"
+	"testing"
+	"time"
+
+	mysqldriver "github.com/go-sql-driver/mysql"
+)
+
+// integrationDB connects to TEST_MYSQL_DSN (e.g.
+// root:root@tcp(127.0.0.1:3306)/mall_outbox_test?parseTime=true) and prepares
+// an empty outbox table. The database is created if it does not exist.
+func integrationDB(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn := os.Getenv("TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("set TEST_MYSQL_DSN to run the outbox integration tests")
+	}
+	cfg, err := mysqldriver.ParseDSN(dsn)
+	if err != nil {
+		t.Fatalf("parse TEST_MYSQL_DSN: %v", err)
+	}
+	if cfg.DBName == "" {
+		t.Fatal("TEST_MYSQL_DSN must name a database")
+	}
+	adminCfg := *cfg
+	adminCfg.DBName = ""
+	admin, err := sql.Open("mysql", adminCfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec("CREATE DATABASE IF NOT EXISTS `" + cfg.DBName + "` CHARACTER SET utf8mb4"); err != nil {
+		t.Fatalf("create test database: %v", err)
+	}
+	_ = admin.Close()
+
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(8)
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM outbox_events")
+		_ = db.Close()
+	})
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS outbox_events (
+		id BIGINT NOT NULL AUTO_INCREMENT,
+		event_id VARCHAR(64) NOT NULL,
+		topic VARCHAR(128) NOT NULL,
+		aggregate_type VARCHAR(64) NOT NULL,
+		aggregate_id VARCHAR(64) NOT NULL,
+		event_type VARCHAR(64) NOT NULL,
+		payload JSON NOT NULL,
+		attempts INT NOT NULL DEFAULT 0,
+		last_error VARCHAR(1024) NOT NULL DEFAULT '',
+		next_attempt_at DATETIME(3) NULL,
+		published_at DATETIME(3) NULL,
+		dead_lettered_at DATETIME(3) NULL,
+		lease_owner VARCHAR(128) NULL,
+		lease_until DATETIME(3) NULL,
+		created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+		PRIMARY KEY (id),
+		UNIQUE KEY uk_outbox_event_id (event_id),
+		KEY idx_outbox_lease (published_at, dead_lettered_at, lease_until, next_attempt_at, id)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
+		t.Fatalf("create outbox table: %v", err)
+	}
+	if _, err := db.Exec("DELETE FROM outbox_events"); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func insertEvent(t *testing.T, db *sql.DB, eventID string) int64 {
+	t.Helper()
+	res, err := db.Exec(`INSERT INTO outbox_events
+		(event_id, topic, aggregate_type, aggregate_id, event_type, payload)
+		VALUES (?, 'shop.test.v1', 'test', '1', 'test.created', '{"ok":true}')`, eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestClaimLeasesRowsAndSkipsLeased(t *testing.T) {
+	db := integrationDB(t)
+	ctx := context.Background()
+	for _, id := range []string{"e1", "e2", "e3"} {
+		insertEvent(t, db, id)
+	}
+	claimed, err := claimBatch(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(claimed) != 3 {
+		t.Fatalf("claimed %d rows, want 3", len(claimed))
+	}
+	var owner string
+	var until time.Time
+	if err := db.QueryRow("SELECT lease_owner, lease_until FROM outbox_events WHERE event_id = 'e1'").Scan(&owner, &until); err != nil {
+		t.Fatal(err)
+	}
+	if owner != relayOwner || until.Before(time.Now()) {
+		t.Fatalf("lease = %q until %s", owner, until)
+	}
+
+	// A second relay must not steal a live lease.
+	again, err := claimBatch(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again) != 0 {
+		t.Fatalf("second claim got %d rows, want 0", len(again))
+	}
+
+	// An expired lease is reclaimable.
+	if _, err := db.Exec("UPDATE outbox_events SET lease_until = DATE_SUB(NOW(3), INTERVAL 1 MINUTE) WHERE event_id = 'e1'"); err != nil {
+		t.Fatal(err)
+	}
+	reclaimed, err := claimBatch(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reclaimed) != 1 || reclaimed[0].id == 0 {
+		t.Fatalf("reclaimed %d rows, want 1", len(reclaimed))
+	}
+}
+
+func TestMarkPublishedRequiresTheSameLeaseOwner(t *testing.T) {
+	db := integrationDB(t)
+	ctx := context.Background()
+	id := insertEvent(t, db, "e1")
+	claimed, err := claimBatch(ctx, db)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim: %v (%d)", err, len(claimed))
+	}
+
+	previous := relayOwner
+	relayOwner = "someone-else"
+	ok, err := markPublished(ctx, db, id)
+	relayOwner = previous
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("a foreign owner must not complete a leased row")
+	}
+	ok, err = markPublished(ctx, db, id)
+	if err != nil || !ok {
+		t.Fatalf("owner completion = %v, %v", ok, err)
+	}
+	var published sql.NullTime
+	if err := db.QueryRow("SELECT published_at FROM outbox_events WHERE id = ?", id).Scan(&published); err != nil {
+		t.Fatal(err)
+	}
+	if !published.Valid {
+		t.Fatal("published_at was not set")
+	}
+}
+
+func TestMarkFailedBacksOffThenDeadLetters(t *testing.T) {
+	db := integrationDB(t)
+	ctx := context.Background()
+	id := insertEvent(t, db, "e1")
+	claimed, err := claimBatch(ctx, db)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim: %v", err)
+	}
+	if err := markFailed(ctx, db, claimed[0], errBoom, testLogger()); err != nil {
+		t.Fatal(err)
+	}
+	var attempts int
+	var next sql.NullTime
+	var lease sql.NullString
+	if err := db.QueryRow("SELECT attempts, next_attempt_at, lease_owner FROM outbox_events WHERE id = ?", id).Scan(&attempts, &next, &lease); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 || !next.Valid || lease.Valid {
+		t.Fatalf("after failure: attempts=%d next=%v lease=%v", attempts, next.Valid, lease.Valid)
+	}
+
+	// Exhaust the retry budget.
+	if _, err := db.Exec("UPDATE outbox_events SET attempts = 19, lease_owner = ?, lease_until = DATE_ADD(NOW(3), INTERVAL 1 MINUTE) WHERE id = ?", relayOwner, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := markFailed(ctx, db, claimedEvent{id: id, topic: "shop.test.v1", attempts: 19}, errBoom, testLogger()); err != nil {
+		t.Fatal(err)
+	}
+	var dead sql.NullTime
+	if err := db.QueryRow("SELECT dead_lettered_at FROM outbox_events WHERE id = ?", id).Scan(&dead); err != nil {
+		t.Fatal(err)
+	}
+	if !dead.Valid {
+		t.Fatal("row was not dead-lettered after max attempts")
+	}
+}
+
+func TestPruneRemovesOnlyOldTerminalRows(t *testing.T) {
+	db := integrationDB(t)
+	ctx := context.Background()
+	published := insertEvent(t, db, "old-published")
+	pending := insertEvent(t, db, "pending")
+	if _, err := db.Exec("UPDATE outbox_events SET published_at = DATE_SUB(NOW(3), INTERVAL 30 DAY) WHERE id = ?", published); err != nil {
+		t.Fatal(err)
+	}
+	n, err := pruneOnce(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("pruned %d rows, want 1", n)
+	}
+	var remaining int
+	if err := db.QueryRow("SELECT COUNT(*) FROM outbox_events WHERE id = ?", pending).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 1 {
+		t.Fatal("pending row was pruned")
+	}
+}
+
+var errBoom = errors.New("boom")
+
+func testLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}

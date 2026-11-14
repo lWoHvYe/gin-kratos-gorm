@@ -24,7 +24,7 @@ K8S_INFRA_HA_VALUES := $(K8S_DIR)/charts/infra/values-ha.yaml
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race verify wire proto arch clean \
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race test-integration verify wire proto arch clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-render-ha k8s-lint-ha k8s-ha-verify k8s-deploy mesh-smoke \
 	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration status
 
@@ -50,6 +50,7 @@ help:
 	@echo "  e2e-phase15                       Phase 1.5 B-end/C-end/return E2E (gateway/admin URLs)"
 	@echo "  concurrency-phase15               prove two simultaneous checkouts do not oversell"
 	@echo "  test-race                         unit tests with the race detector"
+	@echo "  test-integration                  MySQL-backed outbox lease tests (TEST_MYSQL_DSN)"
 	@echo "  arch                              architecture/import guard"
 	@echo "  wire                              regenerate Wire injectors for gateway/admin/order/payment"
 	@echo "  proto                             regenerate api/gen from api/proto (requires protoc)"
@@ -152,6 +153,10 @@ concurrency-phase15:
 
 dtm-contract:
 	./scripts/check-dtm-contract.sh
+
+test-integration:
+	@test -n "$$TEST_MYSQL_DSN" || (echo "set TEST_MYSQL_DSN, e.g. root:root@tcp(127.0.0.1:3306)/mall_outbox_test?parseTime=true" >&2; exit 1)
+	$(GO) test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune' -count=1
 
 test-race:
 	$(GO) test -race ./internal/services/... ./internal/platform/...

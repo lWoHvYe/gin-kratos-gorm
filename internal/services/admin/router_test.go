@@ -42,7 +42,7 @@ func testManager(t *testing.T) *auth.Manager {
 func TestAdminOrderDetailRoute(t *testing.T) {
 	manager := testManager(t)
 	fake := &fakeOrderClient{}
-	engine := NewEngine(nil, manager, &Clients{Order: fake})
+	engine := NewEngine(nil, manager, &Clients{Order: fake}, false)
 	token, _, err := manager.Generate(1, []string{"admin"})
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestAdminOrderDetailRoute(t *testing.T) {
 
 func TestAdminOrderDetailRequiresAdmin(t *testing.T) {
 	manager := testManager(t)
-	engine := NewEngine(nil, manager, &Clients{})
+	engine := NewEngine(nil, manager, &Clients{}, false)
 	token, _, err := manager.Generate(2, []string{"user"})
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestAdminOrderDetailRequiresAdmin(t *testing.T) {
 
 func TestAdminRouteRequiresToken(t *testing.T) {
 	manager := testManager(t)
-	engine := NewEngine(nil, manager, &Clients{})
+	engine := NewEngine(nil, manager, &Clients{}, false)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/v1/orders/ORD-1", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)

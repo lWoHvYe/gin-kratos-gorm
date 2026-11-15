@@ -230,7 +230,7 @@ authz:
       sources: [gateway, admin, cart, pricing, ai]
       paths: ["/mall.v1.CatalogService/*"]
     - name: inventory
-      sources: [gateway, admin, order, payment, aftersales, dtm, seckill]
+      sources: [gateway, admin, order, payment, aftersales, dtm, seckill, ai]
       paths: ["/mall.v1.InventoryService/*"]
     - name: cart
       sources: [gateway]

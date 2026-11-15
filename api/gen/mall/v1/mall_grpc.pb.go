@@ -1339,6 +1339,7 @@ const (
 	InventoryService_Release_FullMethodName                   = "/mall.v1.InventoryService/Release"
 	InventoryService_AdminAdjustStock_FullMethodName          = "/mall.v1.InventoryService/AdminAdjustStock"
 	InventoryService_ListStocks_FullMethodName                = "/mall.v1.InventoryService/ListStocks"
+	InventoryService_ListLowStock_FullMethodName              = "/mall.v1.InventoryService/ListLowStock"
 	InventoryService_Restock_FullMethodName                   = "/mall.v1.InventoryService/Restock"
 	InventoryService_TccTryConfirm_FullMethodName             = "/mall.v1.InventoryService/TccTryConfirm"
 	InventoryService_TccConfirm_FullMethodName                = "/mall.v1.InventoryService/TccConfirm"
@@ -1365,6 +1366,7 @@ type InventoryServiceClient interface {
 	Release(ctx context.Context, in *ReserveRequest, opts ...grpc.CallOption) (*Empty, error)
 	AdminAdjustStock(ctx context.Context, in *AdminAdjustStockRequest, opts ...grpc.CallOption) (*Stock, error)
 	ListStocks(ctx context.Context, in *ListStocksRequest, opts ...grpc.CallOption) (*StockList, error)
+	ListLowStock(ctx context.Context, in *ListLowStockRequest, opts ...grpc.CallOption) (*StockList, error)
 	Restock(ctx context.Context, in *RestockRequest, opts ...grpc.CallOption) (*Stock, error)
 	TccTryConfirm(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccConfirm(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -1443,6 +1445,16 @@ func (c *inventoryServiceClient) ListStocks(ctx context.Context, in *ListStocksR
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StockList)
 	err := c.cc.Invoke(ctx, InventoryService_ListStocks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) ListLowStock(ctx context.Context, in *ListLowStockRequest, opts ...grpc.CallOption) (*StockList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StockList)
+	err := c.cc.Invoke(ctx, InventoryService_ListLowStock_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1581,6 +1593,7 @@ type InventoryServiceServer interface {
 	Release(context.Context, *ReserveRequest) (*Empty, error)
 	AdminAdjustStock(context.Context, *AdminAdjustStockRequest) (*Stock, error)
 	ListStocks(context.Context, *ListStocksRequest) (*StockList, error)
+	ListLowStock(context.Context, *ListLowStockRequest) (*StockList, error)
 	Restock(context.Context, *RestockRequest) (*Stock, error)
 	TccTryConfirm(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccConfirm(context.Context, *TccPaymentRequest) (*Empty, error)
@@ -1622,6 +1635,9 @@ func (UnimplementedInventoryServiceServer) AdminAdjustStock(context.Context, *Ad
 }
 func (UnimplementedInventoryServiceServer) ListStocks(context.Context, *ListStocksRequest) (*StockList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListStocks not implemented")
+}
+func (UnimplementedInventoryServiceServer) ListLowStock(context.Context, *ListLowStockRequest) (*StockList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLowStock not implemented")
 }
 func (UnimplementedInventoryServiceServer) Restock(context.Context, *RestockRequest) (*Stock, error) {
 	return nil, status.Error(codes.Unimplemented, "method Restock not implemented")
@@ -1784,6 +1800,24 @@ func _InventoryService_ListStocks_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InventoryServiceServer).ListStocks(ctx, req.(*ListStocksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_ListLowStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLowStockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ListLowStock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ListLowStock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ListLowStock(ctx, req.(*ListLowStockRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2034,6 +2068,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListStocks",
 			Handler:    _InventoryService_ListStocks_Handler,
+		},
+		{
+			MethodName: "ListLowStock",
+			Handler:    _InventoryService_ListLowStock_Handler,
 		},
 		{
 			MethodName: "Restock",
@@ -2765,6 +2803,7 @@ const (
 	OrderService_MarkPaid_FullMethodName           = "/mall.v1.OrderService/MarkPaid"
 	OrderService_GetOrder_FullMethodName           = "/mall.v1.OrderService/GetOrder"
 	OrderService_ListOrders_FullMethodName         = "/mall.v1.OrderService/ListOrders"
+	OrderService_GetOrderStats_FullMethodName      = "/mall.v1.OrderService/GetOrderStats"
 	OrderService_TccTryMarkPaid_FullMethodName     = "/mall.v1.OrderService/TccTryMarkPaid"
 	OrderService_TccConfirmMarkPaid_FullMethodName = "/mall.v1.OrderService/TccConfirmMarkPaid"
 	OrderService_TccCancelMarkPaid_FullMethodName  = "/mall.v1.OrderService/TccCancelMarkPaid"
@@ -2785,6 +2824,7 @@ type OrderServiceClient interface {
 	MarkPaid(ctx context.Context, in *MarkPaidRequest, opts ...grpc.CallOption) (*Order, error)
 	GetOrder(ctx context.Context, in *GetOrderRequest, opts ...grpc.CallOption) (*Order, error)
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*OrderList, error)
+	GetOrderStats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*OrderStats, error)
 	TccTryMarkPaid(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccConfirmMarkPaid(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccCancelMarkPaid(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -2879,6 +2919,16 @@ func (c *orderServiceClient) ListOrders(ctx context.Context, in *ListOrdersReque
 	return out, nil
 }
 
+func (c *orderServiceClient) GetOrderStats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*OrderStats, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderStats)
+	err := c.cc.Invoke(ctx, OrderService_GetOrderStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orderServiceClient) TccTryMarkPaid(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -2933,6 +2983,7 @@ type OrderServiceServer interface {
 	MarkPaid(context.Context, *MarkPaidRequest) (*Order, error)
 	GetOrder(context.Context, *GetOrderRequest) (*Order, error)
 	ListOrders(context.Context, *ListOrdersRequest) (*OrderList, error)
+	GetOrderStats(context.Context, *StatsRequest) (*OrderStats, error)
 	TccTryMarkPaid(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccConfirmMarkPaid(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccCancelMarkPaid(context.Context, *TccPaymentRequest) (*Empty, error)
@@ -2970,6 +3021,9 @@ func (UnimplementedOrderServiceServer) GetOrder(context.Context, *GetOrderReques
 }
 func (UnimplementedOrderServiceServer) ListOrders(context.Context, *ListOrdersRequest) (*OrderList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOrders not implemented")
+}
+func (UnimplementedOrderServiceServer) GetOrderStats(context.Context, *StatsRequest) (*OrderStats, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOrderStats not implemented")
 }
 func (UnimplementedOrderServiceServer) TccTryMarkPaid(context.Context, *TccPaymentRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method TccTryMarkPaid not implemented")
@@ -3148,6 +3202,24 @@ func _OrderService_ListOrders_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrderService_GetOrderStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).GetOrderStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_GetOrderStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).GetOrderStats(ctx, req.(*StatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _OrderService_TccTryMarkPaid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TccPaymentRequest)
 	if err := dec(in); err != nil {
@@ -3258,6 +3330,10 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListOrders",
 			Handler:    _OrderService_ListOrders_Handler,
+		},
+		{
+			MethodName: "GetOrderStats",
+			Handler:    _OrderService_GetOrderStats_Handler,
 		},
 		{
 			MethodName: "TccTryMarkPaid",
@@ -4476,6 +4552,7 @@ const (
 	AfterSalesService_ReceiveReturn_FullMethodName        = "/mall.v1.AfterSalesService/ReceiveReturn"
 	AfterSalesService_Refund_FullMethodName               = "/mall.v1.AfterSalesService/Refund"
 	AfterSalesService_ListAfterSales_FullMethodName       = "/mall.v1.AfterSalesService/ListAfterSales"
+	AfterSalesService_GetAfterSaleStats_FullMethodName    = "/mall.v1.AfterSalesService/GetAfterSaleStats"
 )
 
 // AfterSalesServiceClient is the client API for AfterSalesService service.
@@ -4491,6 +4568,7 @@ type AfterSalesServiceClient interface {
 	ReceiveReturn(ctx context.Context, in *ReceiveReturnRequest, opts ...grpc.CallOption) (*AfterSale, error)
 	Refund(ctx context.Context, in *RefundAfterSaleRequest, opts ...grpc.CallOption) (*AfterSale, error)
 	ListAfterSales(ctx context.Context, in *ListAfterSalesRequest, opts ...grpc.CallOption) (*AfterSaleList, error)
+	GetAfterSaleStats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*AfterSaleStats, error)
 }
 
 type afterSalesServiceClient struct {
@@ -4571,6 +4649,16 @@ func (c *afterSalesServiceClient) ListAfterSales(ctx context.Context, in *ListAf
 	return out, nil
 }
 
+func (c *afterSalesServiceClient) GetAfterSaleStats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*AfterSaleStats, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AfterSaleStats)
+	err := c.cc.Invoke(ctx, AfterSalesService_GetAfterSaleStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AfterSalesServiceServer is the server API for AfterSalesService service.
 // All implementations must embed UnimplementedAfterSalesServiceServer
 // for forward compatibility.
@@ -4584,6 +4672,7 @@ type AfterSalesServiceServer interface {
 	ReceiveReturn(context.Context, *ReceiveReturnRequest) (*AfterSale, error)
 	Refund(context.Context, *RefundAfterSaleRequest) (*AfterSale, error)
 	ListAfterSales(context.Context, *ListAfterSalesRequest) (*AfterSaleList, error)
+	GetAfterSaleStats(context.Context, *StatsRequest) (*AfterSaleStats, error)
 	mustEmbedUnimplementedAfterSalesServiceServer()
 }
 
@@ -4614,6 +4703,9 @@ func (UnimplementedAfterSalesServiceServer) Refund(context.Context, *RefundAfter
 }
 func (UnimplementedAfterSalesServiceServer) ListAfterSales(context.Context, *ListAfterSalesRequest) (*AfterSaleList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAfterSales not implemented")
+}
+func (UnimplementedAfterSalesServiceServer) GetAfterSaleStats(context.Context, *StatsRequest) (*AfterSaleStats, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAfterSaleStats not implemented")
 }
 func (UnimplementedAfterSalesServiceServer) mustEmbedUnimplementedAfterSalesServiceServer() {}
 func (UnimplementedAfterSalesServiceServer) testEmbeddedByValue()                           {}
@@ -4762,6 +4854,24 @@ func _AfterSalesService_ListAfterSales_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AfterSalesService_GetAfterSaleStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AfterSalesServiceServer).GetAfterSaleStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AfterSalesService_GetAfterSaleStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AfterSalesServiceServer).GetAfterSaleStats(ctx, req.(*StatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AfterSalesService_ServiceDesc is the grpc.ServiceDesc for AfterSalesService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4796,6 +4906,10 @@ var AfterSalesService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListAfterSales",
 			Handler:    _AfterSalesService_ListAfterSales_Handler,
+		},
+		{
+			MethodName: "GetAfterSaleStats",
+			Handler:    _AfterSalesService_GetAfterSaleStats_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

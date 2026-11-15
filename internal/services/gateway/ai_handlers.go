@@ -2,10 +2,6 @@ package gateway
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"io"
-	"net/http"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -21,13 +17,6 @@ const aiStreamTimeout = 120 * time.Second
 type aiChatRequest struct {
 	SessionID string `json:"session_id"`
 	Message   string `json:"message"`
-}
-
-type aiEvent struct {
-	Type  string `json:"type"`
-	Delta string `json:"delta,omitempty"`
-	Tool  string `json:"tool,omitempty"`
-	Error string `json:"error,omitempty"`
 }
 
 // aiChat proxies the assistant's gRPC stream as SSE. user_id always comes from
@@ -62,74 +51,7 @@ func (h *handlers) aiChat(c *gin.Context) {
 		return
 	}
 	defer func() { _ = stream.CloseSend() }()
-
-	// Read the first event before committing SSE headers: quota and provider
-	// errors arrive here, so the HTTP status can still be 429/503.
-	first, recvErr := stream.Recv()
-	if recvErr != nil {
-		if errors.Is(recvErr, io.EOF) {
-			httpx.Error(c, apperr.Unavailable("assistant returned no events", nil))
-			return
-		}
-		httpx.Error(c, bff.RemoteError(recvErr))
-		return
-	}
-
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
-	c.Status(http.StatusOK)
-	flusher, _ := c.Writer.(http.Flusher)
-
-	write := func(ev aiEvent) bool {
-		payload, err := json.Marshal(ev)
-		if err != nil {
-			return false
-		}
-		if _, err := c.Writer.Write([]byte("data: " + string(payload) + "\n\n")); err != nil {
-			return false
-		}
-		if flusher != nil {
-			flusher.Flush()
-		}
-		return true
-	}
-
-	handle := func(ev *pb.AIChatEvent) bool {
-		switch ev.GetType() {
-		case "delta":
-			return write(aiEvent{Type: "delta", Delta: ev.GetDelta()})
-		case "tool":
-			return write(aiEvent{Type: "tool", Tool: ev.GetTool()})
-		case "error":
-			write(aiEvent{Type: "error", Error: ev.GetError()})
-			return false
-		case "done":
-			write(aiEvent{Type: "done"})
-			return false
-		}
-		return true
-	}
-	if !handle(first) {
-		return
-	}
-	for {
-		ev, recvErr := stream.Recv()
-		if errors.Is(recvErr, io.EOF) {
-			return
-		}
-		if recvErr != nil {
-			write(aiEvent{Type: "error", Error: "assistant stream interrupted"})
-			return
-		}
-		if ev == nil {
-			continue
-		}
-		if !handle(ev) {
-			return
-		}
-	}
+	bff.ProxyAIStream(c, stream)
 }
 
 func unavailableAI() error {

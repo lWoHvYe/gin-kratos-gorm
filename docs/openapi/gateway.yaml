@@ -873,3 +873,27 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+  /api/v1/ai/chat:
+    post:
+      summary: Shopping assistant (SSE stream)
+      tags: [ai]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string }
+                session_id: { type: string }
+              additionalProperties: false
+      responses:
+        '200':
+          description: text/event-stream of assistant events (delta/tool/done/error)
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '429':
+          description: per-user quota exceeded

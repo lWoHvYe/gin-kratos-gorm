@@ -118,3 +118,15 @@ func TestChatSendsErrorEventWhenModelFails(t *testing.T) {
 		t.Fatalf("events = %+v", stream.events)
 	}
 }
+
+func TestChatSelectsAdminAgent(t *testing.T) {
+	svc := newTestService(t, fakeAgent{chunks: []*schema.Message{{Role: schema.Assistant, Content: "customer"}}}, &fakeSessions{}, fakeLimiter{allowed: true})
+	svc.adminAgent = fakeAgent{chunks: []*schema.Message{{Role: schema.Assistant, Content: "admin"}}}
+	stream := &fakeChatStream{ctx: context.Background()}
+	if err := svc.Chat(&pb.AIChatRequest{UserId: 1, Message: "hi", Admin: true}, stream); err != nil {
+		t.Fatal(err)
+	}
+	if len(stream.events) == 0 || stream.events[0].GetDelta() != "admin" {
+		t.Fatalf("events = %+v", stream.events)
+	}
+}

@@ -36,26 +36,34 @@ type Config struct {
 type Service struct {
 	pb.UnimplementedAIServiceServer
 
-	cfg      Config
-	agent    agentRunner
-	sessions sessionStore
-	limiter  limiter
-	log      *slog.Logger
+	cfg        Config
+	agent      agentRunner
+	adminAgent agentRunner
+	sessions   sessionStore
+	limiter    limiter
+	log        *slog.Logger
 }
 
 // NewService wires the agent, Redis session store and per-user limiter. The
 // agent is only built when the feature is enabled, so a disabled assistant does
 // not dial the model or the catalog.
 func NewService(ctx context.Context, cfg Config, provider ProviderConfig, d deps, cache redis.UniversalClient, logger *slog.Logger) (*Service, error) {
-	var runner agentRunner
+	var runner, adminRunner agentRunner
 	if cfg.Enabled {
 		built, err := buildAgent(ctx, provider, d)
 		if err != nil {
 			return nil, err
 		}
 		runner = built
+		adminBuilt, err := buildAdminAgent(ctx, provider, d)
+		if err != nil {
+			return nil, err
+		}
+		adminRunner = adminBuilt
 	}
-	return New(cfg, runner, newSessionStore(cache), newLimiter(cache, cfg.RateLimit, cfg.RateWindow), logger), nil
+	svc := New(cfg, runner, newSessionStore(cache), newLimiter(cache, cfg.RateLimit, cfg.RateWindow), logger)
+	svc.adminAgent = adminRunner
+	return svc, nil
 }
 
 func New(cfg Config, agent agentRunner, sessions sessionStore, limit limiter, logger *slog.Logger) *Service {
@@ -128,7 +136,15 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 	}
 	turns := append(history, &schema.Message{Role: schema.User, Content: message})
 
-	out, err := s.agent.Stream(ctx, turns)
+	runner := s.agent
+	if req.GetAdmin() {
+		runner = s.adminAgent
+	}
+	if runner == nil {
+		result = "disabled"
+		return status.Error(codes.Unavailable, "assistant is not available")
+	}
+	out, err := runner.Stream(ctx, turns)
 	if err != nil {
 		result = "error"
 		s.log.Warn("ai stream failed", "user_id", req.GetUserId(), "error", err)
@@ -178,7 +194,7 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		// A failed history write must not fail a delivered answer.
 		s.log.Warn("ai session append failed", "user_id", req.GetUserId(), "error", err)
 	}
-	s.log.Info("ai chat", "user_id", req.GetUserId(), "session_id", sessionID,
+	s.log.Info("ai chat", "user_id", req.GetUserId(), "session_id", sessionID, "admin", req.GetAdmin(),
 		"latency_ms", time.Since(start).Milliseconds(), "chars", answer.Len())
 	return stream.Send(&pb.AIChatEvent{Type: "done"})
 }

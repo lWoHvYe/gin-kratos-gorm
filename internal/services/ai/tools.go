@@ -24,11 +24,17 @@ type catalogClient interface {
 type orderClient interface {
 	ListOrders(ctx context.Context, in *pb.ListOrdersRequest, opts ...grpc.CallOption) (*pb.OrderList, error)
 	GetOrder(ctx context.Context, in *pb.GetOrderRequest, opts ...grpc.CallOption) (*pb.Order, error)
+	GetOrderStats(ctx context.Context, in *pb.StatsRequest, opts ...grpc.CallOption) (*pb.OrderStats, error)
 }
 
 type afterSalesClient interface {
 	ListAfterSales(ctx context.Context, in *pb.ListAfterSalesRequest, opts ...grpc.CallOption) (*pb.AfterSaleList, error)
 	GetAfterSale(ctx context.Context, in *pb.GetAfterSaleRequest, opts ...grpc.CallOption) (*pb.AfterSale, error)
+	GetAfterSaleStats(ctx context.Context, in *pb.StatsRequest, opts ...grpc.CallOption) (*pb.AfterSaleStats, error)
+}
+
+type inventoryClient interface {
+	ListLowStock(ctx context.Context, in *pb.ListLowStockRequest, opts ...grpc.CallOption) (*pb.StockList, error)
 }
 
 // Deps are the read-only clients the agent tools may call.
@@ -36,6 +42,7 @@ type Deps struct {
 	Catalog    catalogClient
 	Orders     orderClient
 	AfterSales afterSalesClient
+	Inventory  inventoryClient
 }
 
 type deps = Deps
@@ -409,4 +416,144 @@ func scopedUser(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("authenticated user is required")
 	}
 	return uid, nil
+}
+
+// ---------------------------------------------------------------- admin analytics
+
+type daysInput struct {
+	Days int32 `json:"days,omitempty" jsonschema:"description=Window in days, default 30, max 366"`
+}
+
+type salesSummaryOutput struct {
+	FromUnix        int64 `json:"from_unix"`
+	ToUnix          int64 `json:"to_unix"`
+	TotalOrders     int64 `json:"total_orders"`
+	PaidOrders      int64 `json:"paid_orders"`
+	CompletedOrders int64 `json:"completed_orders"`
+	CancelledOrders int64 `json:"cancelled_orders"`
+	PaidCent        int64 `json:"paid_cent"`
+}
+
+type refundSummaryOutput struct {
+	FromUnix     int64 `json:"from_unix"`
+	ToUnix       int64 `json:"to_unix"`
+	Total        int64 `json:"total"`
+	Requested    int64 `json:"requested"`
+	Approved     int64 `json:"approved"`
+	Refunded     int64 `json:"refunded"`
+	RefundedCent int64 `json:"refunded_cent"`
+}
+
+type lowStockInput struct {
+	Threshold int64 `json:"threshold,omitempty" jsonschema:"description=Report rows whose available stock is <= threshold, default 10"`
+	Limit     int32 `json:"limit,omitempty" jsonschema:"description=Number of rows, max 20"`
+}
+
+type stockSummary struct {
+	SkuID     int64 `json:"sku_id"`
+	Warehouse int64 `json:"warehouse_id"`
+	OnHand    int64 `json:"on_hand"`
+	Reserved  int64 `json:"reserved"`
+	Available int64 `json:"available"`
+}
+
+type lowStockOutput struct {
+	Stocks []stockSummary `json:"stocks"`
+	Total  int64          `json:"total"`
+}
+
+func statsRange(days int32) (int64, int64) {
+	if days <= 0 {
+		days = 30
+	}
+	if days > 366 {
+		days = 366
+	}
+	to := time.Now()
+	from := to.AddDate(0, 0, -int(days))
+	return from.Unix(), to.Unix()
+}
+
+func newAdminTools(d Deps) ([]tool.BaseTool, error) {
+	sales, err := utils.InferTool("sales_summary",
+		"Read-only order aggregates (counts and paid amount) for a recent window. Use for 销售/订单/营收 questions.",
+		func(ctx context.Context, in daysInput) (salesSummaryOutput, error) {
+			from, to := statsRange(in.Days)
+			ctx, cancel := context.WithTimeout(ctx, toolTimeout)
+			defer cancel()
+			stats, err := d.Orders.GetOrderStats(ctx, &pb.StatsRequest{FromUnix: from, ToUnix: to})
+			if err != nil {
+				metrics.AIToolCalls.WithLabelValues("sales_summary", "error").Inc()
+				return salesSummaryOutput{}, err
+			}
+			metrics.AIToolCalls.WithLabelValues("sales_summary", "ok").Inc()
+			return salesSummaryOutput{
+				FromUnix: stats.GetFromUnix(), ToUnix: stats.GetToUnix(),
+				TotalOrders: stats.GetTotalOrders(), PaidOrders: stats.GetPaidOrders(),
+				CompletedOrders: stats.GetCompletedOrders(), CancelledOrders: stats.GetCancelledOrders(),
+				PaidCent: stats.GetPaidCent(),
+			}, nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	refunds, err := utils.InferTool("refund_summary",
+		"Read-only after-sale/refund aggregates for a recent window. Use for 退款/售后 questions.",
+		func(ctx context.Context, in daysInput) (refundSummaryOutput, error) {
+			from, to := statsRange(in.Days)
+			ctx, cancel := context.WithTimeout(ctx, toolTimeout)
+			defer cancel()
+			stats, err := d.AfterSales.GetAfterSaleStats(ctx, &pb.StatsRequest{FromUnix: from, ToUnix: to})
+			if err != nil {
+				metrics.AIToolCalls.WithLabelValues("refund_summary", "error").Inc()
+				return refundSummaryOutput{}, err
+			}
+			metrics.AIToolCalls.WithLabelValues("refund_summary", "ok").Inc()
+			return refundSummaryOutput{
+				FromUnix: stats.GetFromUnix(), ToUnix: stats.GetToUnix(),
+				Total: stats.GetTotal(), Requested: stats.GetRequested(),
+				Approved: stats.GetApproved(), Refunded: stats.GetRefunded(),
+				RefundedCent: stats.GetRefundedCent(),
+			}, nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	low, err := utils.InferTool("low_stock",
+		"List stock rows closest to running out (available <= threshold), for 库存/补货 questions.",
+		func(ctx context.Context, in lowStockInput) (lowStockOutput, error) {
+			threshold := in.Threshold
+			if threshold <= 0 {
+				threshold = 10
+			}
+			limit := in.Limit
+			if limit <= 0 {
+				limit = 10
+			}
+			if limit > 20 {
+				limit = 20
+			}
+			ctx, cancel := context.WithTimeout(ctx, toolTimeout)
+			defer cancel()
+			list, err := d.Inventory.ListLowStock(ctx, &pb.ListLowStockRequest{Threshold: threshold, Limit: limit})
+			if err != nil {
+				metrics.AIToolCalls.WithLabelValues("low_stock", "error").Inc()
+				return lowStockOutput{}, err
+			}
+			out := lowStockOutput{Total: list.GetTotal()}
+			for _, st := range list.GetStocks() {
+				out.Stocks = append(out.Stocks, stockSummary{
+					SkuID: st.GetSkuId(), Warehouse: st.GetWarehouseId(),
+					OnHand: st.GetOnHand(), Reserved: st.GetReserved(), Available: st.GetAvailable(),
+				})
+			}
+			metrics.AIToolCalls.WithLabelValues("low_stock", "ok").Inc()
+			return out, nil
+		})
+	if err != nil {
+		return nil, err
+	}
+	return []tool.BaseTool{sales, refunds, low}, nil
 }

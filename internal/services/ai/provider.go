@@ -58,7 +58,7 @@ func (m *mockModel) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatMo
 func (m *mockModel) Generate(_ context.Context, in []*schema.Message, _ ...model.Option) (*schema.Message, error) {
 	last := in[len(in)-1]
 	if last.Role == schema.Tool {
-		return &schema.Message{Role: schema.Assistant, Content: mockAnswer(last.Content)}, nil
+		return &schema.Message{Role: schema.Assistant, Content: mockAnswer(last.ToolName, last.Content)}, nil
 	}
 	query := ""
 	for i := len(in) - 1; i >= 0; i-- {
@@ -67,7 +67,7 @@ func (m *mockModel) Generate(_ context.Context, in []*schema.Message, _ ...model
 			break
 		}
 	}
-	name, payload := mockToolCall(query)
+	name, payload := m.mockToolCall(query)
 	args, _ := json.Marshal(payload)
 	return &schema.Message{
 		Role: schema.Assistant,
@@ -90,21 +90,39 @@ func (m *mockModel) Stream(ctx context.Context, in []*schema.Message, opts ...mo
 	return schema.StreamReaderFromArray([]*schema.Message{msg}), nil
 }
 
-func mockToolCall(query string) (string, map[string]any) {
+func (m *mockModel) mockToolCall(query string) (string, map[string]any) {
 	q := strings.ToLower(query)
+	has := func(name string) bool {
+		for _, ti := range m.tools {
+			if ti.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+	if has("sales_summary") { // admin agent
+		switch {
+		case strings.Contains(q, "退款") || strings.Contains(q, "售后"):
+			return "refund_summary", map[string]any{"days": 30}
+		case strings.Contains(q, "库存") || strings.Contains(q, "缺货") || strings.Contains(q, "补货"):
+			return "low_stock", map[string]any{"threshold": 10, "limit": 10}
+		default:
+			return "sales_summary", map[string]any{"days": 30}
+		}
+	}
 	switch {
-	case strings.Contains(q, "政策") || strings.Contains(q, "规则") || strings.Contains(q, "运费"):
+	case has("search_policy") && (strings.Contains(q, "政策") || strings.Contains(q, "规则") || strings.Contains(q, "运费")):
 		return "search_policy", map[string]any{"query": query}
-	case strings.Contains(q, "订单") || strings.Contains(q, "发货") || strings.Contains(q, "物流"):
+	case has("list_my_orders") && (strings.Contains(q, "订单") || strings.Contains(q, "发货") || strings.Contains(q, "物流")):
 		return "list_my_orders", map[string]any{"limit": 5}
-	case strings.Contains(q, "退货") || strings.Contains(q, "退款") || strings.Contains(q, "售后"):
+	case has("list_my_after_sales") && (strings.Contains(q, "退货") || strings.Contains(q, "退款") || strings.Contains(q, "售后")):
 		return "list_my_after_sales", map[string]any{"limit": 5}
 	default:
 		return "search_products", map[string]any{"query": query, "page_size": 5}
 	}
 }
 
-func mockAnswer(toolResult string) string {
+func mockAnswer(toolName, toolResult string) string {
 	var out struct {
 		Products []struct {
 			Name      string `json:"name"`
@@ -119,15 +137,51 @@ func mockAnswer(toolResult string) string {
 			No     string `json:"after_sale_no"`
 			Status string `json:"status"`
 		} `json:"after_sales"`
-		Answer string `json:"answer"`
+		Stocks []struct {
+			SkuID     int64 `json:"sku_id"`
+			Available int64 `json:"available"`
+		} `json:"stocks"`
+		TotalOrders     int64  `json:"total_orders"`
+		PaidOrders      int64  `json:"paid_orders"`
+		CompletedOrders int64  `json:"completed_orders"`
+		CancelledOrders int64  `json:"cancelled_orders"`
+		PaidCent        int64  `json:"paid_cent"`
+		Total           int64  `json:"total"`
+		Requested       int64  `json:"requested"`
+		Approved        int64  `json:"approved"`
+		Refunded        int64  `json:"refunded"`
+		RefundedCent    int64  `json:"refunded_cent"`
+		Answer          string `json:"answer"`
 	}
 	if err := json.Unmarshal([]byte(toolResult), &out); err != nil {
 		return "我暂时无法读取这项信息，请稍后再试或联系人工客服。"
 	}
-	switch {
-	case out.Answer != "":
+	switch toolName {
+	case "search_policy":
+		if out.Answer == "" {
+			return "没有找到对应的商城规则，建议转人工客服确认。"
+		}
 		return out.Answer
-	case len(out.Orders) > 0:
+	case "sales_summary":
+		return fmt.Sprintf("最近 30 天共 %d 笔订单，已支付 %d 笔，完成 %d 笔，取消 %d 笔，支付金额 ¥%.2f。",
+			out.TotalOrders, out.PaidOrders, out.CompletedOrders, out.CancelledOrders, float64(out.PaidCent)/100)
+	case "refund_summary":
+		return fmt.Sprintf("最近 30 天售后 %d 条，待处理 %d 条，已通过 %d 条，已退款 %d 条，退款金额 ¥%.2f。",
+			out.Total, out.Requested, out.Approved, out.Refunded, float64(out.RefundedCent)/100)
+	case "low_stock":
+		var b strings.Builder
+		fmt.Fprintf(&b, "库存偏低的 SKU 共 %d 个，例如：\n", out.Total)
+		for i, st := range out.Stocks {
+			if i >= 5 {
+				break
+			}
+			fmt.Fprintf(&b, "- SKU %d：可用 %d\n", st.SkuID, st.Available)
+		}
+		return strings.TrimRight(b.String(), "\n")
+	case "list_my_orders", "get_my_order":
+		if len(out.Orders) == 0 {
+			return "没有查到订单记录。"
+		}
 		var b strings.Builder
 		fmt.Fprintf(&b, "最近 %d 笔订单：\n", len(out.Orders))
 		for i, o := range out.Orders {
@@ -137,7 +191,10 @@ func mockAnswer(toolResult string) string {
 			fmt.Fprintf(&b, "- %s：%s，¥%.2f\n", o.OrderNo, o.Status, float64(o.PayCent)/100)
 		}
 		return strings.TrimRight(b.String(), "\n")
-	case len(out.AfterSales) > 0:
+	case "list_my_after_sales", "get_my_after_sale":
+		if len(out.AfterSales) == 0 {
+			return "没有查到售后记录。"
+		}
 		var b strings.Builder
 		fmt.Fprintf(&b, "最近 %d 条售后记录：\n", len(out.AfterSales))
 		for i, a := range out.AfterSales {
@@ -147,7 +204,10 @@ func mockAnswer(toolResult string) string {
 			fmt.Fprintf(&b, "- %s：%s\n", a.No, a.Status)
 		}
 		return strings.TrimRight(b.String(), "\n")
-	case len(out.Products) > 0:
+	case "search_products", "get_product":
+		if len(out.Products) == 0 {
+			return "没有找到匹配的商品，可以换个关键词或预算试试。"
+		}
 		var b strings.Builder
 		fmt.Fprintf(&b, "找到 %d 件商品：\n", len(out.Products))
 		for i, p := range out.Products {

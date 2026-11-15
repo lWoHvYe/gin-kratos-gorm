@@ -137,7 +137,7 @@ spec:
             - name: ORDER_DTM_URL
               value: "order:9006/mall.v1.OrderService"
             {{- end }}
-            {{- if eq $name "gateway" }}
+            {{- if or (eq $name "gateway") (eq $name "admin") }}
             - name: AI_ENABLED
               value: {{ $.Values.ai.enabled | quote }}
             {{- end }}

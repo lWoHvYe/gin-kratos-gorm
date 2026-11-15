@@ -64,6 +64,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer afterSalesConn.Close()
+	inventoryConn, err := dial("INVENTORY_ADDR", "inventory:9003")
+	if err != nil {
+		logger.Error("dial inventory", "error", err)
+		os.Exit(1)
+	}
+	defer inventoryConn.Close()
 
 	svc, err := ai.NewService(context.Background(), ai.Config{
 		Enabled:    cfg.AIEnabled,
@@ -81,6 +87,7 @@ func main() {
 		Catalog:    pb.NewCatalogServiceClient(catalogConn),
 		Orders:     pb.NewOrderServiceClient(orderConn),
 		AfterSales: pb.NewAfterSalesServiceClient(afterSalesConn),
+		Inventory:  pb.NewInventoryServiceClient(inventoryConn),
 	}, cache, logger)
 	if err != nil {
 		logger.Error("build ai service", "error", err)

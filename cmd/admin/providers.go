@@ -32,13 +32,14 @@ func provideAuth(cfg *config.Config) *auth.Manager {
 	return auth.NewManager(cfg)
 }
 
-func provideEngine(logger *slog.Logger, jwt *auth.Manager, clients *admin.Clients) *gin.Engine {
-	return admin.NewEngine(logger, jwt, clients)
+func provideEngine(cfg *config.Config, logger *slog.Logger, jwt *auth.Manager, clients *admin.Clients) *gin.Engine {
+	return admin.NewEngine(logger, jwt, clients, cfg.AIEnabled)
 }
 
 func provideHTTPServer(cfg *config.Config, engine *gin.Engine) *khttp.Server {
-	// Kratos defaults to a 1s request timeout, which cuts off checkout sagas.
-	srv := khttp.NewServer(khttp.Address(cfg.HTTPAddr), khttp.Timeout(15*time.Second))
+	// 120s bounds SSE assistant streams; normal routes keep 15s through the
+	// BFF timeout middleware.
+	srv := khttp.NewServer(khttp.Address(cfg.HTTPAddr), khttp.Timeout(120*time.Second))
 	srv.HandlePrefix("/", otelhttp.NewHandler(engine, cfg.Service))
 	return srv
 }

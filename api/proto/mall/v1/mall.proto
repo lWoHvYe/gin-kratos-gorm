@@ -225,6 +225,7 @@ service InventoryService {
   rpc Release (ReserveRequest) returns (Empty);
   rpc AdminAdjustStock (AdminAdjustStockRequest) returns (Stock);
   rpc ListStocks (ListStocksRequest) returns (StockList);
+  rpc ListLowStock (ListLowStockRequest) returns (StockList);
   rpc Restock (RestockRequest) returns (Stock);
   rpc TccTryConfirm (TccPaymentRequest) returns (Empty);
   rpc TccConfirm (TccPaymentRequest) returns (Empty);
@@ -269,6 +270,11 @@ message ListStocksRequest {
   int32 page_size = 4;
 }
 message StockList { repeated Stock stocks = 1; int64 total = 2; }
+
+message ListLowStockRequest {
+  int64 threshold = 1;
+  int32 limit = 2;
+}
 message RestockRequest {
   string order_no = 1;
   int64 sku_id = 2;
@@ -355,6 +361,7 @@ service OrderService {
   rpc MarkPaid (MarkPaidRequest) returns (Order);
   rpc GetOrder (GetOrderRequest) returns (Order);
   rpc ListOrders (ListOrdersRequest) returns (OrderList);
+  rpc GetOrderStats (StatsRequest) returns (OrderStats);
   rpc TccTryMarkPaid (TccPaymentRequest) returns (Empty);
   rpc TccConfirmMarkPaid (TccPaymentRequest) returns (Empty);
   rpc TccCancelMarkPaid (TccPaymentRequest) returns (Empty);
@@ -436,6 +443,20 @@ message ListOrdersRequest {
   string status = 5;
 }
 message OrderList { repeated Order orders = 1; int64 total = 2; }
+
+message StatsRequest {
+  int64 from_unix = 1;
+  int64 to_unix = 2;
+}
+message OrderStats {
+  int64 total_orders = 1;
+  int64 paid_orders = 2;
+  int64 completed_orders = 3;
+  int64 cancelled_orders = 4;
+  int64 paid_cent = 5;
+  int64 from_unix = 6;
+  int64 to_unix = 7;
+}
 
 // ---------------------------------------------------------------- payment
 service PaymentService {
@@ -656,6 +677,7 @@ service AfterSalesService {
   rpc ReceiveReturn (ReceiveReturnRequest) returns (AfterSale);
   rpc Refund (RefundAfterSaleRequest) returns (AfterSale);
   rpc ListAfterSales (ListAfterSalesRequest) returns (AfterSaleList);
+  rpc GetAfterSaleStats (StatsRequest) returns (AfterSaleStats);
 }
 message AfterSaleItem { int64 sku_id = 1; int32 quantity = 2; }
 message AfterSale {
@@ -674,6 +696,16 @@ message AfterSale {
   repeated AfterSaleItem items = 13;
 }
 message AfterSaleList { repeated AfterSale after_sales = 1; int64 total = 2; }
+
+message AfterSaleStats {
+  int64 total = 1;
+  int64 requested = 2;
+  int64 approved = 3;
+  int64 refunded = 4;
+  int64 refunded_cent = 5;
+  int64 from_unix = 6;
+  int64 to_unix = 7;
+}
 message CreateAfterSaleRequest {
   string order_no = 1;
   int64 user_id = 2;
@@ -841,6 +873,8 @@ message AIChatRequest {
   string session_id = 1;
   string message = 2;
   int64 user_id = 3;
+  // admin selects the operations agent. Only the admin BFF sets it.
+  bool admin = 4;
 }
 
 message AIChatEvent {

@@ -79,6 +79,9 @@ keep `bff.Timeout(15s)`.
 | `list_my_after_sales` | `AfterSalesService.ListAfterSales` | status, limit | `user_id` from the request context |
 | `get_my_after_sale` | `AfterSalesService.GetAfterSale` | after-sale no | `GetAfterSale` has no filter, so ownership is checked in the tool |
 | `search_policy` | in-code FAQ | question | curated returns/shipping/cancel/payment/seckill/address text, max 2 entries |
+| `sales_summary` (admin) | `OrderService.GetOrderStats` | days | aggregates only: order counts and paid amount |
+| `refund_summary` (admin) | `AfterSalesService.GetAfterSaleStats` | days | aggregates only: after-sale counts and refunded amount |
+| `low_stock` (admin) | `InventoryService.ListLowStock` | threshold, limit | rows with available <= threshold; limit 20 |
 
 Tool results are compact JSON; the model may not set `user_id`. Writes will be
 two-phase `draft -> confirm` and always call the existing business RPC, never
@@ -172,12 +175,23 @@ Phase 3 RAG backend options (decide after evaluation, do not add both):
 - **Deferred default**: MySQL keyword + structured tools; introduce a vector
   store only when the Phase 1 evaluation set shows retrieval misses.
 
-Phase 2: admin read-only copilot after adding aggregate read APIs; campaign
-draft with `EvaluatePromotions` preview and explicit confirmation.
+Phase 2: admin read-only copilot (done for the analytics half): aggregate RPCs
+`GetOrderStats`, `GetAfterSaleStats`, `ListLowStock` and the admin SSE endpoint
+`POST /api/admin/v1/ai/chat` with an admin-only agent. Remaining Phase 2B:
+campaign draft + `EvaluatePromotions` preview and explicit confirmation.
 
 Phase 3: optional RAG. Add embeddings + Qdrant only if evaluation shows the
 MySQL retrieval is insufficient; index catalog changes from NATS/outbox
 asynchronously.
+
+## Acceptance for Phase 2A
+
+1. An admin token receives sales/refund/low-stock aggregates and no user-level
+   rows; a normal user gets 403 on `/api/admin/v1/ai/chat`.
+2. The admin route is documented in `docs/openapi/admin.yaml`; the gateway AI
+   route is documented too.
+3. Aggregate RPCs are read-only and bounded (window <= 366 days, low-stock
+   limit <= 50).
 
 ## Acceptance for Phase 1
 

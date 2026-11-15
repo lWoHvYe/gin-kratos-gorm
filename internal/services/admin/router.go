@@ -42,6 +42,7 @@ var serviceAddrs = map[string]string{
 	"fulfillment": "fulfillment:9008",
 	"aftersales":  "aftersales:9009",
 	"seckill":     "seckill:9010",
+	"ai":          "ai:9011",
 }
 
 // Clients bundles the downstream gRPC clients used by the admin BFF.
@@ -54,6 +55,7 @@ type Clients struct {
 	AfterSales  pb.AfterSalesServiceClient
 	Promotion   pb.PromotionServiceClient
 	Seckill     pb.SeckillServiceClient
+	AI          pb.AIServiceClient
 
 	conns map[string]*grpc.ClientConn
 }
@@ -100,6 +102,7 @@ func Dial(ctx context.Context) (*Clients, error) {
 		{"aftersales", func(conn *grpc.ClientConn) { clients.AfterSales = pb.NewAfterSalesServiceClient(conn) }},
 		{"promotion", func(conn *grpc.ClientConn) { clients.Promotion = pb.NewPromotionServiceClient(conn) }},
 		{"seckill", func(conn *grpc.ClientConn) { clients.Seckill = pb.NewSeckillServiceClient(conn) }},
+		{"ai", func(conn *grpc.ClientConn) { clients.AI = pb.NewAIServiceClient(conn) }},
 	}
 	for _, target := range targets {
 		conn, err := grpcx.Dial(ctx, targetFor(target.name))
@@ -126,11 +129,11 @@ func targetFor(name string) string {
 
 // NewEngine builds the admin Gin engine. Every route requires a valid bearer
 // token with the "admin" role.
-func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.Engine {
+func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabled bool) *gin.Engine {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	h := &handlers{clients: clients}
+	h := &handlers{clients: clients, aiEnabled: aiEnabled}
 
 	engine := gin.New()
 	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), bff.Timeout(requestTimeout))
@@ -140,6 +143,9 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients) *gin.En
 	engine.GET("/readyz", bff.Readiness(logger, clients.States, []string{"order", "payment"}))
 
 	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole), audit(logger))
+	if aiEnabled {
+		admin.POST("/ai/chat", h.aiChat)
+	}
 	admin.GET("/categories", h.listCategoriesAdmin)
 	admin.POST("/categories", h.createCategory)
 	admin.PUT("/categories/:id", h.updateCategory)
@@ -217,7 +223,8 @@ func audit(logger *slog.Logger) gin.HandlerFunc {
 
 // handlers holds the downstream clients. It is stateless.
 type handlers struct {
-	clients *Clients
+	clients   *Clients
+	aiEnabled bool
 }
 
 // ---------------------------------------------------------------- middleware

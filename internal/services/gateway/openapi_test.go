@@ -24,7 +24,7 @@ func TestOpenAPIDocumentedRoutesExist(t *testing.T) {
 		JWTSecret: "0123456789abcdef0123456789abcdef", JWTIssuer: "mall",
 		AccessTTL: time.Minute, RefreshTTL: time.Hour,
 	})
-	engine := NewEngine(nil, manager, &Clients{}, Options{PaymentMockEnabled: true})
+	engine := NewEngine(nil, manager, &Clients{}, Options{PaymentMockEnabled: true, AIEnabled: true})
 
 	registered := make(map[string]bool, len(engine.Routes()))
 	for _, route := range engine.Routes() {

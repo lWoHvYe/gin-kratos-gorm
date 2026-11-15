@@ -29,6 +29,9 @@ func (f *fakeOrders) GetOrder(_ context.Context, in *pb.GetOrderRequest, _ ...gr
 	}
 	return &pb.Order{OrderNo: in.GetOrderNo(), UserId: in.GetUserId(), Status: "PAID"}, nil
 }
+func (f *fakeOrders) GetOrderStats(_ context.Context, in *pb.StatsRequest, _ ...grpc.CallOption) (*pb.OrderStats, error) {
+	return &pb.OrderStats{FromUnix: in.GetFromUnix(), ToUnix: in.GetToUnix(), TotalOrders: 4, PaidOrders: 3, CompletedOrders: 2, PaidCent: 12345}, nil
+}
 
 type fakeAfterSales struct {
 	lastList *pb.ListAfterSalesRequest
@@ -46,6 +49,15 @@ func (f *fakeAfterSales) GetAfterSale(_ context.Context, in *pb.GetAfterSaleRequ
 		return f.record, nil
 	}
 	return &pb.AfterSale{AfterSaleNo: in.GetAfterSaleNo(), UserId: 7, Status: "APPROVED"}, nil
+}
+func (f *fakeAfterSales) GetAfterSaleStats(_ context.Context, in *pb.StatsRequest, _ ...grpc.CallOption) (*pb.AfterSaleStats, error) {
+	return &pb.AfterSaleStats{FromUnix: in.GetFromUnix(), ToUnix: in.GetToUnix(), Total: 3, Requested: 1, Approved: 1, Refunded: 1, RefundedCent: 500}, nil
+}
+
+type fakeInventory struct{}
+
+func (fakeInventory) ListLowStock(_ context.Context, _ *pb.ListLowStockRequest, _ ...grpc.CallOption) (*pb.StockList, error) {
+	return &pb.StockList{Total: 1, Stocks: []*pb.Stock{{SkuId: 9, WarehouseId: 1, OnHand: 8, Reserved: 2, Available: 6}}}, nil
 }
 
 func runTool(t *testing.T, base tool.BaseTool, ctx context.Context, args string) (string, error) {
@@ -114,5 +126,34 @@ func TestPolicyToolAnswersFromCuratedText(t *testing.T) {
 	}
 	if !strings.Contains(out, "退货退款流程") || !strings.Contains(out, "退款") {
 		t.Fatalf("out = %s", out)
+	}
+}
+
+func TestAdminToolsAggregateWithoutUserScope(t *testing.T) {
+	d := Deps{Orders: &fakeOrders{}, AfterSales: &fakeAfterSales{}, Inventory: fakeInventory{}}
+	tools, err := newAdminTools(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]tool.BaseTool{}
+	for _, tl := range tools {
+		info, _ := tl.Info(context.Background())
+		byName[info.Name] = tl
+	}
+	for name, args := range map[string]string{
+		"sales_summary":  `{"days":30}`,
+		"refund_summary": `{"days":7}`,
+		"low_stock":      `{"threshold":10,"limit":5}`,
+	} {
+		out, err := runTool(t, byName[name], context.Background(), args)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if name == "sales_summary" && !strings.Contains(out, "12345") {
+			t.Fatalf("sales out = %s", out)
+		}
+		if name == "low_stock" && !strings.Contains(out, `"available":6`) {
+			t.Fatalf("stock out = %s", out)
+		}
 	}
 }

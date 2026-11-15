@@ -77,10 +77,42 @@ var (
 		Name: "mall_errors_total",
 		Help: "Errors returned to callers, by surface and domain code.",
 	}, []string{"surface", "code"})
+
+	// AIRequests counts assistant turns by outcome.
+	AIRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_ai_requests_total",
+		Help: "Assistant chat requests by result.",
+	}, []string{"result"})
+
+	// AIDuration tracks assistant request latency.
+	AIDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "mall_ai_request_duration_seconds",
+		Help:    "Assistant chat latency in seconds.",
+		Buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 40, 60},
+	}, []string{"result"})
+
+	// AIToolCalls counts tool invocations by tool and outcome.
+	AIToolCalls = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_ai_tool_calls_total",
+		Help: "Assistant tool calls by tool and result.",
+	}, []string{"tool", "result"})
+
+	// AITokens counts model tokens by kind (prompt/completion).
+	AITokens = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_ai_tokens_total",
+		Help: "Model tokens consumed by the assistant.",
+	}, []string{"kind"})
+
+	// AIRateLimited counts requests rejected by the per-user quota.
+	AIRateLimited = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mall_ai_rate_limited_total",
+		Help: "Assistant requests rejected by the per-user quota.",
+	})
 )
 
 func init() {
 	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
-		OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors)
+		OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
+		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited)
 }

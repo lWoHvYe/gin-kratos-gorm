@@ -829,3 +829,24 @@ message ReleaseSeckillReservationRequest { string order_no = 1; int64 sku_id = 2
 
 message ReplaySeckillDLQRequest { int64 activity_id = 1; int32 limit = 2; }
 message ReplaySeckillDLQReply { int32 replayed = 1; int32 skipped = 2; string errors = 3; }
+
+// AIService is the assistant gateway. It owns no business data: tools call the
+// domain services. user_id is injected by the BFF from the JWT and must not be
+// trusted from the browser.
+service AIService {
+  rpc Chat (AIChatRequest) returns (stream AIChatEvent);
+}
+
+message AIChatRequest {
+  string session_id = 1;
+  string message = 2;
+  int64 user_id = 3;
+}
+
+message AIChatEvent {
+  // type is one of: delta, tool, done, error.
+  string type = 1;
+  string delta = 2;
+  string tool = 3;
+  string error = 4;
+}

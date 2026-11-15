@@ -52,6 +52,19 @@ type Config struct {
 	// MySQLMaxOpenConns/MySQLMaxIdleConns bound each service's connection pool.
 	MySQLMaxOpenConns int
 	MySQLMaxIdleConns int
+	// AIEnabled gates the assistant. The transaction path never depends on it.
+	AIEnabled bool
+	// AIProvider is "mock" (deterministic, no network) or "deepseek".
+	AIProvider string
+	// DeepSeekAPIKey authenticates the DeepSeek API; required for that provider.
+	DeepSeekAPIKey  string
+	DeepSeekBaseURL string
+	AIModel         string
+	AIMaxTokens     int
+	AITimeout       time.Duration
+	// AIRateLimit requests per user per AIRateWindow.
+	AIRateLimit  int
+	AIRateWindow time.Duration
 }
 
 // etcdFile is the optional YAML/JSON overlay stored in etcd. Pointers preserve
@@ -92,6 +105,13 @@ func Load(service string) (*Config, error) {
 		RefreshTTL:         720 * time.Hour,
 		MySQLMaxOpenConns:  defaultMySQLMaxOpenConns,
 		MySQLMaxIdleConns:  defaultMySQLMaxIdleConns,
+		AIProvider:         "mock",
+		DeepSeekBaseURL:    "https://api.deepseek.com",
+		AIModel:            "deepseek-chat",
+		AIMaxTokens:        1024,
+		AITimeout:          30 * time.Second,
+		AIRateLimit:        20,
+		AIRateWindow:       10 * time.Minute,
 	}
 	// Bootstrap endpoints are needed before the config center can be read.
 	if v := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS")); v != "" {
@@ -132,11 +152,45 @@ func Load(service string) (*Config, error) {
 	if err := c.validateSecrets(); err != nil {
 		return nil, err
 	}
+	if err := c.validateAI(); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
 // validateSecrets makes production mode fail closed. Development keeps the
 // historical defaults so compose and unit tests start without configuration.
+// validateAI keeps provider selection explicit and fails closed when the
+// selected provider cannot be configured.
+func (c *Config) validateAI() error {
+	provider := strings.ToLower(strings.TrimSpace(c.AIProvider))
+	if provider == "" {
+		provider = "mock"
+	}
+	c.AIProvider = provider
+	switch provider {
+	case "mock", "deepseek":
+	default:
+		return fmt.Errorf("AI_PROVIDER must be mock or deepseek (got %q)", c.AIProvider)
+	}
+	if provider == "deepseek" && strings.TrimSpace(c.DeepSeekAPIKey) == "" && c.AIEnabled {
+		return fmt.Errorf("DEEPSEEK_API_KEY is required when AI_PROVIDER=deepseek")
+	}
+	if c.AITimeout <= 0 {
+		c.AITimeout = 30 * time.Second
+	}
+	if c.AIMaxTokens <= 0 {
+		c.AIMaxTokens = 1024
+	}
+	if c.AIRateLimit <= 0 {
+		c.AIRateLimit = 20
+	}
+	if c.AIRateWindow <= 0 {
+		c.AIRateWindow = 10 * time.Minute
+	}
+	return nil
+}
+
 func (c *Config) validateSecrets() error {
 	if c.Env == "dev" {
 		return nil
@@ -324,6 +378,39 @@ func applyEnv(c *Config) {
 	if v := os.Getenv("JWT_REFRESH_TTL"); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.RefreshTTL = d
+		}
+	}
+	if v, ok := os.LookupEnv("AI_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
+			c.AIEnabled = parsed
+		}
+	}
+	if v := os.Getenv("AI_PROVIDER"); v != "" {
+		c.AIProvider = v
+	}
+	if v := os.Getenv("DEEPSEEK_API_KEY"); v != "" {
+		c.DeepSeekAPIKey = v
+	}
+	if v := os.Getenv("DEEPSEEK_BASE_URL"); v != "" {
+		c.DeepSeekBaseURL = v
+	}
+	if v := os.Getenv("AI_MODEL"); v != "" {
+		c.AIModel = v
+	}
+	if v := os.Getenv("AI_MAX_TOKENS"); v != "" {
+		c.AIMaxTokens = EnvInt("AI_MAX_TOKENS", c.AIMaxTokens)
+	}
+	if v := os.Getenv("AI_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			c.AITimeout = d
+		}
+	}
+	if v := os.Getenv("AI_RATE_LIMIT"); v != "" {
+		c.AIRateLimit = EnvInt("AI_RATE_LIMIT", c.AIRateLimit)
+	}
+	if v := os.Getenv("AI_RATE_WINDOW"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			c.AIRateWindow = d
 		}
 	}
 }

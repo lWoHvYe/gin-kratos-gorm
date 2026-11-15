@@ -22,6 +22,9 @@ type Options struct {
 	// an intent with the mock channel. Production channels call the payment
 	// service directly with a signature.
 	PaymentMockEnabled bool
+	// AIEnabled exposes the assistant SSE endpoint. The handler still returns
+	// Unavailable when the ai service is disabled.
+	AIEnabled bool
 }
 
 // NewEngine builds the public gateway Gin engine. The routes under /api/v1 that
@@ -30,7 +33,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	if logger == nil {
 		logger = slog.Default()
 	}
-	h := &handlers{clients: clients, log: logger}
+	h := &handlers{clients: clients, log: logger, aiEnabled: opts.AIEnabled}
 
 	engine := gin.New()
 	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), bff.Timeout(requestTimeout))
@@ -68,6 +71,9 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	authed.GET("/orders/:orderNo", h.getOrder)
 	authed.POST("/orders/:orderNo/cancel", h.cancelOrder)
 	authed.POST("/orders/:orderNo/receive", h.receiveOrder)
+	if opts.AIEnabled {
+		authed.POST("/ai/chat", h.aiChat)
+	}
 	if opts.PaymentMockEnabled {
 		authed.POST("/payments/:paymentNo/pay", h.pay)
 	}

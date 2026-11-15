@@ -57,6 +57,7 @@ Reference implementation: `internal/services/identity` and `cmd/identity`.
 | fulfillment | 9008 | 9108 | mall_fulfillment |
 | aftersales | 9009 | 9109 | mall_aftersales |
 | seckill | 9010 | 9110 | mall_seckill |
+| ai | 9011 | 9111 | - (stateless; Redis sessions) |
 | gateway | - | 8080 | - |
 | admin | - | 8081 | mall_admin |
 
@@ -64,6 +65,9 @@ Common env: `MYSQL_DSN`, `REDIS_ADDR`, `NATS_URL`, `ETCD_ENDPOINTS` (optional
 configuration center only), `DTM_ADDRESS`, `JWT_SECRET`, `GRPC_ADDR`, `HTTP_ADDR`.
 Service-to-service addresses are direct Kubernetes/Docker DNS names.
 Payment/after-sales: `PAYMENT_TCC_ENABLED`, `ORDER_TCC_URL`, `INVENTORY_TCC_URL`, `PRICING_TCC_URL`, `INVENTORY_ADDR`, `PRICING_ADDR`, `PAYMENT_ADDR`.
+AI: `AI_ENABLED`, `AI_PROVIDER` (`mock`/`deepseek`), `DEEPSEEK_API_KEY`,
+`DEEPSEEK_BASE_URL`, `AI_MODEL`, `AI_MAX_TOKENS`, `AI_TIMEOUT`, `AI_RATE_LIMIT`,
+`AI_RATE_WINDOW`, `CATALOG_ADDR`. See [ai-design.md](ai-design.md).
 
 ## Database conventions
 

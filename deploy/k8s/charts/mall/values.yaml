@@ -105,6 +105,16 @@ seckill:
   tokenSecretName: ""
   tokenSecretKey: seckill-token-secret
 
+ai:
+  # The assistant is optional; disabling it hides the BFF route.
+  enabled: true
+  provider: mock
+  model: deepseek-chat
+  deepseekBaseURL: https://api.deepseek.com
+  # Secret holding DEEPSEEK_API_KEY; required when provider=deepseek.
+  apiKeySecret: ""
+  apiKeySecretKey: deepseek-api-key
+
 services:
   gateway:
     protocol: http
@@ -166,6 +176,11 @@ services:
     port: 9010
     healthPort: 9110
     mysqlDatabase: mall_seckill
+  ai:
+    protocol: grpc
+    port: 9011
+    healthPort: 9111
+    mysqlDatabase: mall_admin
 
 # L7 service-to-service matrix. Each rule allows one source ServiceAccount to
 # call one service's gRPC methods. Ingress is handled separately.
@@ -212,7 +227,7 @@ authz:
       sources: [gateway]
       paths: ["/mall.v1.IdentityService/*"]
     - name: catalog
-      sources: [gateway, admin, cart, pricing]
+      sources: [gateway, admin, cart, pricing, ai]
       paths: ["/mall.v1.CatalogService/*"]
     - name: inventory
       sources: [gateway, admin, order, payment, aftersales, dtm, seckill]
@@ -238,6 +253,9 @@ authz:
     - name: seckill
       sources: [admin, gateway]
       paths: ["/mall.v1.SeckillService/*"]
+    - name: ai
+      sources: [gateway, admin]
+      paths: ["/mall.v1.AIService/*"]
     - name: dtm
       sources: [order, payment]
       paths: ["/dtmgimp.Dtm/*"]

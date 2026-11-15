@@ -12,7 +12,7 @@ COMPOSE := docker compose $(COMPOSE_ENV_ARG) \
 	-f $(COMPOSE_DIR)/infra.yml \
 	-f $(COMPOSE_DIR)/services.yml
 
-SERVICES := gateway admin identity catalog inventory cart pricing order payment fulfillment aftersales seckill
+SERVICES := gateway admin identity catalog inventory cart pricing order payment fulfillment aftersales seckill ai
 INFRA_SERVICES := mysql redis nats etcd dtm
 OBS_SERVICES := prometheus grafana
 K8S_DIR := deploy/k8s
@@ -144,7 +144,7 @@ proto:
 		--go-grpc_out=api/gen --go-grpc_opt=paths=source_relative \
 		api/proto/mall/v1/mall.proto
 
-verify: fmt-check vet test test-race build arch dtm-contract
+verify: fmt-check vet test test-race build arch dtm-contract migrations-check
 	@echo "verify: OK"
 
 dtm-smoke:

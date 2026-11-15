@@ -12,8 +12,9 @@ import (
 
 // handlers holds the downstream clients. It is stateless.
 type handlers struct {
-	clients *Clients
-	log     *slog.Logger
+	clients   *Clients
+	log       *slog.Logger
+	aiEnabled bool
 }
 
 // ---------------------------------------------------------------- middleware

@@ -1,0 +1,83 @@
+package main
+
+import (
+	"context"
+	"os"
+	"strings"
+
+	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/config"
+	"gin-kratos-gorm/internal/platform/grpcx"
+	"gin-kratos-gorm/internal/platform/log"
+	"gin-kratos-gorm/internal/platform/redis"
+	"gin-kratos-gorm/internal/platform/runtime"
+	"gin-kratos-gorm/internal/platform/tracing"
+	"gin-kratos-gorm/internal/services/ai"
+)
+
+func main() {
+	cfg, err := config.Load("ai")
+	if err != nil {
+		panic(err)
+	}
+	logger := log.New(cfg.Service, cfg.Env)
+	shutdownTracing, err := tracing.Init(context.Background(), cfg.Service)
+	if err != nil {
+		logger.Error("init tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
+
+	cache, err := redis.Open(redis.Config{
+		Mode: cfg.RedisMode, Addrs: cfg.RedisAddrs, Password: cfg.RedisPassword, MasterName: cfg.RedisMasterName,
+	})
+	if err != nil {
+		logger.Error("connect redis", "error", err)
+		os.Exit(1)
+	}
+	defer cache.Close()
+
+	catalogAddr := strings.TrimSpace(os.Getenv("CATALOG_ADDR"))
+	if catalogAddr == "" {
+		catalogAddr = "catalog:9002"
+	}
+	conn, err := grpcx.Dial(context.Background(), catalogAddr)
+	if err != nil {
+		logger.Error("dial catalog", "error", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+	catalog := pb.NewCatalogServiceClient(conn)
+
+	svc, err := ai.NewService(context.Background(), ai.Config{
+		Enabled:    cfg.AIEnabled,
+		Timeout:    cfg.AITimeout,
+		RateLimit:  cfg.AIRateLimit,
+		RateWindow: cfg.AIRateWindow,
+	}, ai.ProviderConfig{
+		Provider:   cfg.AIProvider,
+		APIKey:     cfg.DeepSeekAPIKey,
+		BaseURL:    cfg.DeepSeekBaseURL,
+		Model:      cfg.AIModel,
+		MaxTokens:  cfg.AIMaxTokens,
+		TimeoutSec: int(cfg.AITimeout.Seconds()),
+	}, catalog, cache, logger)
+	if err != nil {
+		logger.Error("build ai service", "error", err)
+		os.Exit(1)
+	}
+	if !cfg.AIEnabled {
+		logger.Warn("ai assistant is disabled", "AI_ENABLED", "false")
+	}
+
+	gs := grpcx.NewServer(cfg, logger)
+	pb.RegisterAIServiceServer(gs, svc)
+	health := runtime.HealthServer(cfg, nil, logger, func(ctx context.Context) error {
+		return cache.Ping(ctx).Err()
+	})
+	app := runtime.NewApp(cfg, logger, gs, health)
+	if err := app.Run(); err != nil {
+		logger.Error("run", "error", err)
+		os.Exit(1)
+	}
+}

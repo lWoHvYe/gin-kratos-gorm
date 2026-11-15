@@ -69,6 +69,7 @@ services:
     image: mall/gateway:${IMAGE_TAG:-dev}
     environment:
       <<: *service-env
+      AI_ENABLED: "${AI_ENABLED:-true}"
     ports:
       - "8080:8080"
     healthcheck:
@@ -359,6 +360,30 @@ services:
     depends_on:
       <<: *deps-core
       inventory:
+        condition: service_healthy
+
+  ai:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: ai
+    image: mall/ai:${IMAGE_TAG:-dev}
+    environment:
+      <<: *service-env
+      GRPC_ADDR: ":9011"
+      HTTP_ADDR: ":9111"
+      AI_ENABLED: "${AI_ENABLED:-true}"
+      AI_PROVIDER: "${AI_PROVIDER:-mock}"
+      AI_MODEL: "${AI_MODEL:-deepseek-chat}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      DEEPSEEK_BASE_URL: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
+      CATALOG_ADDR: catalog:9002
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9111/healthz"]
+    depends_on:
+      catalog:
         condition: service_healthy
 
   # ---------------------------------------------------------------- ingress

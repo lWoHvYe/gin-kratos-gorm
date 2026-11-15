@@ -5363,3 +5363,116 @@ var SeckillService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "mall/v1/mall.proto",
 }
+
+const (
+	AIService_Chat_FullMethodName = "/mall.v1.AIService/Chat"
+)
+
+// AIServiceClient is the client API for AIService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// AIService is the assistant gateway. It owns no business data: tools call the
+// domain services. user_id is injected by the BFF from the JWT and must not be
+// trusted from the browser.
+type AIServiceClient interface {
+	Chat(ctx context.Context, in *AIChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AIChatEvent], error)
+}
+
+type aIServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAIServiceClient(cc grpc.ClientConnInterface) AIServiceClient {
+	return &aIServiceClient{cc}
+}
+
+func (c *aIServiceClient) Chat(ctx context.Context, in *AIChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AIChatEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AIService_ServiceDesc.Streams[0], AIService_Chat_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[AIChatRequest, AIChatEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_ChatClient = grpc.ServerStreamingClient[AIChatEvent]
+
+// AIServiceServer is the server API for AIService service.
+// All implementations must embed UnimplementedAIServiceServer
+// for forward compatibility.
+//
+// AIService is the assistant gateway. It owns no business data: tools call the
+// domain services. user_id is injected by the BFF from the JWT and must not be
+// trusted from the browser.
+type AIServiceServer interface {
+	Chat(*AIChatRequest, grpc.ServerStreamingServer[AIChatEvent]) error
+	mustEmbedUnimplementedAIServiceServer()
+}
+
+// UnimplementedAIServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAIServiceServer struct{}
+
+func (UnimplementedAIServiceServer) Chat(*AIChatRequest, grpc.ServerStreamingServer[AIChatEvent]) error {
+	return status.Error(codes.Unimplemented, "method Chat not implemented")
+}
+func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
+func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
+
+// UnsafeAIServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AIServiceServer will
+// result in compilation errors.
+type UnsafeAIServiceServer interface {
+	mustEmbedUnimplementedAIServiceServer()
+}
+
+func RegisterAIServiceServer(s grpc.ServiceRegistrar, srv AIServiceServer) {
+	// If the following call panics, it indicates UnimplementedAIServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AIService_ServiceDesc, srv)
+}
+
+func _AIService_Chat_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(AIChatRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AIServiceServer).Chat(m, &grpc.GenericServerStream[AIChatRequest, AIChatEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_ChatServer = grpc.ServerStreamingServer[AIChatEvent]
+
+// AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AIService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "mall.v1.AIService",
+	HandlerType: (*AIServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Chat",
+			Handler:       _AIService_Chat_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "mall/v1/mall.proto",
+}

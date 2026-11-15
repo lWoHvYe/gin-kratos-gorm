@@ -40,6 +40,7 @@ var serviceAddrs = map[string]string{
 	"fulfillment": "fulfillment:9008",
 	"aftersales":  "aftersales:9009",
 	"seckill":     "seckill:9010",
+	"ai":          "ai:9011",
 }
 
 // Clients bundles every downstream gRPC client used by the public BFF.
@@ -56,6 +57,7 @@ type Clients struct {
 	Fulfillment pb.FulfillmentServiceClient
 	AfterSales  pb.AfterSalesServiceClient
 	Seckill     pb.SeckillServiceClient
+	AI          pb.AIServiceClient
 
 	conns map[string]*grpc.ClientConn
 }
@@ -111,6 +113,7 @@ func Dial(ctx context.Context) (*Clients, error) {
 		{"fulfillment", func(conn *grpc.ClientConn) { clients.Fulfillment = pb.NewFulfillmentServiceClient(conn) }},
 		{"aftersales", func(conn *grpc.ClientConn) { clients.AfterSales = pb.NewAfterSalesServiceClient(conn) }},
 		{"seckill", func(conn *grpc.ClientConn) { clients.Seckill = pb.NewSeckillServiceClient(conn) }},
+		{"ai", func(conn *grpc.ClientConn) { clients.AI = pb.NewAIServiceClient(conn) }},
 	}
 	for _, target := range targets {
 		conn, err := grpcx.Dial(ctx, targetFor(target.name))

@@ -137,6 +137,10 @@ spec:
             - name: ORDER_DTM_URL
               value: "order:9006/mall.v1.OrderService"
             {{- end }}
+            {{- if eq $name "gateway" }}
+            - name: AI_ENABLED
+              value: {{ $.Values.ai.enabled | quote }}
+            {{- end }}
             {{- if or (eq $name "gateway") (eq $name "payment") }}
             - name: PAYMENT_MOCK_ENABLED
               value: {{ $.Values.payment.mockEnabled | quote }}
@@ -148,6 +152,25 @@ spec:
                 secretKeyRef:
                   name: {{ . }}
                   key: {{ $.Values.seckill.tokenSecretKey | default "seckill-token-secret" }}
+            {{- end }}
+            {{- end }}
+            {{- if eq $name "ai" }}
+            - name: AI_ENABLED
+              value: {{ $.Values.ai.enabled | quote }}
+            - name: AI_PROVIDER
+              value: {{ $.Values.ai.provider | quote }}
+            - name: AI_MODEL
+              value: {{ $.Values.ai.model | quote }}
+            - name: DEEPSEEK_BASE_URL
+              value: {{ $.Values.ai.deepseekBaseURL | quote }}
+            - name: CATALOG_ADDR
+              value: "catalog:9002"
+            {{- if $.Values.ai.apiKeySecret }}
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.ai.apiKeySecret }}
+                  key: {{ $.Values.ai.apiKeySecretKey | default "deepseek-api-key" }}
             {{- end }}
             {{- end }}
             {{- if eq $name "payment" }}

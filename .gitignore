@@ -95,3 +95,4 @@ frontend/**/vite.config.ts.timestamp-*
 /fulfillment
 /aftersales
 /seckill
+/ai

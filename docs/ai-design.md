@@ -74,11 +74,15 @@ keep `bff.Timeout(15s)`.
 |---|---|---|---|
 | `search_products` | `CatalogService.ListProducts` | keyword, category_id, brand_id, min/max price, sort | `page_size<=10`, only `ON_SALE` results |
 | `get_product` | `CatalogService.GetProduct` | product id | returns name, subtitle, description, price range, attributes; no internal ids beyond product/SKU |
+| `list_my_orders` | `OrderService.ListOrders` | status, limit | `user_id` from the request context; `page_size<=10` |
+| `get_my_order` | `OrderService.GetOrder` | order no | rejects an order whose `user_id` differs |
+| `list_my_after_sales` | `AfterSalesService.ListAfterSales` | status, limit | `user_id` from the request context |
+| `get_my_after_sale` | `AfterSalesService.GetAfterSale` | after-sale no | `GetAfterSale` has no filter, so ownership is checked in the tool |
+| `search_policy` | in-code FAQ | question | curated returns/shipping/cancel/payment/seckill/address text, max 2 entries |
 
-Tool results are compact JSON; the model may not set `user_id`. Future tools
-(order, aftersales, admin reads) follow the same pattern: read-only, scoped,
-bounded. Writes will be two-phase `draft -> confirm` and always call the
-existing business RPC, never SQL.
+Tool results are compact JSON; the model may not set `user_id`. Writes will be
+two-phase `draft -> confirm` and always call the existing business RPC, never
+SQL.
 
 ## Conversation and limits
 
@@ -149,8 +153,20 @@ Phase 0 (this change): service skeleton, Eino ReAct + two catalog tools,
 DeepSeek/mock providers, Redis session + rate limit, gRPC stream, gateway SSE,
 metrics, config, compose/K8s wiring, unit tests.
 
-Phase 1: order/aftersales read tools; policy FAQ answered from a static document
-(no embeddings); assistant widget on the storefront.
+Phase 1 (done): order/after-sales read tools scoped by the request context;
+policy FAQ answered from a curated in-code document (no embeddings); assistant
+widget on the storefront (`components/AiAssistant.vue`, SSE parser in
+`utils/sse.ts`).
+
+Phase 3 RAG backend options (decide after evaluation, do not add both):
+
+- **Redis Query Engine** (vector search in Redis): the current `redis:8` image
+  does not ship the query engine; it would be replaced by `redis-stack` (or the
+  modules installed) in compose and Helm. One datastore, low ops.
+- **pgvector**: a new Postgres instance/schema. Better SQL/vector ergonomics,
+  but adds a second database to back up and operate.
+- **Deferred default**: MySQL keyword + structured tools; introduce a vector
+  store only when the Phase 1 evaluation set shows retrieval misses.
 
 Phase 2: admin read-only copilot after adding aggregate read APIs; campaign
 draft with `EvaluatePromotions` preview and explicit confirmation.
@@ -158,6 +174,14 @@ draft with `EvaluatePromotions` preview and explicit confirmation.
 Phase 3: optional RAG. Add embeddings + Qdrant only if evaluation shows the
 MySQL retrieval is insufficient; index catalog changes from NATS/outbox
 asynchronously.
+
+## Acceptance for Phase 1
+
+1. Asking "我的订单" streams the caller's orders; another user's order number is
+   rejected by the tool.
+2. "退货政策" is answered from the curated FAQ and cites the entry title.
+3. The storefront renders the assistant entry; an unauthenticated call returns
+   401; a rate-limited call returns 429; message bodies never appear in logs.
 
 ## Acceptance for Phase 0
 

@@ -13,6 +13,8 @@ import (
 	"gin-kratos-gorm/internal/platform/runtime"
 	"gin-kratos-gorm/internal/platform/tracing"
 	"gin-kratos-gorm/internal/services/ai"
+
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -37,17 +39,31 @@ func main() {
 	}
 	defer cache.Close()
 
-	catalogAddr := strings.TrimSpace(os.Getenv("CATALOG_ADDR"))
-	if catalogAddr == "" {
-		catalogAddr = "catalog:9002"
+	dial := func(env, fallback string) (pbCatalog *grpc.ClientConn, err error) {
+		addr := strings.TrimSpace(os.Getenv(env))
+		if addr == "" {
+			addr = fallback
+		}
+		return grpcx.Dial(context.Background(), addr)
 	}
-	conn, err := grpcx.Dial(context.Background(), catalogAddr)
+	catalogConn, err := dial("CATALOG_ADDR", "catalog:9002")
 	if err != nil {
 		logger.Error("dial catalog", "error", err)
 		os.Exit(1)
 	}
-	defer conn.Close()
-	catalog := pb.NewCatalogServiceClient(conn)
+	defer catalogConn.Close()
+	orderConn, err := dial("ORDER_ADDR", "order:9006")
+	if err != nil {
+		logger.Error("dial order", "error", err)
+		os.Exit(1)
+	}
+	defer orderConn.Close()
+	afterSalesConn, err := dial("AFTERSALES_ADDR", "aftersales:9009")
+	if err != nil {
+		logger.Error("dial aftersales", "error", err)
+		os.Exit(1)
+	}
+	defer afterSalesConn.Close()
 
 	svc, err := ai.NewService(context.Background(), ai.Config{
 		Enabled:    cfg.AIEnabled,
@@ -61,7 +77,11 @@ func main() {
 		Model:      cfg.AIModel,
 		MaxTokens:  cfg.AIMaxTokens,
 		TimeoutSec: int(cfg.AITimeout.Seconds()),
-	}, catalog, cache, logger)
+	}, ai.Deps{
+		Catalog:    pb.NewCatalogServiceClient(catalogConn),
+		Orders:     pb.NewOrderServiceClient(orderConn),
+		AfterSales: pb.NewAfterSalesServiceClient(afterSalesConn),
+	}, cache, logger)
 	if err != nil {
 		logger.Error("build ai service", "error", err)
 		os.Exit(1)

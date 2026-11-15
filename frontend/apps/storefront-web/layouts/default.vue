@@ -15,6 +15,7 @@
     </header>
     <main class="container store-main"><slot /></main>
     <footer class="store-footer">Mall Store · Vue / Nuxt / Vant</footer>
+    <AiAssistant />
     <van-tabbar route>
       <van-tabbar-item to="/" icon="home-o">首页</van-tabbar-item>
       <van-tabbar-item to="/cart" icon="cart-o">购物车</van-tabbar-item>

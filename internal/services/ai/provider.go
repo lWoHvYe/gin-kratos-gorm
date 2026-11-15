@@ -67,14 +67,15 @@ func (m *mockModel) Generate(_ context.Context, in []*schema.Message, _ ...model
 			break
 		}
 	}
-	args, _ := json.Marshal(map[string]any{"query": query, "page_size": 5})
+	name, payload := mockToolCall(query)
+	args, _ := json.Marshal(payload)
 	return &schema.Message{
 		Role: schema.Assistant,
 		ToolCalls: []schema.ToolCall{{
 			ID:   "mock-call-1",
 			Type: "function",
 			Function: schema.FunctionCall{
-				Name:      "search_products",
+				Name:      name,
 				Arguments: string(args),
 			},
 		}},
@@ -89,24 +90,75 @@ func (m *mockModel) Stream(ctx context.Context, in []*schema.Message, opts ...mo
 	return schema.StreamReaderFromArray([]*schema.Message{msg}), nil
 }
 
+func mockToolCall(query string) (string, map[string]any) {
+	q := strings.ToLower(query)
+	switch {
+	case strings.Contains(q, "政策") || strings.Contains(q, "规则") || strings.Contains(q, "运费"):
+		return "search_policy", map[string]any{"query": query}
+	case strings.Contains(q, "订单") || strings.Contains(q, "发货") || strings.Contains(q, "物流"):
+		return "list_my_orders", map[string]any{"limit": 5}
+	case strings.Contains(q, "退货") || strings.Contains(q, "退款") || strings.Contains(q, "售后"):
+		return "list_my_after_sales", map[string]any{"limit": 5}
+	default:
+		return "search_products", map[string]any{"query": query, "page_size": 5}
+	}
+}
+
 func mockAnswer(toolResult string) string {
 	var out struct {
 		Products []struct {
 			Name      string `json:"name"`
 			PriceCent int64  `json:"min_price_cent"`
 		} `json:"products"`
+		Orders []struct {
+			OrderNo string `json:"order_no"`
+			Status  string `json:"status"`
+			PayCent int64  `json:"pay_cent"`
+		} `json:"orders"`
+		AfterSales []struct {
+			No     string `json:"after_sale_no"`
+			Status string `json:"status"`
+		} `json:"after_sales"`
+		Answer string `json:"answer"`
 	}
-	if err := json.Unmarshal([]byte(toolResult), &out); err != nil || len(out.Products) == 0 {
-		return "没有找到匹配的商品，可以换个关键词或预算试试。"
+	if err := json.Unmarshal([]byte(toolResult), &out); err != nil {
+		return "我暂时无法读取这项信息，请稍后再试或联系人工客服。"
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "找到 %d 件商品：\n", len(out.Products))
-	for i, p := range out.Products {
-		if i >= 3 {
-			break
+	switch {
+	case out.Answer != "":
+		return out.Answer
+	case len(out.Orders) > 0:
+		var b strings.Builder
+		fmt.Fprintf(&b, "最近 %d 笔订单：\n", len(out.Orders))
+		for i, o := range out.Orders {
+			if i >= 3 {
+				break
+			}
+			fmt.Fprintf(&b, "- %s：%s，¥%.2f\n", o.OrderNo, o.Status, float64(o.PayCent)/100)
 		}
-		fmt.Fprintf(&b, "- %s（¥%.2f）\n", p.Name, float64(p.PriceCent)/100)
+		return strings.TrimRight(b.String(), "\n")
+	case len(out.AfterSales) > 0:
+		var b strings.Builder
+		fmt.Fprintf(&b, "最近 %d 条售后记录：\n", len(out.AfterSales))
+		for i, a := range out.AfterSales {
+			if i >= 3 {
+				break
+			}
+			fmt.Fprintf(&b, "- %s：%s\n", a.No, a.Status)
+		}
+		return strings.TrimRight(b.String(), "\n")
+	case len(out.Products) > 0:
+		var b strings.Builder
+		fmt.Fprintf(&b, "找到 %d 件商品：\n", len(out.Products))
+		for i, p := range out.Products {
+			if i >= 3 {
+				break
+			}
+			fmt.Fprintf(&b, "- %s（¥%.2f）\n", p.Name, float64(p.PriceCent)/100)
+		}
+		b.WriteString("需要我按价格或用途再筛选吗？")
+		return b.String()
+	default:
+		return "没有找到相关记录，可以换个关键词试试。"
 	}
-	b.WriteString("需要我按价格或用途再筛选吗？")
-	return b.String()
 }

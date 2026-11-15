@@ -239,7 +239,7 @@ authz:
       sources: [gateway, admin, order, payment, dtm]
       paths: ["/mall.v1.PricingService/*", "/mall.v1.PromotionService/*"]
     - name: order
-      sources: [gateway, admin, payment, aftersales, dtm, seckill]
+      sources: [gateway, admin, payment, aftersales, dtm, seckill, ai]
       paths: ["/mall.v1.OrderService/*"]
     - name: payment
       sources: [gateway, admin, aftersales, seckill]
@@ -248,7 +248,7 @@ authz:
       sources: [gateway, admin]
       paths: ["/mall.v1.FulfillmentService/*"]
     - name: aftersales
-      sources: [gateway, admin]
+      sources: [gateway, admin, ai]
       paths: ["/mall.v1.AfterSalesService/*"]
     - name: seckill
       sources: [admin, gateway]

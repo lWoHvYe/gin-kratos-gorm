@@ -67,7 +67,8 @@ Service-to-service addresses are direct Kubernetes/Docker DNS names.
 Payment/after-sales: `PAYMENT_TCC_ENABLED`, `ORDER_TCC_URL`, `INVENTORY_TCC_URL`, `PRICING_TCC_URL`, `INVENTORY_ADDR`, `PRICING_ADDR`, `PAYMENT_ADDR`.
 AI: `AI_ENABLED`, `AI_PROVIDER` (`mock`/`deepseek`), `DEEPSEEK_API_KEY`,
 `DEEPSEEK_BASE_URL`, `AI_MODEL`, `AI_MAX_TOKENS`, `AI_TIMEOUT`, `AI_RATE_LIMIT`,
-`AI_RATE_WINDOW`, `CATALOG_ADDR`. See [ai-design.md](ai-design.md).
+`AI_RATE_WINDOW`, `CATALOG_ADDR`, `ORDER_ADDR`, `AFTERSALES_ADDR`.
+See [ai-design.md](ai-design.md).
 
 ## Database conventions
 

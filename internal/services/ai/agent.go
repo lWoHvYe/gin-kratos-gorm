@@ -24,12 +24,12 @@ type agentRunner interface {
 	Stream(ctx context.Context, input []*schema.Message, opts ...agent.AgentOption) (*schema.StreamReader[*schema.Message], error)
 }
 
-func buildAgent(ctx context.Context, cfg ProviderConfig, catalog catalogClient) (*react.Agent, error) {
+func buildAgent(ctx context.Context, cfg ProviderConfig, d deps) (*react.Agent, error) {
 	cm, err := newChatModel(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	tools, err := newCatalogTools(catalog)
+	tools, err := newTools(d)
 	if err != nil {
 		return nil, err
 	}

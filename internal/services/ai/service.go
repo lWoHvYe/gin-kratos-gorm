@@ -46,10 +46,10 @@ type Service struct {
 // NewService wires the agent, Redis session store and per-user limiter. The
 // agent is only built when the feature is enabled, so a disabled assistant does
 // not dial the model or the catalog.
-func NewService(ctx context.Context, cfg Config, provider ProviderConfig, catalog catalogClient, cache redis.UniversalClient, logger *slog.Logger) (*Service, error) {
+func NewService(ctx context.Context, cfg Config, provider ProviderConfig, d deps, cache redis.UniversalClient, logger *slog.Logger) (*Service, error) {
 	var runner agentRunner
 	if cfg.Enabled {
-		built, err := buildAgent(ctx, provider, catalog)
+		built, err := buildAgent(ctx, provider, d)
 		if err != nil {
 			return nil, err
 		}
@@ -115,6 +115,10 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		metrics.AIRateLimited.Inc()
 		return status.Error(codes.ResourceExhausted, "assistant rate limit exceeded")
 	}
+
+	// Tools read the user id from this context; model arguments can never
+	// select another user's data.
+	ctx = withUserID(ctx, req.GetUserId())
 
 	history, err := s.sessions.Load(ctx, req.GetUserId(), sessionID)
 	if err != nil {

@@ -160,9 +160,13 @@ widget on the storefront (`components/AiAssistant.vue`, SSE parser in
 
 Phase 3 RAG backend options (decide after evaluation, do not add both):
 
-- **Redis Query Engine** (vector search in Redis): the current `redis:8` image
-  does not ship the query engine; it would be replaced by `redis-stack` (or the
-  modules installed) in compose and Helm. One datastore, low ops.
+- **Redis Query Engine**: bundled in Redis 8 Open Source. The repo already runs
+  `redis:8.10.3-alpine` in compose and Helm, and both the local image and the
+  live redis pod load the `search` module (`FT.CREATE`/`FT.SEARCH` work), so no
+  `redis-stack` image or module install is needed. One datastore, low ops.
+  Caveat: the default tokenizer does not segment Chinese; for Chinese text use
+  an n-gram field, pre-tokenized terms, or the vector field instead of relying
+  on word tokens.
 - **pgvector**: a new Postgres instance/schema. Better SQL/vector ergonomics,
   but adds a second database to back up and operate.
 - **Deferred default**: MySQL keyword + structured tools; introduce a vector

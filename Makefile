@@ -24,7 +24,7 @@ K8S_INFRA_HA_VALUES := $(K8S_DIR)/charts/infra/values-ha.yaml
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check clean \
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-render-ha k8s-lint-ha k8s-ha-verify k8s-deploy mesh-smoke \
 	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration status
 
@@ -54,6 +54,8 @@ help:
 	@echo "  chaos                             NATS outage + Redis outage chaos (Docker)"
 	@echo "  arch                              architecture/import guard"
 	@echo "  migrations-check                  outbox migrations only where the table exists"
+	@echo "  seed-demo                         apply the demo catalog to the k3s MySQL"
+	@echo "  ambient-recover                   recover expired Ambient workload certs"
 	@echo "  wire                              regenerate Wire injectors for gateway/admin/order/payment"
 	@echo "  proto                             regenerate api/gen from api/proto (requires protoc)"
 	@echo "  verify                            fmt-check + vet + test + build + arch + dtm-contract"
@@ -162,6 +164,12 @@ dtm-contract:
 chaos:
 	./scripts/chaos-nats.sh
 	./scripts/chaos-redis.sh
+
+seed-demo:
+	./scripts/seed-demo-catalog.sh --k8s
+
+ambient-recover:
+	./scripts/ambient-recover.sh
 
 test-integration:
 	@test -n "$$TEST_MYSQL_DSN" || (echo "set TEST_MYSQL_DSN, e.g. root:root@tcp(127.0.0.1:3306)/mall_outbox_test?parseTime=true" >&2; exit 1)

@@ -106,6 +106,8 @@ func (m *mockModel) mockToolCall(query string) (string, map[string]any) {
 			return "refund_summary", map[string]any{"days": 30}
 		case strings.Contains(q, "库存") || strings.Contains(q, "缺货") || strings.Contains(q, "补货"):
 			return "low_stock", map[string]any{"threshold": 10, "limit": 10}
+		case strings.Contains(q, "活动") || strings.Contains(q, "促销") || strings.Contains(q, "满减") || strings.Contains(q, "优惠"):
+			return "draft_campaign", map[string]any{"name": "AI 满减活动", "type": "THRESHOLD", "threshold_cent": 30000, "discount_cent": 3000, "days": 7}
 		default:
 			return "sales_summary", map[string]any{"days": 30}
 		}
@@ -141,17 +143,27 @@ func mockAnswer(toolName, toolResult string) string {
 			SkuID     int64 `json:"sku_id"`
 			Available int64 `json:"available"`
 		} `json:"stocks"`
-		TotalOrders     int64  `json:"total_orders"`
-		PaidOrders      int64  `json:"paid_orders"`
-		CompletedOrders int64  `json:"completed_orders"`
-		CancelledOrders int64  `json:"cancelled_orders"`
-		PaidCent        int64  `json:"paid_cent"`
-		Total           int64  `json:"total"`
-		Requested       int64  `json:"requested"`
-		Approved        int64  `json:"approved"`
-		Refunded        int64  `json:"refunded"`
-		RefundedCent    int64  `json:"refunded_cent"`
-		Answer          string `json:"answer"`
+		TotalOrders     int64 `json:"total_orders"`
+		PaidOrders      int64 `json:"paid_orders"`
+		CompletedOrders int64 `json:"completed_orders"`
+		CancelledOrders int64 `json:"cancelled_orders"`
+		PaidCent        int64 `json:"paid_cent"`
+		Total           int64 `json:"total"`
+		Requested       int64 `json:"requested"`
+		Approved        int64 `json:"approved"`
+		Refunded        int64 `json:"refunded"`
+		RefundedCent    int64 `json:"refunded_cent"`
+		Campaign        struct {
+			Code   string `json:"code"`
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"campaign"`
+		Rule struct {
+			Code          string `json:"code"`
+			ConditionExpr string `json:"condition_expr"`
+			EffectJSON    string `json:"effect_json"`
+		} `json:"rule"`
+		Answer string `json:"answer"`
 	}
 	if err := json.Unmarshal([]byte(toolResult), &out); err != nil {
 		return "我暂时无法读取这项信息，请稍后再试或联系人工客服。"
@@ -168,6 +180,9 @@ func mockAnswer(toolName, toolResult string) string {
 	case "refund_summary":
 		return fmt.Sprintf("最近 30 天售后 %d 条，待处理 %d 条，已通过 %d 条，已退款 %d 条，退款金额 ¥%.2f。",
 			out.Total, out.Requested, out.Approved, out.Refunded, float64(out.RefundedCent)/100)
+	case "draft_campaign":
+		return fmt.Sprintf("已生成活动草案 %s（%s，状态 %s）：规则条件 %s，优惠 %s。草案未保存，需管理员确认。",
+			out.Campaign.Code, out.Campaign.Name, out.Campaign.Status, out.Rule.ConditionExpr, out.Rule.EffectJSON)
 	case "low_stock":
 		var b strings.Builder
 		fmt.Fprintf(&b, "库存偏低的 SKU 共 %d 个，例如：\n", out.Total)

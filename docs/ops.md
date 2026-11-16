@@ -424,12 +424,11 @@ returns 503. Restart the data plane so new certificates are fetched, then
 restart the application pods so their in-pod ztunnel proxies reconnect:
 
 ```bash
-kubectl -n istio-system rollout restart ds/ztunnel
-kubectl -n istio-system rollout restart deployment/istiod
-kubectl -n mall delete pod -l gateway.networking.k8s.io/gateway-name=mall-waypoint
-kubectl -n istio-system rollout restart deployment/mall-gateway-istio
-kubectl -n mall rollout restart deployment
+make ambient-recover
 ```
+
+The script restarts ztunnel/istiod, recreates the waypoint, restarts the ingress
+gateway and mall deployments, and waits for `Gateway PROGRAMMED=True`.
 
 ### After draining the namespace
 

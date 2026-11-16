@@ -42,6 +42,7 @@ func TestGoldenAssistantTurns(t *testing.T) {
 		{"admin-sales", admin, "最近销售", []string{"123.45", "4"}},
 		{"admin-stock", admin, "库存", []string{"SKU 9", "可用 6"}},
 		{"admin-refunds", admin, "退款", []string{"售后", "5.00"}},
+		{"admin-campaign", admin, "做一个促销", []string{"草案", "subtotal_cent >= 30000"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

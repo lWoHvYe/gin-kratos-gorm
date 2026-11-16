@@ -157,3 +157,23 @@ func TestAdminToolsAggregateWithoutUserScope(t *testing.T) {
 		}
 	}
 }
+
+func TestCampaignDraftIsNeverPersisted(t *testing.T) {
+	tl, err := newCampaignDraftTool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := runTool(t, tl, context.Background(), `{"name":"满 300 减 30","type":"THRESHOLD","threshold_cent":30000,"discount_cent":3000,"days":7,"budget_cent":100000}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"status":"DRAFT"`) || !strings.Contains(out, "subtotal_cent >= 30000") {
+		t.Fatalf("draft = %s", out)
+	}
+	if !strings.Contains(out, "不会写入数据库") {
+		t.Fatalf("missing no-write note: %s", out)
+	}
+	if _, err := runTool(t, tl, context.Background(), `{"type":"PERCENT","percent":150}`); err == nil {
+		t.Fatal("expected percent validation error")
+	}
+}

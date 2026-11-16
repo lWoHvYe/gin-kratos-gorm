@@ -82,6 +82,7 @@ keep `bff.Timeout(15s)`.
 | `sales_summary` (admin) | `OrderService.GetOrderStats` | days | aggregates only: order counts and paid amount |
 | `refund_summary` (admin) | `AfterSalesService.GetAfterSaleStats` | days | aggregates only: after-sale counts and refunded amount |
 | `low_stock` (admin) | `InventoryService.ListLowStock` | threshold, limit | rows with available <= threshold; limit 20 |
+| `draft_campaign` (admin) | none (pure validation) | name/type/threshold/discount/days/budget | returns a DRAFT campaign + rule JSON; never writes |
 
 Tool results are compact JSON; the model may not set `user_id`. Writes will be
 two-phase `draft -> confirm` and always call the existing business RPC, never
@@ -177,8 +178,10 @@ Phase 3 RAG backend options (decide after evaluation, do not add both):
 
 Phase 2: admin read-only copilot (done for the analytics half): aggregate RPCs
 `GetOrderStats`, `GetAfterSaleStats`, `ListLowStock` and the admin SSE endpoint
-`POST /api/admin/v1/ai/chat` with an admin-only agent. Remaining Phase 2B:
-campaign draft + `EvaluatePromotions` preview and explicit confirmation.
+`POST /api/admin/v1/ai/chat` with an admin-only agent. Phase 2B is draft-only so far: `draft_campaign` returns a validated DRAFT
+campaign/rule JSON with a no-write note. Previewing a draft still requires saving
+it (the pricing simulator evaluates persisted rules), and the save/confirmation
+flow is not implemented yet.
 
 Phase 3: optional RAG. Add embeddings + Qdrant only if evaluation shows the
 MySQL retrieval is insufficient; index catalog changes from NATS/outbox
@@ -193,6 +196,8 @@ This is a working Phase 0–2A slice, not a production assistant yet:
   been exercised with a real API key, so model quality/latency/cost are unknown.
 - `TestGoldenAssistantTurns` is deterministic (mock model + fake services). It
   protects routing and tool wiring, not real-model groundedness.
+- The catalog now has realistic demo data (see `demo-data.md`); before that it
+  contained only E2E widgets.
 - Policy answers come from six curated in-code entries; there is no retrieval,
   embedding, citation beyond the entry title, or content review workflow.
 - Everything is read-only. Campaign drafts, confirmations, and any writes are

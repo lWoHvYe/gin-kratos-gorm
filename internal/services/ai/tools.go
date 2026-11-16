@@ -555,5 +555,145 @@ func newAdminTools(d Deps) ([]tool.BaseTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []tool.BaseTool{sales, refunds, low}, nil
+	draft, err := newCampaignDraftTool()
+	if err != nil {
+		return nil, err
+	}
+	return []tool.BaseTool{sales, refunds, low, draft}, nil
+}
+
+type campaignDraftInput struct {
+	Name          string `json:"name,omitempty" jsonschema:"description=Campaign name; a default is used when empty"`
+	Type          string `json:"type" jsonschema:"description=THRESHOLD, PERCENT, FIXED_AMOUNT or FREE_SHIPPING"`
+	ThresholdCent int64  `json:"threshold_cent,omitempty" jsonschema:"description=Minimum cart subtotal in cents"`
+	DiscountCent  int64  `json:"discount_cent,omitempty" jsonschema:"description=Fixed reduction in cents (THRESHOLD/FIXED_AMOUNT)"`
+	Percent       int32  `json:"percent,omitempty" jsonschema:"description=Discount percent for PERCENT, 1-100"`
+	Days          int32  `json:"days,omitempty" jsonschema:"description=Duration in days, default 7, max 90"`
+	BudgetCent    int64  `json:"budget_cent,omitempty" jsonschema:"description=Optional campaign budget in cents"`
+	PerUserLimit  int32  `json:"per_user_limit,omitempty" jsonschema:"description=Optional per-user limit"`
+}
+
+type campaignDraft struct {
+	Code         string `json:"code"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	Status       string `json:"status"`
+	StartAtUnix  int64  `json:"start_at_unix"`
+	EndAtUnix    int64  `json:"end_at_unix"`
+	Priority     int32  `json:"priority"`
+	BudgetCent   int64  `json:"budget_cent"`
+	PerUserLimit int32  `json:"per_user_limit"`
+	StackMode    string `json:"stack_mode"`
+}
+
+type promotionRuleDraft struct {
+	Code            string `json:"code"`
+	Name            string `json:"name"`
+	Type            string `json:"type"`
+	Status          string `json:"status"`
+	Priority        int32  `json:"priority"`
+	Exclusive       bool   `json:"exclusive"`
+	StackGroup      string `json:"stack_group"`
+	ScopeJSON       string `json:"scope_json"`
+	ConditionExpr   string `json:"condition_expr"`
+	EffectJSON      string `json:"effect_json"`
+	MaxDiscountCent int64  `json:"max_discount_cent"`
+	BudgetCent      int64  `json:"budget_cent"`
+	PerUserLimit    int32  `json:"per_user_limit"`
+	AllowWithCoupon bool   `json:"allow_with_coupon"`
+	StartAtUnix     int64  `json:"start_at_unix"`
+	EndAtUnix       int64  `json:"end_at_unix"`
+}
+
+type campaignDraftOutput struct {
+	Campaign campaignDraft      `json:"campaign"`
+	Rule     promotionRuleDraft `json:"rule"`
+	Notes    []string           `json:"notes"`
+}
+
+func newCampaignDraftTool() (tool.BaseTool, error) {
+	return utils.InferTool("draft_campaign",
+		"Build a DRAFT campaign + promotion rule from a few numbers. This never writes to the database; an admin must review and save it.",
+		func(_ context.Context, in campaignDraftInput) (campaignDraftOutput, error) {
+			typ := strings.ToUpper(strings.TrimSpace(in.Type))
+			if typ == "" {
+				typ = "THRESHOLD"
+			}
+			switch typ {
+			case "THRESHOLD", "PERCENT", "FIXED_AMOUNT", "FREE_SHIPPING":
+			default:
+				return campaignDraftOutput{}, fmt.Errorf("unsupported campaign type %q", in.Type)
+			}
+			now := time.Now()
+			days := in.Days
+			if days <= 0 {
+				days = 7
+			}
+			if days > 90 {
+				days = 90
+			}
+			end := now.AddDate(0, 0, int(days))
+			name := strings.TrimSpace(in.Name)
+			if name == "" {
+				name = "AI 活动草案"
+			}
+			stamp := now.Unix()
+			notes := []string{
+				"草案不会写入数据库；确认后才可通过管理端活动接口保存。",
+				"预览需要先保存活动，当前版本不提供草稿模拟。",
+			}
+			ruleType := typ
+			condition := ""
+			effect := ""
+			maxDiscount := int64(0)
+			switch typ {
+			case "THRESHOLD":
+				if in.ThresholdCent <= 0 || in.DiscountCent <= 0 {
+					return campaignDraftOutput{}, fmt.Errorf("threshold_cent and discount_cent are required for THRESHOLD")
+				}
+				condition = fmt.Sprintf("subtotal_cent >= %d", in.ThresholdCent)
+				effect = fmt.Sprintf(`{"type":"THRESHOLD","tiers":[{"min_cent":%d,"amount_cent":%d}]}`, in.ThresholdCent, in.DiscountCent)
+				maxDiscount = in.DiscountCent
+			case "PERCENT":
+				if in.Percent <= 0 || in.Percent > 100 {
+					return campaignDraftOutput{}, fmt.Errorf("percent must be between 1 and 100")
+				}
+				if in.ThresholdCent > 0 {
+					condition = fmt.Sprintf("subtotal_cent >= %d", in.ThresholdCent)
+				}
+				effect = fmt.Sprintf(`{"type":"PERCENT","percent":%d,"max_discount_cent":%d}`, in.Percent, in.DiscountCent)
+				maxDiscount = in.DiscountCent
+			case "FIXED_AMOUNT":
+				if in.DiscountCent <= 0 {
+					return campaignDraftOutput{}, fmt.Errorf("discount_cent is required for FIXED_AMOUNT")
+				}
+				if in.ThresholdCent > 0 {
+					condition = fmt.Sprintf("subtotal_cent >= %d", in.ThresholdCent)
+				}
+				effect = fmt.Sprintf(`{"type":"FIXED_AMOUNT","amount_cent":%d}`, in.DiscountCent)
+				maxDiscount = in.DiscountCent
+			case "FREE_SHIPPING":
+				if in.ThresholdCent > 0 {
+					condition = fmt.Sprintf("subtotal_cent >= %d", in.ThresholdCent)
+				}
+				effect = `{"type":"FREE_SHIPPING","shipping_cent":1000}`
+			}
+			out := campaignDraftOutput{
+				Campaign: campaignDraft{
+					Code: fmt.Sprintf("AI-%d", stamp), Name: name, Type: "PROMOTION", Status: "DRAFT",
+					StartAtUnix: now.Unix(), EndAtUnix: end.Unix(), Priority: 10,
+					BudgetCent: in.BudgetCent, PerUserLimit: in.PerUserLimit, StackMode: "STACK",
+				},
+				Rule: promotionRuleDraft{
+					Code: fmt.Sprintf("AI-R-%d", stamp), Name: name, Type: ruleType, Status: "DRAFT",
+					Priority: 10, Exclusive: false, StackGroup: "default",
+					ScopeJSON: `{"all":true}`, ConditionExpr: condition, EffectJSON: effect,
+					MaxDiscountCent: maxDiscount, BudgetCent: in.BudgetCent, PerUserLimit: in.PerUserLimit,
+					AllowWithCoupon: true, StartAtUnix: now.Unix(), EndAtUnix: end.Unix(),
+				},
+				Notes: notes,
+			}
+			metrics.AIToolCalls.WithLabelValues("draft_campaign", "ok").Inc()
+			return out, nil
+		})
 }

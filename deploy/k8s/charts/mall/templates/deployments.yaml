@@ -165,6 +165,23 @@ spec:
               value: {{ $.Values.ai.deepseekBaseURL | quote }}
             - name: CATALOG_ADDR
               value: "catalog:9002"
+            - name: AI_RAG_ENABLED
+              value: {{ $.Values.ai.ragEnabled | quote }}
+            - name: EMBEDDING_PROVIDER
+              value: {{ $.Values.ai.embeddingProvider | quote }}
+            - name: EMBEDDING_BASE_URL
+              value: {{ $.Values.ai.embeddingBaseURL | quote }}
+            - name: EMBEDDING_MODEL
+              value: {{ $.Values.ai.embeddingModel | quote }}
+            - name: EMBEDDING_DIM
+              value: {{ $.Values.ai.embeddingDim | quote }}
+            {{- if $.Values.ai.embeddingAPIKeySecret }}
+            - name: EMBEDDING_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.ai.embeddingAPIKeySecret }}
+                  key: {{ $.Values.ai.embeddingAPIKeySecretKey | default "embedding-api-key" }}
+            {{- end }}
             {{- if $.Values.ai.apiKeySecret }}
             - name: DEEPSEEK_API_KEY
               valueFrom:

@@ -79,6 +79,7 @@ keep `bff.Timeout(15s)`.
 | `list_my_after_sales` | `AfterSalesService.ListAfterSales` | status, limit | `user_id` from the request context |
 | `get_my_after_sale` | `AfterSalesService.GetAfterSale` | after-sale no | `GetAfterSale` has no filter, so ownership is checked in the tool |
 | `search_policy` | in-code FAQ | question | curated returns/shipping/cancel/payment/seckill/address text, max 2 entries |
+| `search_knowledge` | Redis Search (vector KNN) | open-ended question | top 5 passages from indexed products/policies; requires `AI_RAG_ENABLED` |
 | `sales_summary` (admin) | `OrderService.GetOrderStats` | days | aggregates only: order counts and paid amount |
 | `refund_summary` (admin) | `AfterSalesService.GetAfterSaleStats` | days | aggregates only: after-sale counts and refunded amount |
 | `low_stock` (admin) | `InventoryService.ListLowStock` | threshold, limit | rows with available <= threshold; limit 20 |
@@ -162,19 +163,24 @@ policy FAQ answered from a curated in-code document (no embeddings); assistant
 widget on the storefront (`components/AiAssistant.vue`, SSE parser in
 `utils/sse.ts`).
 
-Phase 3 RAG backend options (decide after evaluation, do not add both):
+Phase 3 (Redis vector search, first cut): `AI_RAG_ENABLED=true` indexes policy
+entries and on-sale products into Redis Search at AI-service startup (66 docs in
+the dev cluster). `search_knowledge` embeds the question and runs a KNN query
+(`FT.SEARCH ... =>[KNN k @embedding $vec]`). The index is recreated on startup;
+an outbox/event-driven indexer is future work.
 
-- **Redis Query Engine**: bundled in Redis 8 Open Source. The repo already runs
-  `redis:8.10.3-alpine` in compose and Helm, and both the local image and the
-  live redis pod load the `search` module (`FT.CREATE`/`FT.SEARCH` work), so no
-  `redis-stack` image or module install is needed. One datastore, low ops.
-  Caveat: the default tokenizer does not segment Chinese; for Chinese text use
-  an n-gram field, pre-tokenized terms, or the vector field instead of relying
-  on word tokens.
-- **pgvector**: a new Postgres instance/schema. Better SQL/vector ergonomics,
-  but adds a second database to back up and operate.
-- **Deferred default**: MySQL keyword + structured tools; introduce a vector
-  store only when the Phase 1 evaluation set shows retrieval misses.
+Embeddings are pluggable:
+
+- `EMBEDDING_PROVIDER=hash` is a deterministic token-hash fallback (dev/CI). It
+  is lexical, not semantic; treat RAG quality as unproven until a real model is
+  configured.
+- `EMBEDDING_PROVIDER=openai` calls any OpenAI-compatible `/embeddings` endpoint
+  (BGE, Qwen, OpenAI). Set `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`,
+  `EMBEDDING_API_KEY`, `EMBEDDING_DIM`. DeepSeek's chat API does not provide
+  embeddings, so this is a separate provider even when chat uses DeepSeek.
+
+Redis is the store/searcher, not the embedding generator. `pgvector` remains an
+alternative if a second database is acceptable, but it was not added.
 
 Phase 2: admin read-only copilot (done for the analytics half): aggregate RPCs
 `GetOrderStats`, `GetAfterSaleStats`, `ListLowStock` and the admin SSE endpoint
@@ -198,8 +204,11 @@ This is a working Phase 0–2A slice, not a production assistant yet:
   protects routing and tool wiring, not real-model groundedness.
 - The catalog now has realistic demo data (see `demo-data.md`); before that it
   contained only E2E widgets.
-- Policy answers come from six curated in-code entries; there is no retrieval,
-  embedding, citation beyond the entry title, or content review workflow.
+- RAG is wired end to end with Redis, but the default `hash` embedder is lexical,
+  not semantic; quality must be measured with a real embedding model.
+- Policy answers come from six curated in-code entries; the vector index adds
+  product/policy passages, but there is still no citation UI or content review
+  workflow.
 - Everything is read-only. Campaign drafts, confirmations, and any writes are
   still Phase 2B.
 - Quotas are per-user request counts. There is no token/cost budget, per-tool

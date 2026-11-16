@@ -114,6 +114,16 @@ ai:
   # Secret holding DEEPSEEK_API_KEY; required when provider=deepseek.
   apiKeySecret: ""
   apiKeySecretKey: deepseek-api-key
+  # Redis Search RAG. hash is a deterministic lexical fallback for dev; point
+  # provider=openai at a real embedding model (BGE/Qwen/OpenAI-compatible) for
+  # semantic retrieval.
+  ragEnabled: true
+  embeddingProvider: hash
+  embeddingBaseURL: https://api.openai.com/v1
+  embeddingModel: text-embedding-3-small
+  embeddingDim: 256
+  embeddingAPIKeySecret: ""
+  embeddingAPIKeySecretKey: embedding-api-key
 
 services:
   gateway:

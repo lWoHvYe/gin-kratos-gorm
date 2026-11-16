@@ -19,6 +19,7 @@ func TestGoldenAssistantTurns(t *testing.T) {
 		Orders:     &fakeOrders{},
 		AfterSales: &fakeAfterSales{},
 		Inventory:  fakeInventory{},
+		RAG:        fakeRAG{},
 	}
 	customer, err := buildAgent(context.Background(), ProviderConfig{Provider: "mock"}, d)
 	if err != nil {
@@ -36,6 +37,7 @@ func TestGoldenAssistantTurns(t *testing.T) {
 		want []string
 	}{
 		{"product", customer, "Widget", []string{"静音键盘", "299.00"}},
+		{"knowledge", customer, "适合大学生的手机", []string{"云舟 M3", "适合学生"}},
 		{"orders", customer, "我的订单", []string{"ORD-1", "PAID"}},
 		{"policy", customer, "退货政策", []string{"退货退款流程"}},
 		{"after-sales", customer, "售后", []string{"AS-1"}},

@@ -177,3 +177,23 @@ func TestCampaignDraftIsNeverPersisted(t *testing.T) {
 		t.Fatal("expected percent validation error")
 	}
 }
+
+type fakeRAG struct{}
+
+func (fakeRAG) Search(context.Context, string, int) ([]ragDoc, error) {
+	return []ragDoc{{ID: "product:1002", Kind: "product", Title: "云舟 M3 手机", Content: "6000mAh 大电池，适合学生和重度使用。", ProductID: 1002}}, nil
+}
+
+func TestKnowledgeToolReturnsIndexedPassages(t *testing.T) {
+	tl, err := newKnowledgeTool(fakeRAG{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := runTool(t, tl, context.Background(), `{"query":"适合大学生的手机"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "云舟 M3") || !strings.Contains(out, "适合学生") {
+		t.Fatalf("out = %s", out)
+	}
+}

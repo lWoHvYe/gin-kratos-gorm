@@ -65,6 +65,14 @@ type Config struct {
 	// AIRateLimit requests per user per AIRateWindow.
 	AIRateLimit  int
 	AIRateWindow time.Duration
+	// RAGEnabled indexes product/policy documents into Redis Search.
+	RAGEnabled bool
+	// EmbeddingProvider is "hash" (dev only) or "openai" (compatible API).
+	EmbeddingProvider string
+	EmbeddingBaseURL  string
+	EmbeddingAPIKey   string
+	EmbeddingModel    string
+	EmbeddingDim      int
 }
 
 // etcdFile is the optional YAML/JSON overlay stored in etcd. Pointers preserve
@@ -112,6 +120,10 @@ func Load(service string) (*Config, error) {
 		AITimeout:          30 * time.Second,
 		AIRateLimit:        20,
 		AIRateWindow:       10 * time.Minute,
+		EmbeddingProvider:  "hash",
+		EmbeddingBaseURL:   "https://api.openai.com/v1",
+		EmbeddingModel:     "text-embedding-3-small",
+		EmbeddingDim:       256,
 	}
 	// Bootstrap endpoints are needed before the config center can be read.
 	if v := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS")); v != "" {
@@ -187,6 +199,26 @@ func (c *Config) validateAI() error {
 	}
 	if c.AIRateWindow <= 0 {
 		c.AIRateWindow = 10 * time.Minute
+	}
+	embeddingProvider := strings.ToLower(strings.TrimSpace(c.EmbeddingProvider))
+	if embeddingProvider == "" {
+		embeddingProvider = "hash"
+	}
+	c.EmbeddingProvider = embeddingProvider
+	switch embeddingProvider {
+	case "hash":
+		if c.EmbeddingDim <= 0 {
+			c.EmbeddingDim = 256
+		}
+	case "openai":
+		if strings.TrimSpace(c.EmbeddingModel) == "" {
+			return fmt.Errorf("EMBEDDING_MODEL is required for EMBEDDING_PROVIDER=openai")
+		}
+		if c.EmbeddingDim <= 0 {
+			c.EmbeddingDim = 1536
+		}
+	default:
+		return fmt.Errorf("EMBEDDING_PROVIDER must be hash or openai (got %q)", c.EmbeddingProvider)
 	}
 	return nil
 }
@@ -412,6 +444,26 @@ func applyEnv(c *Config) {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.AIRateWindow = d
 		}
+	}
+	if v, ok := os.LookupEnv("AI_RAG_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
+			c.RAGEnabled = parsed
+		}
+	}
+	if v := os.Getenv("EMBEDDING_PROVIDER"); v != "" {
+		c.EmbeddingProvider = v
+	}
+	if v := os.Getenv("EMBEDDING_BASE_URL"); v != "" {
+		c.EmbeddingBaseURL = v
+	}
+	if v := os.Getenv("EMBEDDING_API_KEY"); v != "" {
+		c.EmbeddingAPIKey = v
+	}
+	if v := os.Getenv("EMBEDDING_MODEL"); v != "" {
+		c.EmbeddingModel = v
+	}
+	if v := os.Getenv("EMBEDDING_DIM"); v != "" {
+		c.EmbeddingDim = EnvInt("EMBEDDING_DIM", c.EmbeddingDim)
 	}
 }
 

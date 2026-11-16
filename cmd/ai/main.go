@@ -39,7 +39,7 @@ func main() {
 	}
 	defer cache.Close()
 
-	dial := func(env, fallback string) (pbCatalog *grpc.ClientConn, err error) {
+	dial := func(env, fallback string) (*grpc.ClientConn, error) {
 		addr := strings.TrimSpace(os.Getenv(env))
 		if addr == "" {
 			addr = fallback
@@ -52,6 +52,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer catalogConn.Close()
+	catalog := pb.NewCatalogServiceClient(catalogConn)
 	orderConn, err := dial("ORDER_ADDR", "order:9006")
 	if err != nil {
 		logger.Error("dial order", "error", err)
@@ -71,6 +72,22 @@ func main() {
 	}
 	defer inventoryConn.Close()
 
+	var rag ai.RAGSearcher
+	if cfg.RAGEnabled {
+		built, err := ai.OpenRAG(context.Background(), ai.RAGConfig{
+			Provider: cfg.EmbeddingProvider,
+			BaseURL:  cfg.EmbeddingBaseURL,
+			APIKey:   cfg.EmbeddingAPIKey,
+			Model:    cfg.EmbeddingModel,
+			Dim:      cfg.EmbeddingDim,
+		}, catalog, cache, logger)
+		if err != nil {
+			logger.Warn("rag disabled", "error", err)
+		} else {
+			rag = built
+		}
+	}
+
 	svc, err := ai.NewService(context.Background(), ai.Config{
 		Enabled:    cfg.AIEnabled,
 		Timeout:    cfg.AITimeout,
@@ -88,6 +105,7 @@ func main() {
 		Orders:     pb.NewOrderServiceClient(orderConn),
 		AfterSales: pb.NewAfterSalesServiceClient(afterSalesConn),
 		Inventory:  pb.NewInventoryServiceClient(inventoryConn),
+		RAG:        rag,
 	}, cache, logger)
 	if err != nil {
 		logger.Error("build ai service", "error", err)

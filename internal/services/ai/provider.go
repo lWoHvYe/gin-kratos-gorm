@@ -112,6 +112,9 @@ func (m *mockModel) mockToolCall(query string) (string, map[string]any) {
 			return "sales_summary", map[string]any{"days": 30}
 		}
 	}
+	if has("search_knowledge") && (strings.Contains(q, "适合") || strings.Contains(q, "怎么选") || strings.Contains(q, "对比") || strings.Contains(q, "有什么区别")) {
+		return "search_knowledge", map[string]any{"query": query, "limit": 5}
+	}
 	switch {
 	case has("search_policy") && (strings.Contains(q, "政策") || strings.Contains(q, "规则") || strings.Contains(q, "运费")):
 		return "search_policy", map[string]any{"query": query}
@@ -153,7 +156,12 @@ func mockAnswer(toolName, toolResult string) string {
 		Approved        int64 `json:"approved"`
 		Refunded        int64 `json:"refunded"`
 		RefundedCent    int64 `json:"refunded_cent"`
-		Campaign        struct {
+		Results         []struct {
+			Title   string `json:"title"`
+			Content string `json:"content"`
+			Kind    string `json:"kind"`
+		} `json:"results"`
+		Campaign struct {
 			Code   string `json:"code"`
 			Name   string `json:"name"`
 			Status string `json:"status"`
@@ -169,6 +177,22 @@ func mockAnswer(toolName, toolResult string) string {
 		return "我暂时无法读取这项信息，请稍后再试或联系人工客服。"
 	}
 	switch toolName {
+	case "search_knowledge":
+		if len(out.Results) == 0 {
+			return "知识库里没有找到相关内容，可以换个问法或联系人工客服。"
+		}
+		var b strings.Builder
+		for i, r := range out.Results {
+			if i >= 3 {
+				break
+			}
+			content := []rune(r.Content)
+			if len(content) > 160 {
+				content = content[:160]
+			}
+			fmt.Fprintf(&b, "- %s：%s\n", r.Title, string(content))
+		}
+		return strings.TrimRight(b.String(), "\n")
 	case "search_policy":
 		if out.Answer == "" {
 			return "没有找到对应的商城规则，建议转人工客服确认。"

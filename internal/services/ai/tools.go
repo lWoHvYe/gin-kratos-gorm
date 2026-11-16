@@ -43,6 +43,7 @@ type Deps struct {
 	Orders     orderClient
 	AfterSales afterSalesClient
 	Inventory  inventoryClient
+	RAG        RAGSearcher
 }
 
 type deps = Deps
@@ -81,7 +82,15 @@ func newTools(d deps) ([]tool.BaseTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []tool.BaseTool{search, getProduct, listOrders, getOrder, listAfterSales, getAfterSale, policy}, nil
+	out := []tool.BaseTool{search, getProduct, listOrders, getOrder, listAfterSales, getAfterSale, policy}
+	if d.RAG != nil {
+		knowledge, err := newKnowledgeTool(d.RAG)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, knowledge)
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------- products
@@ -694,6 +703,54 @@ func newCampaignDraftTool() (tool.BaseTool, error) {
 				Notes: notes,
 			}
 			metrics.AIToolCalls.WithLabelValues("draft_campaign", "ok").Inc()
+			return out, nil
+		})
+}
+
+// ---------------------------------------------------------------- rag
+
+type knowledgeInput struct {
+	Query string `json:"query" jsonschema:"description=Open-ended product question, e.g. 适合大学生的手机"`
+	Limit int32  `json:"limit,omitempty" jsonschema:"description=Number of passages, max 8"`
+}
+
+type knowledgeResult struct {
+	Title     string  `json:"title"`
+	Content   string  `json:"content"`
+	Kind      string  `json:"kind"`
+	ProductID int64   `json:"product_id,omitempty"`
+	Score     float64 `json:"score,omitempty"`
+}
+
+type knowledgeOutput struct {
+	Results []knowledgeResult `json:"results"`
+}
+
+func newKnowledgeTool(rag RAGSearcher) (tool.BaseTool, error) {
+	return utils.InferTool("search_knowledge",
+		"Retrieve product/policy passages from the indexed knowledge base for open-ended questions (适合谁/怎么选/对比). Prefer search_products when the user gave concrete filters.",
+		func(ctx context.Context, in knowledgeInput) (knowledgeOutput, error) {
+			limit := in.Limit
+			if limit <= 0 {
+				limit = 5
+			}
+			if limit > 8 {
+				limit = 8
+			}
+			ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+			defer cancel()
+			docs, err := rag.Search(ctx, in.Query, int(limit))
+			if err != nil {
+				metrics.AIToolCalls.WithLabelValues("search_knowledge", "error").Inc()
+				return knowledgeOutput{}, err
+			}
+			out := knowledgeOutput{Results: make([]knowledgeResult, 0, len(docs))}
+			for _, d := range docs {
+				out.Results = append(out.Results, knowledgeResult{
+					Title: d.Title, Content: d.Content, Kind: d.Kind, ProductID: d.ProductID, Score: d.Score,
+				})
+			}
+			metrics.AIToolCalls.WithLabelValues("search_knowledge", "ok").Inc()
 			return out, nil
 		})
 }

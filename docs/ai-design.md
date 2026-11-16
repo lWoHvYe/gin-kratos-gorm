@@ -177,7 +177,11 @@ Embeddings are pluggable:
 - `EMBEDDING_PROVIDER=openai` calls any OpenAI-compatible `/embeddings` endpoint
   (BGE, Qwen, OpenAI). Set `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`,
   `EMBEDDING_API_KEY`, `EMBEDDING_DIM`. DeepSeek's chat API does not provide
-  embeddings, so this is a separate provider even when chat uses DeepSeek.
+  embeddings, so this is a separate provider even when chat uses DeepSeek. The
+  dev cluster uses Qwen `qwen3.7-text-embedding` (1024 dims).
+  Docs take effect for new/restarted processes.
+- See `deploy/k8s/charts/mall/values-deepseek.example.yaml` for the real-model
+  overlay; keys live in `mall-ai-secrets`, never in values.
 
 Redis is the store/searcher, not the embedding generator. `pgvector` remains an
 alternative if a second database is acceptable, but it was not added.
@@ -195,37 +199,33 @@ asynchronously.
 
 ## Current maturity (2026-11)
 
-This is a working Phase 0–2A slice, not a production assistant yet:
+The dev cluster now runs `deepseek-flash` for chat and `qwen3.7-text-embedding`
+(1024 dimensions) through an OpenAI-compatible endpoint in Aliyun MaaS; Redis
+Search indexes 66 product/policy documents. Live checks produced grounded
+answers from the seeded catalog and real order/refund aggregates.
 
-- The cluster runs `AI_PROVIDER=mock`. The DeepSeek adapter has a contract test
-  against an OpenAI-compatible server (auth, path, usage parsing) but has not
-  been exercised with a real API key, so model quality/latency/cost are unknown.
-- `TestGoldenAssistantTurns` is deterministic (mock model + fake services). It
-  protects routing and tool wiring, not real-model groundedness.
-- The catalog now has realistic demo data (see `demo-data.md`); before that it
-  contained only E2E widgets.
-- RAG is wired end to end with Redis, but the default `hash` embedder is lexical,
-  not semantic; quality must be measured with a real embedding model.
-- Policy answers come from six curated in-code entries; the vector index adds
-  product/policy passages, but there is still no citation UI or content review
-  workflow.
-- Everything is read-only. Campaign drafts, confirmations, and any writes are
-  still Phase 2B.
-- Quotas are per-user request counts. There is no token/cost budget, per-tool
-  budget, semantic cache, or per-tenant limit.
-- SSE emits `delta`/`done`/`error`; `tool` is reserved but not emitted yet.
-  Client cancellation is detected only when a write fails, not proactively.
-- Sessions store user text in Redis for 30 minutes in plaintext; there is no
-  retention/erasure policy beyond TTL.
-- `admin=true` is trusted from the admin BFF under the mesh trust ADR; the AI
-  service does not re-check the caller role.
-- No feedback capture, no evaluation dashboard, no alerting on tool errors or
-  provider latency.
-- Prompt-injection defense is structural (curated tools, user id from context,
-  model cannot set identity) but has no adversarial test corpus.
+Still demo-grade:
 
-Hardening order: live DeepSeek run + real-model evaluation set, token/cost
-budgets, tool events and cancellation, feedback capture, then Phase 2B writes.
+- No automated real-model evaluation set or quality metrics; `TestGoldenAssistant`
+  uses the mock model and fake services. A live prompt set is still manual.
+- The model is `deepseek-flash` with a 12-step ReAct budget; latency/token cost
+  per tool path have not been measured in aggregate.
+- Everything is read-only. Campaign drafts are generated but never saved,
+  previewed against the pricing engine, or confirmed.
+- Quotas are per-user request counts; there is no token/cost budget, semantic
+  cache, or per-tool budget.
+- SSE emits `delta`/`done`/`error`; `tool` is reserved but not emitted. Client
+  cancellation is detected only when a write fails.
+- Sessions store user text in Redis for 30 minutes in plaintext.
+- `admin=true` is trusted from the admin BFF under the mesh trust ADR.
+- No feedback capture, evaluation dashboard, or alerts on tool/provider errors.
+- The k3s NetworkPolicy workaround allows AI pods all public egress (port-
+  qualified ipBlock rules did not take effect); production needs an egress
+  gateway with domain allow-listing.
+- RAG reindexes on startup; catalog changes do not update the index yet.
+
+Hardening order: real-model evaluation harness, token/cost budgets, tool events
+and cancellation, feedback capture, event-driven indexing, then Phase 2B writes.
 
 ## Acceptance for Phase 2A
 

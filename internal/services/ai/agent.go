@@ -52,7 +52,7 @@ func buildAgent(ctx context.Context, cfg ProviderConfig, d deps) (*react.Agent, 
 				return "", fmt.Errorf("unknown tool")
 			},
 		},
-		MaxStep: 6,
+		MaxStep: 12,
 		MessageModifier: func(_ context.Context, in []*schema.Message) []*schema.Message {
 			out := make([]*schema.Message, 0, len(in)+1)
 			out = append(out, &schema.Message{Role: schema.System, Content: systemPrompt})
@@ -84,7 +84,7 @@ func buildAdminAgent(ctx context.Context, cfg ProviderConfig, d Deps) (*react.Ag
 				return "", fmt.Errorf("unknown tool")
 			},
 		},
-		MaxStep: 6,
+		MaxStep: 12,
 		MessageModifier: func(_ context.Context, in []*schema.Message) []*schema.Message {
 			out := make([]*schema.Message, 0, len(in)+1)
 			out = append(out, &schema.Message{Role: schema.System, Content: adminSystemPrompt})

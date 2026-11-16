@@ -1,0 +1,22 @@
+# Example overlay for real models (copy, fill the workspace host, then):
+#   kubectl -n mall create secret generic mall-ai-secrets \
+#     --from-literal=deepseek-api-key=... \
+#     --from-literal=embedding-api-key=...
+#   helm upgrade mall deploy/k8s/charts/mall -n mall \
+#     -f deploy/k8s/charts/mall/values-single-node.yaml \
+#     -f deploy/k8s/charts/mall/values-deepseek.example.yaml
+ai:
+  enabled: true
+  provider: deepseek
+  model: deepseek-flash
+  apiKeySecret: mall-ai-secrets
+  apiKeySecretKey: deepseek-api-key
+  ragEnabled: true
+  # Qwen OpenAI-compatible embedding endpoint:
+  # https://<workspace>.<region>.maas.aliyuncs.com/compatible-mode/v1
+  embeddingProvider: openai
+  embeddingBaseURL: https://<workspace>.<region>.maas.aliyuncs.com/compatible-mode/v1
+  embeddingModel: qwen3.7-text-embedding
+  embeddingDim: 1024
+  embeddingAPIKeySecret: mall-ai-secrets
+  embeddingAPIKeySecretKey: embedding-api-key

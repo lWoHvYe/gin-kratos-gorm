@@ -146,9 +146,23 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 	for i, d := range docs {
 		texts[i] = d.Title + "\n" + d.Content
 	}
-	vectors, err := r.embedder.Embed(ctx, texts)
-	if err != nil {
-		return fmt.Errorf("embed documents: %w", err)
+	// Embedding APIs cap batch sizes (Qwen's endpoint is small), so embed in
+	// fixed chunks and concatenate in document order.
+	const batchSize = 10
+	vectors := make([][]float32, 0, len(texts))
+	for start := 0; start < len(texts); start += batchSize {
+		end := start + batchSize
+		if end > len(texts) {
+			end = len(texts)
+		}
+		batch, err := r.embedder.Embed(ctx, texts[start:end])
+		if err != nil {
+			return fmt.Errorf("embed documents: %w", err)
+		}
+		if len(batch) != end-start {
+			return fmt.Errorf("embedding batch count %d != %d", len(batch), end-start)
+		}
+		vectors = append(vectors, batch...)
 	}
 	if len(vectors) != len(docs) {
 		return fmt.Errorf("embedding count %d != documents %d", len(vectors), len(docs))

@@ -142,3 +142,24 @@ spec:
           port: 15014
         - protocol: TCP
           port: 443
+---
+# The assistant calls external model APIs (DeepSeek/Qwen). k3s's policy
+# controller does not honour ipBlock+port combinations reliably here, so this
+# allows public addresses without a port restriction. Production should route
+# model egress through a dedicated egress gateway with domain allow-listing.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ai-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mall.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ai
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0

@@ -430,6 +430,14 @@ make ambient-recover
 The script restarts ztunnel/istiod, recreates the waypoint, restarts the ingress
 gateway and mall deployments, and waits for `Gateway PROGRAMMED=True`.
 
+### AI model egress
+
+The `ai` service calls DeepSeek and Qwen embedding endpoints over public HTTPS.
+`allow-ai-egress` permits public addresses for AI pods only; k3s ignored
+port-qualified ipBlock rules in this environment, so it has no port restriction.
+Production should use a dedicated egress gateway with domain allow-listing
+instead. Model keys live in the `mall-ai-secrets` Secret.
+
 ### After draining the namespace
 
 `kubectl -n mall scale deployment --all --replicas=0` also scales the Ambient

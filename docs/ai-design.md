@@ -184,6 +184,35 @@ Phase 3: optional RAG. Add embeddings + Qdrant only if evaluation shows the
 MySQL retrieval is insufficient; index catalog changes from NATS/outbox
 asynchronously.
 
+## Current maturity (2026-11)
+
+This is a working Phase 0–2A slice, not a production assistant yet:
+
+- The cluster runs `AI_PROVIDER=mock`. The DeepSeek adapter has a contract test
+  against an OpenAI-compatible server (auth, path, usage parsing) but has not
+  been exercised with a real API key, so model quality/latency/cost are unknown.
+- `TestGoldenAssistantTurns` is deterministic (mock model + fake services). It
+  protects routing and tool wiring, not real-model groundedness.
+- Policy answers come from six curated in-code entries; there is no retrieval,
+  embedding, citation beyond the entry title, or content review workflow.
+- Everything is read-only. Campaign drafts, confirmations, and any writes are
+  still Phase 2B.
+- Quotas are per-user request counts. There is no token/cost budget, per-tool
+  budget, semantic cache, or per-tenant limit.
+- SSE emits `delta`/`done`/`error`; `tool` is reserved but not emitted yet.
+  Client cancellation is detected only when a write fails, not proactively.
+- Sessions store user text in Redis for 30 minutes in plaintext; there is no
+  retention/erasure policy beyond TTL.
+- `admin=true` is trusted from the admin BFF under the mesh trust ADR; the AI
+  service does not re-check the caller role.
+- No feedback capture, no evaluation dashboard, no alerting on tool errors or
+  provider latency.
+- Prompt-injection defense is structural (curated tools, user id from context,
+  model cannot set identity) but has no adversarial test corpus.
+
+Hardening order: live DeepSeek run + real-model evaluation set, token/cost
+budgets, tool events and cancellation, feedback capture, then Phase 2B writes.
+
 ## Acceptance for Phase 2A
 
 1. An admin token receives sales/refund/low-stock aggregates and no user-level

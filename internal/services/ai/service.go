@@ -21,6 +21,8 @@ import (
 const (
 	maxMessageRunes = 2000
 	streamTimeout   = 120 * time.Second
+	// promptVersion changes whenever systemPrompt or adminSystemPrompt changes.
+	promptVersion = "2026-11-16"
 )
 
 // Config holds the assistant knobs that are not model-provider specific.
@@ -29,6 +31,8 @@ type Config struct {
 	Timeout    time.Duration
 	RateLimit  int
 	RateWindow time.Duration
+	Provider   string
+	Model      string
 }
 
 // Service streams assistant turns. It never touches business state directly:
@@ -48,6 +52,9 @@ type Service struct {
 // agent is only built when the feature is enabled, so a disabled assistant does
 // not dial the model or the catalog.
 func NewService(ctx context.Context, cfg Config, provider ProviderConfig, d deps, cache redis.UniversalClient, logger *slog.Logger) (*Service, error) {
+	cfg.Provider = provider.Provider
+	cfg.Model = provider.Model
+	metrics.AIInfo.WithLabelValues(provider.Provider, provider.Model, promptVersion).Set(1)
 	var runner, adminRunner agentRunner
 	if cfg.Enabled {
 		built, err := buildAgent(ctx, provider, d)
@@ -195,6 +202,7 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		s.log.Warn("ai session append failed", "user_id", req.GetUserId(), "error", err)
 	}
 	s.log.Info("ai chat", "user_id", req.GetUserId(), "session_id", sessionID, "admin", req.GetAdmin(),
+		"provider", s.cfg.Provider, "model", s.cfg.Model, "prompt_version", promptVersion,
 		"latency_ms", time.Since(start).Milliseconds(), "chars", answer.Len())
 	return stream.Send(&pb.AIChatEvent{Type: "done"})
 }

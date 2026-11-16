@@ -108,11 +108,17 @@ var (
 		Name: "mall_ai_rate_limited_total",
 		Help: "Assistant requests rejected by the per-user quota.",
 	})
+
+	// AIInfo exposes the active provider/model/prompt version.
+	AIInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "mall_ai_info",
+		Help: "Active assistant provider, model and prompt version.",
+	}, []string{"provider", "model", "prompt_version"})
 )
 
 func init() {
 	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
 		OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
-		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited)
+		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo)
 }

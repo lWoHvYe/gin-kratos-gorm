@@ -167,7 +167,7 @@ func TestCampaignDraftIsNeverPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, `"status":"DRAFT"`) || !strings.Contains(out, "subtotal_cent >= 30000") {
+	if !strings.Contains(out, `"status":"DRAFT"`) || !strings.Contains(out, `"stack_mode":"PRIORITY"`) || !strings.Contains(out, "subtotal_cent >= 30000") {
 		t.Fatalf("draft = %s", out)
 	}
 	if !strings.Contains(out, "不会写入数据库") {
@@ -194,6 +194,26 @@ func TestKnowledgeToolReturnsIndexedPassages(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out, "云舟 M3") || !strings.Contains(out, "适合学生") {
+		t.Fatalf("out = %s", out)
+	}
+}
+
+type fakePromotion struct{}
+
+func (fakePromotion) EvaluateDraft(context.Context, *pb.EvaluateDraftRequest, ...grpc.CallOption) (*pb.PromotionEvaluation, error) {
+	return &pb.PromotionEvaluation{DiscountCent: 3000, Applied: []*pb.AppliedPromotion{{Code: "DRAFT"}}}, nil
+}
+
+func TestPreviewCampaignUsesDraftEvaluation(t *testing.T) {
+	tl, err := newPreviewCampaignTool(fakePromotion{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := runTool(t, tl, context.Background(), `{"type":"THRESHOLD","threshold_cent":30000,"discount_cent":3000,"sample_price_cent":30000}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "3000") || !strings.Contains(out, "DRAFT") {
 		t.Fatalf("out = %s", out)
 	}
 }

@@ -37,12 +37,17 @@ type inventoryClient interface {
 	ListLowStock(ctx context.Context, in *pb.ListLowStockRequest, opts ...grpc.CallOption) (*pb.StockList, error)
 }
 
+type promotionClient interface {
+	EvaluateDraft(ctx context.Context, in *pb.EvaluateDraftRequest, opts ...grpc.CallOption) (*pb.PromotionEvaluation, error)
+}
+
 // Deps are the read-only clients the agent tools may call.
 type Deps struct {
 	Catalog    catalogClient
 	Orders     orderClient
 	AfterSales afterSalesClient
 	Inventory  inventoryClient
+	Promotion  promotionClient
 	RAG        RAGSearcher
 }
 
@@ -568,7 +573,15 @@ func newAdminTools(d Deps) ([]tool.BaseTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []tool.BaseTool{sales, refunds, low, draft}, nil
+	out := []tool.BaseTool{sales, refunds, low, draft}
+	if d.Promotion != nil {
+		preview, err := newPreviewCampaignTool(d.Promotion)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, preview)
+	}
+	return out, nil
 }
 
 type campaignDraftInput struct {
@@ -691,7 +704,7 @@ func newCampaignDraftTool() (tool.BaseTool, error) {
 				Campaign: campaignDraft{
 					Code: fmt.Sprintf("AI-%d", stamp), Name: name, Type: "PROMOTION", Status: "DRAFT",
 					StartAtUnix: now.Unix(), EndAtUnix: end.Unix(), Priority: 10,
-					BudgetCent: in.BudgetCent, PerUserLimit: in.PerUserLimit, StackMode: "STACK",
+					BudgetCent: in.BudgetCent, PerUserLimit: in.PerUserLimit, StackMode: "PRIORITY",
 				},
 				Rule: promotionRuleDraft{
 					Code: fmt.Sprintf("AI-R-%d", stamp), Name: name, Type: ruleType, Status: "DRAFT",
@@ -751,6 +764,96 @@ func newKnowledgeTool(rag RAGSearcher) (tool.BaseTool, error) {
 				})
 			}
 			metrics.AIToolCalls.WithLabelValues("search_knowledge", "ok").Inc()
+			return out, nil
+		})
+}
+
+type previewCampaignInput struct {
+	Type            string `json:"type,omitempty" jsonschema:"description=THRESHOLD or PERCENT"`
+	ThresholdCent   int64  `json:"threshold_cent,omitempty" jsonschema:"description=Minimum cart subtotal in cents"`
+	DiscountCent    int64  `json:"discount_cent,omitempty" jsonschema:"description=Discount amount in cents"`
+	Percent         int32  `json:"percent,omitempty" jsonschema:"description=Discount percent for PERCENT"`
+	SamplePriceCent int64  `json:"sample_price_cent,omitempty" jsonschema:"description=Sample item price in cents, default 30000"`
+	Quantity        int32  `json:"quantity,omitempty" jsonschema:"description=Sample quantity, default 1"`
+}
+
+type previewCampaignOutput struct {
+	DiscountCent         int64    `json:"discount_cent"`
+	ShippingDiscountCent int64    `json:"shipping_discount_cent"`
+	Applied              []string `json:"applied"`
+	Rejected             []string `json:"rejected"`
+}
+
+func newPreviewCampaignTool(promotions promotionClient) (tool.BaseTool, error) {
+	return utils.InferTool("preview_campaign",
+		"Preview a draft promotion against a sample item without saving it. Returns the discount the admin would see.",
+		func(ctx context.Context, in previewCampaignInput) (previewCampaignOutput, error) {
+			typ := strings.ToUpper(strings.TrimSpace(in.Type))
+			if typ == "" {
+				typ = "THRESHOLD"
+			}
+			threshold := in.ThresholdCent
+			if threshold <= 0 {
+				threshold = 30000
+			}
+			price := in.SamplePriceCent
+			if price <= 0 {
+				price = threshold
+			}
+			qty := in.Quantity
+			if qty <= 0 {
+				qty = 1
+			}
+			var effect, condition string
+			switch typ {
+			case "THRESHOLD":
+				discount := in.DiscountCent
+				if discount <= 0 {
+					discount = 3000
+				}
+				condition = fmt.Sprintf("subtotal_cent >= %d", threshold)
+				effect = fmt.Sprintf(`{"type":"THRESHOLD","tiers":[{"min_cent":%d,"amount_cent":%d}]}`, threshold, discount)
+			case "PERCENT":
+				pct := in.Percent
+				if pct <= 0 {
+					pct = 10
+				}
+				if pct > 100 {
+					return previewCampaignOutput{}, fmt.Errorf("percent must be <= 100")
+				}
+				condition = fmt.Sprintf("subtotal_cent >= %d", threshold)
+				effect = fmt.Sprintf(`{"type":"PERCENT","percent":%d}`, pct)
+			default:
+				return previewCampaignOutput{}, fmt.Errorf("preview supports THRESHOLD or PERCENT")
+			}
+			ctx, cancel := context.WithTimeout(ctx, toolTimeout)
+			defer cancel()
+			reply, err := promotions.EvaluateDraft(ctx, &pb.EvaluateDraftRequest{
+				Evaluation: &pb.PromotionEvaluateRequest{
+					UserId: 1,
+					Items:  []*pb.PromotionEvaluateItem{{PriceCent: price, Quantity: qty}},
+				},
+				Campaign: &pb.Campaign{Name: "preview", StackMode: "PRIORITY", BudgetCent: 0},
+				Rule: &pb.PromotionRule{
+					Code: "PREVIEW", Name: "preview", Type: typ, Status: "DRAFT",
+					Priority: 10, ScopeJson: `{"all":true}`, ConditionExpr: condition,
+					EffectJson: effect, AllowWithCoupon: true,
+				},
+			})
+			if err != nil {
+				metrics.AIToolCalls.WithLabelValues("preview_campaign", "error").Inc()
+				return previewCampaignOutput{}, err
+			}
+			out := previewCampaignOutput{
+				DiscountCent: reply.GetDiscountCent(), ShippingDiscountCent: reply.GetShippingDiscountCent(),
+			}
+			for _, a := range reply.GetApplied() {
+				out.Applied = append(out.Applied, a.GetCode())
+			}
+			for _, r := range reply.GetRejected() {
+				out.Rejected = append(out.Rejected, r.GetCode()+":"+r.GetReason())
+			}
+			metrics.AIToolCalls.WithLabelValues("preview_campaign", "ok").Inc()
 			return out, nil
 		})
 }

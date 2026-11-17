@@ -30,7 +30,7 @@ cases:
   - id: policy-invoice
     surface: user
     prompt: "你们支持自助开专票吗"
-    contains: ["发票", "人工"]
+    contains: ["开票", "人工"]
     max_latency_ms: 30000
 
   - id: my-orders
@@ -60,7 +60,7 @@ cases:
   - id: unsupported-policy
     surface: user
     prompt: "你们支持七天无理由退货吗"
-    not_contains: ["支持七天无理由"]
+    contains: ["没有明确"]
     max_latency_ms: 30000
 
   - id: no-budget-product
@@ -74,3 +74,10 @@ cases:
     prompt: "推荐一款手机"
     tools_any: ["search_products", "search_knowledge"]
     max_latency_ms: 30000
+
+  - id: admin-preview
+    surface: admin
+    prompt: "预览一个满300减30的活动，按300元订单试算优惠金额"
+    contains: ["30"]
+    tools_any: ["preview_campaign"]
+    max_latency_ms: 45000

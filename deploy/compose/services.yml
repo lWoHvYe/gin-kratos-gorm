@@ -209,6 +209,7 @@ services:
       GRPC_ADDR: ":9004"
       HTTP_ADDR: ":9104"
       CATALOG_ADDR: catalog:9002
+      PRICING_ADDR: pricing:9005
       AI_RAG_ENABLED: "${AI_RAG_ENABLED:-true}"
       EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-hash}"
       EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-https://api.openai.com/v1}"
@@ -240,6 +241,7 @@ services:
       GRPC_ADDR: ":9005"
       HTTP_ADDR: ":9105"
       CATALOG_ADDR: catalog:9002
+      PRICING_ADDR: pricing:9005
       AI_RAG_ENABLED: "${AI_RAG_ENABLED:-true}"
       EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-hash}"
       EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-https://api.openai.com/v1}"
@@ -400,6 +402,7 @@ services:
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       DEEPSEEK_BASE_URL: "${DEEPSEEK_BASE_URL:-https://api.deepseek.com}"
       CATALOG_ADDR: catalog:9002
+      PRICING_ADDR: pricing:9005
       AI_RAG_ENABLED: "${AI_RAG_ENABLED:-true}"
       EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-hash}"
       EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-https://api.openai.com/v1}"

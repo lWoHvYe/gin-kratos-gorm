@@ -84,6 +84,7 @@ keep `bff.Timeout(15s)`.
 | `refund_summary` (admin) | `AfterSalesService.GetAfterSaleStats` | days | aggregates only: after-sale counts and refunded amount |
 | `low_stock` (admin) | `InventoryService.ListLowStock` | threshold, limit | rows with available <= threshold; limit 20 |
 | `draft_campaign` (admin) | none (pure validation) | name/type/threshold/discount/days/budget | returns a DRAFT campaign + rule JSON; never writes |
+| `preview_campaign` (admin) | `PromotionService.EvaluateDraft` | draft values + sample item | runs the real promotion engine without saving; returns discount |
 
 Tool results are compact JSON; the model may not set `user_id`. Writes will be
 two-phase `draft -> confirm` and always call the existing business RPC, never
@@ -195,10 +196,12 @@ alternative if a second database is acceptable, but it was not added.
 
 Phase 2: admin read-only copilot (done for the analytics half): aggregate RPCs
 `GetOrderStats`, `GetAfterSaleStats`, `ListLowStock` and the admin SSE endpoint
-`POST /api/admin/v1/ai/chat` with an admin-only agent. Phase 2B is draft-only so far: `draft_campaign` returns a validated DRAFT
-campaign/rule JSON with a no-write note. Previewing a draft still requires saving
-it (the pricing simulator evaluates persisted rules), and the save/confirmation
-flow is not implemented yet.
+`POST /api/admin/v1/ai/chat` with an admin-only agent. Phase 2B (done): `draft_campaign` builds a validated DRAFT campaign/rule,
+`preview_campaign` runs the pricing engine through
+`PromotionService.EvaluateDraft` without persisting, and
+`POST /api/admin/v1/promotions/apply-draft` saves both only when an admin sends
+`confirm=true`. The AI never calls the write endpoint. Draft campaigns use the
+valid `PRIORITY` stack mode (a bug found during the live save test).
 
 Phase 3: optional RAG. Add embeddings + Qdrant only if evaluation shows the
 MySQL retrieval is insufficient; index catalog changes from NATS/outbox
@@ -217,8 +220,9 @@ Still demo-grade:
   uses the mock model and fake services. A live prompt set is still manual.
 - The model is `deepseek-flash` with a 12-step ReAct budget; latency/token cost
   per tool path have not been measured in aggregate.
-- Everything is read-only. Campaign drafts are generated but never saved,
-  previewed against the pricing engine, or confirmed.
+- Customer-facing tools are read-only. Campaign drafts can be previewed and
+  saved through the admin-only apply endpoint after explicit confirmation; the
+  assistant itself has no write tool.
 - Request quota, per-user/global daily token budgets and a provider circuit
   breaker are implemented; prices are optional and cost is not billed. There is
   no semantic cache or per-tool budget yet.

@@ -31,11 +31,12 @@ func newChatModel(ctx context.Context, cfg ProviderConfig) (model.ToolCallingCha
 			return nil, fmt.Errorf("deepseek api key is required")
 		}
 		return deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
-			APIKey:    cfg.APIKey,
-			BaseURL:   cfg.BaseURL,
-			Model:     cfg.Model,
-			MaxTokens: cfg.MaxTokens,
-			Timeout:   time.Duration(cfg.TimeoutSec) * time.Second,
+			APIKey:      cfg.APIKey,
+			BaseURL:     cfg.BaseURL,
+			Model:       cfg.Model,
+			MaxTokens:   cfg.MaxTokens,
+			Temperature: 0.2,
+			Timeout:     time.Duration(cfg.TimeoutSec) * time.Second,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported ai provider %q", cfg.Provider)
@@ -100,6 +101,9 @@ func (m *mockModel) mockToolCall(query string) (string, map[string]any) {
 		}
 		return false
 	}
+	if has("preview_campaign") && (strings.Contains(q, "预览") || strings.Contains(q, "试算")) {
+		return "preview_campaign", map[string]any{"type": "THRESHOLD", "threshold_cent": 30000, "discount_cent": 3000, "sample_price_cent": 30000, "quantity": 1}
+	}
 	if has("sales_summary") { // admin agent
 		switch {
 		case strings.Contains(q, "退款") || strings.Contains(q, "售后"):
@@ -146,17 +150,20 @@ func mockAnswer(toolName, toolResult string) string {
 			SkuID     int64 `json:"sku_id"`
 			Available int64 `json:"available"`
 		} `json:"stocks"`
-		TotalOrders     int64 `json:"total_orders"`
-		PaidOrders      int64 `json:"paid_orders"`
-		CompletedOrders int64 `json:"completed_orders"`
-		CancelledOrders int64 `json:"cancelled_orders"`
-		PaidCent        int64 `json:"paid_cent"`
-		Total           int64 `json:"total"`
-		Requested       int64 `json:"requested"`
-		Approved        int64 `json:"approved"`
-		Refunded        int64 `json:"refunded"`
-		RefundedCent    int64 `json:"refunded_cent"`
-		Results         []struct {
+		TotalOrders          int64    `json:"total_orders"`
+		PaidOrders           int64    `json:"paid_orders"`
+		CompletedOrders      int64    `json:"completed_orders"`
+		CancelledOrders      int64    `json:"cancelled_orders"`
+		PaidCent             int64    `json:"paid_cent"`
+		Total                int64    `json:"total"`
+		Requested            int64    `json:"requested"`
+		Approved             int64    `json:"approved"`
+		Refunded             int64    `json:"refunded"`
+		RefundedCent         int64    `json:"refunded_cent"`
+		DiscountCent         int64    `json:"discount_cent"`
+		ShippingDiscountCent int64    `json:"shipping_discount_cent"`
+		Applied              []string `json:"applied"`
+		Results              []struct {
 			Title   string `json:"title"`
 			Content string `json:"content"`
 			Kind    string `json:"kind"`
@@ -204,6 +211,8 @@ func mockAnswer(toolName, toolResult string) string {
 	case "refund_summary":
 		return fmt.Sprintf("最近 30 天售后 %d 条，待处理 %d 条，已通过 %d 条，已退款 %d 条，退款金额 ¥%.2f。",
 			out.Total, out.Requested, out.Approved, out.Refunded, float64(out.RefundedCent)/100)
+	case "preview_campaign":
+		return fmt.Sprintf("试算结果：优惠 %.2f 元，运费优惠 %.2f 元；命中规则 %v。", float64(out.DiscountCent)/100, float64(out.ShippingDiscountCent)/100, out.Applied)
 	case "draft_campaign":
 		return fmt.Sprintf("已生成活动草案 %s（%s，状态 %s）：规则条件 %s，优惠 %s。草案未保存，需管理员确认。",
 			out.Campaign.Code, out.Campaign.Name, out.Campaign.Status, out.Rule.ConditionExpr, out.Rule.EffectJSON)

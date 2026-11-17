@@ -522,6 +522,7 @@ message RefundList { repeated Refund refunds = 1; int64 total = 2; }
 
 service PromotionService {
   rpc EvaluatePromotions (PromotionEvaluateRequest) returns (PromotionEvaluation);
+  rpc EvaluateDraft (EvaluateDraftRequest) returns (PromotionEvaluation);
   rpc ReservePromotions (PromotionReserveRequest) returns (PromotionReserveReply);
   rpc ConfirmPromotions (PromotionOrderRequest) returns (Empty);
   rpc ReleasePromotions (PromotionOrderRequest) returns (Empty);
@@ -594,6 +595,13 @@ message PromotionEvaluateRequest {
   repeated PromotionEvaluateItem items = 2;
   bool coupon_applied = 3;
   int64 coupon_discount_cent = 4;
+}
+
+// EvaluateDraft previews a campaign/rule that has not been persisted.
+message EvaluateDraftRequest {
+  PromotionEvaluateRequest evaluation = 1;
+  Campaign campaign = 2;
+  PromotionRule rule = 3;
 }
 message PromotionAllocation { int64 sku_id = 1; int64 discount_cent = 2; }
 message AppliedPromotion {

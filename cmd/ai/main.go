@@ -71,6 +71,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer inventoryConn.Close()
+	pricingConn, err := dial("PRICING_ADDR", "pricing:9005")
+	if err != nil {
+		logger.Error("dial pricing", "error", err)
+		os.Exit(1)
+	}
+	defer pricingConn.Close()
 
 	var rag ai.RAGSearcher
 	if cfg.RAGEnabled {
@@ -112,6 +118,7 @@ func main() {
 		Orders:     pb.NewOrderServiceClient(orderConn),
 		AfterSales: pb.NewAfterSalesServiceClient(afterSalesConn),
 		Inventory:  pb.NewInventoryServiceClient(inventoryConn),
+		Promotion:  pb.NewPromotionServiceClient(pricingConn),
 		RAG:        rag,
 	}, cache, logger)
 	if err != nil {

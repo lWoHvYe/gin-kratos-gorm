@@ -1213,3 +1213,49 @@ paths:
               schema: { type: string }
         '429':
           description: per-user quota exceeded
+
+  /api/admin/v1/promotions/evaluate-draft:
+    post:
+      summary: Preview a campaign/promotion draft without saving it
+      tags: [promotions]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evaluation, rule]
+              properties:
+                campaign: { type: object, additionalProperties: true }
+                rule: { type: object, additionalProperties: true }
+                evaluation: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Promotion evaluation
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /api/admin/v1/promotions/apply-draft:
+    post:
+      summary: Save a campaign and promotion draft after explicit confirmation
+      tags: [promotions]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [campaign, rule, confirm]
+              properties:
+                campaign: { type: object, additionalProperties: true }
+                rule: { type: object, additionalProperties: true }
+                confirm: { type: boolean }
+      responses:
+        '200':
+          description: Created campaign and promotion
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }

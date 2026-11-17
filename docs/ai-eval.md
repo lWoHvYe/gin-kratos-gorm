@@ -33,7 +33,7 @@ kubectl -n mall-data exec redis-0 -- sh -c \
 
 ## Baseline (2026-11-17, deepseek-flash + Qwen 1024d RAG)
 
-12 cases, 12 passed; end-to-end latency 0.8–9.0s:
+13 cases, 13 passed; end-to-end latency 0.8–9.0s:
 
 | Case | Result |
 |---|---|
@@ -47,6 +47,7 @@ kubectl -n mall-data exec redis-0 -- sh -c \
 | unsupported-policy | PASS, no invented 7-day policy |
 | no-budget-product | PASS, no product invented below budget |
 | tool-events | PASS, `search_*` tool event observed |
+| admin-preview | PASS, `preview_campaign` tool + 30 元 discount |
 
 This is a single stochastic run, not an accuracy benchmark. Tool events and
 token counters now exist (`mall_ai_tool_calls_total`, `mall_ai_tokens_total`);

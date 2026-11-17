@@ -198,6 +198,8 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 	admin.GET("/seckill/activities/:id/stock", h.getSeckillStock)
 	admin.POST("/seckill/dlq/replay", h.replaySeckillDLQ)
 	admin.POST("/promotions/evaluate", h.evaluatePromotions)
+	admin.POST("/promotions/evaluate-draft", h.evaluateDraft)
+	admin.POST("/promotions/apply-draft", h.applyDraft)
 
 	return engine
 }
@@ -1125,6 +1127,70 @@ func (h *handlers) listPromotionReservations(c *gin.Context) {
 	}
 	reply, err := h.clients.Promotion.ListPromotionReservations(c.Request.Context(), &pb.ListPromotionReservationsRequest{
 		OrderNo: strings.TrimSpace(c.Query("order_no")), Page: page, PageSize: pageSize,
+	})
+	if err != nil {
+		httpx.Error(c, bff.RemoteError(err))
+		return
+	}
+	httpx.OK(c, reply)
+}
+
+// applyDraft is the human-confirmation path: the assistant may draft and
+// preview, but only an admin request with confirm=true creates the campaign and
+// rule. The campaign is created as DRAFT first; an invalid rule leaves a safe
+// draft behind rather than an active promotion.
+func (h *handlers) applyDraft(c *gin.Context) {
+	var req struct {
+		Campaign *pb.Campaign      `json:"campaign"`
+		Rule     *pb.PromotionRule `json:"rule"`
+		Confirm  bool              `json:"confirm"`
+	}
+	if err := bff.BindJSON(c, &req); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if !req.Confirm {
+		httpx.Error(c, apperr.Invalid("confirm=true is required to save a draft"))
+		return
+	}
+	if req.Campaign == nil || req.Rule == nil {
+		httpx.Error(c, apperr.Invalid("campaign and rule are required"))
+		return
+	}
+	campaign := req.Campaign
+	if strings.TrimSpace(campaign.GetStatus()) == "" {
+		campaign.Status = "DRAFT"
+	}
+	created, err := h.clients.Promotion.CreateCampaign(c.Request.Context(), campaign)
+	if err != nil {
+		httpx.Error(c, bff.RemoteError(err))
+		return
+	}
+	rule := req.Rule
+	rule.CampaignId = created.GetId()
+	if strings.TrimSpace(rule.GetStatus()) == "" {
+		rule.Status = "DRAFT"
+	}
+	saved, err := h.clients.Promotion.CreatePromotion(c.Request.Context(), rule)
+	if err != nil {
+		httpx.Error(c, bff.RemoteError(err))
+		return
+	}
+	httpx.OK(c, map[string]any{"campaign": created, "rule": saved})
+}
+
+func (h *handlers) evaluateDraft(c *gin.Context) {
+	var req struct {
+		Campaign   *pb.Campaign                 `json:"campaign"`
+		Rule       *pb.PromotionRule            `json:"rule"`
+		Evaluation *pb.PromotionEvaluateRequest `json:"evaluation"`
+	}
+	if err := bff.BindJSON(c, &req); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	reply, err := h.clients.Promotion.EvaluateDraft(c.Request.Context(), &pb.EvaluateDraftRequest{
+		Evaluation: req.Evaluation, Campaign: req.Campaign, Rule: req.Rule,
 	})
 	if err != nil {
 		httpx.Error(c, bff.RemoteError(err))

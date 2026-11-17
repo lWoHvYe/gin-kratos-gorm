@@ -3692,6 +3692,7 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	PromotionService_EvaluatePromotions_FullMethodName        = "/mall.v1.PromotionService/EvaluatePromotions"
+	PromotionService_EvaluateDraft_FullMethodName             = "/mall.v1.PromotionService/EvaluateDraft"
 	PromotionService_ReservePromotions_FullMethodName         = "/mall.v1.PromotionService/ReservePromotions"
 	PromotionService_ConfirmPromotions_FullMethodName         = "/mall.v1.PromotionService/ConfirmPromotions"
 	PromotionService_ReleasePromotions_FullMethodName         = "/mall.v1.PromotionService/ReleasePromotions"
@@ -3711,6 +3712,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PromotionServiceClient interface {
 	EvaluatePromotions(ctx context.Context, in *PromotionEvaluateRequest, opts ...grpc.CallOption) (*PromotionEvaluation, error)
+	EvaluateDraft(ctx context.Context, in *EvaluateDraftRequest, opts ...grpc.CallOption) (*PromotionEvaluation, error)
 	ReservePromotions(ctx context.Context, in *PromotionReserveRequest, opts ...grpc.CallOption) (*PromotionReserveReply, error)
 	ConfirmPromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error)
 	ReleasePromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -3737,6 +3739,16 @@ func (c *promotionServiceClient) EvaluatePromotions(ctx context.Context, in *Pro
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PromotionEvaluation)
 	err := c.cc.Invoke(ctx, PromotionService_EvaluatePromotions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) EvaluateDraft(ctx context.Context, in *EvaluateDraftRequest, opts ...grpc.CallOption) (*PromotionEvaluation, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromotionEvaluation)
+	err := c.cc.Invoke(ctx, PromotionService_EvaluateDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3868,6 +3880,7 @@ func (c *promotionServiceClient) ListPromotionReservations(ctx context.Context, 
 // for forward compatibility.
 type PromotionServiceServer interface {
 	EvaluatePromotions(context.Context, *PromotionEvaluateRequest) (*PromotionEvaluation, error)
+	EvaluateDraft(context.Context, *EvaluateDraftRequest) (*PromotionEvaluation, error)
 	ReservePromotions(context.Context, *PromotionReserveRequest) (*PromotionReserveReply, error)
 	ConfirmPromotions(context.Context, *PromotionOrderRequest) (*Empty, error)
 	ReleasePromotions(context.Context, *PromotionOrderRequest) (*Empty, error)
@@ -3892,6 +3905,9 @@ type UnimplementedPromotionServiceServer struct{}
 
 func (UnimplementedPromotionServiceServer) EvaluatePromotions(context.Context, *PromotionEvaluateRequest) (*PromotionEvaluation, error) {
 	return nil, status.Error(codes.Unimplemented, "method EvaluatePromotions not implemented")
+}
+func (UnimplementedPromotionServiceServer) EvaluateDraft(context.Context, *EvaluateDraftRequest) (*PromotionEvaluation, error) {
+	return nil, status.Error(codes.Unimplemented, "method EvaluateDraft not implemented")
 }
 func (UnimplementedPromotionServiceServer) ReservePromotions(context.Context, *PromotionReserveRequest) (*PromotionReserveReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReservePromotions not implemented")
@@ -3964,6 +3980,24 @@ func _PromotionService_EvaluatePromotions_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PromotionServiceServer).EvaluatePromotions(ctx, req.(*PromotionEvaluateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_EvaluateDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EvaluateDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).EvaluateDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_EvaluateDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).EvaluateDraft(ctx, req.(*EvaluateDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4194,6 +4228,10 @@ var PromotionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EvaluatePromotions",
 			Handler:    _PromotionService_EvaluatePromotions_Handler,
+		},
+		{
+			MethodName: "EvaluateDraft",
+			Handler:    _PromotionService_EvaluateDraft_Handler,
 		},
 		{
 			MethodName: "ReservePromotions",

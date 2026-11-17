@@ -1,7 +1,10 @@
 package pricing
 
 import (
+	"context"
+	"log/slog"
 	"testing"
+	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 
@@ -65,5 +68,38 @@ func TestSelectPriorityDoesNotMixExclusive(t *testing.T) {
 	selected, rejected := selectPriority(cands, nil)
 	if len(selected) != 1 || selected[0].rule.ID != 1 || len(rejected) != 1 || rejected[0].Reason != "EXCLUSIVE_CONFLICT" {
 		t.Fatalf("selected=%+v rejected=%+v", selected, rejected)
+	}
+}
+
+func TestEvaluateDraftDoesNotNeedDatabase(t *testing.T) {
+	svc := &PromotionService{log: slog.Default(), now: func() time.Time { return time.Unix(1000, 0) }}
+	evaluation := &pb.PromotionEvaluateRequest{
+		UserId: 7,
+		Items:  []*pb.PromotionEvaluateItem{{SkuId: 1, PriceCent: 10000, Quantity: 1}},
+	}
+	draft := &pb.PromotionRule{
+		Code: "DRAFT10", Name: "10% off", Type: "PERCENT", Status: "DRAFT",
+		ScopeJson: `{"all":true}`, EffectJson: `{"type":"PERCENT","percent":10}`,
+		AllowWithCoupon: true,
+	}
+	got, err := svc.EvaluateDraft(context.Background(), &pb.EvaluateDraftRequest{
+		Evaluation: evaluation, Rule: draft,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GetDiscountCent() != 1000 {
+		t.Fatalf("discount = %d, want 1000", got.GetDiscountCent())
+	}
+	if len(got.GetApplied()) != 1 || got.GetApplied()[0].GetCode() != "DRAFT10" {
+		t.Fatalf("applied = %+v", got.GetApplied())
+	}
+
+	draft.Type = "THRESHOLD"
+	draft.EffectJson = `{"type":"THRESHOLD","tiers":[{"min_cent":10000,"amount_cent":1500}]}`
+	draft.ConditionExpr = "subtotal_cent >= 10000"
+	got, err = svc.EvaluateDraft(context.Background(), &pb.EvaluateDraftRequest{Evaluation: evaluation, Rule: draft})
+	if err != nil || got.GetDiscountCent() != 1500 {
+		t.Fatalf("threshold discount = %d err = %v", got.GetDiscountCent(), err)
 	}
 }

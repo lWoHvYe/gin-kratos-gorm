@@ -290,6 +290,14 @@ type candidate struct {
 
 func (s *PromotionService) evaluate(ctx context.Context, req *pb.PromotionEvaluateRequest) (*pb.PromotionEvaluation, error) {
 	now := s.now()
+	rules, err := s.loadActiveRules(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	return s.evaluateRules(ctx, req, rules, now)
+}
+
+func (s *PromotionService) evaluateRules(ctx context.Context, req *pb.PromotionEvaluateRequest, rules []*promotionRule, now time.Time) (*pb.PromotionEvaluation, error) {
 	items := req.GetItems()
 	var cartTotal, cartQty int64
 	for _, item := range items {
@@ -297,10 +305,6 @@ func (s *PromotionService) evaluate(ctx context.Context, req *pb.PromotionEvalua
 			cartTotal += item.GetPriceCent() * int64(item.GetQuantity())
 			cartQty += int64(item.GetQuantity())
 		}
-	}
-	rules, err := s.loadActiveRules(ctx, now)
-	if err != nil {
-		return nil, err
 	}
 	applied := make([]candidate, 0)
 	rejected := make([]*pb.RejectedPromotion, 0)
@@ -497,6 +501,69 @@ func selectBest(candidates []candidate, rejected []*pb.RejectedPromotion) ([]can
 		}
 	}
 	return best, rejected
+}
+
+// EvaluateDraft previews a campaign/rule that has not been persisted. It runs
+// the same condition/effect engine as EvaluatePromotions against the supplied
+// items, so an admin can see the discount before saving anything.
+func (s *PromotionService) EvaluateDraft(ctx context.Context, req *pb.EvaluateDraftRequest) (*pb.PromotionEvaluation, error) {
+	if req == nil || req.GetEvaluation() == nil || req.GetRule() == nil {
+		return nil, apperr.Invalid("evaluation and rule are required")
+	}
+	ev := req.GetEvaluation()
+	if ev.GetUserId() <= 0 {
+		return nil, apperr.Invalid("user_id is required")
+	}
+	if len(ev.GetItems()) == 0 {
+		return nil, apperr.Invalid("items are required")
+	}
+	draft := req.GetRule()
+	typ := strings.ToUpper(strings.TrimSpace(draft.GetType()))
+	switch typ {
+	case "FIXED_AMOUNT", "PERCENT", "THRESHOLD", "FREE_SHIPPING":
+	default:
+		return nil, apperr.Invalid("unsupported promotion type")
+	}
+	var effect promotionEffect
+	if err := json.Unmarshal([]byte(draft.GetEffectJson()), &effect); err != nil {
+		return nil, apperr.Invalid("invalid effect_json")
+	}
+	if typ == "PERCENT" && (effect.Percent <= 0 || effect.Percent > 100) {
+		return nil, apperr.Invalid("percent must be between 1 and 100")
+	}
+	if typ == "FIXED_AMOUNT" && effect.AmountCent <= 0 {
+		return nil, apperr.Invalid("fixed amount must be positive")
+	}
+	if typ == "THRESHOLD" && len(effect.Tiers) == 0 {
+		return nil, apperr.Invalid("threshold promotion needs tiers")
+	}
+	if _, err := parseScope(draft.GetScopeJson()); err != nil {
+		return nil, apperr.Invalid("invalid scope_json")
+	}
+	if condition := strings.TrimSpace(draft.GetConditionExpr()); condition != "" {
+		if _, err := exprCompile(condition); err != nil {
+			return nil, apperr.Invalid("invalid condition_expr: %v", err)
+		}
+	}
+	now := s.now()
+	rule := &promotionRule{
+		ID: 0, CampaignID: 0, Code: draft.GetCode(), Name: draft.GetName(), Type: typ,
+		Status: "ACTIVE", Priority: draft.GetPriority(), Exclusive: draft.GetExclusive(),
+		StackGroup: draft.GetStackGroup(), ScopeJSON: draft.GetScopeJson(),
+		ConditionExpr: draft.GetConditionExpr(), EffectJSON: draft.GetEffectJson(),
+		MaxDiscountCent: draft.GetMaxDiscountCent(), BudgetCent: draft.GetBudgetCent(),
+		PerUserLimit: draft.GetPerUserLimit(), AllowWithCoupon: draft.GetAllowWithCoupon(),
+		StartAt: now, EndAt: now.Add(24 * time.Hour), Version: 0,
+		CampaignStackMode: "PRIORITY", CampaignStatus: "ACTIVE",
+	}
+	if c := req.GetCampaign(); c != nil {
+		if mode := strings.TrimSpace(c.GetStackMode()); mode != "" {
+			rule.CampaignStackMode = mode
+		}
+		rule.CampaignBudget = c.GetBudgetCent()
+		rule.CampaignName = c.GetName()
+	}
+	return s.evaluateRules(ctx, ev, []*promotionRule{rule}, now)
 }
 
 func (s *PromotionService) EvaluatePromotions(ctx context.Context, req *pb.PromotionEvaluateRequest) (*pb.PromotionEvaluation, error) {

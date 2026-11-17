@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/flow/agent"
@@ -52,7 +53,8 @@ func buildAgent(ctx context.Context, cfg ProviderConfig, d deps) (*react.Agent, 
 				return "", fmt.Errorf("unknown tool")
 			},
 		},
-		MaxStep: 12,
+		MaxStep:               12,
+		StreamToolCallChecker: anyChunkToolCallChecker,
 		MessageModifier: func(_ context.Context, in []*schema.Message) []*schema.Message {
 			out := make([]*schema.Message, 0, len(in)+1)
 			out = append(out, &schema.Message{Role: schema.System, Content: systemPrompt})
@@ -84,7 +86,8 @@ func buildAdminAgent(ctx context.Context, cfg ProviderConfig, d Deps) (*react.Ag
 				return "", fmt.Errorf("unknown tool")
 			},
 		},
-		MaxStep: 12,
+		MaxStep:               12,
+		StreamToolCallChecker: anyChunkToolCallChecker,
 		MessageModifier: func(_ context.Context, in []*schema.Message) []*schema.Message {
 			out := make([]*schema.Message, 0, len(in)+1)
 			out = append(out, &schema.Message{Role: schema.System, Content: adminSystemPrompt})
@@ -96,4 +99,24 @@ func buildAdminAgent(ctx context.Context, cfg ProviderConfig, d Deps) (*react.Ag
 		return nil, fmt.Errorf("build admin agent: %w", err)
 	}
 	return built, nil
+}
+
+// anyChunkToolCallChecker keeps reading until the model finishes, so providers
+// that stream an explanatory sentence before tool_calls (DeepSeek does this)
+// still enter the tool node. The graph branch receives a copy of the stream, so
+// consuming the checker's copy does not drop the user-visible tokens.
+func anyChunkToolCallChecker(_ context.Context, sr *schema.StreamReader[*schema.Message]) (bool, error) {
+	defer sr.Close()
+	for {
+		msg, err := sr.Recv()
+		if err == io.EOF {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if len(msg.ToolCalls) > 0 {
+			return true, nil
+		}
+	}
 }

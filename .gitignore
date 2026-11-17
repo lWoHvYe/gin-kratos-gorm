@@ -96,4 +96,5 @@ frontend/**/vite.config.ts.timestamp-*
 /aftersales
 /seckill
 /ai
+/ai-eval
 /secret

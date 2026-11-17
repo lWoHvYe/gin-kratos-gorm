@@ -24,7 +24,7 @@ K8S_INFRA_HA_VALUES := $(K8S_DIR)/charts/infra/values-ha.yaml
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo clean \
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo ai-eval clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-render-ha k8s-lint-ha k8s-ha-verify k8s-deploy mesh-smoke \
 	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration status
 
@@ -54,6 +54,7 @@ help:
 	@echo "  chaos                             NATS outage + Redis outage chaos (Docker)"
 	@echo "  arch                              architecture/import guard"
 	@echo "  migrations-check                  outbox migrations only where the table exists"
+	@echo "  ai-eval                           live AI quality/latency cases (needs stack)"
 	@echo "  seed-demo                         apply the demo catalog to the k3s MySQL"
 	@echo "  ambient-recover                   recover expired Ambient workload certs"
 	@echo "  wire                              regenerate Wire injectors for gateway/admin/order/payment"
@@ -164,6 +165,9 @@ dtm-contract:
 chaos:
 	./scripts/chaos-nats.sh
 	./scripts/chaos-redis.sh
+
+ai-eval:
+	$(GO) run ./cmd/ai-eval -cases deploy/eval/ai-cases.yaml
 
 seed-demo:
 	./scripts/seed-demo-catalog.sh --k8s

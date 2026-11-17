@@ -1,0 +1,52 @@
+# Live evaluation cases for the deployed assistant. Run with:
+#   make ai-eval
+# Requires gateway/admin port-forwards and the seeded demo catalog + orders.
+cases:
+  - id: phone-budget
+    surface: user
+    prompt: "预算3000以内，适合大学生的手机，帮我推荐两款"
+    contains: ["极光 Note 12", "1999"]
+    max_latency_ms: 30000
+
+  - id: phone-over-budget
+    surface: user
+    prompt: "预算2000以内买什么手机"
+    contains: ["极光 Note 12"]
+    not_contains: ["星环 X1 Pro"]
+    max_latency_ms: 30000
+
+  - id: headphone-compare
+    surface: user
+    prompt: "推荐一款降噪耳机，通勤用"
+    contains: ["声谷 Air 3"]
+    max_latency_ms: 30000
+
+  - id: policy-return
+    surface: user
+    prompt: "退货政策是什么"
+    contains: ["退货", "退款"]
+    max_latency_ms: 30000
+
+  - id: policy-invoice
+    surface: user
+    prompt: "你们支持自助开专票吗"
+    contains: ["发票", "人工"]
+    max_latency_ms: 30000
+
+  - id: my-orders
+    surface: user
+    prompt: "我的订单到哪了"
+    contains: ["订单"]
+    max_latency_ms: 30000
+
+  - id: rag-student
+    surface: user
+    prompt: "适合大学生的手机有哪些"
+    contains: ["极光", "云舟"]
+    max_latency_ms: 30000
+
+  - id: admin-sales
+    surface: admin
+    prompt: "最近30天销售和退款情况怎么样？给一个运营建议"
+    contains: ["订单", "退款"]
+    max_latency_ms: 45000

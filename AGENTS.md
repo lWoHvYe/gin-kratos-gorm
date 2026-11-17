@@ -91,7 +91,7 @@ dtm-contract — scripts/check-dtm-contract.sh:
 - 单元测试不依赖 MySQL/NATS/etcd/DTM/Redis: 'make test'。
 - 全量检查: 'make verify'（组成见 Makefile 的 verify 目标）。
 - AI 改动: 'go test ./internal/services/ai'；RAG 集成测试需要 Redis 8（带 search 模块）并设置
-  TEST_REDIS_ADDR；真实模型调用不属于单测。
+  TEST_REDIS_ADDR；真实模型调用不属于单测。部署栈可用时用 'make ai-eval' 跑真实模型用例。
 - 改 frontend/ 后跑 'pnpm -C frontend typecheck' 与 'pnpm -C frontend build'；改 BFF 契约后
   'pnpm -C frontend generate:api' 并提交生成物。
 - 需要真实依赖的（test-integration / e2e-phase15 / concurrency-phase15 / chaos / k8s-*/

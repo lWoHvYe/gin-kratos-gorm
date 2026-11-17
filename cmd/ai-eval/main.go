@@ -25,6 +25,7 @@ type caseSpec struct {
 	Contains     []string `yaml:"contains"`
 	NotContains  []string `yaml:"not_contains"`
 	MaxLatencyMS int      `yaml:"max_latency_ms"`
+	ToolsAny     []string `yaml:"tools_any"`
 }
 
 type suite struct {
@@ -34,6 +35,7 @@ type suite struct {
 type event struct {
 	Type  string `json:"type"`
 	Delta string `json:"delta"`
+	Tool  string `json:"tool"`
 	Error string `json:"error"`
 }
 
@@ -42,6 +44,7 @@ type result struct {
 	Passed   bool     `json:"passed"`
 	Latency  int64    `json:"latency_ms"`
 	Chars    int      `json:"chars"`
+	Tools    []string `json:"tools,omitempty"`
 	Error    string   `json:"error,omitempty"`
 	Failures []string `json:"failures,omitempty"`
 	Snippet  string   `json:"snippet,omitempty"`
@@ -128,8 +131,8 @@ func runCase(c caseSpec, userURL, adminURL, userToken, adminToken string) result
 	}
 	start := time.Now()
 	session := fmt.Sprintf("eval-%s-%d", c.ID, time.Now().UnixNano())
-	text, errText, err := stream(base+path, token, c.Prompt, session)
-	r := result{ID: c.ID, Latency: time.Since(start).Milliseconds(), Chars: len([]rune(text))}
+	text, errText, tools, err := stream(base+path, token, c.Prompt, session)
+	r := result{ID: c.ID, Latency: time.Since(start).Milliseconds(), Chars: len([]rune(text)), Tools: tools}
 	if err != nil {
 		r.Error = err.Error()
 		return r
@@ -150,6 +153,20 @@ func runCase(c caseSpec, userURL, adminURL, userToken, adminToken string) result
 			r.Failures = append(r.Failures, "unexpected "+bad)
 		}
 	}
+	if len(c.ToolsAny) > 0 {
+		found := false
+		for _, want := range c.ToolsAny {
+			for _, got := range tools {
+				if got == want {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			r.Failures = append(r.Failures, "no expected tool event: "+strings.Join(c.ToolsAny, "/"))
+		}
+	}
 	if c.MaxLatencyMS > 0 && r.Latency > int64(c.MaxLatencyMS) {
 		r.Failures = append(r.Failures, fmt.Sprintf("latency %dms > %dms", r.Latency, c.MaxLatencyMS))
 	}
@@ -157,25 +174,26 @@ func runCase(c caseSpec, userURL, adminURL, userToken, adminToken string) result
 	return r
 }
 
-func stream(url, token, prompt, session string) (string, string, error) {
+func stream(url, token, prompt, session string) (string, string, []string, error) {
 	body, _ := json.Marshal(map[string]string{"message": prompt, "session_id": session})
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := (&http.Client{Timeout: 120 * time.Second}).Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", "", fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		return "", "", nil, fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
 	var text, errText strings.Builder
+	var tools []string
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
 	for scanner.Scan() {
@@ -190,16 +208,18 @@ func stream(url, token, prompt, session string) (string, string, error) {
 		switch ev.Type {
 		case "delta":
 			text.WriteString(ev.Delta)
+		case "tool":
+			tools = append(tools, ev.Tool)
 		case "error":
 			errText.WriteString(ev.Error)
 		case "done":
-			return text.String(), errText.String(), nil
+			return text.String(), errText.String(), tools, nil
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return text.String(), errText.String(), err
+		return text.String(), errText.String(), tools, err
 	}
-	return text.String(), errText.String(), nil
+	return text.String(), errText.String(), tools, nil
 }
 
 func login(base, user, password string) (string, error) {

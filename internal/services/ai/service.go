@@ -12,6 +12,11 @@ import (
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/metrics"
 
+	"github.com/cloudwego/eino/callbacks"
+	"github.com/cloudwego/eino/components"
+	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/flow/agent"
 	"github.com/cloudwego/eino/schema"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
@@ -151,7 +156,41 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		result = "disabled"
 		return status.Error(codes.Unavailable, "assistant is not available")
 	}
-	out, err := runner.Stream(ctx, turns)
+	var promptTokens, completionTokens int64
+	cb := callbacks.NewHandlerBuilder().
+		OnStartFn(func(ctx context.Context, info *callbacks.RunInfo, _ callbacks.CallbackInput) context.Context {
+			if info.Component == components.ComponentOfTool && info.Name != "" {
+				_ = stream.Send(&pb.AIChatEvent{Type: "tool", Tool: info.Name})
+			}
+			return ctx
+		}).
+		OnEndFn(func(ctx context.Context, info *callbacks.RunInfo, output callbacks.CallbackOutput) context.Context {
+			if info.Component != components.ComponentOfChatModel {
+				return ctx
+			}
+			if out := model.ConvCallbackOutput(output); out != nil && out.TokenUsage != nil {
+				promptTokens += int64(out.TokenUsage.PromptTokens)
+				completionTokens += int64(out.TokenUsage.CompletionTokens)
+			}
+			return ctx
+		}).
+		OnEndWithStreamOutputFn(func(ctx context.Context, info *callbacks.RunInfo, output *schema.StreamReader[callbacks.CallbackOutput]) context.Context {
+			defer output.Close()
+			if info.Component != components.ComponentOfChatModel {
+				return ctx
+			}
+			for {
+				item, err := output.Recv()
+				if err != nil {
+					return ctx
+				}
+				if out := model.ConvCallbackOutput(item); out != nil && out.TokenUsage != nil {
+					promptTokens += int64(out.TokenUsage.PromptTokens)
+					completionTokens += int64(out.TokenUsage.CompletionTokens)
+				}
+			}
+		}).Build()
+	out, err := runner.Stream(ctx, turns, agent.WithComposeOptions(compose.WithCallbacks(cb)))
 	if err != nil {
 		result = "error"
 		s.log.Warn("ai stream failed", "user_id", req.GetUserId(), "error", err)
@@ -175,11 +214,6 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		if chunk == nil {
 			continue
 		}
-		if chunk.ResponseMeta != nil && chunk.ResponseMeta.Usage != nil {
-			u := chunk.ResponseMeta.Usage
-			metrics.AITokens.WithLabelValues("prompt").Add(float64(u.PromptTokens))
-			metrics.AITokens.WithLabelValues("completion").Add(float64(u.CompletionTokens))
-		}
 		if chunk.Content == "" {
 			continue
 		}
@@ -190,6 +224,10 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		}
 	}
 
+	if promptTokens > 0 || completionTokens > 0 {
+		metrics.AITokens.WithLabelValues("prompt").Add(float64(promptTokens))
+		metrics.AITokens.WithLabelValues("completion").Add(float64(completionTokens))
+	}
 	if answer.Len() == 0 {
 		result = "error"
 		_ = stream.Send(&pb.AIChatEvent{Type: "error", Error: "empty assistant response"})

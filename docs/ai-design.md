@@ -131,7 +131,7 @@ from the tool result, so local development and CI need no API key.
 
 ## Observability
 
-Prometheus (ai service):
+Prometheus (ai service; tokens/tool calls come from Eino callbacks):
 
 - `ai_requests_total{result}`
 - `ai_request_duration_seconds`
@@ -212,10 +212,11 @@ Still demo-grade:
   per tool path have not been measured in aggregate.
 - Everything is read-only. Campaign drafts are generated but never saved,
   previewed against the pricing engine, or confirmed.
-- Quotas are per-user request counts; there is no token/cost budget, semantic
-  cache, or per-tool budget.
-- SSE emits `delta`/`done`/`error`; `tool` is reserved but not emitted. Client
-  cancellation is detected only when a write fails.
+- Token usage is exposed via `mall_ai_tokens_total` and tool events via
+  `mall_ai_tool_calls_total`, but there is no token/cost budget, semantic cache,
+  or per-tool budget.
+- SSE emits `delta`/`tool`/`done`/`error`; tool events come from Eino callbacks.
+  Client cancellation is detected only when a write fails.
 - Sessions store user text in Redis for 30 minutes in plaintext.
 - `admin=true` is trusted from the admin BFF under the mesh trust ADR.
 - No feedback capture, evaluation dashboard, or alerts on tool/provider errors.

@@ -124,6 +124,14 @@ ai:
   embeddingDim: 256
   embeddingAPIKeySecret: ""
   embeddingAPIKeySecretKey: embedding-api-key
+  # Per-user and global daily token budgets; 0 disables. Prices are optional
+  # cents per 1k tokens for cost metrics (not billing).
+  dailyTokenBudget: 200000
+  globalDailyTokenBudget: 0
+  circuitFailures: 5
+  circuitCooldown: 60s
+  pricePromptPer1K: 0
+  priceCompletionPer1K: 0
 
 services:
   gateway:

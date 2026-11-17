@@ -93,6 +93,13 @@ func main() {
 		Timeout:    cfg.AITimeout,
 		RateLimit:  cfg.AIRateLimit,
 		RateWindow: cfg.AIRateWindow,
+
+		DailyTokenBudget:       cfg.AIDailyTokenBudget,
+		GlobalDailyTokenBudget: cfg.AIGlobalDailyTokenBudget,
+		PricePromptPer1K:       cfg.AIPricePromptPer1K,
+		PriceCompletionPer1K:   cfg.AIPriceCompletionPer1K,
+		CircuitFailures:        cfg.AICircuitFailures,
+		CircuitCooldown:        cfg.AICircuitCooldown,
 	}, ai.ProviderConfig{
 		Provider:   cfg.AIProvider,
 		APIKey:     cfg.DeepSeekAPIKey,

@@ -215,6 +215,10 @@ services:
       EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-3-small}"
       EMBEDDING_DIM: "${EMBEDDING_DIM:-256}"
       EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-}"
+      AI_DAILY_TOKEN_BUDGET: "${AI_DAILY_TOKEN_BUDGET:-200000}"
+      AI_GLOBAL_DAILY_TOKEN_BUDGET: "${AI_GLOBAL_DAILY_TOKEN_BUDGET:-0}"
+      AI_CIRCUIT_FAILURES: "${AI_CIRCUIT_FAILURES:-5}"
+      AI_CIRCUIT_COOLDOWN: "${AI_CIRCUIT_COOLDOWN:-60s}"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9104/healthz"]
@@ -242,6 +246,10 @@ services:
       EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-3-small}"
       EMBEDDING_DIM: "${EMBEDDING_DIM:-256}"
       EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-}"
+      AI_DAILY_TOKEN_BUDGET: "${AI_DAILY_TOKEN_BUDGET:-200000}"
+      AI_GLOBAL_DAILY_TOKEN_BUDGET: "${AI_GLOBAL_DAILY_TOKEN_BUDGET:-0}"
+      AI_CIRCUIT_FAILURES: "${AI_CIRCUIT_FAILURES:-5}"
+      AI_CIRCUIT_COOLDOWN: "${AI_CIRCUIT_COOLDOWN:-60s}"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9105/healthz"]
@@ -398,6 +406,10 @@ services:
       EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-3-small}"
       EMBEDDING_DIM: "${EMBEDDING_DIM:-256}"
       EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-}"
+      AI_DAILY_TOKEN_BUDGET: "${AI_DAILY_TOKEN_BUDGET:-200000}"
+      AI_GLOBAL_DAILY_TOKEN_BUDGET: "${AI_GLOBAL_DAILY_TOKEN_BUDGET:-0}"
+      AI_CIRCUIT_FAILURES: "${AI_CIRCUIT_FAILURES:-5}"
+      AI_CIRCUIT_COOLDOWN: "${AI_CIRCUIT_COOLDOWN:-60s}"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9111/healthz"]

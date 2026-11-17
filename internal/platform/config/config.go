@@ -73,6 +73,17 @@ type Config struct {
 	EmbeddingAPIKey   string
 	EmbeddingModel    string
 	EmbeddingDim      int
+	// AIDailyTokenBudget limits one user's prompt+completion tokens per UTC day;
+	// 0 disables the check. AIGlobalDailyTokenBudget does the same across users.
+	AIDailyTokenBudget       int64
+	AIGlobalDailyTokenBudget int64
+	// AICircuitFailures consecutive provider failures open the circuit for
+	// AICircuitCooldown.
+	AICircuitFailures int
+	AICircuitCooldown time.Duration
+	// Optional list prices in cents per 1k tokens, for cost metrics only.
+	AIPricePromptPer1K     int64
+	AIPriceCompletionPer1K int64
 }
 
 // etcdFile is the optional YAML/JSON overlay stored in etcd. Pointers preserve
@@ -124,6 +135,8 @@ func Load(service string) (*Config, error) {
 		EmbeddingBaseURL:   "https://api.openai.com/v1",
 		EmbeddingModel:     "text-embedding-3-small",
 		EmbeddingDim:       256,
+		AICircuitFailures:  5,
+		AICircuitCooldown:  60 * time.Second,
 	}
 	// Bootstrap endpoints are needed before the config center can be read.
 	if v := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS")); v != "" {
@@ -219,6 +232,15 @@ func (c *Config) validateAI() error {
 		}
 	default:
 		return fmt.Errorf("EMBEDDING_PROVIDER must be hash or openai (got %q)", c.EmbeddingProvider)
+	}
+	if c.AICircuitFailures <= 0 {
+		c.AICircuitFailures = 5
+	}
+	if c.AICircuitCooldown <= 0 {
+		c.AICircuitCooldown = 60 * time.Second
+	}
+	if c.AIDailyTokenBudget < 0 || c.AIGlobalDailyTokenBudget < 0 {
+		return fmt.Errorf("AI token budgets must be >= 0")
 	}
 	return nil
 }
@@ -464,6 +486,26 @@ func applyEnv(c *Config) {
 	}
 	if v := os.Getenv("EMBEDDING_DIM"); v != "" {
 		c.EmbeddingDim = EnvInt("EMBEDDING_DIM", c.EmbeddingDim)
+	}
+	if v := os.Getenv("AI_DAILY_TOKEN_BUDGET"); v != "" {
+		c.AIDailyTokenBudget = int64(EnvInt("AI_DAILY_TOKEN_BUDGET", int(c.AIDailyTokenBudget)))
+	}
+	if v := os.Getenv("AI_GLOBAL_DAILY_TOKEN_BUDGET"); v != "" {
+		c.AIGlobalDailyTokenBudget = int64(EnvInt("AI_GLOBAL_DAILY_TOKEN_BUDGET", int(c.AIGlobalDailyTokenBudget)))
+	}
+	if v := os.Getenv("AI_CIRCUIT_FAILURES"); v != "" {
+		c.AICircuitFailures = EnvInt("AI_CIRCUIT_FAILURES", c.AICircuitFailures)
+	}
+	if v := os.Getenv("AI_CIRCUIT_COOLDOWN"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			c.AICircuitCooldown = d
+		}
+	}
+	if v := os.Getenv("AI_PRICE_PROMPT_CENTS_PER_1K"); v != "" {
+		c.AIPricePromptPer1K = int64(EnvInt("AI_PRICE_PROMPT_CENTS_PER_1K", int(c.AIPricePromptPer1K)))
+	}
+	if v := os.Getenv("AI_PRICE_COMPLETION_CENTS_PER_1K"); v != "" {
+		c.AIPriceCompletionPer1K = int64(EnvInt("AI_PRICE_COMPLETION_CENTS_PER_1K", int(c.AIPriceCompletionPer1K)))
 	}
 }
 

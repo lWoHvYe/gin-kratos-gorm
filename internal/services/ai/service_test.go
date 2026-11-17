@@ -130,3 +130,31 @@ func TestChatSelectsAdminAgent(t *testing.T) {
 		t.Fatalf("events = %+v", stream.events)
 	}
 }
+
+type fakeUsage struct {
+	used   int64
+	global int64
+	added  int64
+}
+
+func (f *fakeUsage) Load(context.Context, int64) (int64, error) { return f.used, nil }
+func (f *fakeUsage) Add(_ context.Context, _, prompt, completion, _ int64) error {
+	f.added += prompt + completion
+	return nil
+}
+func (f *fakeUsage) LoadGlobal(context.Context) (int64, error)            { return f.global, nil }
+func (f *fakeUsage) AddGlobal(context.Context, int64, int64, int64) error { return nil }
+
+func TestChatRejectsExhaustedTokenBudget(t *testing.T) {
+	svc := newTestService(t, fakeAgent{chunks: []*schema.Message{{Role: schema.Assistant, Content: "hi"}}}, &fakeSessions{}, fakeLimiter{allowed: true})
+	svc.usage = &fakeUsage{used: 100}
+	svc.dailyBudget = 100
+	stream := &fakeChatStream{ctx: context.Background()}
+	err := svc.Chat(&pb.AIChatRequest{UserId: 1, Message: "hi"}, stream)
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("code = %v", status.Code(err))
+	}
+	if len(stream.events) != 0 {
+		t.Fatalf("budget rejection must not stream: %+v", stream.events)
+	}
+}

@@ -124,7 +124,11 @@ SQL.
 | `AI_MODEL` | `deepseek-chat` | model id |
 | `AI_MAX_TOKENS` | `1024` | completion cap |
 | `AI_TIMEOUT` | `30s` | per model call |
-| `AI_RATE_LIMIT` | `20/10m` | per-user quota |
+| `AI_RATE_LIMIT` | `20/10m` | per-user request quota |
+| `AI_DAILY_TOKEN_BUDGET` | `0` (disabled) | prompt+completion tokens per user per UTC day |
+| `AI_GLOBAL_DAILY_TOKEN_BUDGET` | `0` (disabled) | daily tokens across all users |
+| `AI_CIRCUIT_FAILURES` / `AI_CIRCUIT_COOLDOWN` | `5` / `60s` | open the provider circuit after consecutive failures |
+| `AI_PRICE_*_CENTS_PER_1K` | `0` | optional list prices for cost metrics, not billing |
 
 `AI_PROVIDER=mock` is deterministic: it calls `search_products` and then answers
 from the tool result, so local development and CI need no API key.
@@ -133,11 +137,14 @@ from the tool result, so local development and CI need no API key.
 
 Prometheus (ai service; tokens/tool calls come from Eino callbacks):
 
-- `ai_requests_total{result}`
-- `ai_request_duration_seconds`
-- `ai_tool_calls_total{tool,result}`
-- `ai_tokens_total{kind}`
-- `ai_rate_limited_total`
+- `mall_ai_requests_total{result}`
+- `mall_ai_request_duration_seconds{result}`
+- `mall_ai_tool_calls_total{tool,result}`
+- `mall_ai_tokens_total{kind}`
+- `mall_ai_rate_limited_total`
+- `mall_ai_budget_exceeded_total{scope}`
+- `mall_ai_cost_cents_total{kind}` (when prices are configured)
+- `mall_ai_circuit_open`
 
 OTel: span per request and per tool call; LLM adapter spans come from Eino
 callbacks (Phase 0.1).
@@ -212,9 +219,9 @@ Still demo-grade:
   per tool path have not been measured in aggregate.
 - Everything is read-only. Campaign drafts are generated but never saved,
   previewed against the pricing engine, or confirmed.
-- Token usage is exposed via `mall_ai_tokens_total` and tool events via
-  `mall_ai_tool_calls_total`, but there is no token/cost budget, semantic cache,
-  or per-tool budget.
+- Request quota, per-user/global daily token budgets and a provider circuit
+  breaker are implemented; prices are optional and cost is not billed. There is
+  no semantic cache or per-tool budget yet.
 - SSE emits `delta`/`tool`/`done`/`error`; tool events come from Eino callbacks.
   Client cancellation is detected only when a write fails.
 - Sessions store user text in Redis for 30 minutes in plaintext.

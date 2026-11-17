@@ -175,6 +175,18 @@ spec:
               value: {{ $.Values.ai.embeddingModel | quote }}
             - name: EMBEDDING_DIM
               value: {{ $.Values.ai.embeddingDim | quote }}
+            - name: AI_DAILY_TOKEN_BUDGET
+              value: {{ $.Values.ai.dailyTokenBudget | quote }}
+            - name: AI_GLOBAL_DAILY_TOKEN_BUDGET
+              value: {{ $.Values.ai.globalDailyTokenBudget | quote }}
+            - name: AI_CIRCUIT_FAILURES
+              value: {{ $.Values.ai.circuitFailures | quote }}
+            - name: AI_CIRCUIT_COOLDOWN
+              value: {{ $.Values.ai.circuitCooldown | quote }}
+            - name: AI_PRICE_PROMPT_CENTS_PER_1K
+              value: {{ $.Values.ai.pricePromptPer1K | quote }}
+            - name: AI_PRICE_COMPLETION_CENTS_PER_1K
+              value: {{ $.Values.ai.priceCompletionPer1K | quote }}
             {{- if $.Values.ai.embeddingAPIKeySecret }}
             - name: EMBEDDING_API_KEY
               valueFrom:

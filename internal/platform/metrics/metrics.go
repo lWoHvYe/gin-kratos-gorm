@@ -114,11 +114,30 @@ var (
 		Name: "mall_ai_info",
 		Help: "Active assistant provider, model and prompt version.",
 	}, []string{"provider", "model", "prompt_version"})
+
+	// AIBudgetExceeded counts rejected requests by budget scope.
+	AIBudgetExceeded = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_ai_budget_exceeded_total",
+		Help: "Assistant requests rejected by a token budget.",
+	}, []string{"scope"})
+
+	// AICostCents tracks estimated model cost when prices are configured.
+	AICostCents = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_ai_cost_cents_total",
+		Help: "Estimated assistant cost in cents by token kind.",
+	}, []string{"kind"})
+
+	// AICircuitState is 1 when the provider circuit is open, 0 otherwise.
+	AICircuitState = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_ai_circuit_open",
+		Help: "Whether the assistant provider circuit is open.",
+	})
 )
 
 func init() {
 	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
 		OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
-		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo)
+		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo,
+		AIBudgetExceeded, AICostCents, AICircuitState)
 }

@@ -38,6 +38,13 @@ type Config struct {
 	RateWindow time.Duration
 	Provider   string
 	Model      string
+
+	DailyTokenBudget       int64
+	GlobalDailyTokenBudget int64
+	PricePromptPer1K       int64
+	PriceCompletionPer1K   int64
+	CircuitFailures        int
+	CircuitCooldown        time.Duration
 }
 
 // Service streams assistant turns. It never touches business state directly:
@@ -50,7 +57,14 @@ type Service struct {
 	adminAgent agentRunner
 	sessions   sessionStore
 	limiter    limiter
-	log        *slog.Logger
+	usage      usageStore
+	breaker    *circuitBreaker
+	// budgets/prices are copied out of cfg for cheap per-request access.
+	dailyBudget      int64
+	globalBudget     int64
+	pricePromptPer1K int64
+	priceCompletion  int64
+	log              *slog.Logger
 }
 
 // NewService wires the agent, Redis session store and per-user limiter. The
@@ -75,6 +89,14 @@ func NewService(ctx context.Context, cfg Config, provider ProviderConfig, d deps
 	}
 	svc := New(cfg, runner, newSessionStore(cache), newLimiter(cache, cfg.RateLimit, cfg.RateWindow), logger)
 	svc.adminAgent = adminRunner
+	svc.dailyBudget = cfg.DailyTokenBudget
+	svc.globalBudget = cfg.GlobalDailyTokenBudget
+	svc.pricePromptPer1K = cfg.PricePromptPer1K
+	svc.priceCompletion = cfg.PriceCompletionPer1K
+	svc.breaker = newCircuitBreaker(cfg.CircuitFailures, cfg.CircuitCooldown)
+	if svc.dailyBudget > 0 || svc.globalBudget > 0 {
+		svc.usage = newUsageStore(cache)
+	}
 	return svc, nil
 }
 
@@ -85,7 +107,8 @@ func New(cfg Config, agent agentRunner, sessions sessionStore, limit limiter, lo
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = streamTimeout
 	}
-	return &Service{cfg: cfg, agent: agent, sessions: sessions, limiter: limit, log: logger}
+	return &Service{cfg: cfg, agent: agent, sessions: sessions, limiter: limit,
+		breaker: newCircuitBreaker(5, time.Minute), log: logger}
 }
 
 func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) error {
@@ -124,6 +147,37 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 	ctx, cancel := context.WithTimeout(stream.Context(), s.cfg.Timeout)
 	defer cancel()
 
+	if s.breaker != nil && !s.breaker.Allow() {
+		result = "circuit_open"
+		return status.Error(codes.Unavailable, "assistant is temporarily unavailable")
+	}
+	if s.usage != nil {
+		used, err := s.usage.Load(ctx, req.GetUserId())
+		if err != nil {
+			result = "error"
+			s.log.Warn("ai usage load failed", "user_id", req.GetUserId(), "error", err)
+			return status.Error(codes.Unavailable, "assistant is temporarily unavailable")
+		}
+		if s.dailyBudget > 0 && used >= s.dailyBudget {
+			result = "budget"
+			metrics.AIBudgetExceeded.WithLabelValues("user").Inc()
+			return status.Error(codes.ResourceExhausted, "daily token budget exceeded")
+		}
+		if s.globalBudget > 0 {
+			global, err := s.usage.LoadGlobal(ctx)
+			if err != nil {
+				result = "error"
+				s.log.Warn("ai global usage load failed", "error", err)
+				return status.Error(codes.Unavailable, "assistant is temporarily unavailable")
+			}
+			if global >= s.globalBudget {
+				result = "budget"
+				metrics.AIBudgetExceeded.WithLabelValues("global").Inc()
+				return status.Error(codes.ResourceExhausted, "global token budget exceeded")
+			}
+		}
+	}
+
 	allowed, err := s.limiter.Allow(ctx, req.GetUserId())
 	if err != nil {
 		result = "error"
@@ -157,6 +211,9 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		return status.Error(codes.Unavailable, "assistant is not available")
 	}
 	var promptTokens, completionTokens int64
+	defer func() {
+		s.recordUsage(ctx, req.GetUserId(), promptTokens, completionTokens)
+	}()
 	cb := callbacks.NewHandlerBuilder().
 		OnStartFn(func(ctx context.Context, info *callbacks.RunInfo, _ callbacks.CallbackInput) context.Context {
 			if info.Component == components.ComponentOfTool && info.Name != "" {
@@ -193,6 +250,7 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 	out, err := runner.Stream(ctx, turns, agent.WithComposeOptions(compose.WithCallbacks(cb)))
 	if err != nil {
 		result = "error"
+		s.breaker.Failure()
 		s.log.Warn("ai stream failed", "user_id", req.GetUserId(), "error", err)
 		_ = stream.Send(&pb.AIChatEvent{Type: "error", Error: "assistant is temporarily unavailable"})
 		return nil
@@ -207,6 +265,7 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		}
 		if recvErr != nil {
 			result = "error"
+			s.breaker.Failure()
 			s.log.Warn("ai stream recv failed", "user_id", req.GetUserId(), "error", recvErr)
 			_ = stream.Send(&pb.AIChatEvent{Type: "error", Error: "assistant stream interrupted"})
 			return nil
@@ -224,15 +283,13 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		}
 	}
 
-	if promptTokens > 0 || completionTokens > 0 {
-		metrics.AITokens.WithLabelValues("prompt").Add(float64(promptTokens))
-		metrics.AITokens.WithLabelValues("completion").Add(float64(completionTokens))
-	}
 	if answer.Len() == 0 {
 		result = "error"
+		s.breaker.Failure()
 		_ = stream.Send(&pb.AIChatEvent{Type: "error", Error: "empty assistant response"})
 		return nil
 	}
+	s.breaker.Success()
 	if err := s.sessions.Append(ctx, req.GetUserId(), sessionID,
 		&schema.Message{Role: schema.User, Content: message},
 		&schema.Message{Role: schema.Assistant, Content: answer.String()}); err != nil {
@@ -243,4 +300,30 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		"provider", s.cfg.Provider, "model", s.cfg.Model, "prompt_version", promptVersion,
 		"latency_ms", time.Since(start).Milliseconds(), "chars", answer.Len())
 	return stream.Send(&pb.AIChatEvent{Type: "done"})
+}
+
+// recordUsage persists the token counters and exposes metrics. It runs after a
+// provider stream, whether the answer completed or failed mid-stream.
+func (s *Service) recordUsage(ctx context.Context, userID int64, prompt, completion int64) {
+	if prompt <= 0 && completion <= 0 {
+		return
+	}
+	metrics.AITokens.WithLabelValues("prompt").Add(float64(prompt))
+	metrics.AITokens.WithLabelValues("completion").Add(float64(completion))
+	costCents := (prompt*s.pricePromptPer1K + completion*s.priceCompletion) / 1000
+	if costCents > 0 {
+		metrics.AICostCents.WithLabelValues("prompt").Add(float64(prompt * s.pricePromptPer1K / 1000))
+		metrics.AICostCents.WithLabelValues("completion").Add(float64(completion * s.priceCompletion / 1000))
+	}
+	if s.usage == nil {
+		return
+	}
+	if err := s.usage.Add(ctx, userID, prompt, completion, costCents); err != nil {
+		s.log.Warn("ai usage add failed", "user_id", userID, "error", err)
+	}
+	if s.globalBudget > 0 {
+		if err := s.usage.AddGlobal(ctx, prompt, completion, costCents); err != nil {
+			s.log.Warn("ai global usage add failed", "error", err)
+		}
+	}
 }

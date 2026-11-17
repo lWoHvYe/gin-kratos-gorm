@@ -127,6 +127,12 @@ var (
 		Help: "Estimated assistant cost in cents by token kind.",
 	}, []string{"kind"})
 
+	// AIRAGUpdates tracks incremental catalog index updates.
+	AIRAGUpdates = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_ai_rag_updates_total",
+		Help: "Incremental RAG index updates by result.",
+	}, []string{"result"})
+
 	// AICircuitState is 1 when the provider circuit is open, 0 otherwise.
 	AICircuitState = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "mall_ai_circuit_open",
@@ -139,5 +145,5 @@ func init() {
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
 		OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
 		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo,
-		AIBudgetExceeded, AICostCents, AICircuitState)
+		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates)
 }

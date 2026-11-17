@@ -9,6 +9,7 @@ import (
 	"gin-kratos-gorm/internal/platform/config"
 	"gin-kratos-gorm/internal/platform/grpcx"
 	"gin-kratos-gorm/internal/platform/log"
+	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/redis"
 	"gin-kratos-gorm/internal/platform/runtime"
 	"gin-kratos-gorm/internal/platform/tracing"
@@ -78,7 +79,7 @@ func main() {
 	}
 	defer pricingConn.Close()
 
-	var rag ai.RAGSearcher
+	var rag ai.RAGIndex
 	if cfg.RAGEnabled {
 		built, err := ai.OpenRAG(context.Background(), ai.RAGConfig{
 			Provider: cfg.EmbeddingProvider,
@@ -91,6 +92,20 @@ func main() {
 			logger.Warn("rag disabled", "error", err)
 		} else {
 			rag = built
+		}
+	}
+
+	workers := runtime.NewWorkers()
+	defer workers.Stop()
+	if rag != nil {
+		natsClient, err := mq.Connect(cfg.NATSURL)
+		if err != nil {
+			logger.Warn("ai catalog index consumer disabled", "error", err)
+		} else {
+			defer natsClient.Close()
+			workers.Go(func(ctx context.Context) {
+				ai.RunCatalogIndexConsumer(ctx, natsClient, catalog, rag, logger)
+			})
 		}
 	}
 

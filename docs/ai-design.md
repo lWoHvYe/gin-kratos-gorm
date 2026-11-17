@@ -146,6 +146,7 @@ Prometheus (ai service; tokens/tool calls come from Eino callbacks):
 - `mall_ai_budget_exceeded_total{scope}`
 - `mall_ai_cost_cents_total{kind}` (when prices are configured)
 - `mall_ai_circuit_open`
+- `mall_ai_rag_updates_total{result}`
 
 OTel: span per request and per tool call; LLM adapter spans come from Eino
 callbacks (Phase 0.1).
@@ -171,11 +172,12 @@ policy FAQ answered from a curated in-code document (no embeddings); assistant
 widget on the storefront (`components/AiAssistant.vue`, SSE parser in
 `utils/sse.ts`).
 
-Phase 3 (Redis vector search, first cut): `AI_RAG_ENABLED=true` indexes policy
-entries and on-sale products into Redis Search at AI-service startup (66 docs in
-the dev cluster). `search_knowledge` embeds the question and runs a KNN query
-(`FT.SEARCH ... =>[KNN k @embedding $vec]`). The index is recreated on startup;
-an outbox/event-driven indexer is future work.
+Phase 3 (Redis vector search): `AI_RAG_ENABLED=true` seeds policy entries and
+on-sale products into Redis Search at startup, then a durable NATS consumer on
+`shop.catalog.product.changed.v1` upserts/deletes product documents as the
+catalog changes. `search_knowledge` embeds the question and runs a KNN query
+(`FT.SEARCH ... =>[KNN k @embedding $vec]`). If NATS is unavailable the startup
+snapshot remains in use and the consumer logs a warning.
 
 Embeddings are pluggable:
 
@@ -235,7 +237,8 @@ Still demo-grade:
 - The k3s NetworkPolicy workaround allows AI pods all public egress (port-
   qualified ipBlock rules did not take effect); production needs an egress
   gateway with domain allow-listing.
-- RAG reindexes on startup; catalog changes do not update the index yet.
+- RAG seeds on startup and updates from catalog events; if the consumer is
+  down, the index can lag until the next pod restart.
 
 Hardening order: real-model evaluation harness, token/cost budgets, tool events
 and cancellation, feedback capture, event-driven indexing, then Phase 2B writes.

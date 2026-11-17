@@ -34,6 +34,13 @@ type RAGSearcher interface {
 	Search(ctx context.Context, query string, limit int) ([]ragDoc, error)
 }
 
+// RAGIndex extends the searcher with incremental document updates.
+type RAGIndex interface {
+	RAGSearcher
+	UpsertProduct(ctx context.Context, p *pb.Product) error
+	DeleteProduct(ctx context.Context, id int64) error
+}
+
 // embedder turns text into a vector. Redis stores/searches the vectors; it does
 // not generate embeddings, so a provider is always required.
 type embedder interface {
@@ -97,21 +104,7 @@ func collectKnowledge(ctx context.Context, catalog catalogClient) ([]ragDoc, err
 				return nil, fmt.Errorf("list products for rag: %w", err)
 			}
 			for _, p := range list.GetProducts() {
-				attrs := make([]string, 0, len(p.GetAttributes()))
-				for _, a := range p.GetAttributes() {
-					if a.GetName() != "" {
-						attrs = append(attrs, a.GetName()+": "+a.GetValue())
-					}
-				}
-				content := strings.TrimSpace(strings.Join([]string{
-					p.GetName(), p.GetSubtitle(), p.GetDescription(),
-					"价格：" + fmt.Sprintf("%.2f 元", float64(p.GetMinPriceCent())/100),
-					"规格：" + strings.Join(attrs, "；"),
-				}, "\n"))
-				docs = append(docs, ragDoc{
-					ID: fmt.Sprintf("product:%d", p.GetId()), Kind: "product",
-					Title: p.GetName(), Content: content, ProductID: p.GetId(),
-				})
+				docs = append(docs, productDoc(p))
 			}
 			if len(list.GetProducts()) < 100 {
 				break
@@ -443,4 +436,39 @@ func encodeVector(vec []float32) []byte {
 		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
 	}
 	return buf
+}
+
+func productDoc(p *pb.Product) ragDoc {
+	attrs := make([]string, 0, len(p.GetAttributes()))
+	for _, a := range p.GetAttributes() {
+		if a.GetName() != "" {
+			attrs = append(attrs, a.GetName()+": "+a.GetValue())
+		}
+	}
+	content := strings.TrimSpace(strings.Join([]string{
+		p.GetName(), p.GetSubtitle(), p.GetDescription(),
+		"价格：" + fmt.Sprintf("%.2f 元", float64(p.GetMinPriceCent())/100),
+		"规格：" + strings.Join(attrs, "；"),
+	}, "\n"))
+	return ragDoc{
+		ID: fmt.Sprintf("product:%d", p.GetId()), Kind: "product",
+		Title: p.GetName(), Content: content, ProductID: p.GetId(),
+	}
+}
+
+// UpsertProduct indexes one product without rebuilding the whole index.
+func (r *redisRAG) UpsertProduct(ctx context.Context, p *pb.Product) error {
+	doc := productDoc(p)
+	vec, err := r.embedder.Embed(ctx, []string{doc.Title + "\n" + doc.Content})
+	if err != nil || len(vec) != 1 {
+		return fmt.Errorf("embed product %d: %w", p.GetId(), err)
+	}
+	return r.client.HSet(ctx, r.prefix+doc.ID,
+		"kind", doc.Kind, "title", doc.Title, "content", doc.Content,
+		"product_id", doc.ProductID, "embedding", encodeVector(vec[0])).Err()
+}
+
+// DeleteProduct removes a product from the index on unpublish/delete.
+func (r *redisRAG) DeleteProduct(ctx context.Context, id int64) error {
+	return r.client.Del(ctx, r.prefix+fmt.Sprintf("product:%d", id)).Err()
 }

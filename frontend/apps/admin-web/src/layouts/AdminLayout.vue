@@ -40,6 +40,7 @@ async function logout(): Promise<void> {
           <template #title>促销运营</template>
           <el-menu-item index="/promotions/campaigns">活动</el-menu-item>
           <el-menu-item index="/promotions/rules">促销规则</el-menu-item>
+          <el-menu-item index="/promotions/draft">活动草案</el-menu-item>
           <el-menu-item index="/promotions/simulator">促销模拟器</el-menu-item>
           <el-menu-item index="/promotions/budget">预算 / 预占</el-menu-item>
           <el-menu-item index="/promotions/seckill">秒杀活动</el-menu-item>

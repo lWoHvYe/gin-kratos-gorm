@@ -263,6 +263,10 @@ export const adminApi = {
     update: (id: number, rule: Partial<PromotionRule>) => adminPut<PromotionRule>(`/promotions/${id}`, { ...rule, id }),
     status: (id: number, status: string) => adminPost<unknown>(`/promotions/${id}/status`, { status }),
     evaluate: (payload: PromotionEvaluateRequest) => adminPost<PromotionEvaluation>('/promotions/evaluate', payload),
+    evaluateDraft: (payload: { campaign: Partial<Campaign>; rule: Partial<PromotionRule>; evaluation: PromotionEvaluateRequest }) =>
+      adminPost<PromotionEvaluation>('/promotions/evaluate-draft', payload),
+    applyDraft: (payload: { campaign: Partial<Campaign>; rule: Partial<PromotionRule>; confirm: boolean }) =>
+      adminPost<{ campaign: Campaign; rule: PromotionRule }>('/promotions/apply-draft', payload),
     reservations: (query: PageQuery & { order_no?: string } = {}) =>
       adminGet<{ reservations: PromotionReservation[]; total: number }>('/promotion-reservations', { params: query }),
   },

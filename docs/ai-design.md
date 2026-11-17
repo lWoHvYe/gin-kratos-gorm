@@ -201,7 +201,8 @@ Phase 2: admin read-only copilot (done for the analytics half): aggregate RPCs
 `PromotionService.EvaluateDraft` without persisting, and
 `POST /api/admin/v1/promotions/apply-draft` saves both only when an admin sends
 `confirm=true`. The AI never calls the write endpoint. Draft campaigns use the
-valid `PRIORITY` stack mode (a bug found during the live save test).
+valid `PRIORITY` stack mode (a bug found during the live save test). The admin
+SPA exposes this flow at `/promotions/draft` (test → confirm → save DRAFT).
 
 Phase 3: optional RAG. Add embeddings + Qdrant only if evaluation shows the
 MySQL retrieval is insufficient; index catalog changes from NATS/outbox

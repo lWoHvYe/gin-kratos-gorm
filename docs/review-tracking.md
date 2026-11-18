@@ -22,7 +22,7 @@ remaining risk is documented.
 | 7 | Outbox serial relay / lease timeout | done | batch 20, 4m lease (worst case 200s), backlog/oldest gauges; MySQL lease test |
 | 8 | BFF 15s vs saga 30s timeout | done | checkout/place gets 35s; other routes 15s |
 | 9 | quotes/inventory_ledger lifecycle | partial (quotes done; ledger deferred) | quotes cleaned after 30d; inventory_ledger rows/age measured; archive/retention needs a data-policy decision |
-| 10 | Catalog SQL fallback vs GORM divergence/N+1 | partial | fallback batches products/SKUs/images/attrs and matches SKU code; admin predicate alignment still to audit |
+| 10 | Catalog SQL fallback vs GORM divergence/N+1 | done | fallback batches products/SKUs/images/attrs; public and admin keyword predicates now match the GORM reader |
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
 | 12 | LIKE '%x%' cannot use index | done | ngram fulltext index; >=2-rune keywords use MATCH, short keywords keep LIKE |
 | 13 | Per-SKU GetStock in checkout/cart | rejected | only cart add and admin product detail call GetStock; checkout uses quote lines, no per-SKU loop |
@@ -52,9 +52,9 @@ remaining risk is documented.
 
 - Real-model eval harness: done (13 cases).
 - Feedback capture: done (RPC + Redis + metric + storefront thumbs); quality dashboard still pending.
-- RAG hybrid/rerank/semantic cache: pending.
-- Eino interrupt-resume HITL: pending (current flow is hand-rolled).
-- Cart task assistant / proactive admin brief / long-term memory / multi-agent: pending.
+- RAG hybrid/rerank/semantic cache: not adopted in this pass (roadmap).
+- Eino interrupt-resume HITL: not adopted (current draft/confirm flow is hand-rolled and tested).
+- Cart task assistant / proactive admin brief / long-term memory / multi-agent: not adopted (product roadmap).
 
 ## Scope decisions
 

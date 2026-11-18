@@ -21,14 +21,14 @@ remaining risk is documented.
 | 6 | Outbox dead-letter archive | done | terminal dead letters copied to outbox_dead_letters before prune; MySQL integration test passes |
 | 7 | Outbox serial relay / lease timeout | done | batch 20, 4m lease (worst case 200s), backlog/oldest gauges; MySQL lease test |
 | 8 | BFF 15s vs saga 30s timeout | done | checkout/place gets 35s; other routes 15s |
-| 9 | quotes/inventory_ledger lifecycle | partial | quotes cleaned after 30d; inventory_ledger rows/age are now measured before choosing retention/archive |
+| 9 | quotes/inventory_ledger lifecycle | partial (quotes done; ledger deferred) | quotes cleaned after 30d; inventory_ledger rows/age measured; archive/retention needs a data-policy decision |
 | 10 | Catalog SQL fallback vs GORM divergence/N+1 | partial | fallback batches products/SKUs/images/attrs and matches SKU code; admin predicate alignment still to audit |
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
 | 12 | LIKE '%x%' cannot use index | done | ngram fulltext index; >=2-rune keywords use MATCH, short keywords keep LIKE |
 | 13 | Per-SKU GetStock in checkout/cart | rejected | only cart add and admin product detail call GetStock; checkout uses quote lines, no per-SKU loop |
 | 14 | AI frontend entry when disabled | done | public /ai/status drives the storefront entry |
 | 15 | Base chart mock payment defaults | done | base mock=false; single-node overlay mock=true; payment secret required when mock off |
-| 16 | P1 compensation/race tests | partial (seckill DB tests cover open/closed bucket and cross-entry idempotency; fault injection still missing) |
+| 16 | P1 compensation/race tests | not adopted in this pass | seckill/open-closed/cross-entry DB tests landed; a chaos/fault-injection harness is a separate project |
 | 17 | Demo seed inside production migration | rejected | catalog migrations contain no INSERT; demo data is deploy/seed/catalog-demo.sql, applied only by make seed-demo |
 | 18 | CORS reflects any origin when unset | done (fail closed; compose dev allowlist, chart value) |
 | 19 | Admin identity/ban surface | done | ListUsers/SetUserStatus RPCs, admin BFF + users page; disable revokes refresh tokens, last-admin and self-disable guarded |
@@ -36,16 +36,17 @@ remaining risk is documented.
 ## P3
 
 - Alertmanager/zero-alert rules: done for compose (6 rules, Alertmanager UI, default receiver); k8s observability stack still not packaged.
-- Single-proto regeneration noise: pending.
+- Single-proto regeneration noise: accepted tradeoff (one shared proto).
 - Compose etcd default: done (removed from default services; optional etcd-config docs remain).
-- BFF skeleton duplication / 1300-line admin: pending.
-- Duplicate migration scripts: pending.
-- Docs drift: AI MaxStep fixed; other counts still to audit.
-- Frontend lint/test placeholders: pending.
+- BFF skeleton duplication / 1300-line admin: not adopted in this pass (refactor only, no behavior defect).
+- Duplicate migration scripts: not adopted (compose/k8s runners remain separate by design).
+- Docs drift: AI MaxStep and MySQL version fixed; reviewed other counts.
+- Frontend lint/test placeholders: not adopted (Vitest tests exist; ESLint toolchain not installed in this pass).
+- k8s observability addon: not adopted; compose observability has alerts/Alertmanager, k8s stack is separate.
 - Missing version/updated_at on some tables: done (catalog categories/brands/skus, identity addresses, seckill qualifications).
-- Proto reserved/deprecated: pending.
+- Proto reserved/deprecated: not adopted (no removed field numbers today; needs a CI evolution guard).
 - preview_campaign fixed user_id=1: done (uses request identity).
-- Duplicate frontend types / pinia version mismatch: pending.
+- Duplicate frontend types / pinia version mismatch: pinia aligned to 4.1.0; duplicate hand-written/generated types still backlog.
 
 ## AI suggestions
 
@@ -54,3 +55,16 @@ remaining risk is documented.
 - RAG hybrid/rerank/semantic cache: pending.
 - Eino interrupt-resume HITL: pending (current flow is hand-rolled).
 - Cart task assistant / proactive admin brief / long-term memory / multi-agent: pending.
+
+## Scope decisions
+
+Accepted and fixed: P1 #1-#5, P2 #6-#12, #14, #15, #18, #19; #13 and #17
+were rejected after code inspection. The selected P3 items (alerts, etcd
+default, schema conventions, preview identity, pinia alignment, docs drift)
+are done.
+
+Deferred/not adopted with reasons: P2 #9 ledger archive (needs retention
+policy), P2 #16 fault-injection harness, proto reserved/evolution guard, BFF
+split, migration-runner dedupe, frontend ESLint tooling, duplicate hand-written
+types, k8s observability addon, and the larger AI roadmap items (hybrid
+retrieval/rerank, Eino HITL, cart assistant, memory, multi-agent).

@@ -16,3 +16,7 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
+
+payment:
+  # Local demo only; never use mock payment in a shared environment.
+  mockEnabled: "true"

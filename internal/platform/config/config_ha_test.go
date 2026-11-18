@@ -237,3 +237,11 @@ func TestProductionDefaultsMockPaymentsOff(t *testing.T) {
 		t.Fatal("production must default mock payments off")
 	}
 }
+
+func TestPaymentSecretRequiredEvenInDevWhenMockDisabled(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("PAYMENT_MOCK_ENABLED", "false")
+	if _, err := Load("payment"); err == nil || !strings.Contains(err.Error(), "PAYMENT_SECRET") {
+		t.Fatalf("err = %v", err)
+	}
+}

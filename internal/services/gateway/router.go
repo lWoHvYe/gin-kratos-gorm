@@ -6,6 +6,8 @@
 package gateway
 
 import (
+	"time"
+
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/bff"
@@ -36,7 +38,10 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	h := &handlers{clients: clients, log: logger, aiEnabled: opts.AIEnabled}
 
 	engine := gin.New()
-	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), httpx.MaxPage(1000), bff.Timeout(requestTimeout))
+	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), httpx.MaxPage(1000),
+		bff.TimeoutRoutes(requestTimeout, map[string]time.Duration{
+			"/api/v1/checkout/place": checkoutTimeout,
+		}))
 	engine.NoRoute(func(c *gin.Context) { httpx.Error(c, apperr.NotFound("route not found")) })
 	engine.GET("/healthz", h.health)
 	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))
@@ -53,6 +58,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	engine.GET("/api/v1/skus/:id", h.getSku)
 	engine.GET("/api/v1/seckill/activities", h.listPublicSeckillActivities)
 	engine.GET("/api/v1/seckill/activities/:id", h.getSeckillActivity)
+	engine.GET("/api/v1/ai/status", h.aiStatus)
 
 	authed := engine.Group("/api/v1", httpx.Auth(jwt), requireUser())
 	authed.GET("/addresses", h.listAddresses)

@@ -246,6 +246,12 @@ func (c *Config) validateAI() error {
 }
 
 func (c *Config) validateSecrets() error {
+	// A payment service that accepts real callbacks must never start without a
+	// signature secret, regardless of APP_ENV. Mock mode is the explicit
+	// development opt-in.
+	if c.Service == "payment" && !c.PaymentMockEnabled && strings.TrimSpace(c.PaymentSecret) == "" {
+		return fmt.Errorf("PAYMENT_SECRET is required when mock payments are disabled")
+	}
 	if c.Env == "dev" {
 		return nil
 	}
@@ -259,9 +265,6 @@ func (c *Config) validateSecrets() error {
 		if c.SeckillTokenSecret == c.JWTSecret {
 			return fmt.Errorf("SECKILL_TOKEN_SECRET must differ from JWT_SECRET")
 		}
-	}
-	if c.Service == "payment" && !c.PaymentMockEnabled && strings.TrimSpace(c.PaymentSecret) == "" {
-		return fmt.Errorf("PAYMENT_SECRET is required when mock payments are disabled (APP_ENV=%s)", c.Env)
 	}
 	return nil
 }

@@ -77,6 +77,25 @@ func Timeout(d time.Duration) gin.HandlerFunc {
 	}
 }
 
+// TimeoutRoutes applies a default request budget with per-route overrides.
+// It is used where a saga legitimately outlives the normal BFF budget.
+func TimeoutRoutes(defaultTimeout time.Duration, overrides map[string]time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		d := defaultTimeout
+		route := c.FullPath()
+		if route == "" {
+			route = c.Request.URL.Path
+		}
+		if override, ok := overrides[route]; ok && override > 0 {
+			d = override
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), d)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
 // BindJSON decodes a JSON body with a size limit.
 func BindJSON(c *gin.Context, dst any) error {
 	if c.Request != nil && c.Request.Body != nil {

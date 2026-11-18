@@ -897,3 +897,17 @@ paths:
               schema: { type: string }
         '429':
           description: per-user quota exceeded
+
+  /api/v1/ai/status:
+    get:
+      summary: Assistant availability for the storefront
+      tags: [ai]
+      responses:
+        '200':
+          description: Whether the assistant entry should render
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }

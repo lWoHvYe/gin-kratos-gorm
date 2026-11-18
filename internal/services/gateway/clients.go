@@ -15,6 +15,8 @@ import (
 const (
 	// requestTimeout bounds one BFF request, including every downstream call.
 	requestTimeout = 15 * time.Second
+	// checkoutTimeout covers DTM's 30s WaitResult budget plus transport slack.
+	checkoutTimeout = 35 * time.Second
 	// defaultPaymentChannel is used when the client omits "channel" on the
 	// simulated payment callback.
 	defaultPaymentChannel = "MOCK"

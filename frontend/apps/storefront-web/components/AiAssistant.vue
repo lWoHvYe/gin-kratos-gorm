@@ -1,6 +1,6 @@
 <template>
   <div class="ai-assistant">
-    <button v-if="!open" class="ai-fab" type="button" aria-label="打开购物助手" @click="toggle">AI</button>
+    <button v-if="!open && available" class="ai-fab" type="button" aria-label="打开购物助手" @click="toggle">AI</button>
     <section v-else class="ai-panel" aria-label="购物助手">
       <header class="ai-head">
         <strong>购物助手</strong>
@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import { parseSSEChunk, type SSEEvent } from '~/utils/sse'
 
@@ -40,6 +40,21 @@ interface Message {
 
 const { token } = useApi()
 const open = ref(false)
+// The server is the capability source of truth: AI_ENABLED hides the entry
+// instead of leaving a dead button in the storefront.
+const available = ref(true)
+
+onMounted(async () => {
+  try {
+    const response = await fetch('/api/v1/ai/status')
+    if (response.ok) {
+      const body = await response.json() as { enabled?: boolean }
+      available.value = body.enabled === true
+    }
+  } catch {
+    // Keep the entry; the chat request will surface a clean error if needed.
+  }
+})
 const input = ref('')
 const sending = ref(false)
 const messages = ref<Message[]>([])

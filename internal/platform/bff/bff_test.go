@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"gin-kratos-gorm/internal/platform/apperr"
 
@@ -66,5 +67,25 @@ func TestPathIDRejectsNonPositive(t *testing.T) {
 	c.Params = gin.Params{{Key: "id", Value: "42"}}
 	if id, err := PathID(c, "id"); err != nil || id != 42 {
 		t.Fatalf("id = %d, %v", id, err)
+	}
+}
+
+func TestTimeoutRoutesAppliesOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(TimeoutRoutes(time.Hour, map[string]time.Duration{"/slow": 20 * time.Millisecond}))
+	engine.GET("/slow", func(c *gin.Context) {
+		<-c.Request.Context().Done()
+		c.Status(http.StatusGatewayTimeout)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/slow", nil)
+	rec := httptest.NewRecorder()
+	start := time.Now()
+	engine.ServeHTTP(rec, req)
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatal("override did not shorten the timeout")
 	}
 }

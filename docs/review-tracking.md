@@ -20,14 +20,14 @@ remaining risk is documented.
 |---|---|---|
 | 6 | Outbox dead-letter archive | pending |
 | 7 | Outbox serial relay / lease timeout | pending |
-| 8 | BFF 15s vs saga 30s timeout | pending |
+| 8 | BFF 15s vs saga 30s timeout | done | checkout/place gets 35s; other routes 15s |
 | 9 | quotes/inventory_ledger lifecycle | pending |
 | 10 | Catalog SQL fallback vs GORM divergence/N+1 | pending |
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
 | 12 | LIKE '%x%' cannot use index | pending |
 | 13 | Per-SKU GetStock in checkout/cart | pending |
-| 14 | AI frontend entry when disabled | pending |
-| 15 | Base chart mock payment defaults | pending |
+| 14 | AI frontend entry when disabled | done | public /ai/status drives the storefront entry |
+| 15 | Base chart mock payment defaults | done | base mock=false; single-node overlay mock=true; payment secret required when mock off |
 | 16 | P1 compensation/race tests | partial (released-bucket logic added; no DB race suite) |
 | 17 | Demo seed inside production migration | pending (cannot edit applied 0001; needs forward split) |
 | 18 | CORS reflects any origin when unset | done (fail closed; compose dev allowlist, chart value) |

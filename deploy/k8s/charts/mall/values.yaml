@@ -69,8 +69,9 @@ payment:
   # Secret-managed callback key (key defaults to payment-secret).
   existingSecret: ""
   existingSecretKey: payment-secret
-  # The BFF mock-pay route requires this flag; production overlays disable it.
-  mockEnabled: "true"
+  # Secure default: mock pay is off and a real secret is required. The
+  # single-node dev overlay explicitly enables mock pay.
+  mockEnabled: "false"
   tccEnabled: "true"
 
 ingress:

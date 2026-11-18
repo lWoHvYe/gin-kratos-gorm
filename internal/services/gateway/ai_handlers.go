@@ -57,3 +57,9 @@ func (h *handlers) aiChat(c *gin.Context) {
 func unavailableAI() error {
 	return apperr.Unavailable("ai assistant is disabled", nil)
 }
+
+// aiStatus is public so the storefront can hide the assistant entry when the
+// service is disabled; it exposes no provider details.
+func (h *handlers) aiStatus(c *gin.Context) {
+	httpx.OK(c, gin.H{"enabled": h.aiEnabled && h.clients.AI != nil})
+}

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
@@ -971,9 +972,15 @@ func (s *Service) listProductsSQL(ctx context.Context, req *pb.ListProductsReque
 	where := "WHERE status = 'ON_SALE'"
 	args := []any{}
 	if kw := strings.TrimSpace(req.GetKeyword()); kw != "" {
-		// Match the GORM reader: product name/subtitle plus enabled SKU code.
-		where += " AND (name LIKE ? OR subtitle LIKE ? OR EXISTS (SELECT 1 FROM skus s WHERE s.spu_id = spus.id AND s.sku_code LIKE ? AND s.status = 'ENABLED'))"
-		args = append(args, "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
+		// Match the GORM reader: ngram MATCH for >=2 runes, LIKE for short
+		// keywords, plus enabled SKU code.
+		if utf8.RuneCountInString(kw) >= 2 {
+			where += " AND (MATCH(name, subtitle) AGAINST (?) OR EXISTS (SELECT 1 FROM skus s WHERE s.spu_id = spus.id AND s.sku_code LIKE ? AND s.status = 'ENABLED'))"
+			args = append(args, kw, "%"+kw+"%")
+		} else {
+			where += " AND (name LIKE ? OR subtitle LIKE ? OR EXISTS (SELECT 1 FROM skus s WHERE s.spu_id = spus.id AND s.sku_code LIKE ? AND s.status = 'ENABLED'))"
+			args = append(args, "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
+		}
 	}
 	if len(categoryIDs) > 0 {
 		where += " AND category_id IN (" + placeholders(len(categoryIDs)) + ")"
@@ -1028,8 +1035,13 @@ func (s *Service) listAdminProductsSQL(ctx context.Context, req *pb.ListAdminPro
 	where := "WHERE status <> 'DELETED'"
 	args := []any{}
 	if kw := strings.TrimSpace(req.GetKeyword()); kw != "" {
-		where += " AND (name LIKE ? OR subtitle LIKE ?)"
-		args = append(args, "%"+kw+"%", "%"+kw+"%")
+		if utf8.RuneCountInString(kw) >= 2 {
+			where += " AND MATCH(name, subtitle) AGAINST (?)"
+			args = append(args, kw)
+		} else {
+			where += " AND (name LIKE ? OR subtitle LIKE ?)"
+			args = append(args, "%"+kw+"%", "%"+kw+"%")
+		}
 	}
 	if req.GetCategoryId() > 0 {
 		where += " AND category_id = ?"

@@ -24,7 +24,7 @@ remaining risk is documented.
 | 9 | quotes/inventory_ledger lifecycle | partial | quotes cleaned after 30d; inventory_ledger retention still pending a policy/archive decision |
 | 10 | Catalog SQL fallback vs GORM divergence/N+1 | partial | fallback batches products/SKUs/images/attrs and matches SKU code; admin predicate alignment still to audit |
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
-| 12 | LIKE '%x%' cannot use index | pending |
+| 12 | LIKE '%x%' cannot use index | done | ngram fulltext index; >=2-rune keywords use MATCH, short keywords keep LIKE |
 | 13 | Per-SKU GetStock in checkout/cart | pending |
 | 14 | AI frontend entry when disabled | done | public /ai/status drives the storefront entry |
 | 15 | Base chart mock payment defaults | done | base mock=false; single-node overlay mock=true; payment secret required when mock off |

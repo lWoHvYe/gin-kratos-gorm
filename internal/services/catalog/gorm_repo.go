@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 
@@ -124,7 +125,11 @@ func (g *gormReader) ListProducts(ctx context.Context, req *pb.ListProductsReque
 		query := g.db.WithContext(ctx).Model(&gormSPU{}).Where("status = ?", "ON_SALE")
 		if kw := strings.TrimSpace(req.GetKeyword()); kw != "" {
 			like := "%" + kw + "%"
-			query = query.Where("(name LIKE ? OR subtitle LIKE ? OR EXISTS (SELECT 1 FROM skus s WHERE s.spu_id = spus.id AND s.sku_code LIKE ? AND s.status = 'ENABLED'))", like, like, like)
+			if utf8.RuneCountInString(kw) >= 2 {
+				query = query.Where("(MATCH(name, subtitle) AGAINST (?) OR EXISTS (SELECT 1 FROM skus s WHERE s.spu_id = spus.id AND s.sku_code LIKE ? AND s.status = 'ENABLED'))", kw, like)
+			} else {
+				query = query.Where("(name LIKE ? OR subtitle LIKE ? OR EXISTS (SELECT 1 FROM skus s WHERE s.spu_id = spus.id AND s.sku_code LIKE ? AND s.status = 'ENABLED'))", like, like, like)
+			}
 		}
 		if len(categoryIDs) > 0 {
 			query = query.Where("category_id IN ?", categoryIDs)
@@ -177,7 +182,11 @@ func (g *gormReader) ListAdminProducts(ctx context.Context, req *pb.ListAdminPro
 		query := g.db.WithContext(ctx).Model(&gormSPU{}).Where("status <> ?", "DELETED")
 		if kw := strings.TrimSpace(req.GetKeyword()); kw != "" {
 			like := "%" + kw + "%"
-			query = query.Where("(name LIKE ? OR subtitle LIKE ?)", like, like)
+			if utf8.RuneCountInString(kw) >= 2 {
+				query = query.Where("MATCH(name, subtitle) AGAINST (?)", kw)
+			} else {
+				query = query.Where("(name LIKE ? OR subtitle LIKE ?)", like, like)
+			}
 		}
 		if req.GetCategoryId() > 0 {
 			query = query.Where("category_id = ?", req.GetCategoryId())

@@ -234,6 +234,12 @@ export const adminApi = {
   ai: {
     feedbackSummary: (days = 7) =>
       adminGet<FeedbackSummary>('/ai/feedback/summary', { params: { days } }),
+    startCampaignDraft: (payload: Record<string, unknown>) =>
+      adminPost<{ checkpoint_id: string; draft_json: string }>('/ai/campaign-draft', payload),
+    confirmCampaignDraft: (checkpoint: string, payload: { campaign: unknown; rule: unknown; confirm: boolean }) =>
+      adminPost<{ campaign: { id: number }; rule: { id: number }; checkpoint_closed: boolean }>(
+        `/ai/campaign-draft/${encodeURIComponent(checkpoint)}/confirm`, payload,
+      ),
   },
   users: {
     list: (query: PageQuery & { keyword?: string; status?: string } = {}) =>

@@ -148,6 +148,8 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole), audit(logger))
 	if aiEnabled {
 		admin.POST("/ai/chat", h.aiChat)
+		admin.POST("/ai/campaign-draft", h.startCampaignDraft)
+		admin.POST("/ai/campaign-draft/:checkpoint/confirm", h.confirmCampaignDraft)
 	}
 	admin.GET("/users", h.listUsers)
 	admin.PUT("/users/:id/status", h.setUserStatus)
@@ -1159,30 +1161,35 @@ func (h *handlers) applyDraft(c *gin.Context) {
 		httpx.Error(c, apperr.Invalid("confirm=true is required to save a draft"))
 		return
 	}
-	if req.Campaign == nil || req.Rule == nil {
-		httpx.Error(c, apperr.Invalid("campaign and rule are required"))
-		return
-	}
-	campaign := req.Campaign
-	if strings.TrimSpace(campaign.GetStatus()) == "" {
-		campaign.Status = "DRAFT"
-	}
-	created, err := h.clients.Promotion.CreateCampaign(c.Request.Context(), campaign)
-	if err != nil {
-		httpx.Error(c, bff.RemoteError(err))
-		return
-	}
-	rule := req.Rule
-	rule.CampaignId = created.GetId()
-	if strings.TrimSpace(rule.GetStatus()) == "" {
-		rule.Status = "DRAFT"
-	}
-	saved, err := h.clients.Promotion.CreatePromotion(c.Request.Context(), rule)
+	created, saved, err := h.saveDraft(c.Request.Context(), req.Campaign, req.Rule)
 	if err != nil {
 		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
 	httpx.OK(c, map[string]any{"campaign": created, "rule": saved})
+}
+
+// saveDraft is shared by the plain apply endpoint and the ADK-confirmed flow.
+func (h *handlers) saveDraft(ctx context.Context, campaign *pb.Campaign, rule *pb.PromotionRule) (*pb.Campaign, *pb.PromotionRule, error) {
+	if campaign == nil || rule == nil {
+		return nil, nil, apperr.Invalid("campaign and rule are required")
+	}
+	if strings.TrimSpace(campaign.GetStatus()) == "" {
+		campaign.Status = "DRAFT"
+	}
+	created, err := h.clients.Promotion.CreateCampaign(ctx, campaign)
+	if err != nil {
+		return nil, nil, err
+	}
+	rule.CampaignId = created.GetId()
+	if strings.TrimSpace(rule.GetStatus()) == "" {
+		rule.Status = "DRAFT"
+	}
+	saved, err := h.clients.Promotion.CreatePromotion(ctx, rule)
+	if err != nil {
+		return nil, nil, err
+	}
+	return created, saved, nil
 }
 
 func (h *handlers) evaluateDraft(c *gin.Context) {

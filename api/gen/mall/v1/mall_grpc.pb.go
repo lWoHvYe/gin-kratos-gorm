@@ -5595,9 +5595,11 @@ var SeckillService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AIService_Chat_FullMethodName            = "/mall.v1.AIService/Chat"
-	AIService_SubmitFeedback_FullMethodName  = "/mall.v1.AIService/SubmitFeedback"
-	AIService_FeedbackSummary_FullMethodName = "/mall.v1.AIService/FeedbackSummary"
+	AIService_Chat_FullMethodName                = "/mall.v1.AIService/Chat"
+	AIService_SubmitFeedback_FullMethodName      = "/mall.v1.AIService/SubmitFeedback"
+	AIService_FeedbackSummary_FullMethodName     = "/mall.v1.AIService/FeedbackSummary"
+	AIService_StartCampaignDraft_FullMethodName  = "/mall.v1.AIService/StartCampaignDraft"
+	AIService_ResumeCampaignDraft_FullMethodName = "/mall.v1.AIService/ResumeCampaignDraft"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -5611,6 +5613,10 @@ type AIServiceClient interface {
 	Chat(ctx context.Context, in *AIChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AIChatEvent], error)
 	SubmitFeedback(ctx context.Context, in *AIFeedbackRequest, opts ...grpc.CallOption) (*Empty, error)
 	FeedbackSummary(ctx context.Context, in *FeedbackSummaryRequest, opts ...grpc.CallOption) (*FeedbackSummaryReply, error)
+	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
+	// after the BFF has saved the draft through the normal apply endpoint.
+	StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error)
+	ResumeCampaignDraft(ctx context.Context, in *ResumeCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type aIServiceClient struct {
@@ -5660,6 +5666,26 @@ func (c *aIServiceClient) FeedbackSummary(ctx context.Context, in *FeedbackSumma
 	return out, nil
 }
 
+func (c *aIServiceClient) StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CampaignDraftReply)
+	err := c.cc.Invoke(ctx, AIService_StartCampaignDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) ResumeCampaignDraft(ctx context.Context, in *ResumeCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AIService_ResumeCampaignDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -5671,6 +5697,10 @@ type AIServiceServer interface {
 	Chat(*AIChatRequest, grpc.ServerStreamingServer[AIChatEvent]) error
 	SubmitFeedback(context.Context, *AIFeedbackRequest) (*Empty, error)
 	FeedbackSummary(context.Context, *FeedbackSummaryRequest) (*FeedbackSummaryReply, error)
+	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
+	// after the BFF has saved the draft through the normal apply endpoint.
+	StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error)
+	ResumeCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -5689,6 +5719,12 @@ func (UnimplementedAIServiceServer) SubmitFeedback(context.Context, *AIFeedbackR
 }
 func (UnimplementedAIServiceServer) FeedbackSummary(context.Context, *FeedbackSummaryRequest) (*FeedbackSummaryReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FeedbackSummary not implemented")
+}
+func (UnimplementedAIServiceServer) StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartCampaignDraft not implemented")
+}
+func (UnimplementedAIServiceServer) ResumeCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResumeCampaignDraft not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -5758,6 +5794,42 @@ func _AIService_FeedbackSummary_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_StartCampaignDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartCampaignDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).StartCampaignDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_StartCampaignDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).StartCampaignDraft(ctx, req.(*StartCampaignDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_ResumeCampaignDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeCampaignDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).ResumeCampaignDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_ResumeCampaignDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).ResumeCampaignDraft(ctx, req.(*ResumeCampaignDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5772,6 +5844,14 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FeedbackSummary",
 			Handler:    _AIService_FeedbackSummary_Handler,
+		},
+		{
+			MethodName: "StartCampaignDraft",
+			Handler:    _AIService_StartCampaignDraft_Handler,
+		},
+		{
+			MethodName: "ResumeCampaignDraft",
+			Handler:    _AIService_ResumeCampaignDraft_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

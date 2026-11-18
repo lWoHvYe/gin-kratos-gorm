@@ -1328,3 +1328,34 @@ paths:
                       properties:
                         day: { type: string }
                         comment: { type: string }
+  /api/admin/v1/ai/campaign-draft:
+    post:
+      summary: Start an ADK campaign draft review checkpoint
+      tags: [ai]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Checkpoint and draft JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkpoint_id: { type: string }
+                  draft_json: { type: string }
+  /api/admin/v1/ai/campaign-draft/{param}/confirm:
+    post:
+      summary: Close the ADK checkpoint and save the DRAFT campaign
+      tags: [ai]
+      parameters:
+        - { name: param, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Saved campaign and rule

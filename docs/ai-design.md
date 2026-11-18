@@ -270,3 +270,11 @@ and cancellation, feedback capture, event-driven indexing, then Phase 2B writes.
    the entry); the ai service itself returns Unavailable if called anyway.
 4. No prompt, key or message body appears in logs.
 5. A 429 is returned after the per-user quota; other users are unaffected.
+
+## ADK HITL pilot
+
+Admin campaign drafts can run through `adk.Runner` with a Redis checkpoint:
+start returns `checkpoint_id` + draft JSON, confirm closes the checkpoint and
+then saves through the normal DRAFT endpoint. Checkpoints are one-shot, 30-minute
+TTL, and bound to the admin who started them. The customer assistant still uses
+the ReAct runtime until the phase-4 migration reaches eval parity.

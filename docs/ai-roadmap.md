@@ -6,7 +6,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Feedback quality dashboard over `ai:feedback:*` | done |
-| 2 | ADK HITL pilot for admin campaign drafts | pending |
+| 2 | ADK HITL pilot for admin campaign drafts | done |
 | 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | pending |
 | 4 | Replace the customer/admin ReAct runtime with ADK; keep SSE, tool events, budgets, breaker, eval | pending |
 
@@ -26,6 +26,17 @@ and keep the assistant optional (failures must not affect browse/checkout).
 - Checkpoints in Redis with TTL and admin identity binding; feature flag
   `AI_ADK_HITL`; fallback remains the current hand-rolled flow.
 - No direct writes from the model; the BFF keeps the admin role check.
+
+## Phase 2 acceptance (done)
+
+- `adk.Runner` with a Redis `CheckPointStore`; start interrupts with a draft,
+  confirm resumes once and then calls the existing `apply-draft` path.
+- Checkpoint is one-shot, 30-minute TTL, bound to the starting admin id.
+- Admin UI exposes "ADK 生成草案" / "ADK 确认保存"; the plain save path remains.
+- Live test: checkpoint `1-...` created, confirm created DRAFT campaign 62 /
+  rule 17, replay returned NOT_FOUND.
+- The deterministic draft-review agent isolates checkpoint mechanics; the
+  conversational `ChatModelAgent` migration remains phase 4.
 
 ## Phase 3 shape
 

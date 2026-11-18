@@ -890,6 +890,10 @@ service AIService {
   rpc Chat (AIChatRequest) returns (stream AIChatEvent);
   rpc SubmitFeedback (AIFeedbackRequest) returns (Empty);
   rpc FeedbackSummary (FeedbackSummaryRequest) returns (FeedbackSummaryReply);
+  // Admin-only draft review. Start interrupts; Resume closes the checkpoint
+  // after the BFF has saved the draft through the normal apply endpoint.
+  rpc StartCampaignDraft (StartCampaignDraftRequest) returns (CampaignDraftReply);
+  rpc ResumeCampaignDraft (ResumeCampaignDraftRequest) returns (Empty);
 }
 
 message AIChatRequest {
@@ -901,6 +905,25 @@ message AIChatRequest {
 }
 
 message FeedbackSummaryRequest { int32 days = 1; }
+message StartCampaignDraftRequest {
+  int64 user_id = 1;
+  string name = 2;
+  string type = 3;
+  int64 threshold_cent = 4;
+  int64 discount_cent = 5;
+  int32 percent = 6;
+  int32 days = 7;
+  int64 budget_cent = 8;
+  int32 per_user_limit = 9;
+}
+message CampaignDraftReply {
+  string checkpoint_id = 1;
+  string draft_json = 2;
+}
+message ResumeCampaignDraftRequest {
+  int64 user_id = 1;
+  string checkpoint_id = 2;
+}
 message FeedbackDaySummary {
   string day = 1;
   int64 helpful = 2;

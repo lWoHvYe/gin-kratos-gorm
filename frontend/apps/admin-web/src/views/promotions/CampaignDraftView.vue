@@ -16,6 +16,9 @@ const form = reactive({
 
 const preview = ref<PromotionEvaluation | null>(null)
 const saved = ref<{ campaignId: number; ruleId: number } | null>(null)
+const checkpoint = ref('')
+const hitlDraft = ref<{ campaign: Record<string, unknown>; rule: Record<string, unknown> } | null>(null)
+const hitlLoading = ref(false)
 const confirmed = ref(false)
 const loading = ref(false)
 const error = ref('')
@@ -74,6 +77,44 @@ async function runPreview(): Promise<void> {
   }
 }
 
+async function startHitl(): Promise<void> {
+  error.value = ''
+  hitlLoading.value = true
+  try {
+    const reply = await adminApi.ai.startCampaignDraft({
+      name: form.name, type: 'THRESHOLD', threshold_cent: form.threshold,
+      discount_cent: form.discount, days: form.days, budget_cent: form.budget,
+      per_user_limit: form.perUser,
+    })
+    checkpoint.value = reply.checkpoint_id
+    hitlDraft.value = JSON.parse(reply.draft_json) as { campaign: Record<string, unknown>; rule: Record<string, unknown> }
+    ElMessage.success('已生成 ADK 审核 checkpoint，可预览后确认')
+  } catch (err) {
+    error.value = err instanceof ApiError || err instanceof Error ? err.message : '创建 ADK 草案失败'
+  } finally {
+    hitlLoading.value = false
+  }
+}
+
+async function confirmHitl(): Promise<void> {
+  if (!checkpoint.value || !hitlDraft.value) return
+  hitlLoading.value = true
+  error.value = ''
+  try {
+    const result = await adminApi.ai.confirmCampaignDraft(checkpoint.value, {
+      campaign: hitlDraft.value.campaign, rule: hitlDraft.value.rule, confirm: true,
+    })
+    saved.value = { campaignId: result.campaign.id, ruleId: result.rule.id }
+    checkpoint.value = ''
+    hitlDraft.value = null
+    ElMessage.success('ADK 审核已确认，草案已保存为 DRAFT')
+  } catch (err) {
+    error.value = err instanceof ApiError || err instanceof Error ? err.message : '确认失败'
+  } finally {
+    hitlLoading.value = false
+  }
+}
+
 async function save(): Promise<void> {
   if (!confirmed.value) {
     error.value = '请先勾选“我已核对并确认保存”'
@@ -117,7 +158,9 @@ async function save(): Promise<void> {
             <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
             <div class="actions">
               <el-button type="primary" :loading="loading" @click="runPreview">试算</el-button>
-              <el-button type="success" :loading="loading" :disabled="!preview || !confirmed" @click="save">保存 DRAFT</el-button>
+              <el-button type="success" :loading="loading" :disabled="!preview || !confirmed" @click="save">直接保存 DRAFT</el-button>
+              <el-button type="warning" :loading="hitlLoading" @click="startHitl">ADK 生成草案</el-button>
+              <el-button type="success" :loading="hitlLoading" :disabled="!hitlDraft || !confirmed" @click="confirmHitl">ADK 确认保存</el-button>
             </div>
             <el-checkbox v-model="confirmed" class="confirm">我已核对并确认保存（不会立即生效）</el-checkbox>
           </el-form>
@@ -137,6 +180,8 @@ async function save(): Promise<void> {
             <el-table-column prop="code" label="编码" min-width="160" />
             <el-table-column label="优惠" width="120"><template #default="{ row }">{{ formatMoney(row.amount_cent) }}</template></el-table-column>
           </el-table>
+          <el-alert v-if="checkpoint" class="tip" type="info" :closable="false" show-icon
+            :title="`ADK checkpoint ${checkpoint} 已创建；确认前不会写库`" />
           <el-alert v-if="saved" class="tip" type="success" :closable="false" show-icon
             :title="`已保存 campaign ${saved.campaignId} / rule ${saved.ruleId}，状态 DRAFT`" />
         </div>

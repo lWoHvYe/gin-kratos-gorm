@@ -38,7 +38,7 @@ func (f *fakeCatalog) GetProduct(_ context.Context, in *pb.GetProductRequest, _ 
 
 func TestMockAgentCallsCatalogTool(t *testing.T) {
 	catalog := &fakeCatalog{}
-	ag, err := buildAgent(context.Background(), ProviderConfig{Provider: "mock"}, Deps{Catalog: catalog})
+	ag, err := buildADKAgent(context.Background(), ProviderConfig{Provider: "mock"}, Deps{Catalog: catalog}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

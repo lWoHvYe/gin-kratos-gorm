@@ -11,7 +11,7 @@ import (
 )
 
 // TestGoldenAssistantTurns is a deterministic evaluation set for the agent
-// graph. It exercises the real Eino ReAct loop with the mock model and fake
+// graph. It exercises the real Eino ADK loop with the mock model and fake
 // domain clients, so routing/tool regressions fail without network access.
 func TestGoldenAssistantTurns(t *testing.T) {
 	d := Deps{
@@ -21,11 +21,11 @@ func TestGoldenAssistantTurns(t *testing.T) {
 		Inventory:  fakeInventory{},
 		RAG:        fakeRAG{},
 	}
-	customer, err := buildAgent(context.Background(), ProviderConfig{Provider: "mock"}, d)
+	customer, err := buildADKAgent(context.Background(), ProviderConfig{Provider: "mock"}, d, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admin, err := buildAdminAgent(context.Background(), ProviderConfig{Provider: "mock"}, d)
+	admin, err := buildADKAgent(context.Background(), ProviderConfig{Provider: "mock"}, d, true)
 	if err != nil {
 		t.Fatal(err)
 	}

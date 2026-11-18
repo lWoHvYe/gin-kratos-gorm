@@ -23,6 +23,7 @@ type caseSpec struct {
 	Surface      string   `yaml:"surface"`
 	Prompt       string   `yaml:"prompt"`
 	Contains     []string `yaml:"contains"`
+	ContainsAny  []string `yaml:"contains_any"`
 	NotContains  []string `yaml:"not_contains"`
 	MaxLatencyMS int      `yaml:"max_latency_ms"`
 	ToolsAny     []string `yaml:"tools_any"`

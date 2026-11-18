@@ -45,7 +45,7 @@ func newChatModel(ctx context.Context, cfg ProviderConfig) (model.ToolCallingCha
 
 // mockModel makes the assistant usable without network access. It calls
 // search_products once and then answers from the tool result, which exercises
-// the full Eino ReAct loop in tests and local compose.
+// the full Eino ADK loop in tests and local compose.
 type mockModel struct {
 	tools []*schema.ToolInfo
 }

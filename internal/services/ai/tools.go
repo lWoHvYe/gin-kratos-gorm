@@ -646,7 +646,7 @@ func newCampaignDraftTool() (tool.BaseTool, error) {
 		})
 }
 
-// buildCampaignDraft is shared by the ReAct tool and the ADK HITL draft flow.
+// buildCampaignDraft is shared by the ADK tool and the HITL draft flow.
 func buildCampaignDraft(in campaignDraftInput) (campaignDraftOutput, error) {
 	typ := strings.ToUpper(strings.TrimSpace(in.Type))
 	if typ == "" {

@@ -54,9 +54,9 @@ token counters now exist (`mall_ai_tool_calls_total`, `mall_ai_tokens_total`);
 add cost budgets, admin permission-boundary cases and a larger golden set before
 calling the assistant production-ready.
 
-## Known failure mode (fixed)
+## Known failure mode (resolved)
 
-DeepSeek streams an explanatory sentence before `tool_calls`. Eino's default
-`StreamToolCallChecker` stops at the first content chunk, so the ReAct graph
-ended before using a tool. `anyChunkToolCallChecker` scans the branch's stream
-copy to EOF or the first tool call; the user-visible copy is unaffected.
+DeepSeek streams an explanatory sentence before `tool_calls`. The ADK
+`ChatModelAgent` completes the assistant turn before dispatching tools, and the
+event adapter maps tool completions to `tool` SSE events. The previous ReAct
+`StreamToolCallChecker` workaround is no longer in the runtime.

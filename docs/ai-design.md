@@ -27,7 +27,7 @@ rate limit or a timeout must leave browsing, checkout and payment untouched.
 Storefront
    │ POST /api/v1/ai/chat (SSE)
    ▼
-Gateway BFF ──gRPC stream──▶ ai service (Kratos, Eino ReAct agent)
+Gateway BFF ──gRPC stream──▶ ai service (Kratos, Eino ADK agent)
    │                              │
    │                              ├── DeepSeek ChatModel (eino-ext)
    │                              │      or mock provider (AI_PROVIDER=mock)
@@ -97,7 +97,7 @@ SQL.
 - Rate limit: 20 requests / 10 minutes per user (Redis sliding window, fail
   closed for the AI surface only).
 - Input: max 2000 characters, trimmed; empty input rejected.
-- Agent: Eino ReAct, `MaxStep=12`, model timeout 30s, stream timeout 120s.
+- Agent: Eino ADK `ChatModelAgent` (`MaxIterations=12`), model timeout 30s, stream timeout 120s.
 - Output: max 4096 model tokens (configurable), no markdown HTML rendering in
   the BFF (frontend renders text/plain).
 
@@ -163,7 +163,7 @@ callbacks (Phase 0.1).
 
 ## Phase plan
 
-Phase 0 (this change): service skeleton, Eino ReAct + two catalog tools,
+Phase 0: service skeleton, Eino agent + two catalog tools,
 DeepSeek/mock providers, Redis session + rate limit, gRPC stream, gateway SSE,
 metrics, config, compose/K8s wiring, unit tests.
 
@@ -222,7 +222,7 @@ Still demo-grade:
 
 - No automated real-model evaluation set or quality metrics; `TestGoldenAssistant`
   uses the mock model and fake services. A live prompt set is still manual.
-- The model is `deepseek-flash` with a 12-step ReAct budget; latency/token cost
+- The model is `deepseek-flash` with a 12-step ADK iteration budget; latency/token cost
   per tool path have not been measured in aggregate.
 - Customer-facing tools are read-only. Campaign drafts can be previewed and
   saved through the admin-only apply endpoint after explicit confirmation; the
@@ -278,4 +278,4 @@ Admin campaign drafts can run through `adk.Runner` with a Redis checkpoint:
 start returns `checkpoint_id` + draft JSON, confirm closes the checkpoint and
 then saves through the normal DRAFT endpoint. Checkpoints are one-shot, 30-minute
 TTL, and bound to the admin who started them. The customer assistant still uses
-the ReAct runtime until the phase-4 migration reaches eval parity.
+the ADK runtime for both customer and admin surfaces; the phase-4 migration kept eval parity.

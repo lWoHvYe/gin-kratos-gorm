@@ -12,11 +12,6 @@ import (
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/metrics"
 
-	"github.com/cloudwego/eino/callbacks"
-	"github.com/cloudwego/eino/components"
-	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/compose"
-	"github.com/cloudwego/eino/flow/agent"
 	"github.com/cloudwego/eino/schema"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
@@ -27,7 +22,7 @@ const (
 	maxMessageRunes = 2000
 	streamTimeout   = 120 * time.Second
 	// promptVersion changes whenever systemPrompt or adminSystemPrompt changes.
-	promptVersion = "2026-11-17"
+	promptVersion = "2026-11-19"
 )
 
 // Config holds the assistant knobs that are not model-provider specific.
@@ -77,12 +72,12 @@ func NewService(ctx context.Context, cfg Config, provider ProviderConfig, d deps
 	metrics.AIInfo.WithLabelValues(provider.Provider, provider.Model, promptVersion).Set(1)
 	var runner, adminRunner agentRunner
 	if cfg.Enabled {
-		built, err := buildAgent(ctx, provider, d)
+		built, err := buildADKAgent(ctx, provider, d, false)
 		if err != nil {
 			return nil, err
 		}
 		runner = built
-		adminBuilt, err := buildAdminAgent(ctx, provider, d)
+		adminBuilt, err := buildADKAgent(ctx, provider, d, true)
 		if err != nil {
 			return nil, err
 		}
@@ -216,40 +211,7 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 	defer func() {
 		s.recordUsage(ctx, req.GetUserId(), promptTokens, completionTokens)
 	}()
-	cb := callbacks.NewHandlerBuilder().
-		OnStartFn(func(ctx context.Context, info *callbacks.RunInfo, _ callbacks.CallbackInput) context.Context {
-			if info.Component == components.ComponentOfTool && info.Name != "" {
-				_ = stream.Send(&pb.AIChatEvent{Type: "tool", Tool: info.Name})
-			}
-			return ctx
-		}).
-		OnEndFn(func(ctx context.Context, info *callbacks.RunInfo, output callbacks.CallbackOutput) context.Context {
-			if info.Component != components.ComponentOfChatModel {
-				return ctx
-			}
-			if out := model.ConvCallbackOutput(output); out != nil && out.TokenUsage != nil {
-				promptTokens += int64(out.TokenUsage.PromptTokens)
-				completionTokens += int64(out.TokenUsage.CompletionTokens)
-			}
-			return ctx
-		}).
-		OnEndWithStreamOutputFn(func(ctx context.Context, info *callbacks.RunInfo, output *schema.StreamReader[callbacks.CallbackOutput]) context.Context {
-			defer output.Close()
-			if info.Component != components.ComponentOfChatModel {
-				return ctx
-			}
-			for {
-				item, err := output.Recv()
-				if err != nil {
-					return ctx
-				}
-				if out := model.ConvCallbackOutput(item); out != nil && out.TokenUsage != nil {
-					promptTokens += int64(out.TokenUsage.PromptTokens)
-					completionTokens += int64(out.TokenUsage.CompletionTokens)
-				}
-			}
-		}).Build()
-	out, err := runner.Stream(ctx, turns, agent.WithComposeOptions(compose.WithCallbacks(cb)))
+	out, err := runner.Stream(ctx, turns)
 	if err != nil {
 		result = "error"
 		s.breaker.Failure()
@@ -274,6 +236,16 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		}
 		if chunk == nil {
 			continue
+		}
+		if chunk.Role == schema.Tool {
+			if chunk.ToolName != "" {
+				_ = stream.Send(&pb.AIChatEvent{Type: "tool", Tool: chunk.ToolName})
+			}
+			continue
+		}
+		if chunk.ResponseMeta != nil && chunk.ResponseMeta.Usage != nil {
+			promptTokens += int64(chunk.ResponseMeta.Usage.PromptTokens)
+			completionTokens += int64(chunk.ResponseMeta.Usage.CompletionTokens)
 		}
 		if chunk.Content == "" {
 			continue

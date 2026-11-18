@@ -9,7 +9,6 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 
-	"github.com/cloudwego/eino/flow/agent"
 	"github.com/cloudwego/eino/schema"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -21,7 +20,7 @@ type fakeAgent struct {
 	err    error
 }
 
-func (f fakeAgent) Stream(context.Context, []*schema.Message, ...agent.AgentOption) (*schema.StreamReader[*schema.Message], error) {
+func (f fakeAgent) Stream(context.Context, []*schema.Message) (*schema.StreamReader[*schema.Message], error) {
 	if f.err != nil {
 		return nil, f.err
 	}

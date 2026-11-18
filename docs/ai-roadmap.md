@@ -8,7 +8,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 1 | Feedback quality dashboard over `ai:feedback:*` | done |
 | 2 | ADK HITL pilot for admin campaign drafts | done |
 | 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank; semantic cache deferred) |
-| 4 | Replace the customer/admin ReAct runtime with ADK; keep SSE, tool events, budgets, breaker, eval | pending |
+| 4 | Replace the customer/admin ReAct runtime with ADK; keep SSE, tool events, budgets, breaker, eval | done |
 
 ## Phase 1 acceptance
 
@@ -50,9 +50,12 @@ and keep the assistant optional (failures must not affect browse/checkout).
 - A semantic cache is deferred (exact query caching would go stale on catalog
   events; revisit with an index version).
 
-## Phase 4 shape
+## Phase 4 acceptance (done)
 
-- Adopt `adk.ChatModelAgent` for both prompts, one `adk.Runner` per surface.
-- Preserve `anyChunkToolCallChecker` behavior, `tool` SSE events, token usage
-  callbacks, budgets/breaker, and the 13-case eval. Roll out behind a flag, then
-  remove the ReAct path only after parity.
+- Both customer and admin agents are `adk.ChatModelAgent`; the ReAct builders,
+  compose callback handler and `StreamToolCallChecker` are removed.
+- The ADK event adapter emits assistant deltas, maps tool events to `tool` SSE,
+  and reads token usage from assistant `ResponseMeta` into the existing
+  budget/metrics path.
+- Real-model eval after the switch: 13/13, including tool events and admin
+  preview; no runtime flag remains.

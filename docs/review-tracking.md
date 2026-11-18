@@ -19,9 +19,9 @@ remaining risk is documented.
 | # | Item | Status |
 |---|---|---|
 | 6 | Outbox dead-letter archive | done | terminal dead letters copied to outbox_dead_letters before prune; MySQL integration test passes |
-| 7 | Outbox serial relay / lease timeout | pending |
+| 7 | Outbox serial relay / lease timeout | done | batch 20, 4m lease (worst case 200s), backlog/oldest gauges; MySQL lease test |
 | 8 | BFF 15s vs saga 30s timeout | done | checkout/place gets 35s; other routes 15s |
-| 9 | quotes/inventory_ledger lifecycle | pending |
+| 9 | quotes/inventory_ledger lifecycle | partial | quotes cleaned after 30d; inventory_ledger retention still pending a policy/archive decision |
 | 10 | Catalog SQL fallback vs GORM divergence/N+1 | pending |
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
 | 12 | LIKE '%x%' cannot use index | pending |

@@ -47,6 +47,16 @@ var (
 		Help: "Consumer message outcomes by subject.",
 	}, []string{"subject", "result"})
 
+	// OutboxPending/OutboxOldestSeconds expose relay backlog.
+	OutboxPending = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_outbox_pending_events",
+		Help: "Unpublished, non-dead-lettered outbox events.",
+	})
+	OutboxOldestSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_outbox_oldest_pending_seconds",
+		Help: "Age of the oldest pending outbox event in seconds.",
+	})
+
 	// OutboxDeadLettered counts events that exhausted their retry budget.
 	OutboxDeadLettered = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "mall_outbox_dead_lettered_total",
@@ -121,6 +131,12 @@ var (
 		Help: "Assistant requests rejected by a token budget.",
 	}, []string{"scope"})
 
+	// QuotesCleaned counts expired quote rows removed by retention.
+	QuotesCleaned = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mall_quotes_cleaned_total",
+		Help: "Expired quotes removed by the retention worker.",
+	})
+
 	// AICostCents tracks estimated model cost when prices are configured.
 	AICostCents = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mall_ai_cost_cents_total",
@@ -143,7 +159,7 @@ var (
 func init() {
 	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
-		OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
+		OutboxPending, OutboxOldestSeconds, OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
 		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo,
-		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates)
+		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, QuotesCleaned)
 }

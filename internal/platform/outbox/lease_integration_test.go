@@ -409,3 +409,19 @@ func TestPruneArchivesDeadLettersBeforeDeleting(t *testing.T) {
 		t.Fatalf("live=%d archived=%d", live, archived)
 	}
 }
+
+func TestClaimBatchLeasesBeyondWorstCaseBatch(t *testing.T) {
+	db := integrationDB(t)
+	insertEvent(t, db, "lease-headroom")
+	if _, err := claimBatch(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	var seconds int64
+	if err := db.QueryRow(`SELECT TIMESTAMPDIFF(SECOND, NOW(3), lease_until)
+		FROM outbox_events WHERE event_id = ?`, "lease-headroom").Scan(&seconds); err != nil {
+		t.Fatal(err)
+	}
+	if seconds < int64((claimLimit*publishTimeout + 30*time.Second).Seconds()) {
+		t.Fatalf("lease headroom = %ds, worst case is %v", seconds, claimLimit*publishTimeout)
+	}
+}

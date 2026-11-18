@@ -57,9 +57,14 @@ const (
 	maxAttempts = 20
 	// pruneAfter removes terminal rows so the table cannot grow forever.
 	pruneAfter = 7 * 24 * time.Hour
-	// leaseTTL must exceed publishTimeout so a live relay does not lose rows.
-	leaseTTL       = 60 * time.Second
+	// claimLimit/publishTimeout bound one batch: 20*10s is the worst case a
+	// live relay can hold rows, so leaseTTL leaves headroom above it. A smaller
+	// batch avoids a crashed relay blocking the queue for too long.
+	claimLimit     = 20
 	publishTimeout = 10 * time.Second
+	// leaseTTL must exceed claimLimit*publishTimeout so a live relay does not
+	// lose rows to another replica mid-batch.
+	leaseTTL = 4 * time.Minute
 )
 
 // Relay claims pending rows with SKIP LOCKED, publishes them and marks them done.
@@ -72,6 +77,7 @@ func Relay(ctx context.Context, db *sql.DB, client *mq.Client, logger *slog.Logg
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	lastPrune := time.Time{}
+	lastBacklog := time.Time{}
 	for {
 		select {
 		case <-ctx.Done():
@@ -81,6 +87,10 @@ func Relay(ctx context.Context, db *sql.DB, client *mq.Client, logger *slog.Logg
 				logger.Error("outbox relay", "error", err)
 			} else if n > 0 {
 				logger.Info("outbox relay", "published", n)
+			}
+			if time.Since(lastBacklog) >= time.Minute {
+				updateBacklog(ctx, db, logger)
+				lastBacklog = time.Now()
 			}
 			if time.Since(lastPrune) >= time.Hour {
 				if n, err := pruneOnce(ctx, db); err != nil {
@@ -188,7 +198,7 @@ func claimBatch(ctx context.Context, db *sql.DB) ([]claimedEvent, error) {
 		WHERE published_at IS NULL AND dead_lettered_at IS NULL
 		  AND (next_attempt_at IS NULL OR next_attempt_at <= NOW(3))
 		  AND (lease_until IS NULL OR lease_until < NOW(3))
-		ORDER BY id LIMIT 100 FOR UPDATE SKIP LOCKED`)
+		ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED`, claimLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -275,6 +285,21 @@ func truncateError(err error) string {
 		return msg
 	}
 	return msg[:1024]
+}
+
+// updateBacklog exposes queue depth and oldest pending age without scanning
+// payloads. It runs once a minute, not on every relay tick.
+func updateBacklog(ctx context.Context, db *sql.DB, logger *slog.Logger) {
+	var pending, oldest int64
+	err := db.QueryRowContext(ctx, `SELECT COUNT(*),
+		COALESCE(TIMESTAMPDIFF(SECOND, MIN(created_at), NOW()), 0)
+		FROM outbox_events WHERE published_at IS NULL AND dead_lettered_at IS NULL`).Scan(&pending, &oldest)
+	if err != nil {
+		logger.Warn("outbox backlog query failed", "error", err)
+		return
+	}
+	metrics.OutboxPending.Set(float64(pending))
+	metrics.OutboxOldestSeconds.Set(float64(oldest))
 }
 
 // pruneOnce archives dead-lettered rows and then deletes terminal rows older

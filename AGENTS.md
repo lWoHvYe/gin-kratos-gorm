@@ -64,8 +64,8 @@ docs/handoff.md 是历史会话交接，可能过期，不作为规范或必读�
   admin 标记只能由 admin BFF 设置。
 - 模型/embedding key 只能来自 Secret（如 mall-ai-secrets），不得写入 values、代码或文档；
   secret/ 已被忽略。
-- 模型与 embedding provider 由 AI_*/EMBEDDING_* 配置；RAG 索引在启动时重建，商品变更
-  尚未增量同步，不得宣称实时。
+- 模型与 embedding provider 由 AI_*/EMBEDDING_* 配置；RAG 索引在启动时重建，并通过
+  catalog 商品事件增量 upsert/delete，但仍有启动与消费延迟，不得宣称实时。
 
 ## 静态守卫（make verify 一环，违反即失败）
 

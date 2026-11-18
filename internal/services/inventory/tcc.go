@@ -70,6 +70,34 @@ func (s *Service) TccCancelConfirm(ctx context.Context, req *pb.TccPaymentReques
 			if r.status != statusHeld && r.status != statusConfirmed {
 				return apperr.Failed(fmt.Sprintf("reservation %s is %s", r.reservationNo, r.status))
 			}
+			// Seckill reservations have a separate bucket + mapping. The generic
+			// path below decrements inventory_stocks.reserved (which a seckill
+			// reservation never incremented) and would corrupt accounting.
+			mapping, merr := s.seckillOrderMapping(ctx, tx, r.orderNo, r.skuID, true)
+			if merr != nil {
+				return merr
+			}
+			if mapping != nil {
+				switch mapping.status {
+				case statusReleased:
+					// already compensated
+				case statusHeld:
+					if _, err := s.releaseSeckillMapping(ctx, tx, r); err != nil {
+						return err
+					}
+				case statusConfirmed:
+					// Reversing sold bucket/mapping is a separate state machine;
+					// fail closed rather than decrementing the wrong stock row.
+					return apperr.Failed("seckill CONFIRMED TCC cancel is not supported; use the reconciliation flow")
+				default:
+					return apperr.Failed("unexpected seckill order mapping status " + mapping.status)
+				}
+				if _, err := tx.ExecContext(ctx, `UPDATE stock_reservations SET status = ?, updated_at = ? WHERE id = ?`,
+					statusReleased, time.Now(), r.id); err != nil {
+					return apperr.Internal("release seckill reservation", err)
+				}
+				return nil
+			}
 			wasConfirmed := r.status == statusConfirmed
 			if wasConfirmed {
 				res, err := tx.ExecContext(ctx, `UPDATE inventory_stocks

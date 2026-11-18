@@ -274,14 +274,45 @@ func (s *Service) ReleaseSeckillHold(ctx context.Context, req *pb.ReleaseSeckill
 		if err != nil {
 			return err
 		}
+		// A qualification converts into an order mapping atomically with the
+		// stock reservation. Once that mapping exists, order cancellation owns
+		// the release; releasing the bucket here too would double-credit it.
+		mapping, merr := s.seckillOrderMappingByRef(ctx, tx, req.GetActivityId(), req.GetRefNo())
+		if merr != nil {
+			return merr
+		}
+		if mapping != nil {
+			out, err = s.getSeckillStock(ctx, tx, req.GetActivityId(), false)
+			return err
+		}
 		if current.held < req.GetQuantity() {
 			return apperr.Conflict("seckill held stock is insufficient")
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
-			SET available = available + ?, held = held - ?, version = version + 1
-			WHERE activity_id = ? AND held >= ?`,
-			req.GetQuantity(), req.GetQuantity(), req.GetActivityId(), req.GetQuantity()); err != nil {
-			return apperr.Internal("release seckill hold", err)
+		if current.status == seckillStatusReleased {
+			// The bucket is closed: held units were never sold, so return them
+			// to normal inventory instead of resurrecting a released bucket.
+			res, rerr := tx.ExecContext(ctx, `UPDATE inventory_stocks
+				SET reserved = reserved - ?, version = version + 1
+				WHERE sku_id = ? AND warehouse_id = ? AND reserved >= ?`,
+				req.GetQuantity(), current.skuID, current.warehouseID, req.GetQuantity())
+			if rerr != nil {
+				return apperr.Internal("release seckill hold to inventory", rerr)
+			}
+			if n, _ := res.RowsAffected(); n == 0 {
+				return apperr.Conflict("seckill release would make normal reserved negative")
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+				SET held = held - ?, version = version + 1 WHERE activity_id = ? AND held >= ?`,
+				req.GetQuantity(), req.GetActivityId(), req.GetQuantity()); err != nil {
+				return apperr.Internal("release closed seckill hold", err)
+			}
+		} else {
+			if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+				SET available = available + ?, held = held - ?, version = version + 1
+				WHERE activity_id = ? AND held >= ?`,
+				req.GetQuantity(), req.GetQuantity(), req.GetActivityId(), req.GetQuantity()); err != nil {
+				return apperr.Internal("release seckill hold", err)
+			}
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_stock_ledger
 			(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,
@@ -332,6 +363,20 @@ func (s *Service) seckillOrderMapping(ctx context.Context, q rowQuerier, orderNo
 	}
 	if err != nil {
 		return nil, apperr.Internal("query seckill order stock", err)
+	}
+	return &m, nil
+}
+
+func (s *Service) seckillOrderMappingByRef(ctx context.Context, q rowQuerier, activityID int64, refNo string) (*seckillOrderStock, error) {
+	var m seckillOrderStock
+	err := q.QueryRowContext(ctx, `SELECT activity_id, order_no, sku_id, quantity, ref_no, status
+		FROM seckill_order_stock WHERE activity_id=? AND ref_no=? LIMIT 1`, activityID, refNo).Scan(
+		&m.activityID, &m.orderNo, &m.skuID, &m.quantity, &m.refNo, &m.status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, apperr.Internal("query seckill order by ref", err)
 	}
 	return &m, nil
 }
@@ -398,7 +443,24 @@ func (s *Service) releaseSeckillMapping(ctx context.Context, tx *sql.Tx, r *rese
 	if st.held < m.quantity {
 		return true, apperr.Conflict("seckill held stock is insufficient")
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+	if st.status == seckillStatusReleased {
+		// Bucket already closed: the held unit belongs back in normal stock.
+		res, rerr := tx.ExecContext(ctx, `UPDATE inventory_stocks
+			SET reserved = reserved - ?, version = version + 1
+			WHERE sku_id = ? AND warehouse_id = ? AND reserved >= ?`,
+			m.quantity, st.skuID, st.warehouseID, m.quantity)
+		if rerr != nil {
+			return true, apperr.Internal("return closed seckill hold to inventory", rerr)
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return true, apperr.Conflict("seckill release would make normal reserved negative")
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+			SET held = held - ?, version = version + 1 WHERE activity_id = ? AND held >= ?`,
+			m.quantity, m.activityID, m.quantity); err != nil {
+			return true, apperr.Internal("release closed seckill order stock", err)
+		}
+	} else if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
 		SET held = held - ?, available = available + ?, version = version + 1
 		WHERE activity_id = ? AND held >= ?`,
 		m.quantity, m.quantity, m.activityID, m.quantity); err != nil {

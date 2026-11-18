@@ -9,6 +9,7 @@ type expiredQualification struct {
 	activityID int64
 	userID     int64
 	tokenHash  string
+	orderNo    string
 }
 
 // RunQualificationExpiry releases Redis stock held by abandoned qualifications.
@@ -31,7 +32,7 @@ func (s *Service) RunQualificationExpiry(ctx context.Context, interval time.Dura
 }
 
 func (s *Service) expireQualifications(ctx context.Context) {
-	rows, err := s.db.QueryContext(ctx, `SELECT activity_id, user_id, token_hash
+	rows, err := s.db.QueryContext(ctx, `SELECT activity_id, user_id, token_hash, order_no
 		FROM seckill_qualifications WHERE status IN ('ISSUED','FAILED') AND expires_at <= NOW(3)
 		ORDER BY id LIMIT 200`)
 	if err != nil {
@@ -41,12 +42,21 @@ func (s *Service) expireQualifications(ctx context.Context) {
 	var expired []expiredQualification
 	for rows.Next() {
 		var q expiredQualification
-		if err := rows.Scan(&q.activityID, &q.userID, &q.tokenHash); err == nil {
+		if err := rows.Scan(&q.activityID, &q.userID, &q.tokenHash, &q.orderNo); err == nil {
 			expired = append(expired, q)
 		}
 	}
 	rows.Close()
 	for _, q := range expired {
+		// The order path owns the hold once qualification conversion started;
+		// releasing it here as well would double-credit the bucket.
+		if q.orderNo != "" {
+			if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications
+				SET status='ORDERED' WHERE token_hash=? AND status IN ('ISSUED','FAILED')`, q.tokenHash); err != nil {
+				s.log.Warn("mark converted qualification ordered", "error", err)
+			}
+			continue
+		}
 		if err := s.releaseQualification(ctx, q.activityID, q.tokenHash); err != nil {
 			s.log.Warn("skip expired qualification with held stock", "activity_id", q.activityID, "error", err)
 			continue

@@ -8,10 +8,10 @@ remaining risk is documented.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 1 | Seckill TCC cancel bucket/mapping compensation | done | HELD releases the bucket; CONFIRMED reverses into the open bucket or normal on_hand when closed; MySQL tests cover open bucket and closed-bucket late release. |
-| 2 | Late release after activity RELEASED writes available | done | `ReleaseSeckillHold` and `releaseSeckillMapping` now return held units to normal `reserved` when the bucket is closed. |
-| 3 | Qualification vs order release double-credit | done | `ReleaseSeckillHold` skips converted mappings; expiry skips `order_no` rows; MySQL test proves only the order release credits the bucket. |
-| 4 | MarkPaid/cancel race leaves CONFIRMED stock | done | cancel-after-confirm calls inventory `TccCancelConfirm` (non-seckill). Race injection test still desirable. |
+| 1 | Seckill TCC cancel bucket/mapping compensation | partial | HELD/CONFIRMED paths implemented; MySQL tests cover open-bucket confirmed cancel. Closed-bucket HELD compensation updates normal reserved but does not emit `stock.changed`/normal ledger; no closed-confirmed DB test. |
+| 2 | Late release after activity RELEASED writes available | partial | Both paths return held units to normal `reserved`, but `ReleaseSeckillHold` and `releaseSeckillMapping` do not emit `stock.changed` (and hold path has no inventory ledger), so the catalog stock projection stays stale. |
+| 3 | Qualification vs order release double-credit | partial | Guards and a sequential MySQL test exist; no true concurrent qualification/order race test. |
+| 4 | MarkPaid/cancel race leaves CONFIRMED stock | partial | Normal orders are restocked via `TccCancelConfirm`; seckill orders are explicitly skipped, and there is no race-injection test. |
 | 5 | Coupon lock lost on crash | done | `locked_at`, TTL sweeper, pricing/0008 migration; live sweep verified. |
 
 ## P2
@@ -22,7 +22,7 @@ remaining risk is documented.
 | 7 | Outbox serial relay / lease timeout | done | batch 20, 4m lease (worst case 200s), backlog/oldest gauges; MySQL lease test |
 | 8 | BFF 15s vs saga 30s timeout | done | checkout/place gets 35s; other routes 15s |
 | 9 | quotes/inventory_ledger lifecycle | partial (quotes done; ledger deferred) | quotes cleaned after 30d; inventory_ledger rows/age measured; archive/retention needs a data-policy decision |
-| 10 | Catalog SQL fallback vs GORM divergence/N+1 | done | fallback batches products/SKUs/images/attrs; public and admin keyword predicates now match the GORM reader |
+| 10 | Catalog SQL fallback vs GORM divergence/N+1 | partial | Code batches products/SKUs/images/attrs and aligns public/admin predicates; no SQL-fallback integration test, so this is code-complete only. |
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
 | 12 | LIKE '%x%' cannot use index | done | ngram fulltext index; >=2-rune keywords use MATCH, short keywords keep LIKE |
 | 13 | Per-SKU GetStock in checkout/cart | rejected | only cart add and admin product detail call GetStock; checkout uses quote lines, no per-SKU loop |
@@ -31,7 +31,7 @@ remaining risk is documented.
 | 16 | P1 compensation/race tests | not adopted in this pass | seckill/open-closed/cross-entry DB tests landed; a chaos/fault-injection harness is a separate project |
 | 17 | Demo seed inside production migration | rejected | catalog migrations contain no INSERT; demo data is deploy/seed/catalog-demo.sql, applied only by make seed-demo |
 | 18 | CORS reflects any origin when unset | done (fail closed; compose dev allowlist, chart value) |
-| 19 | Admin identity/ban surface | done | ListUsers/SetUserStatus RPCs, admin BFF + users page; disable revokes refresh tokens, last-admin and self-disable guarded |
+| 19 | Admin identity/ban surface | partial | ListUsers/SetUserStatus + UI, refresh-token revocation and guards; already-issued access tokens remain valid until their 15m TTL. |
 
 ## P3
 
@@ -43,7 +43,7 @@ remaining risk is documented.
 - Docs drift: AI MaxStep and MySQL version fixed; reviewed other counts.
 - Frontend lint/test placeholders: not adopted (Vitest tests exist; ESLint toolchain not installed in this pass).
 - k8s observability addon: not adopted; compose observability has alerts/Alertmanager, k8s stack is separate.
-- Missing version/updated_at on some tables: done (catalog categories/brands/skus, identity addresses, seckill qualifications).
+- Missing version/updated_at on some tables: partial (columns added; category/brand/SKU/address updates do not yet bump version).
 - Proto reserved/deprecated: not adopted (no removed field numbers today; needs a CI evolution guard).
 - preview_campaign fixed user_id=1: done (uses request identity).
 - Duplicate frontend types / pinia version mismatch: pinia aligned to 4.1.0; duplicate hand-written/generated types still backlog.
@@ -69,3 +69,21 @@ policy), P2 #16 fault-injection harness, proto reserved/evolution guard, BFF
 split, migration-runner dedupe, frontend ESLint tooling, duplicate hand-written
 types, k8s observability addon, and the larger AI roadmap items (hybrid
 retrieval/rerank, Eino HITL, cart assistant, memory, multi-agent).
+
+## Second-pass audit (2026-11-19)
+
+The following previously-done items were downgraded after re-reading the code,
+not just the trackers:
+
+- `ReleaseSeckillHold` and `releaseSeckillMapping` closed-bucket branches update
+  `inventory_stocks.reserved` but never call `appendStockChanged`; the catalog
+  stock projection can diverge. The former also has no normal inventory ledger.
+- `refundCancelledAfterConfirm` restocks normal orders only; it skips
+  `quote_id` starting with `seckill:`, so the non-TCC MarkPaid cancellation race
+  is still uncompensated for seckill orders.
+- P1 #3's MySQL test is sequential, not a concurrent race.
+- Catalog SQL fallback has no integration test; it is code-complete only.
+- The ADK HITL pilot uses a deterministic `draftReviewAgent`, not a
+  `ChatModelAgent`; ADK full replacement applies to the chat runtime.
+- Hybrid RAG's rerank is a deterministic query-token rerank; semantic cache is
+  still deferred.

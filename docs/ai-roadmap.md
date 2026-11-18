@@ -6,9 +6,9 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Feedback quality dashboard over `ai:feedback:*` | done |
-| 2 | ADK HITL pilot for admin campaign drafts | done |
+| 2 | ADK HITL pilot for admin campaign drafts | done (deterministic review agent) |
 | 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank; semantic cache deferred) |
-| 4 | Replace the customer/admin ReAct runtime with ADK; keep SSE, tool events, budgets, breaker, eval | done |
+| 4 | Replace the customer/admin ReAct runtime with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
 
 ## Phase 1 acceptance
 

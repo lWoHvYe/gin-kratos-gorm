@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import type {
+  AdminUser,
   AfterSale,
   ApiErrorBody,
   Brand,
@@ -229,6 +230,12 @@ export const adminApi = {
       adminPost<Shipment>('/shipments', { order_no: orderNo, carrier, tracking_no: trackingNo, ship }),
     ship: (shipmentNo: string) => adminPost<Shipment>(`/shipments/${shipmentNo}/ship`, {}),
   },
+  users: {
+    list: (query: PageQuery & { keyword?: string; status?: string } = {}) =>
+      adminGet<{ users: AdminUser[]; total: number }>('/users', { params: query }),
+    status: (id: number, status: 'ACTIVE' | 'DISABLED') =>
+      adminPut<AdminUser>(`/users/${id}/status`, { status }),
+  },
   afterSales: {
     list: (query: PageQuery & { user_id?: number } = {}) =>
       adminGet<{ after_sales: AfterSale[]; total: number }>('/after-sales', { params: query }),
@@ -273,4 +280,4 @@ export const adminApi = {
 }
 
 export { api as http, admin }
-export type { AfterSale, Brand, Campaign, Category, Order, Product, PromotionEvaluation, PromotionRule, Refund, SeckillActivity, SeckillStock, Shipment, Sku, Stock }
+export type { AdminUser, AfterSale, Brand, Campaign, Category, Order, Product, PromotionEvaluation, PromotionRule, Refund, SeckillActivity, SeckillStock, Shipment, Sku, Stock }

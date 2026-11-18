@@ -145,13 +145,17 @@ func (s *Service) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.Empty,
 
 func (s *Service) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.User, error) {
 	var user pb.User
-	err := s.db.QueryRowContext(ctx, `SELECT id, username, nickname, phone FROM users WHERE id = ?`, req.GetUserId()).
-		Scan(&user.Id, &user.Username, &user.Nickname, &user.Phone)
+	var created sql.NullTime
+	err := s.db.QueryRowContext(ctx, `SELECT id, username, nickname, phone, status, created_at FROM users WHERE id = ?`, req.GetUserId()).
+		Scan(&user.Id, &user.Username, &user.Nickname, &user.Phone, &user.Status, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("user not found")
 	}
 	if err != nil {
 		return nil, apperr.Internal("query user", err)
+	}
+	if created.Valid {
+		user.CreatedAtUnix = created.Time.Unix()
 	}
 	roles, err := s.roles(ctx, user.Id)
 	if err != nil {

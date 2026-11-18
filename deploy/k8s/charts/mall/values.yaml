@@ -247,7 +247,7 @@ podDisruptionBudgets:
 authz:
   rules:
     - name: identity
-      sources: [gateway]
+      sources: [gateway, admin]
       paths: ["/mall.v1.IdentityService/*"]
     - name: catalog
       sources: [gateway, admin, cart, pricing, ai]

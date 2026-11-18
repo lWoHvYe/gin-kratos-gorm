@@ -35,6 +35,7 @@ const (
 // (for example CATALOG_ADDR); Kubernetes sets these to Service DNS names.
 var serviceAddrs = map[string]string{
 	"catalog":     "catalog:9002",
+	"identity":    "identity:9001",
 	"inventory":   "inventory:9003",
 	"promotion":   "pricing:9005",
 	"order":       "order:9006",
@@ -56,6 +57,7 @@ type Clients struct {
 	Promotion   pb.PromotionServiceClient
 	Seckill     pb.SeckillServiceClient
 	AI          pb.AIServiceClient
+	Identity    pb.IdentityServiceClient
 
 	conns map[string]*grpc.ClientConn
 }
@@ -103,6 +105,7 @@ func Dial(ctx context.Context) (*Clients, error) {
 		{"promotion", func(conn *grpc.ClientConn) { clients.Promotion = pb.NewPromotionServiceClient(conn) }},
 		{"seckill", func(conn *grpc.ClientConn) { clients.Seckill = pb.NewSeckillServiceClient(conn) }},
 		{"ai", func(conn *grpc.ClientConn) { clients.AI = pb.NewAIServiceClient(conn) }},
+		{"identity", func(conn *grpc.ClientConn) { clients.Identity = pb.NewIdentityServiceClient(conn) }},
 	}
 	for _, target := range targets {
 		conn, err := grpcx.Dial(ctx, targetFor(target.name))
@@ -146,6 +149,8 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 	if aiEnabled {
 		admin.POST("/ai/chat", h.aiChat)
 	}
+	admin.GET("/users", h.listUsers)
+	admin.PUT("/users/:id/status", h.setUserStatus)
 	admin.GET("/categories", h.listCategoriesAdmin)
 	admin.POST("/categories", h.createCategory)
 	admin.PUT("/categories/:id", h.updateCategory)

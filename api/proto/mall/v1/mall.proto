@@ -18,6 +18,9 @@ service IdentityService {
   rpc DeleteAddress (DeleteAddressRequest) returns (Empty);
   rpc SetDefaultAddress (SetDefaultAddressRequest) returns (Empty);
   rpc ListAddresses (GetUserRequest) returns (AddressList);
+  // Admin-only user management. The BFF enforces the admin role.
+  rpc ListUsers (ListUsersRequest) returns (UserList);
+  rpc SetUserStatus (SetUserStatusRequest) returns (User);
 }
 
 message User {
@@ -26,6 +29,8 @@ message User {
   string nickname = 3;
   string phone = 4;
   repeated string roles = 5;
+  string status = 6;
+  int64 created_at_unix = 7;
 }
 message RegisterRequest {
   string username = 1;
@@ -44,6 +49,14 @@ message LoginReply {
   User user = 3;
 }
 message GetUserRequest { int64 user_id = 1; }
+message ListUsersRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string keyword = 3;
+  string status = 4;
+}
+message UserList { repeated User users = 1; int64 total = 2; }
+message SetUserStatusRequest { int64 user_id = 1; string status = 2; }
 message Address {
   int64 id = 1;
   int64 user_id = 2;

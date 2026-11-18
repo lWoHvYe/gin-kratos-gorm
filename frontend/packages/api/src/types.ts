@@ -13,6 +13,12 @@ export interface LoginUser {
   roles: string[]
 }
 
+export interface AdminUser extends LoginUser {
+  phone: string
+  status: string
+  created_at_unix: number
+}
+
 export interface LoginReply {
   access_token: string
   refresh_token: string

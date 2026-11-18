@@ -20,6 +20,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'catalog/products/new', name: 'product-new', component: () => import('@/views/catalog/ProductEditView.vue') },
       { path: 'catalog/products/:id', name: 'product-edit', component: () => import('@/views/catalog/ProductEditView.vue') },
       { path: 'inventory', name: 'inventory', component: () => import('@/views/catalog/InventoryView.vue') },
+      { path: 'users', name: 'users', component: () => import('@/views/UsersView.vue') },
       { path: 'promotions/campaigns', name: 'campaigns', component: () => import('@/views/promotions/CampaignsView.vue') },
       { path: 'promotions/draft', name: 'campaign-draft', component: () => import('@/views/promotions/CampaignDraftView.vue') },
       { path: 'promotions/rules', name: 'promotions', component: () => import('@/views/promotions/PromotionsView.vue') },

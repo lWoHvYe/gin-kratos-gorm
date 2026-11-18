@@ -1259,3 +1259,40 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+  /api/admin/v1/users:
+    get:
+      summary: List users
+      tags: [v1]
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: page_size, in: query, schema: { type: integer } }
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users: { type: array, items: { type: object, additionalProperties: true } }
+                  total: { type: integer, format: int64 }
+  /api/admin/v1/users/{param}/status:
+    put:
+      summary: Enable or disable a user
+      tags: [v1]
+      parameters:
+        - { name: param, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { status: { type: string, enum: [ACTIVE, DISABLED] } }
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }

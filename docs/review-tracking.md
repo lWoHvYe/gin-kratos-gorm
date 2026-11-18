@@ -31,7 +31,7 @@ remaining risk is documented.
 | 16 | P1 compensation/race tests | partial (seckill DB tests cover open/closed bucket; true race injection still missing) |
 | 17 | Demo seed inside production migration | pending (cannot edit applied 0001; needs forward split) |
 | 18 | CORS reflects any origin when unset | done (fail closed; compose dev allowlist, chart value) |
-| 19 | Admin identity/ban surface | pending |
+| 19 | Admin identity/ban surface | done | ListUsers/SetUserStatus RPCs, admin BFF + users page; disable revokes refresh tokens, last-admin and self-disable guarded |
 
 ## P3
 

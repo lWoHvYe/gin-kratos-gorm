@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	pb "gin-kratos-gorm/api/gen/mall/v1"
+
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
 
@@ -151,5 +153,41 @@ func TestReleaseHeldAfterBucketClosedReturnsNormalReserved(t *testing.T) {
 	}
 	if reserved != 2 || held != 0 || available != 0 {
 		t.Fatalf("reserved=%d held=%d available=%d, want 2/0/0", reserved, held, available)
+	}
+}
+
+func TestQualificationReleaseDoesNotDoubleCreditConvertedOrder(t *testing.T) {
+	db := seckillTestDB(t)
+	seedBucket(t, db, 902, 0, 1, 0, seckillStatusAllocated)
+	seedMapping(t, db, 902, "ORD-DOUBLE", statusHeld)
+	svc := &Service{db: db}
+	if _, err := svc.ReleaseSeckillHold(context.Background(), &pb.ReleaseSeckillHoldRequest{
+		ActivityId: 902, Quantity: 1, RefNo: "ORD-DOUBLE-ref",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var available, held int64
+	if err := db.QueryRow(`SELECT available, held FROM seckill_stocks WHERE activity_id = 902`).Scan(&available, &held); err != nil {
+		t.Fatal(err)
+	}
+	if available != 0 || held != 1 {
+		t.Fatalf("converted hold released twice: available=%d held=%d", available, held)
+	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.releaseSeckillMapping(context.Background(), tx, &reservation{orderNo: "ORD-DOUBLE", skuID: 1, warehouseID: 1, quantity: 1}); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT available, held FROM seckill_stocks WHERE activity_id = 902`).Scan(&available, &held); err != nil {
+		t.Fatal(err)
+	}
+	if available != 1 || held != 0 {
+		t.Fatalf("order release available=%d held=%d, want 1/0", available, held)
 	}
 }

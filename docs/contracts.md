@@ -77,7 +77,7 @@ See [ai-design.md](ai-design.md).
 
 ## Database conventions
 
-- MySQL 8.0. Transactional core uses `database/sql` +
+- MySQL 8.4. Transactional core uses `database/sql` +
   `go-sql-driver/mysql`; catalog read queries use GORM (`docs/architecture.md`).
 - All money columns end with `_cent BIGINT`.
 - All status columns are VARCHAR strings.

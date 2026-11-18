@@ -971,8 +971,9 @@ func (s *Service) listProductsSQL(ctx context.Context, req *pb.ListProductsReque
 	where := "WHERE status = 'ON_SALE'"
 	args := []any{}
 	if kw := strings.TrimSpace(req.GetKeyword()); kw != "" {
-		where += " AND (name LIKE ? OR subtitle LIKE ?)"
-		args = append(args, "%"+kw+"%", "%"+kw+"%")
+		// Match the GORM reader: product name/subtitle plus enabled SKU code.
+		where += " AND (name LIKE ? OR subtitle LIKE ? OR EXISTS (SELECT 1 FROM skus s WHERE s.spu_id = spus.id AND s.sku_code LIKE ? AND s.status = 'ENABLED'))"
+		args = append(args, "%"+kw+"%", "%"+kw+"%", "%"+kw+"%")
 	}
 	if len(categoryIDs) > 0 {
 		where += " AND category_id IN (" + placeholders(len(categoryIDs)) + ")"
@@ -1016,17 +1017,11 @@ func (s *Service) listProductsSQL(ctx context.Context, req *pb.ListProductsReque
 		}
 		ids = append(ids, id)
 	}
-	reply := &pb.ProductList{Total: total}
-	for _, id := range ids {
-		p, err := s.loadProduct(ctx, id, true)
-		if err != nil {
-			return nil, err
-		}
-		if p != nil {
-			reply.Products = append(reply.Products, p)
-		}
+	products, err := s.loadProductsSQL(ctx, ids, true)
+	if err != nil {
+		return nil, err
 	}
-	return reply, rows.Err()
+	return &pb.ProductList{Total: total, Products: products}, rows.Err()
 }
 
 func (s *Service) listAdminProductsSQL(ctx context.Context, req *pb.ListAdminProductsRequest) (*pb.ProductList, error) {
@@ -1058,21 +1053,22 @@ func (s *Service) listAdminProductsSQL(ctx context.Context, req *pb.ListAdminPro
 		return nil, apperr.Internal("list admin products", err)
 	}
 	defer rows.Close()
-	reply := &pb.ProductList{Total: total}
+	var ids []int64
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
 			return nil, apperr.Internal("scan admin product id", err)
 		}
-		p, err := s.loadProduct(ctx, id, false)
-		if err != nil {
-			return nil, err
-		}
-		if p != nil {
-			reply.Products = append(reply.Products, p)
-		}
+		ids = append(ids, id)
 	}
-	return reply, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	products, err := s.loadProductsSQL(ctx, ids, false)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.ProductList{Total: total, Products: products}, nil
 }
 
 func placeholders(n int) string {
@@ -1087,4 +1083,117 @@ func defaultString(v, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+// loadProductsSQL batches the product, SKU, image and attribute reads so the
+// fallback path does not issue four queries per row.
+func (s *Service) loadProductsSQL(ctx context.Context, ids []int64, activeOnly bool) ([]*pb.Product, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	ph := placeholders(len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	query := `SELECT id, category_id, brand_id, name, subtitle, description, main_image, status, min_price_cent
+		FROM spus WHERE id IN (` + ph + `)`
+	if activeOnly {
+		query += ` AND status = 'ON_SALE'`
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, apperr.Internal("batch load products", err)
+	}
+	byID := make(map[int64]*pb.Product, len(ids))
+	for rows.Next() {
+		var p pb.Product
+		if err := rows.Scan(&p.Id, &p.CategoryId, &p.BrandId, &p.Name, &p.Subtitle, &p.Description, &p.MainImage, &p.Status, &p.MinPriceCent); err != nil {
+			rows.Close()
+			return nil, apperr.Internal("scan batch product", err)
+		}
+		byID[p.Id] = &p
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	skuQuery := `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status, image_url
+		FROM skus WHERE spu_id IN (` + ph + `)`
+	if activeOnly {
+		skuQuery += ` AND status = 'ENABLED'`
+	}
+	skuQuery += ` ORDER BY id`
+	skuRows, err := s.db.QueryContext(ctx, skuQuery, args...)
+	if err != nil {
+		return nil, apperr.Internal("batch load skus", err)
+	}
+	for skuRows.Next() {
+		var sku pb.Sku
+		if err := skuRows.Scan(&sku.Id, &sku.SpuId, &sku.SkuCode, &sku.SpecsJson, &sku.PriceCent, &sku.Stock, &sku.Status, &sku.ImageUrl); err != nil {
+			skuRows.Close()
+			return nil, apperr.Internal("scan batch sku", err)
+		}
+		if p := byID[sku.SpuId]; p != nil {
+			if sku.Status == "ENABLED" && sku.PriceCent > 0 && (p.MinPriceCent == 0 || sku.PriceCent < p.MinPriceCent) {
+				p.MinPriceCent = sku.PriceCent
+			}
+			p.Skus = append(p.Skus, &sku)
+		}
+	}
+	skuRows.Close()
+	if err := skuRows.Err(); err != nil {
+		return nil, err
+	}
+
+	imgQuery := `SELECT id, spu_id, url, sort FROM spu_images WHERE spu_id IN (` + ph + `) ORDER BY sort, id`
+	imgRows, err := s.db.QueryContext(ctx, imgQuery, args...)
+	if err != nil {
+		return nil, apperr.Internal("batch load images", err)
+	}
+	for imgRows.Next() {
+		var img pb.ProductImage
+		var spuID int64
+		if err := imgRows.Scan(&img.Id, &spuID, &img.Url, &img.Sort); err != nil {
+			imgRows.Close()
+			return nil, apperr.Internal("scan batch image", err)
+		}
+		if p := byID[spuID]; p != nil {
+			p.Images = append(p.Images, &img)
+		}
+	}
+	imgRows.Close()
+	if err := imgRows.Err(); err != nil {
+		return nil, err
+	}
+
+	attrQuery := `SELECT id, spu_id, name, value, sort FROM spu_attributes WHERE spu_id IN (` + ph + `) ORDER BY sort, id`
+	attrRows, err := s.db.QueryContext(ctx, attrQuery, args...)
+	if err != nil {
+		return nil, apperr.Internal("batch load attributes", err)
+	}
+	for attrRows.Next() {
+		var attr pb.ProductAttribute
+		var spuID int64
+		if err := attrRows.Scan(&attr.Id, &spuID, &attr.Name, &attr.Value, &attr.Sort); err != nil {
+			attrRows.Close()
+			return nil, apperr.Internal("scan batch attribute", err)
+		}
+		if p := byID[spuID]; p != nil {
+			p.Attributes = append(p.Attributes, &attr)
+		}
+	}
+	attrRows.Close()
+	if err := attrRows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]*pb.Product, 0, len(ids))
+	for _, id := range ids {
+		if p := byID[id]; p != nil {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }

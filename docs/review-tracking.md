@@ -8,9 +8,9 @@ remaining risk is documented.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 1 | Seckill TCC cancel bucket/mapping compensation | partial | HELD releases the bucket; CONFIRMED now reverses into the open bucket or normal on_hand when closed. Missing DB-level race test. |
+| 1 | Seckill TCC cancel bucket/mapping compensation | done | HELD releases the bucket; CONFIRMED reverses into the open bucket or normal on_hand when closed; MySQL tests cover open bucket and closed-bucket late release. |
 | 2 | Late release after activity RELEASED writes available | done | `ReleaseSeckillHold` and `releaseSeckillMapping` now return held units to normal `reserved` when the bucket is closed. |
-| 3 | Qualification vs order release double-credit | partial | `ReleaseSeckillHold` skips when an order mapping exists; expiry skips qualifications with `order_no`. Needs DB-level race tests. |
+| 3 | Qualification vs order release double-credit | partial | `ReleaseSeckillHold` skips converted mappings; expiry skips `order_no` rows; closed-bucket release tested. A true concurrent qualification/order race test is still missing. |
 | 4 | MarkPaid/cancel race leaves CONFIRMED stock | done | cancel-after-confirm calls inventory `TccCancelConfirm` (non-seckill). Race injection test still desirable. |
 | 5 | Coupon lock lost on crash | done | `locked_at`, TTL sweeper, pricing/0008 migration; live sweep verified. |
 
@@ -28,7 +28,7 @@ remaining risk is documented.
 | 13 | Per-SKU GetStock in checkout/cart | pending |
 | 14 | AI frontend entry when disabled | done | public /ai/status drives the storefront entry |
 | 15 | Base chart mock payment defaults | done | base mock=false; single-node overlay mock=true; payment secret required when mock off |
-| 16 | P1 compensation/race tests | partial (released-bucket logic added; no DB race suite) |
+| 16 | P1 compensation/race tests | partial (seckill DB tests cover open/closed bucket; true race injection still missing) |
 | 17 | Demo seed inside production migration | pending (cannot edit applied 0001; needs forward split) |
 | 18 | CORS reflects any origin when unset | done (fail closed; compose dev allowlist, chart value) |
 | 19 | Admin identity/ban surface | pending |

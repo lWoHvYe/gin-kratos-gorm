@@ -5595,7 +5595,8 @@ var SeckillService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AIService_Chat_FullMethodName = "/mall.v1.AIService/Chat"
+	AIService_Chat_FullMethodName           = "/mall.v1.AIService/Chat"
+	AIService_SubmitFeedback_FullMethodName = "/mall.v1.AIService/SubmitFeedback"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -5607,6 +5608,7 @@ const (
 // trusted from the browser.
 type AIServiceClient interface {
 	Chat(ctx context.Context, in *AIChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AIChatEvent], error)
+	SubmitFeedback(ctx context.Context, in *AIFeedbackRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type aIServiceClient struct {
@@ -5636,6 +5638,16 @@ func (c *aIServiceClient) Chat(ctx context.Context, in *AIChatRequest, opts ...g
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AIService_ChatClient = grpc.ServerStreamingClient[AIChatEvent]
 
+func (c *aIServiceClient) SubmitFeedback(ctx context.Context, in *AIFeedbackRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AIService_SubmitFeedback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -5645,6 +5657,7 @@ type AIService_ChatClient = grpc.ServerStreamingClient[AIChatEvent]
 // trusted from the browser.
 type AIServiceServer interface {
 	Chat(*AIChatRequest, grpc.ServerStreamingServer[AIChatEvent]) error
+	SubmitFeedback(context.Context, *AIFeedbackRequest) (*Empty, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -5657,6 +5670,9 @@ type UnimplementedAIServiceServer struct{}
 
 func (UnimplementedAIServiceServer) Chat(*AIChatRequest, grpc.ServerStreamingServer[AIChatEvent]) error {
 	return status.Errorf(codes.Unimplemented, "method Chat not implemented")
+}
+func (UnimplementedAIServiceServer) SubmitFeedback(context.Context, *AIFeedbackRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitFeedback not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -5690,13 +5706,36 @@ func _AIService_Chat_Handler(srv interface{}, stream grpc.ServerStream) error {
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AIService_ChatServer = grpc.ServerStreamingServer[AIChatEvent]
 
+func _AIService_SubmitFeedback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AIFeedbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).SubmitFeedback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_SubmitFeedback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).SubmitFeedback(ctx, req.(*AIFeedbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AIService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "mall.v1.AIService",
 	HandlerType: (*AIServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SubmitFeedback",
+			Handler:    _AIService_SubmitFeedback_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Chat",

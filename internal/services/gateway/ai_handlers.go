@@ -63,3 +63,35 @@ func unavailableAI() error {
 func (h *handlers) aiStatus(c *gin.Context) {
 	httpx.OK(c, gin.H{"enabled": h.aiEnabled && h.clients.AI != nil})
 }
+
+type aiFeedbackRequest struct {
+	SessionID string `json:"session_id"`
+	Rating    int32  `json:"rating"`
+	Comment   string `json:"comment"`
+}
+
+func (h *handlers) aiFeedback(c *gin.Context) {
+	if !h.aiEnabled || h.clients.AI == nil {
+		httpx.Error(c, unavailableAI())
+		return
+	}
+	uid, err := userID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	var in aiFeedbackRequest
+	if err := bff.BindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 5*time.Second)
+	defer cancel()
+	if _, err := h.clients.AI.SubmitFeedback(ctx, &pb.AIFeedbackRequest{
+		SessionId: in.SessionID, Rating: in.Rating, Comment: in.Comment, UserId: uid,
+	}); err != nil {
+		httpx.Error(c, apperr.Unavailable("record assistant feedback: "+err.Error(), err))
+		return
+	}
+	httpx.OK(c, gin.H{"status": "OK"})
+}

@@ -911,3 +911,19 @@ paths:
                 type: object
                 properties:
                   enabled: { type: boolean }
+  /api/v1/ai/feedback:
+    post:
+      summary: Rate an assistant answer
+      tags: [ai]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id: { type: string }
+                rating: { type: integer, enum: [1, -1] }
+                comment: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Feedback stored

@@ -888,6 +888,7 @@ message ReplaySeckillDLQReply { int32 replayed = 1; int32 skipped = 2; string er
 // trusted from the browser.
 service AIService {
   rpc Chat (AIChatRequest) returns (stream AIChatEvent);
+  rpc SubmitFeedback (AIFeedbackRequest) returns (Empty);
 }
 
 message AIChatRequest {
@@ -896,6 +897,15 @@ message AIChatRequest {
   int64 user_id = 3;
   // admin selects the operations agent. Only the admin BFF sets it.
   bool admin = 4;
+}
+
+message AIFeedbackRequest {
+  string session_id = 1;
+  // rating is 1 (helpful) or -1 (not helpful).
+  int32 rating = 2;
+  string comment = 3;
+  // Set by the BFF from the access token; never by the model.
+  int64 user_id = 4;
 }
 
 message AIChatEvent {

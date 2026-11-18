@@ -88,6 +88,12 @@ var (
 		Help: "Errors returned to callers, by surface and domain code.",
 	}, []string{"surface", "code"})
 
+	// AIFeedback counts explicit helpful/not-helpful ratings.
+	AIFeedback = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_ai_feedback_total",
+		Help: "Assistant feedback by rating.",
+	}, []string{"rating"})
+
 	// AIRequests counts assistant turns by outcome.
 	AIRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mall_ai_requests_total",
@@ -172,5 +178,5 @@ func init() {
 		OutboxPending, OutboxOldestSeconds, OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
 		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo,
 		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, QuotesCleaned,
-		InventoryLedgerRows, InventoryLedgerOldestSeconds)
+		InventoryLedgerRows, InventoryLedgerOldestSeconds, AIFeedback)
 }

@@ -50,7 +50,7 @@ remaining risk is documented.
 ## AI suggestions
 
 - Real-model eval harness: done (13 cases).
-- Feedback capture/quality dashboard: pending.
+- Feedback capture: done (RPC + Redis + metric + storefront thumbs); quality dashboard still pending.
 - RAG hybrid/rerank/semantic cache: pending.
 - Eino interrupt-resume HITL: pending (current flow is hand-rolled).
 - Cart task assistant / proactive admin brief / long-term memory / multi-agent: pending.

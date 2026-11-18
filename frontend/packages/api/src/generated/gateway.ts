@@ -1872,6 +1872,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rate an assistant answer */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        session_id?: string;
+                        /** @enum {integer} */
+                        rating?: 1 | -1;
+                        comment?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Feedback stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

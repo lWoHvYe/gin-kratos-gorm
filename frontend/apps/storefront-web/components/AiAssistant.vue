@@ -13,6 +13,12 @@
         <div v-for="(m, i) in messages" :key="i" :class="['ai-msg', m.role]">
           {{ m.text }}
         </div>
+        <div v-if="canRate" class="ai-feedback">
+          <span>有帮助吗？</span>
+          <button type="button" @click="rate(1)">👍</button>
+          <button type="button" @click="rate(-1)">👎</button>
+          <span v-if="rated">{{ rated === 1 ? '感谢反馈' : '已记录' }}</span>
+        </div>
       </div>
       <form class="ai-input" @submit.prevent="send">
         <input
@@ -29,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import { parseSSEChunk, type SSEEvent } from '~/utils/sse'
 
@@ -58,7 +64,28 @@ onMounted(async () => {
 const input = ref('')
 const sending = ref(false)
 const messages = ref<Message[]>([])
+const rated = ref(0)
 const listEl = ref<HTMLElement | null>(null)
+
+const canRate = computed(() => {
+  if (rated.value || sending.value || messages.value.length === 0) return false
+  return messages.value[messages.value.length - 1]?.role === 'assistant'
+    && Boolean(messages.value[messages.value.length - 1]?.text.trim())
+})
+
+async function rate(rating: 1 | -1): Promise<void> {
+  if (!token.value) return
+  rated.value = rating
+  try {
+    await fetch('/api/v1/ai/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
+      body: JSON.stringify({ session_id: sessionID(), rating }),
+    })
+  } catch {
+    // Feedback is best-effort; never block the conversation on it.
+  }
+}
 
 function toggle() {
   open.value = !open.value
@@ -96,6 +123,7 @@ async function send() {
   }
   input.value = ''
   sending.value = true
+  rated.value = 0
   messages.value.push({ role: 'user', text })
   const assistant: Message = { role: 'assistant', text: '' }
   messages.value.push(assistant)
@@ -169,4 +197,6 @@ async function send() {
 .ai-input input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; }
 .ai-input button { padding: 8px 14px; border: 0; border-radius: 8px; background: var(--mall-primary, #2563eb); color: #fff; cursor: pointer; }
 .ai-input button:disabled { opacity: 0.5; cursor: default; }
+.ai-feedback { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; color: #6b7280; font-size: 12px; }
+.ai-feedback button { border: 1px solid #e5e7eb; background: #fff; border-radius: 6px; cursor: pointer; padding: 2px 6px; }
 </style>

@@ -18,7 +18,7 @@ remaining risk is documented.
 
 | # | Item | Status |
 |---|---|---|
-| 6 | Outbox dead-letter archive | pending |
+| 6 | Outbox dead-letter archive | done | terminal dead letters copied to outbox_dead_letters before prune; MySQL integration test passes |
 | 7 | Outbox serial relay / lease timeout | pending |
 | 8 | BFF 15s vs saga 30s timeout | done | checkout/place gets 35s; other routes 15s |
 | 9 | quotes/inventory_ledger lifecycle | pending |

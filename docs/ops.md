@@ -259,7 +259,8 @@ Request bodies are capped at 1 MiB and `page` is capped at 1000 per call.
 The outbox relay claims batches under a lease and publishes outside the
 database transaction. Failures back off exponentially, dead-letter after 20
 attempts (`mall_outbox_dead_lettered_total`), and terminal rows are pruned after
-7 days.
+7 days; dead-letter rows are first copied to `outbox_dead_letters` so payloads
+remain auditable.
 
 Durable consumers share one policy (`internal/platform/consumer`): a 10s
 per-message timeout, bounded retries, and dead-lettering to `<subject>.dlq`

@@ -277,25 +277,56 @@ func truncateError(err error) string {
 	return msg[:1024]
 }
 
-// pruneOnce deletes terminal rows older than pruneAfter in bounded batches.
+// pruneOnce archives dead-lettered rows and then deletes terminal rows older
+// than pruneAfter in bounded batches. Published and dead-lettered rows are
+// handled separately so an archived event is never counted twice.
 func pruneOnce(ctx context.Context, db *sql.DB) (int64, error) {
 	var total int64
+	days := int(pruneAfter.Hours() / 24)
 	for i := 0; i < 5; i++ {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return total, err
+		}
 		// pruneAfter is a constant, so formatting it keeps the statement free of
 		// placeholders inside INTERVAL, which some MySQL versions reject.
-		res, err := db.ExecContext(ctx, fmt.Sprintf(`DELETE FROM outbox_events
-			WHERE (published_at IS NOT NULL OR dead_lettered_at IS NOT NULL)
-			  AND COALESCE(published_at, dead_lettered_at) < DATE_SUB(NOW(3), INTERVAL %d DAY)
-			LIMIT 1000`, int(pruneAfter.Hours()/24)))
+		res, err := tx.ExecContext(ctx, fmt.Sprintf(`INSERT IGNORE INTO outbox_dead_letters
+			(event_id, topic, aggregate_type, aggregate_id, event_type, payload, attempts,
+			 last_error, created_at, published_at, dead_lettered_at, archived_at)
+			SELECT event_id, topic, aggregate_type, aggregate_id, event_type, payload, attempts,
+			       last_error, created_at, published_at, dead_lettered_at, NOW(3)
+			FROM outbox_events
+			WHERE dead_lettered_at IS NOT NULL
+			  AND dead_lettered_at < DATE_SUB(NOW(3), INTERVAL %d DAY)
+			LIMIT 1000`, days))
 		if err != nil {
+			_ = tx.Rollback()
 			return total, err
 		}
-		n, err := res.RowsAffected()
+		archived, _ := res.RowsAffected()
+		res, err = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM outbox_events
+			WHERE dead_lettered_at IS NOT NULL
+			  AND dead_lettered_at < DATE_SUB(NOW(3), INTERVAL %d DAY)
+			LIMIT 1000`, days))
 		if err != nil {
+			_ = tx.Rollback()
 			return total, err
 		}
-		total += n
-		if n < 1000 {
+		deletedDL, _ := res.RowsAffected()
+		res, err = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM outbox_events
+			WHERE published_at IS NOT NULL AND dead_lettered_at IS NULL
+			  AND published_at < DATE_SUB(NOW(3), INTERVAL %d DAY)
+			LIMIT 1000`, days))
+		if err != nil {
+			_ = tx.Rollback()
+			return total, err
+		}
+		deletedPublished, _ := res.RowsAffected()
+		if err := tx.Commit(); err != nil {
+			return total, err
+		}
+		total += deletedPublished + deletedDL
+		if archived < 1000 && deletedDL < 1000 && deletedPublished < 1000 {
 			break
 		}
 	}

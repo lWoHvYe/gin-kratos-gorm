@@ -53,6 +53,7 @@ func integrationDB(t *testing.T) *sql.DB {
 	db.SetMaxOpenConns(8)
 	t.Cleanup(func() {
 		_, _ = db.Exec("DELETE FROM outbox_events")
+		_, _ = db.Exec("DELETE FROM outbox_dead_letters")
 		_ = db.Close()
 	})
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS outbox_events (
@@ -77,6 +78,26 @@ func integrationDB(t *testing.T) *sql.DB {
 		KEY idx_outbox_lease (published_at, dead_lettered_at, lease_until, next_attempt_at, id)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
 		t.Fatalf("create outbox table: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS outbox_dead_letters (
+		id BIGINT NOT NULL AUTO_INCREMENT,
+		event_id VARCHAR(64) NOT NULL,
+		topic VARCHAR(128) NOT NULL,
+		aggregate_type VARCHAR(64) NOT NULL,
+		aggregate_id VARCHAR(64) NOT NULL,
+		event_type VARCHAR(64) NOT NULL,
+		payload JSON NOT NULL,
+		attempts INT NOT NULL DEFAULT 0,
+		last_error VARCHAR(1024) NOT NULL DEFAULT '',
+		created_at DATETIME(3) NOT NULL,
+		published_at DATETIME(3) NULL,
+		dead_lettered_at DATETIME(3) NOT NULL,
+		archived_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+		PRIMARY KEY (id),
+		UNIQUE KEY uk_outbox_dead_event_id (event_id),
+		KEY idx_outbox_dead_archived (archived_at)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
+		t.Fatalf("create archive table: %v", err)
 	}
 	if _, err := db.Exec("DELETE FROM outbox_events"); err != nil {
 		t.Fatal(err)
@@ -365,5 +386,26 @@ func TestRelayPublishFailureBacksOff(t *testing.T) {
 	}
 	if attempts != 1 || !next.Valid || lease.Valid {
 		t.Fatalf("attempts=%d next=%v lease=%v", attempts, next.Valid, lease.Valid)
+	}
+}
+
+func TestPruneArchivesDeadLettersBeforeDeleting(t *testing.T) {
+	db := integrationDB(t)
+	id := insertEvent(t, db, "old-dead-letter")
+	if _, err := db.Exec("UPDATE outbox_events SET dead_lettered_at = DATE_SUB(NOW(3), INTERVAL 30 DAY) WHERE id = ?", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pruneOnce(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	var live, archived int
+	if err := db.QueryRow("SELECT COUNT(*) FROM outbox_events WHERE id = ?", id).Scan(&live); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM outbox_dead_letters WHERE event_id = ?", "old-dead-letter").Scan(&archived); err != nil {
+		t.Fatal(err)
+	}
+	if live != 0 || archived != 1 {
+		t.Fatalf("live=%d archived=%d", live, archived)
 	}
 }

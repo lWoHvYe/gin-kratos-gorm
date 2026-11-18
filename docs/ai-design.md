@@ -97,7 +97,7 @@ SQL.
 - Rate limit: 20 requests / 10 minutes per user (Redis sliding window, fail
   closed for the AI surface only).
 - Input: max 2000 characters, trimmed; empty input rejected.
-- Agent: Eino ReAct, `MaxStep=6`, model timeout 30s, stream timeout 120s.
+- Agent: Eino ReAct, `MaxStep=12`, model timeout 30s, stream timeout 120s.
 - Output: max 4096 model tokens (configurable), no markdown HTML rendering in
   the BFF (frontend renders text/plain).
 

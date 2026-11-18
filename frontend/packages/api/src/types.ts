@@ -305,3 +305,17 @@ export interface SeckillStock {
   status: string
   version: number
 }
+
+export interface FeedbackDay {
+  day: string
+  helpful: number
+  not_helpful: number
+}
+
+export interface FeedbackSummary {
+  total: number
+  helpful: number
+  not_helpful: number
+  days: FeedbackDay[]
+  not_helpful_comments: Array<{ day: string; comment: string }>
+}

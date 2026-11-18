@@ -1296,3 +1296,35 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+  /api/admin/v1/ai/feedback/summary:
+    get:
+      summary: Assistant feedback quality summary
+      tags: [ai]
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 30 } }
+      responses:
+        '200':
+          description: Feedback totals by day
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer, format: int64 }
+                  helpful: { type: integer, format: int64 }
+                  not_helpful: { type: integer, format: int64 }
+                  days:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        day: { type: string }
+                        helpful: { type: integer, format: int64 }
+                        not_helpful: { type: integer, format: int64 }
+                  not_helpful_comments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        day: { type: string }
+                        comment: { type: string }

@@ -61,3 +61,49 @@ func (s *Service) SubmitFeedback(ctx context.Context, req *pb.AIFeedbackRequest)
 	metrics.AIFeedback.WithLabelValues(rating).Inc()
 	return &pb.Empty{}, nil
 }
+
+// FeedbackSummary aggregates the last N UTC days of explicit ratings. Lists are
+// capped per day so an abusive client cannot make the admin query unbounded.
+func (s *Service) FeedbackSummary(ctx context.Context, req *pb.FeedbackSummaryRequest) (*pb.FeedbackSummaryReply, error) {
+	if s.cache == nil {
+		return nil, apperr.Unavailable("feedback storage is not configured", nil)
+	}
+	days := int(req.GetDays())
+	if days <= 0 {
+		days = 7
+	}
+	if days > 30 {
+		days = 30
+	}
+	reply := &pb.FeedbackSummaryReply{}
+	now := time.Now().UTC()
+	for i := days - 1; i >= 0; i-- {
+		day := now.AddDate(0, 0, -i).Format("20060102")
+		values, err := s.cache.LRange(ctx, "ai:feedback:"+day, 0, 4999).Result()
+		if err != nil {
+			return nil, apperr.Unavailable("read feedback: "+err.Error(), err)
+		}
+		summary := &pb.FeedbackDaySummary{Day: day}
+		for _, raw := range values {
+			var entry feedbackEntry
+			if err := json.Unmarshal([]byte(raw), &entry); err != nil {
+				continue
+			}
+			if entry.Rating > 0 {
+				summary.Helpful++
+				reply.Helpful++
+			} else if entry.Rating < 0 {
+				summary.NotHelpful++
+				reply.NotHelpful++
+				if entry.Comment != "" && len(reply.NotHelpfulComments) < 50 {
+					reply.NotHelpfulComments = append(reply.NotHelpfulComments, &pb.FeedbackComment{
+						Day: day, Comment: entry.Comment,
+					})
+				}
+			}
+			reply.Total++
+		}
+		reply.Days = append(reply.Days, summary)
+	}
+	return reply, nil
+}

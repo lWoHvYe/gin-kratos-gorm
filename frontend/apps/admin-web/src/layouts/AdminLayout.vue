@@ -46,6 +46,7 @@ async function logout(): Promise<void> {
           <el-menu-item index="/promotions/seckill">秒杀活动</el-menu-item>
         </el-sub-menu>
         <el-menu-item index="/users">用户</el-menu-item>
+        <el-menu-item index="/ai/quality">AI 质量</el-menu-item>
         <el-menu-item index="/orders">订单</el-menu-item>
         <el-menu-item index="/shipments">发货</el-menu-item>
         <el-menu-item index="/aftersales">售后</el-menu-item>

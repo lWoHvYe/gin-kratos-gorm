@@ -3,6 +3,7 @@ import type {
   AdminUser,
   AfterSale,
   ApiErrorBody,
+  FeedbackSummary,
   Brand,
   Campaign,
   Category,
@@ -229,6 +230,10 @@ export const adminApi = {
     create: (orderNo: string, carrier: string, trackingNo: string, ship = true) =>
       adminPost<Shipment>('/shipments', { order_no: orderNo, carrier, tracking_no: trackingNo, ship }),
     ship: (shipmentNo: string) => adminPost<Shipment>(`/shipments/${shipmentNo}/ship`, {}),
+  },
+  ai: {
+    feedbackSummary: (days = 7) =>
+      adminGet<FeedbackSummary>('/ai/feedback/summary', { params: { days } }),
   },
   users: {
     list: (query: PageQuery & { keyword?: string; status?: string } = {}) =>

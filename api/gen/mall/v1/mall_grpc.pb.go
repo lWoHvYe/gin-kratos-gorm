@@ -5595,8 +5595,9 @@ var SeckillService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AIService_Chat_FullMethodName           = "/mall.v1.AIService/Chat"
-	AIService_SubmitFeedback_FullMethodName = "/mall.v1.AIService/SubmitFeedback"
+	AIService_Chat_FullMethodName            = "/mall.v1.AIService/Chat"
+	AIService_SubmitFeedback_FullMethodName  = "/mall.v1.AIService/SubmitFeedback"
+	AIService_FeedbackSummary_FullMethodName = "/mall.v1.AIService/FeedbackSummary"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -5609,6 +5610,7 @@ const (
 type AIServiceClient interface {
 	Chat(ctx context.Context, in *AIChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AIChatEvent], error)
 	SubmitFeedback(ctx context.Context, in *AIFeedbackRequest, opts ...grpc.CallOption) (*Empty, error)
+	FeedbackSummary(ctx context.Context, in *FeedbackSummaryRequest, opts ...grpc.CallOption) (*FeedbackSummaryReply, error)
 }
 
 type aIServiceClient struct {
@@ -5648,6 +5650,16 @@ func (c *aIServiceClient) SubmitFeedback(ctx context.Context, in *AIFeedbackRequ
 	return out, nil
 }
 
+func (c *aIServiceClient) FeedbackSummary(ctx context.Context, in *FeedbackSummaryRequest, opts ...grpc.CallOption) (*FeedbackSummaryReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FeedbackSummaryReply)
+	err := c.cc.Invoke(ctx, AIService_FeedbackSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -5658,6 +5670,7 @@ func (c *aIServiceClient) SubmitFeedback(ctx context.Context, in *AIFeedbackRequ
 type AIServiceServer interface {
 	Chat(*AIChatRequest, grpc.ServerStreamingServer[AIChatEvent]) error
 	SubmitFeedback(context.Context, *AIFeedbackRequest) (*Empty, error)
+	FeedbackSummary(context.Context, *FeedbackSummaryRequest) (*FeedbackSummaryReply, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -5673,6 +5686,9 @@ func (UnimplementedAIServiceServer) Chat(*AIChatRequest, grpc.ServerStreamingSer
 }
 func (UnimplementedAIServiceServer) SubmitFeedback(context.Context, *AIFeedbackRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitFeedback not implemented")
+}
+func (UnimplementedAIServiceServer) FeedbackSummary(context.Context, *FeedbackSummaryRequest) (*FeedbackSummaryReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FeedbackSummary not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -5724,6 +5740,24 @@ func _AIService_SubmitFeedback_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_FeedbackSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FeedbackSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).FeedbackSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_FeedbackSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).FeedbackSummary(ctx, req.(*FeedbackSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5734,6 +5768,10 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitFeedback",
 			Handler:    _AIService_SubmitFeedback_Handler,
+		},
+		{
+			MethodName: "FeedbackSummary",
+			Handler:    _AIService_FeedbackSummary_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

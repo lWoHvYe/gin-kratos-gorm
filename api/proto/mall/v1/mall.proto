@@ -889,6 +889,7 @@ message ReplaySeckillDLQReply { int32 replayed = 1; int32 skipped = 2; string er
 service AIService {
   rpc Chat (AIChatRequest) returns (stream AIChatEvent);
   rpc SubmitFeedback (AIFeedbackRequest) returns (Empty);
+  rpc FeedbackSummary (FeedbackSummaryRequest) returns (FeedbackSummaryReply);
 }
 
 message AIChatRequest {
@@ -897,6 +898,24 @@ message AIChatRequest {
   int64 user_id = 3;
   // admin selects the operations agent. Only the admin BFF sets it.
   bool admin = 4;
+}
+
+message FeedbackSummaryRequest { int32 days = 1; }
+message FeedbackDaySummary {
+  string day = 1;
+  int64 helpful = 2;
+  int64 not_helpful = 3;
+}
+message FeedbackComment {
+  string day = 1;
+  string comment = 2;
+}
+message FeedbackSummaryReply {
+  int64 total = 1;
+  int64 helpful = 2;
+  int64 not_helpful = 3;
+  repeated FeedbackDaySummary days = 4;
+  repeated FeedbackComment not_helpful_comments = 5;
 }
 
 message AIFeedbackRequest {

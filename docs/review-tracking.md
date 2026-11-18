@@ -8,7 +8,7 @@ remaining risk is documented.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 1 | Seckill TCC cancel bucket/mapping compensation | partial | HELD mapping now releases the bucket via `releaseSeckillMapping`; CONFIRMED fails closed instead of decrementing normal reserved. Confirmed reversal still needs a state machine. |
+| 1 | Seckill TCC cancel bucket/mapping compensation | partial | HELD releases the bucket; CONFIRMED now reverses into the open bucket or normal on_hand when closed. Missing DB-level race test. |
 | 2 | Late release after activity RELEASED writes available | done | `ReleaseSeckillHold` and `releaseSeckillMapping` now return held units to normal `reserved` when the bucket is closed. |
 | 3 | Qualification vs order release double-credit | partial | `ReleaseSeckillHold` skips when an order mapping exists; expiry skips qualifications with `order_no`. Needs DB-level race tests. |
 | 4 | MarkPaid/cancel race leaves CONFIRMED stock | done | cancel-after-confirm calls inventory `TccCancelConfirm` (non-seckill). Race injection test still desirable. |

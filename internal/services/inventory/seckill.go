@@ -418,6 +418,70 @@ func (s *Service) confirmSeckillMapping(ctx context.Context, tx *sql.Tx, r *rese
 	return nil
 }
 
+// cancelSeckillConfirmed reverses a CONFIRMED seckill sale. An open bucket gets
+// the unit back as available; a closed bucket returns it to normal on_hand.
+// Mapping status makes replays no-ops.
+func (s *Service) cancelSeckillConfirmed(ctx context.Context, tx *sql.Tx, r *reservation) error {
+	m, err := s.seckillOrderMapping(ctx, tx, r.orderNo, r.skuID, true)
+	if err != nil {
+		return err
+	}
+	if m == nil {
+		return apperr.NotFound("seckill order mapping not found")
+	}
+	if m.status == statusReleased {
+		return nil
+	}
+	if m.status != statusConfirmed {
+		return apperr.Conflict("seckill order is not confirmed")
+	}
+	st, err := s.getSeckillStock(ctx, tx, m.activityID, true)
+	if err != nil {
+		return err
+	}
+	if st.sold < m.quantity {
+		return apperr.Conflict("seckill sold stock is inconsistent")
+	}
+	normalRestock := st.status == seckillStatusReleased
+	if normalRestock {
+		if _, err := tx.ExecContext(ctx, `UPDATE inventory_stocks
+			SET on_hand = on_hand + ?, version = version + 1 WHERE sku_id = ? AND warehouse_id = ?`,
+			m.quantity, st.skuID, st.warehouseID); err != nil {
+			return apperr.Internal("restock cancelled seckill order", err)
+		}
+	} else {
+		if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
+			SET sold = sold - ?, available = available + ?, version = version + 1
+			WHERE activity_id = ? AND sold >= ?`,
+			m.quantity, m.quantity, m.activityID, m.quantity); err != nil {
+			return apperr.Internal("return cancelled seckill order to bucket", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE seckill_order_stock SET status=? WHERE order_no=? AND sku_id=?`,
+		statusReleased, m.orderNo, m.skuID); err != nil {
+		return apperr.Internal("release seckill order mapping", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_stock_ledger
+		(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,
+		m.activityID, m.quantity, st.available+m.quantity, seckillLedgerReleaseOrder, m.orderNo); err != nil {
+		return apperr.Internal("insert seckill cancel ledger", err)
+	}
+	if normalRestock {
+		inv, err := s.stock(ctx, tx, st.skuID, st.warehouseID)
+		if err != nil {
+			return err
+		}
+		r.status = statusConfirmed
+		if err := insertLedger(ctx, tx, r, entryRestock, inv); err != nil {
+			return err
+		}
+		if err := appendStockChanged(ctx, tx, inv); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // releaseSeckillMapping returns an order-held unit to the activity bucket. It is
 // called by the normal reservation Release path and reports whether the
 // reservation is a seckill reservation (so inventory_stocks.reserved must not

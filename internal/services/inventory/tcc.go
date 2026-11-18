@@ -86,9 +86,9 @@ func (s *Service) TccCancelConfirm(ctx context.Context, req *pb.TccPaymentReques
 						return err
 					}
 				case statusConfirmed:
-					// Reversing sold bucket/mapping is a separate state machine;
-					// fail closed rather than decrementing the wrong stock row.
-					return apperr.Failed("seckill CONFIRMED TCC cancel is not supported; use the reconciliation flow")
+					if err := s.cancelSeckillConfirmed(ctx, tx, r); err != nil {
+						return err
+					}
 				default:
 					return apperr.Failed("unexpected seckill order mapping status " + mapping.status)
 				}

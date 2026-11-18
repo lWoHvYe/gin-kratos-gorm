@@ -25,19 +25,19 @@ remaining risk is documented.
 | 10 | Catalog SQL fallback vs GORM divergence/N+1 | partial | fallback batches products/SKUs/images/attrs and matches SKU code; admin predicate alignment still to audit |
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
 | 12 | LIKE '%x%' cannot use index | done | ngram fulltext index; >=2-rune keywords use MATCH, short keywords keep LIKE |
-| 13 | Per-SKU GetStock in checkout/cart | pending |
+| 13 | Per-SKU GetStock in checkout/cart | rejected | only cart add and admin product detail call GetStock; checkout uses quote lines, no per-SKU loop |
 | 14 | AI frontend entry when disabled | done | public /ai/status drives the storefront entry |
 | 15 | Base chart mock payment defaults | done | base mock=false; single-node overlay mock=true; payment secret required when mock off |
 | 16 | P1 compensation/race tests | partial (seckill DB tests cover open/closed bucket; true race injection still missing) |
-| 17 | Demo seed inside production migration | pending (cannot edit applied 0001; needs forward split) |
+| 17 | Demo seed inside production migration | rejected | catalog migrations contain no INSERT; demo data is deploy/seed/catalog-demo.sql, applied only by make seed-demo |
 | 18 | CORS reflects any origin when unset | done (fail closed; compose dev allowlist, chart value) |
 | 19 | Admin identity/ban surface | done | ListUsers/SetUserStatus RPCs, admin BFF + users page; disable revokes refresh tokens, last-admin and self-disable guarded |
 
 ## P3
 
-- Alertmanager/zero-alert rules: pending.
+- Alertmanager/zero-alert rules: done for compose (6 rules, Alertmanager UI, default receiver); k8s observability stack still not packaged.
 - Single-proto regeneration noise: pending.
-- Compose etcd default: pending.
+- Compose etcd default: done (removed from default services; optional etcd-config docs remain).
 - BFF skeleton duplication / 1300-line admin: pending.
 - Duplicate migration scripts: pending.
 - Docs drift: AI MaxStep fixed; other counts still to audit.

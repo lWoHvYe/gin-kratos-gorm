@@ -21,7 +21,6 @@ x-service-env: &service-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   NATS_URL: nats://nats:4222
   REDIS_ADDR: redis:6379
-  ETCD_ENDPOINTS: etcd:2379
   DTM_ADDRESS: dtm:36790
   JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-32-characters}
   # Empty disables tracing. With the tracing profile enabled use tempo:4317.
@@ -33,8 +32,6 @@ x-deps-core: &deps-core
   mysql:
     condition: service_healthy
   nats:
-    condition: service_healthy
-  etcd:
     condition: service_healthy
 
 x-healthcheck: &healthcheck
@@ -77,8 +74,6 @@ services:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
     depends_on:
-      etcd:
-        condition: service_healthy
       identity:
         condition: service_healthy
       catalog:
@@ -122,8 +117,6 @@ services:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz"]
     depends_on:
-      etcd:
-        condition: service_healthy
       catalog:
         condition: service_healthy
       inventory:

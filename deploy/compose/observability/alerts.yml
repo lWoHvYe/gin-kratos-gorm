@@ -1,0 +1,39 @@
+groups:
+  - name: mall
+    rules:
+      - alert: MallOutboxBacklog
+        expr: mall_outbox_pending_events > 1000
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Outbox backlog is above 1000 events
+      - alert: MallOutboxStalled
+        expr: mall_outbox_oldest_pending_seconds > 300
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Oldest outbox event is older than 5 minutes
+      - alert: MallOutboxDeadLettered
+        expr: increase(mall_outbox_dead_lettered_total[10m]) > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: Outbox events reached the dead-letter state
+      - alert: MallAIErrorRate
+        expr: sum(rate(mall_ai_requests_total{result="error"}[5m])) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Assistant error rate is elevated
+      - alert: MallAIBudgetExceeded
+        expr: increase(mall_ai_budget_exceeded_total[10m]) > 0
+        for: 1m
+        labels: { severity: info }
+        annotations:
+          summary: Assistant token budget rejected a request
+      - alert: MallBFF5xx
+        expr: sum(rate(mall_http_requests_total{status=~"5.."}[5m])) > 0.5
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: BFF 5xx rate is elevated

@@ -2,6 +2,14 @@
 #
 # All gRPC services expose /metrics on their health port (HTTP_ADDR, 910x).
 # Gateway/admin intentionally expose only /healthz, so they are not scraped.
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -46,7 +54,3 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ["nats:8222"]
-
-  - job_name: etcd
-    static_configs:
-      - targets: ["etcd:2379"]

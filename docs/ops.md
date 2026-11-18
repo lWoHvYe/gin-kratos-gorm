@@ -20,7 +20,7 @@ schema conventions live in [contracts.md](contracts.md); DTM design lives in
 |---|---|
 | `Dockerfile` | one multi-stage image; `--build-arg SERVICE=<name>` selects `./cmd/<name>` |
 | `Makefile` | build/test/fmt/vet, compose orchestration, `db-reset` |
-| `deploy/compose/infra.yml` | MySQL, Redis, NATS, etcd, DTM, optional observability |
+| `deploy/compose/infra.yml` | MySQL, Redis, NATS, DTM, optional Prometheus/Grafana/Tempo/Alertmanager |
 | `deploy/compose/services.yml` | gateway, admin and the 9 gRPC services |
 | `deploy/compose/init/mysql/00-databases.sql` | creates every `mall_*` database plus `dtm`/`dtm_barrier` |
 | `deploy/compose/init/mysql/01-schemas.sh` | applies `/migrations/*/*.sql` to `mall_<service>` |
@@ -51,7 +51,7 @@ No application container publishes a host port except:
 | traefik | 80 | optional ingress profile |
 
 All internal traffic uses Docker DNS names (`mysql:3306`, `nats:4222`,
-`etcd:2379`, `dtm:36790`, `catalog:9002`, …). Do not replace them with
+`dtm:36790`, `catalog:9002`, …). Do not replace them with
 `127.0.0.1` inside compose.
 
 ## Quick start
@@ -140,7 +140,7 @@ new numbered file (the ledger fails the job when a checksum changes). A database
 that predates the ledger replays the existing files once (they are idempotent)
 and then records them.
 
-Reset everything (destroys all named volumes, including NATS/etcd/Prometheus):
+Reset everything (destroys all named volumes, including NATS/Prometheus):
 
 ```bash
 make db-reset          # down -v, then start MySQL and re-run init
@@ -156,7 +156,7 @@ probes TCP.
 The compose dependency graph is health based:
 
 ```text
-mysql, redis, nats, etcd, dtm
+mysql, redis, nats, dtm
         │
         ├── identity, catalog, inventory, fulfillment, aftersales
         ├── catalog ──> cart, pricing

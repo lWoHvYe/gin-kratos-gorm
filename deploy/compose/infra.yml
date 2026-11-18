@@ -27,8 +27,8 @@ volumes:
   mysql-data:
   redis-data:
   nats-data:
-  etcd-data:
   prometheus-data:
+  alertmanager-data:
   grafana-data:
   tempo-data:
 
@@ -93,40 +93,11 @@ services:
     networks: [mall]
     logging: *default-logging
 
-  etcd:
-    image: quay.io/coreos/etcd:v3.5.17
-    restart: unless-stopped
-    entrypoint: ["/usr/local/bin/etcd"]
-    command:
-      - --name=etcd
-      - --data-dir=/etcd-data
-      - --advertise-client-urls=http://etcd:2379
-      - --listen-client-urls=http://0.0.0.0:2379
-      - --listen-peer-urls=http://0.0.0.0:2380
-      - --initial-advertise-peer-urls=http://etcd:2380
-      - --initial-cluster=etcd=http://etcd:2380
-      - --initial-cluster-state=new
-    environment:
-      ETCDCTL_API: "3"
-    ports:
-      - "2379:2379"
-      - "2380:2380"
-    volumes:
-      - etcd-data:/etcd-data
-    healthcheck:
-      test: ["CMD", "etcdctl", "--endpoints=http://127.0.0.1:2379", "endpoint", "health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks: [mall]
-    logging: *default-logging
-
   # DTM coordinates order/payment sagas. Its own transaction state lives in the
   # `dtm` database; branch barriers live in `dtm_barrier`.
   dtm:
     image: yedf/dtm:latest
     restart: unless-stopped
-    # The image entrypoint is already /app/dtm/dtm; only pass the config flag.
     command: ["-c", "/app/dtm/conf.yml"]
     volumes:
       - ./dtm/config.yml:/app/dtm/conf.yml:ro
@@ -145,7 +116,6 @@ services:
     networks: [mall]
     logging: *default-logging
 
-  # Optional observability stack: `make run-observability`.
   prometheus:
     image: prom/prometheus:v2.54.1
     profiles: ["observability"]
@@ -159,7 +129,23 @@ services:
       - "9090:9090"
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus-data:/prometheus
+    networks: [mall]
+    logging: *default-logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    profiles: ["observability"]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
     networks: [mall]
     logging: *default-logging
 

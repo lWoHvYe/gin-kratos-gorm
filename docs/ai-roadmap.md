@@ -7,7 +7,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 |---|---|---|
 | 1 | Feedback quality dashboard over `ai:feedback:*` | done |
 | 2 | ADK HITL pilot for admin campaign drafts | done |
-| 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | pending |
+| 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank; semantic cache deferred) |
 | 4 | Replace the customer/admin ReAct runtime with ADK; keep SSE, tool events, budgets, breaker, eval | pending |
 
 ## Phase 1 acceptance
@@ -38,10 +38,17 @@ and keep the assistant optional (failures must not affect browse/checkout).
 - The deterministic draft-review agent isolates checkpoint mechanics; the
   conversational `ChatModelAgent` migration remains phase 4.
 
-## Phase 3 shape
+## Phase 3 acceptance (done)
 
-- Redis Search index keeps KNN; add BM25 over the same documents and combine
-  with RRF; optional rerank; measure with the existing eval set before default.
+- A pre-tokenized `terms` TEXT field makes CJK lexical retrieval work with
+  Redis' default tokenizer; `SCORER BM25` ranks it.
+- Search fetches KNN and BM25 candidates (up to 40), merges with RRF (k=60),
+  then applies a deterministic query-token coverage rerank.
+- Lexical failure falls back to KNN only; the assistant never fails because the
+  lexical branch is unavailable.
+- Real-model eval after deployment: 13/13 passed, including `rag-student`.
+- A semantic cache is deferred (exact query caching would go stale on catalog
+  events; revisit with an index version).
 
 ## Phase 4 shape
 

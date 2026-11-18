@@ -52,7 +52,7 @@ remaining risk is documented.
 
 - Real-model eval harness: done (13 cases).
 - Feedback capture + quality dashboard: done (`/ai/quality`, admin summary RPC).
-- RAG hybrid/rerank/semantic cache: not adopted in this pass (roadmap).
+- RAG hybrid/rerank: done (BM25 + KNN + RRF + lexical rerank); semantic cache deferred.
 - Eino interrupt-resume HITL: pilot done (ADK checkpoint + admin draft confirm); full ADK replacement is the AI roadmap phase 4.
 - Cart task assistant / proactive admin brief / long-term memory / multi-agent: not adopted (product roadmap).
 

@@ -175,8 +175,9 @@ widget on the storefront (`components/AiAssistant.vue`, SSE parser in
 Phase 3 (Redis vector search): `AI_RAG_ENABLED=true` seeds policy entries and
 on-sale products into Redis Search at startup, then a durable NATS consumer on
 `shop.catalog.product.changed.v1` upserts/deletes product documents as the
-catalog changes. `search_knowledge` embeds the question and runs a KNN query
-(`FT.SEARCH ... =>[KNN k @embedding $vec]`). If NATS is unavailable the startup
+catalog changes. `search_knowledge` now runs hybrid retrieval: KNN plus a pre-tokenized `terms`
+field scored with BM25, merged with RRF, then a deterministic query-token
+coverage rerank. Lexical failure falls back to KNN only. If NATS is unavailable the startup
 snapshot remains in use and the consumer logs a warning.
 
 Embeddings are pluggable:

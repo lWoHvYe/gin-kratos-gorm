@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -106,5 +107,37 @@ func TestRAGRedisIndexAndSearch(t *testing.T) {
 	}
 	if docs[0].Title == "" {
 		t.Fatalf("missing title: %+v", docs[0])
+	}
+}
+
+func TestFuseRRFRanksAgreementFirst(t *testing.T) {
+	knn := []ragDoc{{ID: "a", Title: "A"}, {ID: "b", Title: "B"}}
+	lexical := []ragDoc{{ID: "b", Title: "B"}, {ID: "c", Title: "C"}}
+	got := fuseRRF(knn, lexical, 2)
+	if len(got) != 2 || got[0].ID != "b" {
+		t.Fatalf("got %+v", got)
+	}
+	if got[0].Score <= got[1].Score {
+		t.Fatalf("scores not descending: %+v", got)
+	}
+}
+
+func TestLexicalTermsSplitsCJK(t *testing.T) {
+	terms := lexicalTerms("降噪耳机")
+	for _, want := range []string{"降", "噪", "降噪", "耳机"} {
+		if !strings.Contains(terms, want) {
+			t.Fatalf("terms %q missing %q", terms, want)
+		}
+	}
+}
+
+func TestRerankLexicalBoostsExactCoverage(t *testing.T) {
+	docs := []ragDoc{
+		{ID: "a", Title: "无关内容", Content: "咖啡豆", Score: 0.03},
+		{ID: "b", Title: "降噪耳机", Content: "降噪耳机", Score: 0.02},
+	}
+	got := rerankLexical("降噪耳机", docs)
+	if got[0].ID != "b" {
+		t.Fatalf("rerank did not boost exact coverage: %+v", got)
 	}
 }

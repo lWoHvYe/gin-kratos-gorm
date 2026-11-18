@@ -127,6 +127,7 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 		"kind", "TAG",
 		"title", "TEXT",
 		"content", "TEXT",
+		"terms", "TEXT",
 		"product_id", "NUMERIC",
 		"embedding", "VECTOR", "HNSW", "6", "TYPE", "FLOAT32", "DIM", fmt.Sprint(r.embedder.Dim()),
 		"DISTANCE_METRIC", "COSINE",
@@ -167,6 +168,7 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 			"kind", d.Kind,
 			"title", d.Title,
 			"content", d.Content,
+			"terms", lexicalTerms(d.Title+"\n"+d.Content),
 			"product_id", d.ProductID,
 			"embedding", encodeVector(vectors[i]),
 		)
@@ -187,22 +189,163 @@ func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDo
 	if limit > 8 {
 		limit = 8
 	}
+	fetch := limit * 4
+	if fetch < 20 {
+		fetch = 20
+	}
+	if fetch > 40 {
+		fetch = 40
+	}
 	vec, err := r.embedder.Embed(ctx, []string{query})
 	if err != nil || len(vec) != 1 {
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
-	args := []interface{}{
+	knnArgs := []interface{}{
 		"FT.SEARCH", r.index,
-		fmt.Sprintf("*=>[KNN %d @embedding $vec AS score]", limit),
+		fmt.Sprintf("*=>[KNN %d @embedding $vec AS score]", fetch),
 		"PARAMS", "2", "vec", encodeVector(vec[0]),
 		"SORTBY", "score", "DIALECT", "2",
 		"RETURN", "4", "kind", "title", "content", "product_id",
 	}
+	raw, err := r.client.Do(ctx, knnArgs...).Result()
+	if err != nil {
+		return nil, fmt.Errorf("rag knn search: %w", err)
+	}
+	knn := parseRAGReply(raw, r.prefix)
+
+	// Lexical retrieval uses a pre-tokenized field: Redis' default tokenizer
+	// does not split CJK text, so querying raw title/content would miss Chinese.
+	lexical, lexErr := r.lexicalSearch(ctx, query, fetch)
+	if lexErr != nil {
+		if r.log != nil {
+			r.log.Warn("rag lexical search failed; using knn only", "error", lexErr)
+		}
+		return rerankLexical(query, knn[:min(len(knn), limit)]), nil
+	}
+	return rerankLexical(query, fuseRRF(knn, lexical, limit)), nil
+}
+
+// rerankLexical is a deterministic rerank: RRF rank is the base score, with a
+// small bonus for documents that actually contain the query tokens. It avoids
+// a second paid model while making exact-term matches win close ties.
+func rerankLexical(query string, docs []ragDoc) []ragDoc {
+	queryTokens := uniqueTokens(tokenize(query))
+	if len(queryTokens) == 0 || len(docs) < 2 {
+		return docs
+	}
+	wanted := make(map[string]struct{}, len(queryTokens))
+	for _, tok := range queryTokens {
+		wanted[tok] = struct{}{}
+	}
+	for i := range docs {
+		docTokens := uniqueTokens(tokenize(docs[i].Title + "\n" + docs[i].Content))
+		matched := 0
+		for _, tok := range docTokens {
+			if _, ok := wanted[tok]; ok {
+				matched++
+			}
+		}
+		docs[i].Score += 0.15 * float64(matched) / float64(len(queryTokens))
+	}
+	sort.SliceStable(docs, func(i, j int) bool { return docs[i].Score > docs[j].Score })
+	return docs
+}
+
+func (r *redisRAG) lexicalSearch(ctx context.Context, query string, limit int) ([]ragDoc, error) {
+	tokens := uniqueTokens(tokenize(query))
+	if len(tokens) == 0 {
+		return nil, nil
+	}
+	escaped := make([]string, 0, len(tokens))
+	for _, tok := range tokens {
+		escaped = append(escaped, escapeQueryToken(tok))
+	}
+	args := []interface{}{
+		"FT.SEARCH", r.index,
+		"@terms:(" + strings.Join(escaped, "|") + ")",
+		"SCORER", "BM25",
+		"LIMIT", "0", fmt.Sprint(limit),
+		"RETURN", "4", "kind", "title", "content", "product_id",
+	}
 	raw, err := r.client.Do(ctx, args...).Result()
 	if err != nil {
-		return nil, fmt.Errorf("rag search: %w", err)
+		return nil, err
 	}
 	return parseRAGReply(raw, r.prefix), nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// fuseRRF merges two ranked lists. k=60 is the standard RRF constant.
+func fuseRRF(knn, lexical []ragDoc, limit int) []ragDoc {
+	const k = 60.0
+	scores := map[string]float64{}
+	byID := map[string]ragDoc{}
+	add := func(docs []ragDoc) {
+		for rank, doc := range docs {
+			if doc.ID == "" {
+				continue
+			}
+			scores[doc.ID] += 1 / (k + float64(rank+1))
+			if _, ok := byID[doc.ID]; !ok {
+				byID[doc.ID] = doc
+			}
+		}
+	}
+	add(knn)
+	add(lexical)
+	ids := make([]string, 0, len(scores))
+	for id := range scores {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		if scores[ids[i]] == scores[ids[j]] {
+			return ids[i] < ids[j]
+		}
+		return scores[ids[i]] > scores[ids[j]]
+	})
+	out := make([]ragDoc, 0, min(limit, len(ids)))
+	for _, id := range ids {
+		doc := byID[id]
+		doc.Score = scores[id]
+		out = append(out, doc)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func uniqueTokens(tokens []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(tokens))
+	for _, tok := range tokens {
+		if _, ok := seen[tok]; ok {
+			continue
+		}
+		seen[tok] = struct{}{}
+		out = append(out, tok)
+	}
+	return out
+}
+
+func escapeQueryToken(tok string) string {
+	var b strings.Builder
+	for _, r := range tok {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func lexicalTerms(text string) string {
+	return strings.Join(uniqueTokens(tokenize(text)), " ")
 }
 
 // parseRAGReply accepts both RESP2 (flat array) and RESP3 (map) FT.SEARCH
@@ -465,6 +608,7 @@ func (r *redisRAG) UpsertProduct(ctx context.Context, p *pb.Product) error {
 	}
 	return r.client.HSet(ctx, r.prefix+doc.ID,
 		"kind", doc.Kind, "title", doc.Title, "content", doc.Content,
+		"terms", lexicalTerms(doc.Title+"\n"+doc.Content),
 		"product_id", doc.ProductID, "embedding", encodeVector(vec[0])).Err()
 }
 

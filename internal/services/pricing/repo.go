@@ -204,7 +204,7 @@ func loadQuoteLines(ctx context.Context, q querier, quoteID string) ([]quoteLine
 // lockCoupon moves AVAILABLE -> LOCKED for orderNo. Re-locking the same order
 // is a no-op so DTM retries are safe.
 func lockCoupon(ctx context.Context, tx *sql.Tx, couponID int64, orderNo string) (bool, error) {
-	res, err := tx.ExecContext(ctx, `UPDATE coupons SET status = ?, order_no = ?, version = version + 1
+	res, err := tx.ExecContext(ctx, `UPDATE coupons SET status = ?, order_no = ?, locked_at = NOW(3), version = version + 1
 		WHERE id = ? AND status = ?`, couponLocked, orderNo, couponID, couponAvailable)
 	if err != nil {
 		return false, apperr.Internal("lock coupon", err)
@@ -236,7 +236,7 @@ func lockCoupon(ctx context.Context, tx *sql.Tx, couponID int64, orderNo string)
 // unlockCoupon moves LOCKED -> AVAILABLE. Unlocking an already available
 // coupon is a no-op so DTM compensation retries are safe.
 func unlockCoupon(ctx context.Context, tx *sql.Tx, couponID int64, orderNo string) (bool, error) {
-	res, err := tx.ExecContext(ctx, `UPDATE coupons SET status = ?, order_no = '', version = version + 1
+	res, err := tx.ExecContext(ctx, `UPDATE coupons SET status = ?, order_no = '', locked_at = NULL, version = version + 1
 		WHERE id = ? AND status = ? AND order_no = ?`, couponAvailable, couponID, couponLocked, orderNo)
 	if err != nil {
 		return false, apperr.Internal("unlock coupon", err)
@@ -270,7 +270,7 @@ func unlockCoupon(ctx context.Context, tx *sql.Tx, couponID int64, orderNo strin
 // consumeCoupon moves LOCKED -> USED. Consuming an already used coupon is a
 // no-op so retries are safe.
 func consumeCoupon(ctx context.Context, tx *sql.Tx, couponID int64, orderNo string) (bool, error) {
-	res, err := tx.ExecContext(ctx, `UPDATE coupons SET status = ?, version = version + 1
+	res, err := tx.ExecContext(ctx, `UPDATE coupons SET status = ?, locked_at = NULL, version = version + 1
 		WHERE id = ? AND status = ? AND order_no = ?`, couponUsed, couponID, couponLocked, orderNo)
 	if err != nil {
 		return false, apperr.Internal("consume coupon", err)

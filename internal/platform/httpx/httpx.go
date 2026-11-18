@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -127,14 +128,14 @@ func RequireRole(role string) gin.HandlerFunc {
 	}
 }
 
-// CORS reflects the request origin only when CORS_ALLOWED_ORIGINS is unset
+// CORS only reflects origins explicitly listed in CORS_ALLOWED_ORIGINS
 // (dev). When the list is set, unknown origins get no CORS headers at all.
 func CORS() gin.HandlerFunc {
 	allowed := splitList(os.Getenv("CORS_ALLOWED_ORIGINS"))
 	return func(c *gin.Context) {
 		if origin := c.GetHeader("Origin"); origin != "" {
 			c.Header("Vary", "Origin")
-			if len(allowed) == 0 || contains(allowed, origin) {
+			if contains(allowed, origin) {
 				c.Header("Access-Control-Allow-Origin", origin)
 				c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Request-ID")
 				c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
@@ -143,6 +144,25 @@ func CORS() gin.HandlerFunc {
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
+		}
+		c.Next()
+	}
+}
+
+// MaxPage rejects deep OFFSET pagination before it reaches a handler. It is a
+// guard against cheap page-walking, not a replacement for keyset pagination.
+func MaxPage(limit int) gin.HandlerFunc {
+	if limit <= 0 {
+		limit = 1000
+	}
+	return func(c *gin.Context) {
+		if raw := c.Query("page"); raw != "" {
+			page, err := strconv.Atoi(raw)
+			if err != nil || page < 1 || page > limit {
+				Error(c, apperr.Invalid("page must be between 1 and %d", limit))
+				c.Abort()
+				return
+			}
 		}
 		c.Next()
 	}

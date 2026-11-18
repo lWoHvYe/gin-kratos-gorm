@@ -647,6 +647,21 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 // refundCancelledAfterConfirm asks the payment service to refund a capture whose
 // order was cancelled between the inventory confirm and the status CAS.
 func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *orderRecord, paidCent int64, paymentNo string) {
+	// MarkPaid confirms inventory before the status CAS. If a concurrent cancel
+	// won that CAS, the reservation is CONFIRMED and must be restocked here;
+	// otherwise the stock stays consumed for a refunded, cancelled order.
+	// Seckill reservations have a separate bucket compensation path, so keep
+	// them out of the generic restock until that state machine is unified.
+	if s.inventory != nil && !strings.HasPrefix(record.QuoteID, "seckill:") {
+		items, err := loadOrderItems(ctx, s.db, record.OrderNo)
+		if err != nil {
+			s.log.Error("load items for cancelled-after-confirm restock", "order_no", record.OrderNo, "error", err)
+		} else if _, err := s.inventory.TccCancelConfirm(ctx, &pb.TccPaymentRequest{
+			OrderNo: record.OrderNo, Items: items,
+		}); err != nil {
+			s.log.Error("restock cancelled-after-confirm order", "order_no", record.OrderNo, "error", err)
+		}
+	}
 	if paidCent <= 0 || paymentNo == "" {
 		s.log.Error("payment captured for cancelled order without refund details",
 			"order_no", record.OrderNo, "paid_cent", paidCent, "payment_no", paymentNo)

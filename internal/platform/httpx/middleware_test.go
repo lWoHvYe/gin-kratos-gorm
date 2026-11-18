@@ -34,7 +34,7 @@ func TestCORSAllowlist(t *testing.T) {
 	}
 }
 
-func TestCORSReflectsWhenUnconfigured(t *testing.T) {
+func TestCORSRejectsWhenUnconfigured(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "")
 	engine := gin.New()
@@ -44,7 +44,32 @@ func TestCORSReflectsWhenUnconfigured(t *testing.T) {
 	req.Header.Set("Origin", "http://localhost:3000")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:3000" {
-		t.Fatalf("dev reflection = %q", got)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("unconfigured CORS must not reflect, got %q", got)
+	}
+}
+
+func TestMaxPageRejectsDeepPages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(MaxPage(1000))
+	engine.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	for _, tc := range []struct {
+		page string
+		want int
+	}{
+		{"1", http.StatusOK},
+		{"1000", http.StatusOK},
+		{"1001", http.StatusBadRequest},
+		{"-1", http.StatusBadRequest},
+		{"abc", http.StatusBadRequest},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/x?page="+tc.page, nil)
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Fatalf("page %q -> %d, want %d", tc.page, rec.Code, tc.want)
+		}
 	}
 }

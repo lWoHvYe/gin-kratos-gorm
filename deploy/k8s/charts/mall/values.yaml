@@ -38,6 +38,10 @@ nats:
   # >1 creates the durable streams with replicated JetStream storage.
   streamReplicas: ""
 
+# Browser CORS allowlist (comma separated). Empty means no cross-origin access;
+# same-origin storefront/admin calls are unaffected.
+corsAllowedOrigins: ""
+
 # Optional etcd configuration center. Leave empty to run without it.
 etcd:
   endpoints: ""

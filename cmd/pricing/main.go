@@ -65,6 +65,7 @@ func main() {
 	workers.Go(func(ctx context.Context) { pricing.RunOrderCancelledConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { pricing.RunOrderPaidConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { pricing.RunPromotionExpiry(ctx, svc, logger, time.Minute) })
+	workers.Go(func(ctx context.Context) { pricing.RunCouponLockSweeper(ctx, database, logger, time.Minute) })
 	pb.RegisterPricingServiceServer(gs, svc)
 	pb.RegisterPromotionServiceServer(gs, svc.Promotion())
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger, client.Healthy))

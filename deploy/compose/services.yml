@@ -69,6 +69,7 @@ services:
     image: mall/gateway:${IMAGE_TAG:-dev}
     environment:
       <<: *service-env
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}"
       AI_ENABLED: "${AI_ENABLED:-true}"
     ports:
       - "8080:8080"
@@ -112,6 +113,7 @@ services:
     image: mall/admin:${IMAGE_TAG:-dev}
     environment:
       <<: *service-env
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}"
       AI_ENABLED: "${AI_ENABLED:-true}"
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_admin?parseTime=true&loc=Local&charset=utf8mb4"
     ports:

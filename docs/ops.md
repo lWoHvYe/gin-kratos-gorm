@@ -252,9 +252,9 @@ mall_db_pool_open_connections / in_use / idle / max_open
 mall_db_pool_wait_count_total / wait_duration_seconds_total
 ```
 
-CORS reflects any origin by default (dev). Set `CORS_ALLOWED_ORIGINS` to a
-comma-separated allowlist for shared environments; unknown origins receive no
-CORS headers. Request bodies are capped at 1 MiB per call.
+CORS only reflects origins listed in `CORS_ALLOWED_ORIGINS`; unset means no
+cross-origin browser access (same-origin and server-side calls are unaffected).
+Request bodies are capped at 1 MiB and `page` is capped at 1000 per call.
 
 The outbox relay claims batches under a lease and publishes outside the
 database transaction. Failures back off exponentially, dead-letter after 20

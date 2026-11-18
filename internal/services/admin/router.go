@@ -136,7 +136,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 	h := &handlers{clients: clients, aiEnabled: aiEnabled}
 
 	engine := gin.New()
-	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), bff.Timeout(requestTimeout))
+	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), httpx.MaxPage(1000), bff.Timeout(requestTimeout))
 	engine.NoRoute(func(c *gin.Context) { httpx.Error(c, apperr.NotFound("route not found")) })
 	engine.GET("/healthz", h.health)
 	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))

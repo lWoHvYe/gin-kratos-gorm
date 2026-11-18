@@ -44,6 +44,7 @@ func main() {
 	}
 	defer client.Close()
 	workers := runtime.NewWorkers()
+	workers.Go(func(ctx context.Context) { inventory.RunLedgerMetrics(ctx, database, logger, time.Minute) })
 	defer workers.Stop()
 	workers.Go(func(ctx context.Context) { outbox.Relay(ctx, database, client, logger, time.Second) })
 	gs := grpcx.NewServer(cfg, logger)

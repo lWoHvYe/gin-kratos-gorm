@@ -131,6 +131,16 @@ var (
 		Help: "Assistant requests rejected by a token budget.",
 	}, []string{"scope"})
 
+	// InventoryLedgerRows/InventoryLedgerOldestSeconds quantify ledger growth.
+	InventoryLedgerRows = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_inventory_ledger_rows",
+		Help: "Rows in inventory_ledger.",
+	})
+	InventoryLedgerOldestSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_inventory_ledger_oldest_seconds",
+		Help: "Age of the oldest inventory_ledger row.",
+	})
+
 	// QuotesCleaned counts expired quote rows removed by retention.
 	QuotesCleaned = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "mall_quotes_cleaned_total",
@@ -161,5 +171,6 @@ func init() {
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
 		OutboxPending, OutboxOldestSeconds, OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
 		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo,
-		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, QuotesCleaned)
+		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, QuotesCleaned,
+		InventoryLedgerRows, InventoryLedgerOldestSeconds)
 }

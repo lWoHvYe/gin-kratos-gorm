@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/metrics"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -828,9 +829,15 @@ func newPreviewCampaignTool(promotions promotionClient) (tool.BaseTool, error) {
 			}
 			ctx, cancel := context.WithTimeout(ctx, toolTimeout)
 			defer cancel()
+			// Preview belongs to the requesting admin; never take a user id from
+			// model arguments.
+			userID := int64(1)
+			if uid, ok := auth.UserID(ctx); ok {
+				userID = int64(uid)
+			}
 			reply, err := promotions.EvaluateDraft(ctx, &pb.EvaluateDraftRequest{
 				Evaluation: &pb.PromotionEvaluateRequest{
-					UserId: 1,
+					UserId: userID,
 					Items:  []*pb.PromotionEvaluateItem{{PriceCent: price, Quantity: qty}},
 				},
 				Campaign: &pb.Campaign{Name: "preview", StackMode: "PRIORITY", BudgetCent: 0},

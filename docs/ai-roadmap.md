@@ -103,8 +103,9 @@ ordinary chat remains the fallback.
 Current slice: server-side Redis profile keyed by user id, 180-day retention,
 GET/PUT/DELETE BFF endpoints, storefront edit/clear panel, and a system-message
 injection for customer chat. Live isolation check: demo preferences are empty
-for the admin user. A/B live run showed the preference-aware answer explicitly
-framing 云舟 and the 3000元 budget; a formal no-memory benchmark remains.
+for the admin user. A/B live run showed the preference-aware answer explicitly framing 云舟 and the
+3000元 budget. `cmd/ai-pref-eval` now encodes the A/B benchmark; its run was
+blocked by an empty provider stream in this environment.
 
 Start with a small server-side preference profile (brands/categories, budget
 range, size where relevant), not unrestricted transcript memory. Preferences are

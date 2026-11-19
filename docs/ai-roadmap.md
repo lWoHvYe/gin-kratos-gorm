@@ -12,7 +12,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
 | 6 | Versioned RAG and measurable quality | done (hit@5 5/5, grounded/refusal cases, rollback drill) |
 | 7 | Customer task assistant: comparison, budget list, cart draft | done: real-model draft SSE -> confirm 200 |
-| 8 | Controlled personalization / preference profile | partial: API + UI + prompt injection |
+| 8 | Controlled personalization / preference profile | done (A/B benchmark PASS) |
 | 9 | Proactive admin operations copilot | done: deterministic daily brief, latest snapshot, low-stock links, feedback |
 | 10 | Evidence-triggered advanced capabilities | conditional |
 
@@ -103,9 +103,9 @@ ordinary chat remains the fallback.
 Current slice: server-side Redis profile keyed by user id, 180-day retention,
 GET/PUT/DELETE BFF endpoints, storefront edit/clear panel, and a system-message
 injection for customer chat. Live isolation check: demo preferences are empty
-for the admin user. A/B live run showed the preference-aware answer explicitly framing 云舟 and the
-3000元 budget. `cmd/ai-pref-eval` now encodes the A/B benchmark; its run was
-blocked by an empty provider stream in this environment.
+for the admin user. A/B benchmark passes: without preferences the first recommendation is 极光
+Note 12; with `云舟` saved it becomes 云舟 M3. The profile is user-scoped,
+180-day retained and clearable.
 
 Start with a small server-side preference profile (brands/categories, budget
 range, size where relevant), not unrestricted transcript memory. Preferences are

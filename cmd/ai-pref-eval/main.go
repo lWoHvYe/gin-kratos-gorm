@@ -29,14 +29,14 @@ func main() {
 	if err := clearPrefs(*base, token); err != nil {
 		fatal(err)
 	}
-	without, err := chat(*base, token, "pref-without-"+fmt.Sprint(time.Now().UnixNano()))
+	without, err := chatWithRetry(*base, token, "pref-without-"+fmt.Sprint(time.Now().UnixNano()))
 	if err != nil {
 		fatal(err)
 	}
 	if err := setPrefs(*base, token); err != nil {
 		fatal(err)
 	}
-	with, err := chat(*base, token, "pref-with-"+fmt.Sprint(time.Now().UnixNano()))
+	with, err := chatWithRetry(*base, token, "pref-with-"+fmt.Sprint(time.Now().UnixNano()))
 	if err != nil {
 		fatal(err)
 	}
@@ -62,6 +62,22 @@ func firstProduct(text string) (string, bool) {
 		}
 	}
 	return best, best != ""
+}
+
+func chatWithRetry(base, token, session string) (string, error) {
+	var last error
+	for i := 0; i < 2; i++ {
+		out, err := chat(base, token, session)
+		if err == nil {
+			return out, nil
+		}
+		last = err
+		if !strings.Contains(err.Error(), "empty assistant response") && !strings.Contains(err.Error(), "interrupted") {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return "", last
 }
 
 func chat(base, token, session string) (string, error) {

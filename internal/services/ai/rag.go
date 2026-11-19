@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/metrics"
 
 	"github.com/redis/go-redis/v9"
@@ -77,6 +78,28 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 		index = "ai_kb"
 	}
 	r := &redisRAG{client: client, embedder: emb, base: index, log: logger}
+	// Only one replica builds a new version. Others load the current alias;
+	// this avoids every Pod embedding the catalog on startup.
+	lockOwner := id.Event()
+	lockKey := index + ":build:lock"
+	locked, err := client.SetNX(ctx, lockKey, lockOwner, 10*time.Minute).Result()
+	if err != nil {
+		return nil, fmt.Errorf("rag build lock: %w", err)
+	}
+	if !locked {
+		if current, ok := waitForCurrent(ctx, client, index, 60*time.Second); ok {
+			r.index, r.prefix = current.Index, current.Prefix
+			logger.Info("ai rag loaded current version", "index", current.Index, "prefix", current.Prefix)
+			return r, nil
+		}
+		// The lock holder did not publish a version in time; try once to take
+		// over (a crashed builder's lock may have expired).
+		if locked, err = client.SetNX(ctx, lockKey, lockOwner, 10*time.Minute).Result(); err != nil || !locked {
+			return nil, fmt.Errorf("rag build lock is held and no current version is available")
+		}
+	}
+	defer releaseRAGLock(client, lockKey, lockOwner)
+
 	buildStart := time.Now()
 	docs, err := collectKnowledge(ctx, catalog)
 	if err != nil {
@@ -87,8 +110,10 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	}
 	metrics.AIRAGDocuments.Set(float64(len(docs)))
 	metrics.AIRAGBuildSeconds.Set(time.Since(buildStart).Seconds())
-	// Catch changes that landed while the snapshot was being embedded. The
-	// alias is already switched; content hashes make this pass cheap.
+	if err := client.Set(ctx, "ai:rag:current", mustJSON(ragVersion{Index: r.index, Prefix: r.prefix, CreatedAt: time.Now().Unix()}), 24*time.Hour).Err(); err != nil {
+		return nil, fmt.Errorf("publish rag current: %w", err)
+	}
+	// Catch changes that landed while the snapshot was being embedded.
 	if catalog != nil {
 		if err := r.ReconcileProducts(ctx, catalog); err != nil {
 			logger.Warn("ai rag post-build reconcile failed", "error", err)
@@ -98,6 +123,34 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	}
 	logger.Info("ai rag indexed", "index", index, "documents", len(docs), "embedding_provider", cfg.Provider, "dim", emb.Dim())
 	return r, nil
+}
+
+func waitForCurrent(ctx context.Context, client redis.UniversalClient, base string, timeout time.Duration) (ragVersion, bool) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if raw, err := client.Get(ctx, "ai:rag:current").Bytes(); err == nil {
+			var current ragVersion
+			if json.Unmarshal(raw, &current) == nil && current.Prefix != "" {
+				return current, true
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ragVersion{}, false
+		case <-time.After(time.Second):
+		}
+	}
+	return ragVersion{}, false
+}
+
+func mustJSON(v any) []byte {
+	data, _ := json.Marshal(v)
+	return data
+}
+
+var releaseRAGLock = func(client redis.UniversalClient, key, owner string) {
+	script := redis.NewScript(`if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`)
+	_ = script.Run(context.Background(), client, []string{key}, owner).Err()
 }
 
 type ragVersion struct {

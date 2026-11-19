@@ -40,10 +40,10 @@ Done:
 - draft/preview/HITL share one CampaignSpec builder
 
 Remaining before calling the gate done:
-1. Add a test that captures `EvaluateDraftRequest.UserId` and proves a missing
-   identity cannot become user 1.
-2. Run eval repeatedly (not one 13/13 run): report pass rate, tool-selection
-   accuracy, raw answers and latency/token cost; keep negative cases.
+1. ~~Add a test that captures `EvaluateDraftRequest.UserId`~~ (done).
+2. Run eval repeatedly (not one 13/13 run): reporting and `-repeat` are added;
+   the 20/10m user limit makes a full repeated run need a reset/test budget.
+   Tool-selection accuracy and raw-answer archive remain.
 3. HITL recovery state machine: derive a business idempotency key from the
    checkpoint, model `INTERRUPTED -> CONFIRMED -> SAVING -> SAVED/FAILED`, make
    duplicate confirmation return the same saved result, and test save failure
@@ -65,9 +65,9 @@ Done:
 - document/build/version metrics and search-mode/empty metrics
 
 Remaining:
-1. Move the full rebuild out of every Pod startup into an elected leader or a
-   Job; non-leaders must load the current alias, not rebuild. This is the main
-   remaining HA risk.
+1. ~~Move the full rebuild out of every Pod startup into an elected leader or a
+   Job~~ (Redis leader lock + non-leader loads `ai:rag:current`; a dedicated Job
+   remains optional).
 2. Metrics: expected vs indexed document count, truncation/empty-page signal,
    consumer lag, rebuild failures and version age.
 3. Quality eval beyond string matching: retrieval hit rate, groundedness,

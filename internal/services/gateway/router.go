@@ -8,6 +8,7 @@ package gateway
 import (
 	"time"
 
+	"gin-kratos-gorm/internal/platform/activecache"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/bff"
@@ -35,7 +36,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	if logger == nil {
 		logger = slog.Default()
 	}
-	h := &handlers{clients: clients, log: logger, aiEnabled: opts.AIEnabled}
+	h := &handlers{clients: clients, log: logger, aiEnabled: opts.AIEnabled, active: activecache.New(5 * time.Second)}
 
 	engine := gin.New()
 	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), httpx.MaxPage(1000),
@@ -60,7 +61,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	engine.GET("/api/v1/seckill/activities/:id", h.getSeckillActivity)
 	engine.GET("/api/v1/ai/status", h.aiStatus)
 
-	authed := engine.Group("/api/v1", httpx.Auth(jwt), requireUser())
+	authed := engine.Group("/api/v1", httpx.Auth(jwt), requireUser(), h.requireActive)
 	authed.GET("/addresses", h.listAddresses)
 	authed.POST("/addresses", h.createAddress)
 	authed.PUT("/addresses/:id", h.updateAddress)
@@ -71,8 +72,8 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	authed.PATCH("/cart/items", h.updateCartItem)
 	authed.DELETE("/cart/items", h.removeCartItem)
 	authed.POST("/cart/merge", h.mergeCart)
-	authed.POST("/checkout/preview", h.requireActive, h.previewCheckout)
-	authed.POST("/checkout/place", h.requireActive, h.placeOrder)
+	authed.POST("/checkout/preview", h.previewCheckout)
+	authed.POST("/checkout/place", h.placeOrder)
 	authed.GET("/orders", h.listOrders)
 	authed.GET("/orders/:orderNo", h.getOrder)
 	authed.POST("/orders/:orderNo/cancel", h.cancelOrder)
@@ -82,7 +83,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 		authed.POST("/ai/feedback", h.aiFeedback)
 	}
 	if opts.PaymentMockEnabled {
-		authed.POST("/payments/:paymentNo/pay", h.requireActive, h.pay)
+		authed.POST("/payments/:paymentNo/pay", h.pay)
 	}
 	authed.POST("/after-sales", h.createAfterSale)
 	authed.GET("/after-sales", h.listAfterSales)

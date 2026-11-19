@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/activecache"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/bff"
@@ -136,7 +137,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 	if logger == nil {
 		logger = slog.Default()
 	}
-	h := &handlers{clients: clients, aiEnabled: aiEnabled}
+	h := &handlers{clients: clients, aiEnabled: aiEnabled, active: activecache.New(5 * time.Second)}
 
 	engine := gin.New()
 	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), httpx.MaxPage(1000), bff.Timeout(requestTimeout))
@@ -235,6 +236,7 @@ func audit(logger *slog.Logger) gin.HandlerFunc {
 type handlers struct {
 	clients   *Clients
 	aiEnabled bool
+	active    *activecache.Cache
 }
 
 // ---------------------------------------------------------------- middleware

@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"gin-kratos-gorm/internal/platform/activecache"
+
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/httpx"
@@ -15,6 +17,7 @@ type handlers struct {
 	clients   *Clients
 	log       *slog.Logger
 	aiEnabled bool
+	active    *activecache.Cache
 }
 
 // ---------------------------------------------------------------- middleware

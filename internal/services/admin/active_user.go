@@ -21,11 +21,21 @@ func (h *handlers) requireActive(c *gin.Context) {
 		c.Abort()
 		return
 	}
+	if status, cached := h.active.Lookup(int64(claims.UserID), claims.TokenVersion); cached {
+		if status == "ACTIVE" {
+			c.Next()
+			return
+		}
+		httpx.Error(c, apperr.Unauthenticated("admin account is not active"))
+		c.Abort()
+		return
+	}
 	user, err := h.clients.Identity.GetUser(c.Request.Context(), &pb.GetUserRequest{UserId: int64(claims.UserID)})
 	if err != nil || user.GetStatus() != "ACTIVE" || user.GetTokenVersion() != claims.TokenVersion {
 		httpx.Error(c, apperr.Unauthenticated("admin account is not active"))
 		c.Abort()
 		return
 	}
+	h.active.Set(int64(claims.UserID), claims.TokenVersion, user.GetStatus())
 	c.Next()
 }

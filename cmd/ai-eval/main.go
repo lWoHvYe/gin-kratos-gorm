@@ -49,6 +49,7 @@ type result struct {
 	Error    string   `json:"error,omitempty"`
 	Failures []string `json:"failures,omitempty"`
 	Snippet  string   `json:"snippet,omitempty"`
+	Text     string   `json:"text,omitempty"`
 }
 
 func main() {
@@ -57,6 +58,8 @@ func main() {
 		userURL   = flag.String("user-url", env("AI_EVAL_USER_URL", "http://127.0.0.1:18080"), "public BFF base URL")
 		adminURL  = flag.String("admin-url", env("AI_EVAL_ADMIN_URL", "http://127.0.0.1:18081"), "admin BFF base URL")
 		jsonOut   = flag.Bool("json", false, "print JSON report")
+		repeat    = flag.Int("repeat", 1, "runs per case (for stability reporting)")
+		minRate   = flag.Float64("min-pass-rate", 1.0, "minimum aggregate pass rate")
 		delay     = flag.Duration("delay", 500*time.Millisecond, "pause between cases")
 	)
 	flag.Parse()
@@ -88,22 +91,39 @@ func main() {
 		}
 	}
 
-	results := make([]result, 0, len(s.Cases))
+	results := make([]result, 0, len(s.Cases)*max(1, *repeat))
+	runCases := *repeat
+	if runCases < 1 {
+		runCases = 1
+	}
 	for _, c := range s.Cases {
-		r := runCase(c, *userURL, *adminURL, userToken, adminToken)
-		results = append(results, r)
-		fmt.Printf("%-18s %-4s %6dms %5d chars", c.ID, passLabel(r.Passed), r.Latency, r.Chars)
-		if r.Error != "" {
-			fmt.Printf("  error=%s", r.Error)
+		passes := 0
+		var firstFailure result
+		var latency int64
+		for i := 0; i < runCases; i++ {
+			r := runCase(c, *userURL, *adminURL, userToken, adminToken)
+			results = append(results, r)
+			latency += r.Latency
+			if r.Passed {
+				passes++
+			} else if firstFailure.ID == "" {
+				firstFailure = r
+			}
+			time.Sleep(*delay)
 		}
-		if !r.Passed && r.Snippet != "" {
-			fmt.Printf("  text=%.120q", r.Snippet)
-		}
-		for _, f := range r.Failures {
-			fmt.Printf("  ! %s", f)
+		fmt.Printf("%-18s %d/%d  avg=%5dms", c.ID, passes, runCases, latency/int64(runCases))
+		if firstFailure.ID != "" {
+			if firstFailure.Error != "" {
+				fmt.Printf("  error=%s", firstFailure.Error)
+			}
+			if firstFailure.Snippet != "" {
+				fmt.Printf("  text=%.100q", firstFailure.Snippet)
+			}
+			for _, f := range firstFailure.Failures {
+				fmt.Printf("  ! %s", f)
+			}
 		}
 		fmt.Println()
-		time.Sleep(*delay)
 	}
 
 	passed := 0
@@ -112,13 +132,17 @@ func main() {
 			passed++
 		}
 	}
+	rate := 0.0
+	if len(results) > 0 {
+		rate = float64(passed) / float64(len(results))
+	}
 	if *jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(map[string]any{"total": len(results), "passed": passed, "results": results})
+		_ = enc.Encode(map[string]any{"runs": len(results), "passed": passed, "pass_rate": rate, "results": results})
 	}
-	fmt.Printf("\nsummary: %d/%d passed\n", passed, len(results))
-	if passed != len(results) {
+	fmt.Printf("\nsummary: %d/%d passed (%.1f%%), repeat=%d\n", passed, len(results), rate*100, runCases)
+	if rate < *minRate {
 		os.Exit(1)
 	}
 }
@@ -143,6 +167,7 @@ func runCase(c caseSpec, userURL, adminURL, userToken, adminToken string) result
 		return r
 	}
 	r.Snippet = text
+	r.Text = text
 	low := strings.ToLower(text)
 	for _, want := range c.Contains {
 		if !strings.Contains(low, strings.ToLower(want)) {

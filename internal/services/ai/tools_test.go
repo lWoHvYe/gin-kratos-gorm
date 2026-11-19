@@ -198,14 +198,16 @@ func TestKnowledgeToolReturnsIndexedPassages(t *testing.T) {
 	}
 }
 
-type fakePromotion struct{}
+type fakePromotion struct{ request *pb.EvaluateDraftRequest }
 
-func (fakePromotion) EvaluateDraft(context.Context, *pb.EvaluateDraftRequest, ...grpc.CallOption) (*pb.PromotionEvaluation, error) {
+func (f *fakePromotion) EvaluateDraft(_ context.Context, in *pb.EvaluateDraftRequest, _ ...grpc.CallOption) (*pb.PromotionEvaluation, error) {
+	f.request = in
 	return &pb.PromotionEvaluation{DiscountCent: 3000, Applied: []*pb.AppliedPromotion{{Code: "DRAFT"}}}, nil
 }
 
 func TestPreviewCampaignUsesDraftEvaluation(t *testing.T) {
-	tl, err := newPreviewCampaignTool(fakePromotion{})
+	promo := &fakePromotion{}
+	tl, err := newPreviewCampaignTool(promo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,5 +217,11 @@ func TestPreviewCampaignUsesDraftEvaluation(t *testing.T) {
 	}
 	if !strings.Contains(out, "3000") || !strings.Contains(out, "DRAFT") {
 		t.Fatalf("out = %s", out)
+	}
+	if promo.request.GetEvaluation().GetUserId() != 7 {
+		t.Fatalf("user_id = %d, want request identity 7", promo.request.GetEvaluation().GetUserId())
+	}
+	if _, err := runTool(t, tl, context.Background(), `{"type":"THRESHOLD","threshold_cent":30000,"discount_cent":3000}`); err == nil {
+		t.Fatal("preview without identity must fail")
 	}
 }

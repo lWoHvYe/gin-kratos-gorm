@@ -60,3 +60,11 @@ DeepSeek streams an explanatory sentence before `tool_calls`. The ADK
 `ChatModelAgent` completes the assistant turn before dispatching tools, and the
 event adapter maps tool completions to `tool` SSE events. The previous ReAct
 `StreamToolCallChecker` workaround is no longer in the runtime.
+
+## Repeated runs
+
+`go run ./cmd/ai-eval -cases ... -repeat 2 -delay 5s -min-pass-rate 0.9`
+runs each case multiple times and prints per-case pass counts plus aggregate
+rate. The AI user limit is 20 requests / 10 minutes by default, so a full
+repeated gate needs a reset or a test-specific higher limit; otherwise the last
+user case reports `RATE_LIMITED`. The default remains one run.

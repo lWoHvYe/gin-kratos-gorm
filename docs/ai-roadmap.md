@@ -9,7 +9,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 2 | ADK HITL pilot for admin campaign drafts | done (deterministic review agent; bound + atomic save) |
 | 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank + versioned semantic cache) |
 | 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
-| 5 | Correctness and recovery gate | partial (see below) |
+| 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
 | 6 | Versioned RAG and measurable quality | partial (see below) |
 | 7 | Customer task assistant: comparison, budget list, cart draft | pending |
 | 8 | Controlled personalization / preference profile | pending |
@@ -41,13 +41,11 @@ Done:
 
 Remaining before calling the gate done:
 1. ~~Add a test that captures `EvaluateDraftRequest.UserId`~~ (done).
-2. ~~Run eval repeatedly~~: `-repeat` and test-only rate/budget resets now
-   produce 26/26 over two runs. Tool-selection accuracy and raw-answer archive
-   remain as reporting work.
-3. ~~HITL recovery/idempotency~~: duplicate confirm now returns the existing
-   campaign/rule via unique draft codes; a failed save leaves the checkpoint
-   open and retry succeeds. A formal state-machine record is still optional;
-   save-failure and duplicate-confirm live tests pass.
+2. ~~Run eval repeatedly~~: `-repeat` + test-only rate/budget resets produce
+   26/26 over two runs; tool-selection accuracy and raw text are in the report.
+3. ~~HITL recovery/idempotency~~: duplicate confirm returns the existing
+   campaign/rule via unique draft codes; failed save leaves the checkpoint open
+   and retry succeeds. Formal state records are optional; live tests pass.
 4. Keep the plain apply path available; HITL must not be a single point of
    failure for admins.
 

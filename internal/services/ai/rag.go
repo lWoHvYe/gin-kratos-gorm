@@ -169,6 +169,7 @@ type redisRAG struct {
 }
 
 func collectKnowledge(ctx context.Context, catalog catalogClient) ([]ragDoc, error) {
+	metrics.AIRAGTruncated.Set(0)
 	var docs []ragDoc
 	for _, p := range policies {
 		docs = append(docs, ragDoc{ID: "policy:" + p.Title, Kind: "policy", Title: p.Title, Content: p.Content})
@@ -184,6 +185,9 @@ func collectKnowledge(ctx context.Context, catalog catalogClient) ([]ragDoc, err
 			}
 			if len(list.GetProducts()) < 100 {
 				break
+			}
+			if page == 100 {
+				metrics.AIRAGTruncated.Set(1)
 			}
 		}
 	}
@@ -304,6 +308,7 @@ func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDo
 	}
 	cacheKey := r.queryCacheKey(query, limit)
 	if cached, err := r.client.Get(ctx, cacheKey).Bytes(); err == nil {
+		metrics.AIRAGTruncated.Set(0)
 		var docs []ragDoc
 		if json.Unmarshal(cached, &docs) == nil {
 			metrics.AIRAGSearch.WithLabelValues("cache").Inc()

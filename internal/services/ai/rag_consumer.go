@@ -38,6 +38,9 @@ func RunCatalogIndexConsumer(ctx context.Context, client *mq.Client, catalog cat
 		Subject: catalogChangedSubject,
 		Durable: "ai-catalog-index",
 	}, func(hctx context.Context, msg *nats.Msg) error {
+		if meta, err := msg.Metadata(); err == nil {
+			metrics.AIRAGConsumerPending.Set(float64(meta.NumPending))
+		}
 		ev, err := decodeCatalogEvent(msg.Data)
 		if err != nil {
 			return consumer.Permanent(err)

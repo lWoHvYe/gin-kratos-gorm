@@ -157,6 +157,30 @@ func main() {
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(map[string]any{"runs": len(results), "passed": passed, "pass_rate": rate, "results": results})
 	}
+	specs := make(map[string]caseSpec, len(s.Cases))
+	for _, c := range s.Cases {
+		specs[c.ID] = c
+	}
+	toolTotal, toolPassed := 0, 0
+	for _, r := range results {
+		c, ok := specs[r.ID]
+		if !ok || len(c.ToolsAny) == 0 {
+			continue
+		}
+		toolTotal++
+		for _, want := range c.ToolsAny {
+			for _, got := range r.Tools {
+				if got == want {
+					toolPassed++
+					goto nextResult
+				}
+			}
+		}
+	nextResult:
+	}
+	if toolTotal > 0 {
+		fmt.Printf("tool-selection: %d/%d (%.1f%%)\n", toolPassed, toolTotal, float64(toolPassed)/float64(toolTotal)*100)
+	}
 	fmt.Printf("\nsummary: %d/%d passed (%.1f%%), repeat=%d\n", passed, len(results), rate*100, runCases)
 	if rate < *minRate {
 		os.Exit(1)

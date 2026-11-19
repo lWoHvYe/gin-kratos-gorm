@@ -104,6 +104,20 @@ var (
 		Help: "RAG searches that returned no documents.",
 	})
 
+	// AIRAGConsumerPending/Truncated/RebuildFailures expose index operations.
+	AIRAGConsumerPending = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_ai_rag_consumer_pending",
+		Help: "Pending catalog-index consumer messages.",
+	})
+	AIRAGTruncated = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_ai_rag_truncated",
+		Help: "1 when the startup catalog scan hit its page safety cap.",
+	})
+	AIRAGRebuildFailures = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mall_ai_rag_rebuild_failures_total",
+		Help: "RAG startup build failures.",
+	})
+
 	// AIRAGDocuments/BuildSeconds/Versions expose RAG index health.
 	AIRAGDocuments = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "mall_ai_rag_documents",
@@ -208,6 +222,7 @@ func init() {
 		OutboxPending, OutboxOldestSeconds, OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
 		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo,
 		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, AIRAGSearch, AIRAGEmpty,
-		AIRAGDocuments, AIRAGBuildSeconds, AIRAGVersions, QuotesCleaned,
+		AIRAGDocuments, AIRAGBuildSeconds, AIRAGVersions, AIRAGConsumerPending,
+		AIRAGTruncated, AIRAGRebuildFailures, QuotesCleaned,
 		InventoryLedgerRows, InventoryLedgerOldestSeconds, InventoryLedgerArchived, AIFeedback)
 }

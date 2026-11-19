@@ -10,6 +10,7 @@ import (
 	"gin-kratos-gorm/internal/platform/config"
 	"gin-kratos-gorm/internal/platform/grpcx"
 	"gin-kratos-gorm/internal/platform/log"
+	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/redis"
 	"gin-kratos-gorm/internal/platform/runtime"
@@ -90,6 +91,7 @@ func main() {
 			Dim:      cfg.EmbeddingDim,
 		}, catalog, cache, logger)
 		if err != nil {
+			metrics.AIRAGRebuildFailures.Inc()
 			logger.Warn("rag disabled", "error", err)
 		} else {
 			rag = built

@@ -29,7 +29,7 @@ risk is explicit.
 | P2#14 | done | `users.token_version` in JWT; status changes bump it; admin + high-risk checkout/payment BFFs revalidate. Live old demo token -> 401 after disable. |
 | P2#15 | done | Concurrent seckill release, expired outbox lease, foreign relay owner, and durable compensation retry tests cover the targeted race/recovery paths; a full chaos suite remains future work. |
 | P2#16 | done | Preview uses the same `userIDFromContext` as tools and errors when identity is missing; no fixed user 1. |
-| P2#17 | partial | Versioned index/alias/full pagination + dual-write + post-build/15m reconciliation + exact/semantic cache + metrics; true event high-watermark/ordering still open. |
+| P2#17 | partial | Versioned index/alias/full pagination + dual-write + post-build/15m reconciliation + exact/semantic cache + document/build/version metrics; true event high-watermark/ordering still open. |
 | P2#18 | done | topologySpreadConstraints added; PDBs cover gateway/seckill/order/inventory/identity/catalog/pricing/payment; HA template renders. |
 | P2#19 | done | Alertmanager added to observability target; Prometheus scrapes ai:9111; compose config valid. |
 
@@ -53,7 +53,7 @@ risk is explicit.
 | Phase | Status |
 |---|---|
 | 5 Correctness foundation | done: identity/eval/HITL binding+atomic save + CampaignSpec |
-| 6 Versioned RAG | partial: versioned index/alias/full pagination + dual-write + post-build/15m reconciliation + exact/semantic cache + metrics done; event high-watermark still open |
+| 6 Versioned RAG | partial: versioned index/alias/full pagination + dual-write + post-build/15m reconciliation + exact/semantic cache + index metrics done; event high-watermark still open |
 | 7 Cart assistant | not started |
 | 8 Personalization | not started |
 | 9 Proactive ops | not started |

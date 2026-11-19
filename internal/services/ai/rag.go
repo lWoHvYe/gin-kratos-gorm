@@ -77,6 +77,7 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 		index = "ai_kb"
 	}
 	r := &redisRAG{client: client, embedder: emb, base: index, log: logger}
+	buildStart := time.Now()
 	docs, err := collectKnowledge(ctx, catalog)
 	if err != nil {
 		return nil, err
@@ -84,6 +85,8 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	if err := r.reindex(ctx, docs); err != nil {
 		return nil, err
 	}
+	metrics.AIRAGDocuments.Set(float64(len(docs)))
+	metrics.AIRAGBuildSeconds.Set(time.Since(buildStart).Seconds())
 	// Catch changes that landed while the snapshot was being embedded. The
 	// alias is already switched; content hashes make this pass cheap.
 	if catalog != nil {
@@ -226,6 +229,9 @@ func (r *redisRAG) pruneVersions(ctx context.Context) {
 		if json.Unmarshal([]byte(raw), &version) != nil || version.CreatedAt == 0 || version.CreatedAt < cutoff {
 			_ = r.client.SRem(ctx, "ai:rag:versions", raw).Err()
 		}
+	}
+	if count, err := r.client.SCard(ctx, "ai:rag:versions").Result(); err == nil {
+		metrics.AIRAGVersions.Set(float64(count))
 	}
 }
 

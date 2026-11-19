@@ -104,6 +104,20 @@ var (
 		Help: "RAG searches that returned no documents.",
 	})
 
+	// AIRAGDocuments/BuildSeconds/Versions expose RAG index health.
+	AIRAGDocuments = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_ai_rag_documents",
+		Help: "Documents in the current RAG index.",
+	})
+	AIRAGBuildSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_ai_rag_build_seconds",
+		Help: "Duration of the last RAG index build.",
+	})
+	AIRAGVersions = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_ai_rag_versions",
+		Help: "Active RAG versions in the dual-write registry.",
+	})
+
 	// AIRequests counts assistant turns by outcome.
 	AIRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mall_ai_requests_total",
@@ -193,6 +207,7 @@ func init() {
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
 		OutboxPending, OutboxOldestSeconds, OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
 		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo,
-		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, QuotesCleaned,
-		InventoryLedgerRows, InventoryLedgerOldestSeconds, AIFeedback)
+		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, AIRAGSearch, AIRAGEmpty,
+		AIRAGDocuments, AIRAGBuildSeconds, AIRAGVersions, QuotesCleaned,
+		InventoryLedgerRows, InventoryLedgerOldestSeconds, InventoryLedgerArchived, AIFeedback)
 }

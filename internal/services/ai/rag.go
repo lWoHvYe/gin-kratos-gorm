@@ -84,6 +84,15 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	if err := r.reindex(ctx, docs); err != nil {
 		return nil, err
 	}
+	// Catch changes that landed while the snapshot was being embedded. The
+	// alias is already switched; content hashes make this pass cheap.
+	if catalog != nil {
+		if err := r.ReconcileProducts(ctx, catalog); err != nil {
+			logger.Warn("ai rag post-build reconcile failed", "error", err)
+		} else {
+			logger.Info("ai rag post-build reconcile complete")
+		}
+	}
 	logger.Info("ai rag indexed", "index", index, "documents", len(docs), "embedding_provider", cfg.Provider, "dim", emb.Dim())
 	return r, nil
 }

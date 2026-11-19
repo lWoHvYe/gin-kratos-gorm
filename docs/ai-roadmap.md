@@ -11,7 +11,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
 | 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
 | 6 | Versioned RAG and measurable quality | partial (see below) |
-| 7 | Customer task assistant: comparison, budget list, cart draft | partial: read-only `draft_cart` tool |
+| 7 | Customer task assistant: comparison, budget list, cart draft | done: draft SSE + confirm via Cart RPC (mock E2E) |
 | 8 | Controlled personalization / preference profile | partial: API + UI + prompt injection |
 | 9 | Proactive admin operations copilot | done: deterministic daily brief, latest snapshot, low-stock links, feedback |
 | 10 | Evidence-triggered advanced capabilities | conditional |
@@ -85,8 +85,8 @@ persists the draft in Redis bound to the server-derived user, and returns a
 10-minute draft id. The BFF confirm endpoint revalidates price/status/stock and
 calls Cart. It is idempotent after completion (duplicate confirm returns
 `confirmed=true` without adding again). An SSE `draft` event and the storefront
-confirmation card are implemented; the live SSE check was blocked by the
-provider returning an empty stream during this run.
+confirmation card are implemented. Mock-provider E2E passed (draft SSE then
+confirm 200); real-model E2E remains blocked by provider empty streams.
 
 Start with product comparison and budget shopping-list generation. The
 assistant uses read tools to produce a cart draft containing SKU, quantity,

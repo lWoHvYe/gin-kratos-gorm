@@ -259,7 +259,7 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 			if chunk.ToolName != "" {
 				_ = stream.Send(&pb.AIChatEvent{Type: "tool", Tool: chunk.ToolName})
 			}
-			if chunk.ToolName == "draft_cart" && strings.HasPrefix(strings.TrimSpace(chunk.Content), "{") {
+			if s.drafts == nil && chunk.ToolName == "draft_cart" && strings.HasPrefix(strings.TrimSpace(chunk.Content), "{") {
 				_ = stream.Send(&pb.AIChatEvent{Type: "draft", DraftJson: chunk.Content})
 			}
 			continue

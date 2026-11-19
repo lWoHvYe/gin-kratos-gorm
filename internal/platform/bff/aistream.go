@@ -18,10 +18,11 @@ type AIEventStream interface {
 }
 
 type aiEvent struct {
-	Type  string `json:"type"`
-	Delta string `json:"delta,omitempty"`
-	Tool  string `json:"tool,omitempty"`
-	Error string `json:"error,omitempty"`
+	Type      string `json:"type"`
+	Delta     string `json:"delta,omitempty"`
+	Tool      string `json:"tool,omitempty"`
+	Error     string `json:"error,omitempty"`
+	DraftJSON string `json:"draft_json,omitempty"`
 }
 
 // ProxyAIStream forwards assistant events as SSE. It reads the first event
@@ -65,6 +66,8 @@ func ProxyAIStream(c *gin.Context, stream AIEventStream) {
 			return write(aiEvent{Type: "delta", Delta: ev.GetDelta()})
 		case "tool":
 			return write(aiEvent{Type: "tool", Tool: ev.GetTool()})
+		case "draft":
+			return write(aiEvent{Type: "draft", DraftJSON: ev.GetDraftJson()})
 		case "error":
 			write(aiEvent{Type: "error", Error: ev.GetError()})
 			return false

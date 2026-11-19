@@ -12,6 +12,10 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+type compensationService interface {
+	TccCancelConfirm(ctx context.Context, in *pb.TccPaymentRequest) (*pb.Empty, error)
+}
+
 type compensationEvent struct {
 	OrderNo string `json:"order_no"`
 	Items   []struct {
@@ -28,27 +32,31 @@ func RunCompensationConsumer(ctx context.Context, client *mq.Client, svc *Servic
 		Subject: "shop.inventory.compensation.requested.v1",
 		Durable: "inventory-compensation",
 	}, func(hctx context.Context, msg *nats.Msg) error {
-		var event compensationEvent
-		if err := json.Unmarshal(msg.Data, &event); err != nil {
-			return consumer.Permanent(err)
-		}
-		if event.OrderNo == "" || len(event.Items) == 0 {
-			return nil
-		}
-		items := make([]*pb.OrderItem, 0, len(event.Items))
-		for _, item := range event.Items {
-			if item.SkuID <= 0 || item.Quantity <= 0 {
-				continue
-			}
-			items = append(items, &pb.OrderItem{SkuId: item.SkuID, Quantity: item.Quantity})
-		}
-		if len(items) == 0 {
-			return nil
-		}
-		_, err := svc.TccCancelConfirm(hctx, &pb.TccPaymentRequest{OrderNo: event.OrderNo, Items: items})
-		return err
+		return handleCompensation(hctx, svc, msg.Data)
 	})
 	if err != nil {
 		logger.Error("subscribe inventory compensation", "error", err)
 	}
+}
+
+func handleCompensation(ctx context.Context, svc compensationService, data []byte) error {
+	var event compensationEvent
+	if err := json.Unmarshal(data, &event); err != nil {
+		return consumer.Permanent(err)
+	}
+	if event.OrderNo == "" || len(event.Items) == 0 {
+		return nil
+	}
+	items := make([]*pb.OrderItem, 0, len(event.Items))
+	for _, item := range event.Items {
+		if item.SkuID <= 0 || item.Quantity <= 0 {
+			continue
+		}
+		items = append(items, &pb.OrderItem{SkuId: item.SkuID, Quantity: item.Quantity})
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	_, err := svc.TccCancelConfirm(ctx, &pb.TccPaymentRequest{OrderNo: event.OrderNo, Items: items})
+	return err
 }

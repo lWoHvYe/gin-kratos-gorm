@@ -62,8 +62,11 @@ func (s *Service) GetCartDraft(ctx context.Context, req *pb.GetCartDraftRequest)
 		return nil, apperr.Invalid("draft_id and user_id are required")
 	}
 	key := "ai:cart:draft:" + req.GetDraftId()
-	if done, _ := s.cache.Exists(ctx, "ai:cart:done:"+req.GetDraftId()).Result(); done > 0 {
-		return &pb.CartDraftReply{Confirmed: true}, nil
+	if done, err := s.cache.Get(ctx, "ai:cart:done:"+req.GetDraftId()).Int64(); err == nil {
+		if done == req.GetUserId() {
+			return &pb.CartDraftReply{Confirmed: true}, nil
+		}
+		return nil, apperr.NotFound("cart draft not found")
 	}
 	raw, err := s.cache.Get(ctx, key).Bytes()
 	if err != nil {
@@ -76,8 +79,7 @@ func (s *Service) GetCartDraft(ctx context.Context, req *pb.GetCartDraftRequest)
 	if err := json.Unmarshal(raw, &stored); err != nil || stored.UserID != req.GetUserId() {
 		return nil, apperr.NotFound("cart draft not found")
 	}
-	confirmed, _ := s.cache.Exists(ctx, "ai:cart:done:"+req.GetDraftId()).Result()
-	return &pb.CartDraftReply{DraftJson: string(stored.Draft), Confirmed: confirmed > 0}, nil
+	return &pb.CartDraftReply{DraftJson: string(stored.Draft)}, nil
 }
 
 func (s *Service) CompleteCartDraft(ctx context.Context, req *pb.CompleteCartDraftRequest) (*pb.Empty, error) {
@@ -85,8 +87,11 @@ func (s *Service) CompleteCartDraft(ctx context.Context, req *pb.CompleteCartDra
 		return nil, apperr.Invalid("draft_id and user_id are required")
 	}
 	key := "ai:cart:draft:" + req.GetDraftId()
-	if done, _ := s.cache.Exists(ctx, "ai:cart:done:"+req.GetDraftId()).Result(); done > 0 {
-		return &pb.Empty{}, nil
+	if done, err := s.cache.Get(ctx, "ai:cart:done:"+req.GetDraftId()).Int64(); err == nil {
+		if done == req.GetUserId() {
+			return &pb.Empty{}, nil
+		}
+		return nil, apperr.NotFound("cart draft not found")
 	}
 	raw, err := s.cache.Get(ctx, key).Bytes()
 	if err != nil {
@@ -96,7 +101,7 @@ func (s *Service) CompleteCartDraft(ctx context.Context, req *pb.CompleteCartDra
 	if err := json.Unmarshal(raw, &stored); err != nil || stored.UserID != req.GetUserId() {
 		return nil, apperr.NotFound("cart draft not found")
 	}
-	if err := s.cache.Set(ctx, "ai:cart:done:"+req.GetDraftId(), "1", cartDraftTTL).Err(); err != nil {
+	if err := s.cache.Set(ctx, "ai:cart:done:"+req.GetDraftId(), fmt.Sprintf("%d", req.GetUserId()), cartDraftTTL).Err(); err != nil {
 		return nil, apperr.Internal("complete cart draft", err)
 	}
 	_ = s.cache.Del(ctx, key).Err()

@@ -110,7 +110,9 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	}
 	metrics.AIRAGDocuments.Set(float64(len(docs)))
 	metrics.AIRAGBuildSeconds.Set(time.Since(buildStart).Seconds())
-	if err := client.Set(ctx, "ai:rag:current", mustJSON(ragVersion{Index: r.index, Prefix: r.prefix, CreatedAt: time.Now().Unix()}), 24*time.Hour).Err(); err != nil {
+	// No TTL: this pointer outlives any single build and must remain readable by
+	// non-leader replicas across restarts.
+	if err := client.Set(ctx, "ai:rag:current", mustJSON(ragVersion{Index: r.index, Prefix: r.prefix, CreatedAt: time.Now().Unix()}), 0).Err(); err != nil {
 		return nil, fmt.Errorf("publish rag current: %w", err)
 	}
 	// Catch changes that landed while the snapshot was being embedded.

@@ -82,6 +82,9 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 		authed.POST("/ai/chat", h.aiChat)
 		authed.POST("/ai/feedback", h.aiFeedback)
 		authed.POST("/ai/cart-drafts/confirm", h.confirmCartDraft)
+		authed.GET("/ai/preferences", h.getAIPreferences)
+		authed.PUT("/ai/preferences", h.setAIPreferences)
+		authed.DELETE("/ai/preferences", h.clearAIPreferences)
 	}
 	if opts.PaymentMockEnabled {
 		authed.POST("/payments/:paymentNo/pay", h.pay)

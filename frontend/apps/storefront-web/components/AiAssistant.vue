@@ -4,8 +4,25 @@
     <section v-else class="ai-panel" aria-label="购物助手">
       <header class="ai-head">
         <strong>购物助手</strong>
-        <button type="button" class="ai-close" aria-label="关闭" @click="open = false">×</button>
+        <div class="ai-head-actions">
+          <button type="button" class="ai-link" @click="togglePrefs">偏好</button>
+          <button type="button" class="ai-close" aria-label="关闭" @click="open = false">×</button>
+        </div>
       </header>
+      <form v-if="prefsOpen" class="ai-prefs" @submit.prevent="savePrefs">
+        <label>品类<input v-model="prefsForm.categories" placeholder="手机,耳机" /></label>
+        <label>品牌<input v-model="prefsForm.brands" placeholder="云舟,声谷" /></label>
+        <label>预算（元）<span class="ai-budget">
+          <input v-model.number="prefsForm.minYuan" type="number" min="0" placeholder="最低" />
+          <input v-model.number="prefsForm.maxYuan" type="number" min="0" placeholder="最高" />
+        </span></label>
+        <label>尺码<input v-model="prefsForm.sizes" placeholder="M,L" /></label>
+        <div class="ai-prefs-actions">
+          <button type="submit" :disabled="prefsSaving">{{ prefsSaving ? '保存中…' : '保存偏好' }}</button>
+          <button type="button" :disabled="prefsSaving" @click="clearPrefs">清除</button>
+        </div>
+        <p class="ai-hint">仅用于推荐，可随时清除；不会推断敏感信息。</p>
+      </form>
       <div ref="listEl" class="ai-messages">
         <p v-if="messages.length === 0" class="ai-hint">
           可以问我商品推荐、订单状态或退货政策。示例：“Widget 有什么”“我的订单”“退货政策”。
@@ -101,6 +118,9 @@ onMounted(async () => {
 })
 const input = ref('')
 const sending = ref(false)
+const prefsOpen = ref(false)
+const prefsSaving = ref(false)
+const prefsForm = ref({ categories: '', brands: '', minYuan: 0, maxYuan: 0, sizes: '' })
 const messages = ref<Message[]>([])
 const rated = ref(0)
 const listEl = ref<HTMLElement | null>(null)
@@ -128,6 +148,74 @@ async function rate(rating: 1 | -1): Promise<void> {
 function toggle() {
   open.value = !open.value
   if (open.value) scrollToEnd()
+}
+
+async function togglePrefs() {
+  prefsOpen.value = !prefsOpen.value
+  if (!prefsOpen.value || !token.value) return
+  try {
+    const response = await fetch('/api/v1/ai/preferences', {
+      headers: { Authorization: `Bearer ${token.value}` },
+    })
+    if (!response.ok) return
+    const body = await response.json() as {
+      preferred_categories?: string[]
+      preferred_brands?: string[]
+      budget_min_cent?: number
+      budget_max_cent?: number
+      sizes?: string[]
+    }
+    prefsForm.value = {
+      categories: (body.preferred_categories || []).join(','),
+      brands: (body.preferred_brands || []).join(','),
+      minYuan: (body.budget_min_cent || 0) / 100,
+      maxYuan: (body.budget_max_cent || 0) / 100,
+      sizes: (body.sizes || []).join(','),
+    }
+  } catch {
+    // Preferences are optional; ignore load failures.
+  }
+}
+
+function split(value: string): string[] {
+  return value.split(/[,，]/).map(v => v.trim()).filter(Boolean)
+}
+
+async function savePrefs() {
+  if (!token.value || prefsSaving.value) return
+  prefsSaving.value = true
+  try {
+    const response = await fetch('/api/v1/ai/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
+      body: JSON.stringify({
+        preferred_categories: split(prefsForm.value.categories),
+        preferred_brands: split(prefsForm.value.brands),
+        budget_min_cent: Math.max(0, Math.round((prefsForm.value.minYuan || 0) * 100)),
+        budget_max_cent: Math.max(0, Math.round((prefsForm.value.maxYuan || 0) * 100)),
+        sizes: split(prefsForm.value.sizes),
+      }),
+    })
+    if (response.ok) prefsOpen.value = false
+  } catch {
+    // Keep the form open on failure.
+  } finally {
+    prefsSaving.value = false
+  }
+}
+
+async function clearPrefs() {
+  if (!token.value || prefsSaving.value) return
+  prefsSaving.value = true
+  try {
+    await fetch('/api/v1/ai/preferences', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token.value}` },
+    })
+    prefsForm.value = { categories: '', brands: '', minYuan: 0, maxYuan: 0, sizes: '' }
+  } finally {
+    prefsSaving.value = false
+  }
 }
 
 function sessionID(): string {
@@ -265,6 +353,21 @@ async function send() {
 .ai-input input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; }
 .ai-input button { padding: 8px 14px; border: 0; border-radius: 8px; background: var(--mall-primary, #2563eb); color: #fff; cursor: pointer; }
 .ai-input button:disabled { opacity: 0.5; cursor: default; }
+.ai-head-actions { display: flex; align-items: center; gap: 6px; }
+.ai-link { border: 0; background: transparent; color: #2563eb; cursor: pointer; font-size: 12px; }
+.ai-prefs {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb; background: #f8fafc; font-size: 12px;
+}
+.ai-prefs label { display: flex; flex-direction: column; gap: 3px; }
+.ai-prefs input { border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 7px; }
+.ai-budget { display: flex; gap: 6px; }
+.ai-budget input { width: 0; flex: 1; }
+.ai-prefs-actions { display: flex; gap: 8px; }
+.ai-prefs-actions button {
+  border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 9px;
+  background: #fff; cursor: pointer;
+}
 .ai-draft {
   margin-top: 8px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px;
   background: #f8fbff; font-size: 13px;

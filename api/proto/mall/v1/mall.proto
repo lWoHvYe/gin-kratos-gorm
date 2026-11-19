@@ -911,6 +911,9 @@ service AIService {
   rpc SearchKnowledge (KnowledgeSearchRequest) returns (KnowledgeSearchReply);
   rpc GetCartDraft (GetCartDraftRequest) returns (CartDraftReply);
   rpc CompleteCartDraft (CompleteCartDraftRequest) returns (Empty);
+  rpc GetPreferences (GetAIPreferencesRequest) returns (AIPreferences);
+  rpc SetPreferences (SetAIPreferencesRequest) returns (AIPreferences);
+  rpc ClearPreferences (ClearAIPreferencesRequest) returns (Empty);
   // Admin-only draft review. Start interrupts; Resume closes the checkpoint
   // after the BFF has saved the draft through the normal apply endpoint.
   rpc StartCampaignDraft (StartCampaignDraftRequest) returns (CampaignDraftReply);
@@ -933,6 +936,17 @@ message KnowledgeSearchReply { repeated KnowledgeDoc docs = 1; }
 message GetCartDraftRequest { string draft_id = 1; int64 user_id = 2; }
 message CartDraftReply { string draft_json = 1; bool confirmed = 2; }
 message CompleteCartDraftRequest { string draft_id = 1; int64 user_id = 2; }
+message AIPreferences {
+  repeated string preferred_categories = 1;
+  repeated string preferred_brands = 2;
+  int64 budget_min_cent = 3;
+  int64 budget_max_cent = 4;
+  repeated string sizes = 5;
+  int64 updated_at = 6;
+}
+message GetAIPreferencesRequest { int64 user_id = 1; }
+message SetAIPreferencesRequest { int64 user_id = 1; AIPreferences preferences = 2; }
+message ClearAIPreferencesRequest { int64 user_id = 1; }
 message StartCampaignDraftRequest {
   int64 user_id = 1;
   string name = 2;

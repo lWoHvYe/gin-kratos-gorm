@@ -12,7 +12,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
 | 6 | Versioned RAG and measurable quality | partial (see below) |
 | 7 | Customer task assistant: comparison, budget list, cart draft | partial: read-only `draft_cart` tool |
-| 8 | Controlled personalization / preference profile | pending |
+| 8 | Controlled personalization / preference profile | partial: API + UI + prompt injection |
 | 9 | Proactive admin operations copilot | pending |
 | 10 | Evidence-triggered advanced capabilities | conditional |
 
@@ -99,6 +99,11 @@ eval covers comparison, budget compliance, price/stock changes and rejection;
 ordinary chat remains the fallback.
 
 ## Phase 8: controlled personalization
+
+Current slice: server-side Redis profile keyed by user id, GET/PUT/DELETE BFF
+endpoints, storefront edit/clear panel, and a system-message injection for
+customer chat. No sensitive attributes or cross-user reads. Retention/eval
+against no-memory recommendations still remain.
 
 Start with a small server-side preference profile (brands/categories, budget
 range, size where relevant), not unrestricted transcript memory. Preferences are

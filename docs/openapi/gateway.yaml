@@ -942,3 +942,32 @@ paths:
               properties: { draft_id: { type: string } }
       responses:
         '200': { description: Cart updated or draft already confirmed }
+
+  /api/v1/ai/preferences:
+    get:
+      summary: Read explicit AI shopping preferences
+      tags: [ai]
+      responses:
+        '200': { description: Preferences }
+    put:
+      summary: Replace explicit AI shopping preferences
+      tags: [ai]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferred_categories: { type: array, items: { type: string } }
+                preferred_brands: { type: array, items: { type: string } }
+                budget_min_cent: { type: integer, minimum: 0 }
+                budget_max_cent: { type: integer, minimum: 0 }
+                sizes: { type: array, items: { type: string } }
+      responses:
+        '200': { description: Preferences }
+    delete:
+      summary: Clear AI shopping preferences
+      tags: [ai]
+      responses:
+        '200': { description: Cleared }

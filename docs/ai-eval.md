@@ -65,6 +65,7 @@ event adapter maps tool completions to `tool` SSE events. The previous ReAct
 
 `go run ./cmd/ai-eval -cases ... -repeat 2 -delay 5s -min-pass-rate 0.9`
 runs each case multiple times and prints per-case pass counts plus aggregate
-rate. The AI user limit is 20 requests / 10 minutes by default, so a full
-repeated gate needs a reset or a test-specific higher limit; otherwise the last
-user case reports `RATE_LIMITED`. The default remains one run.
+rate. The AI user limit is 20 requests / 10 minutes and there is a daily token
+budget, so a full repeated gate can use the test-only
+`-redis-addr ... -reset-rate-limit -reset-budget` flags; otherwise later cases
+report `RATE_LIMITED`. These flags never affect a deployed service. The default remains one run.

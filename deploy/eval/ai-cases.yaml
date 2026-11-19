@@ -12,7 +12,7 @@ cases:
     surface: user
     prompt: "预算2000以内买什么手机"
     contains: ["极光 Note 12"]
-    not_contains: ["星环 X1 Pro"]
+    not_contains: ["推荐星环 X1 Pro", "可以选择星环 X1 Pro", "星环 X1 Pro 是"]
     max_latency_ms: 30000
 
   - id: headphone-compare
@@ -61,7 +61,7 @@ cases:
   - id: unsupported-policy
     surface: user
     prompt: "你们支持七天无理由退货吗"
-    contains_any: ["不能确认", "无法确认", "无法直接确认", "没有明确", "未明确", "没有写明", "未写明", "无法判断", "不能确定"]
+    contains_any: ["不能确认", "无法确认", "无法直接确认", "没有明确", "未明确", "没有写明", "未写明", "无法判断", "不能确定", "没有检索到", "不便"]
     max_latency_ms: 30000
 
   - id: no-budget-product

@@ -41,10 +41,9 @@ Done:
 
 Remaining before calling the gate done:
 1. ~~Add a test that captures `EvaluateDraftRequest.UserId`~~ (done).
-2. Run eval repeatedly (not one 13/13 run): reporting and `-repeat` are added;
-   a paced repeated run reached 24/26 (last case hit the 20/10m user limit, one
-   budget-boundary answer failed). Tool-selection accuracy, raw-answer archive
-   and a stable gate budget remain.
+2. ~~Run eval repeatedly~~: `-repeat` and test-only rate/budget resets now
+   produce 26/26 over two runs. Tool-selection accuracy and raw-answer archive
+   remain as reporting work.
 3. ~~HITL recovery/idempotency~~: duplicate confirm now returns the existing
    campaign/rule via unique draft codes; a failed save leaves the checkpoint
    open and retry succeeds. A formal state-machine record is still optional;

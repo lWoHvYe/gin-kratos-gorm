@@ -22,7 +22,7 @@ const (
 	maxMessageRunes = 2000
 	streamTimeout   = 120 * time.Second
 	// promptVersion changes whenever systemPrompt or adminSystemPrompt changes.
-	promptVersion = "2026-11-19"
+	promptVersion = "2026-11-20"
 )
 
 // Config holds the assistant knobs that are not model-provider specific.

@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"gopkg.in/yaml.v3"
 )
 
@@ -54,13 +56,16 @@ type result struct {
 
 func main() {
 	var (
-		casesPath = flag.String("cases", "deploy/eval/ai-cases.yaml", "YAML case file")
-		userURL   = flag.String("user-url", env("AI_EVAL_USER_URL", "http://127.0.0.1:18080"), "public BFF base URL")
-		adminURL  = flag.String("admin-url", env("AI_EVAL_ADMIN_URL", "http://127.0.0.1:18081"), "admin BFF base URL")
-		jsonOut   = flag.Bool("json", false, "print JSON report")
-		repeat    = flag.Int("repeat", 1, "runs per case (for stability reporting)")
-		minRate   = flag.Float64("min-pass-rate", 1.0, "minimum aggregate pass rate")
-		delay     = flag.Duration("delay", 500*time.Millisecond, "pause between cases")
+		casesPath   = flag.String("cases", "deploy/eval/ai-cases.yaml", "YAML case file")
+		userURL     = flag.String("user-url", env("AI_EVAL_USER_URL", "http://127.0.0.1:18080"), "public BFF base URL")
+		adminURL    = flag.String("admin-url", env("AI_EVAL_ADMIN_URL", "http://127.0.0.1:18081"), "admin BFF base URL")
+		jsonOut     = flag.Bool("json", false, "print JSON report")
+		repeat      = flag.Int("repeat", 1, "runs per case (for stability reporting)")
+		minRate     = flag.Float64("min-pass-rate", 1.0, "minimum aggregate pass rate")
+		redisAddr   = flag.String("redis-addr", env("AI_EVAL_REDIS_ADDR", ""), "test-only Redis address for rate-limit reset")
+		resetRL     = flag.Bool("reset-rate-limit", false, "test-only: clear ai:rl:* before each run")
+		resetBudget = flag.Bool("reset-budget", false, "test-only: clear ai:usage:* before each run")
+		delay       = flag.Duration("delay", 500*time.Millisecond, "pause between cases")
 	)
 	flag.Parse()
 
@@ -91,6 +96,14 @@ func main() {
 		}
 	}
 
+	var redisClient *redis.Client
+	if *resetRL {
+		if *redisAddr == "" {
+			fatal(fmt.Errorf("-reset-rate-limit requires -redis-addr"))
+		}
+		redisClient = redis.NewClient(&redis.Options{Addr: *redisAddr})
+		defer redisClient.Close()
+	}
 	results := make([]result, 0, len(s.Cases)*max(1, *repeat))
 	runCases := *repeat
 	if runCases < 1 {
@@ -101,6 +114,9 @@ func main() {
 		var firstFailure result
 		var latency int64
 		for i := 0; i < runCases; i++ {
+			if redisClient != nil {
+				resetEvalLimits(context.Background(), redisClient, *resetBudget)
+			}
 			r := runCase(c, *userURL, *adminURL, userToken, adminToken)
 			results = append(results, r)
 			latency += r.Latency
@@ -144,6 +160,18 @@ func main() {
 	fmt.Printf("\nsummary: %d/%d passed (%.1f%%), repeat=%d\n", passed, len(results), rate*100, runCases)
 	if rate < *minRate {
 		os.Exit(1)
+	}
+}
+
+func resetEvalLimits(ctx context.Context, client *redis.Client, resetBudget bool) {
+	for _, pattern := range []string{"ai:rl:*", "ai:usage:*"} {
+		if pattern == "ai:usage:*" && !resetBudget {
+			continue
+		}
+		iter := client.Scan(ctx, 0, pattern, 200).Iterator()
+		for iter.Next(ctx) {
+			_ = client.Del(ctx, iter.Val()).Err()
+		}
 	}
 }
 

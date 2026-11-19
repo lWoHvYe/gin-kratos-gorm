@@ -13,7 +13,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const preferenceKeyPrefix = "ai:prefs:"
+const (
+	preferenceKeyPrefix = "ai:prefs:"
+	// Explicit preferences are retained for 180 days unless the user clears
+	// them; this is a defined retention policy, not indefinite storage.
+	preferenceTTL = 180 * 24 * time.Hour
+)
 
 func preferenceKey(userID int64) string { return fmt.Sprintf("%s%d", preferenceKeyPrefix, userID) }
 
@@ -53,7 +58,7 @@ func (s *Service) SetPreferences(ctx context.Context, req *pb.SetAIPreferencesRe
 	if err != nil {
 		return nil, apperr.Internal("encode preferences", err)
 	}
-	if err := s.cache.Set(ctx, preferenceKey(req.GetUserId()), raw, 0).Err(); err != nil {
+	if err := s.cache.Set(ctx, preferenceKey(req.GetUserId()), raw, preferenceTTL).Err(); err != nil {
 		return nil, apperr.Internal("save preferences", err)
 	}
 	return prefs, nil

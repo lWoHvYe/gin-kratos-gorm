@@ -151,6 +151,11 @@ func main() {
 		logger.Warn("ai assistant is disabled", "AI_ENABLED", "false")
 	}
 
+	if cfg.AIEnabled {
+		workers.Go(func(ctx context.Context) {
+			ai.RunOpsBriefScheduler(ctx, cache, svc, logger, time.Hour)
+		})
+	}
 	gs := grpcx.NewServer(cfg, logger)
 	pb.RegisterAIServiceServer(gs, svc)
 	health := runtime.HealthServer(cfg, nil, logger, func(ctx context.Context) error {

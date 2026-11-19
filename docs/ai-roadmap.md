@@ -100,10 +100,10 @@ ordinary chat remains the fallback.
 
 ## Phase 8: controlled personalization
 
-Current slice: server-side Redis profile keyed by user id, GET/PUT/DELETE BFF
-endpoints, storefront edit/clear panel, and a system-message injection for
-customer chat. No sensitive attributes or cross-user reads. Retention/eval
-against no-memory recommendations still remain.
+Current slice: server-side Redis profile keyed by user id, 180-day retention,
+GET/PUT/DELETE BFF endpoints, storefront edit/clear panel, and a system-message
+injection for customer chat. Live isolation check: demo preferences are empty
+for the admin user. Eval against no-memory recommendations still remains.
 
 Start with a small server-side preference profile (brands/categories, budget
 range, size where relevant), not unrestricted transcript memory. Preferences are
@@ -115,9 +115,10 @@ and prove no cross-user leakage.
 ## Phase 9: proactive operations copilot
 
 Current slice: admin-only deterministic brief from order/after-sale/low-stock
-aggregates, with source window and generated_at, plus an admin UI button.
-Scheduling, delivery idempotency, exception explanation links and feedback
-actions still remain.
+aggregates, with source window and generated_at, plus an admin UI button. An AI
+scheduler writes one brief per day under a Redis date lock and stores
+`ai:ops:latest`; failures release the date for retry. Exception explanation
+links and admin feedback actions still remain.
 
 Use a scheduled, controlled workflow rather than free-running multi-agent
 loops. Daily brief and exception explanations come only from existing aggregate
@@ -127,6 +128,11 @@ failure only skips a brief. Eval checks numeric fidelity and that anomalies are
 not invented.
 
 ## Phase 10: evidence-triggered advanced capabilities
+
+Decision: deferred. Phase 7-9 evaluation has not demonstrated that a single
+ChatModelAgent/Workflow is insufficient, and there is no multimodal data
+governance or per-intent routing benchmark yet. Do not adopt multi-agent,
+multimodal or routing without that evidence.
 
 - Supervisor / Plan-Execute only if Phase 7-9 eval shows a single
   ChatModelAgent/Workflow cannot decompose the task; set step/token/time/sub-agent

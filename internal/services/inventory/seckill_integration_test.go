@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"sync"
 	"testing"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -216,5 +217,51 @@ func TestQualificationReleaseDoesNotDoubleCreditConvertedOrder(t *testing.T) {
 	}
 	if available != 1 || held != 0 {
 		t.Fatalf("order release available=%d held=%d, want 1/0", available, held)
+	}
+}
+
+func TestConcurrentReleaseDoesNotDoubleCredit(t *testing.T) {
+	db := seckillTestDB(t)
+	seedBucket(t, db, 903, 0, 1, 0, seckillStatusAllocated)
+	seedMapping(t, db, 903, "ORD-RACE", statusHeld)
+	svc := &Service{db: db}
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, err := svc.ReleaseSeckillHold(context.Background(), &pb.ReleaseSeckillHoldRequest{
+			ActivityId: 903, Quantity: 1, RefNo: "ORD-RACE-ref",
+		})
+		errs <- err
+	}()
+	go func() {
+		defer wg.Done()
+		tx, err := db.BeginTx(context.Background(), nil)
+		if err == nil {
+			_, err = svc.releaseSeckillMapping(context.Background(), tx, &reservation{
+				orderNo: "ORD-RACE", skuID: 1, warehouseID: 1, quantity: 1,
+			})
+			if err == nil {
+				err = tx.Commit()
+			} else {
+				_ = tx.Rollback()
+			}
+		}
+		errs <- err
+	}()
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent release: %v", err)
+		}
+	}
+	var available, held int64
+	if err := db.QueryRow(`SELECT available, held FROM seckill_stocks WHERE activity_id = 903`).Scan(&available, &held); err != nil {
+		t.Fatal(err)
+	}
+	if available != 1 || held != 0 {
+		t.Fatalf("double credit: available=%d held=%d, want 1/0", available, held)
 	}
 }

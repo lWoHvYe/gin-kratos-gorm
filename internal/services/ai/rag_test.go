@@ -96,7 +96,10 @@ func TestRAGRedisIndexAndSearch(t *testing.T) {
 	if err != nil {
 		t.Skipf("Redis Search unavailable: %v", err)
 	}
-	defer client.Do(context.Background(), "FT.DROPINDEX", index, "DD")
+	defer func() {
+		_ = client.Do(context.Background(), "FT.ALIASDEL", index+"_current").Err()
+		_ = client.Do(context.Background(), "FT.DROPINDEX", rag.writeIndex(), "DD").Err()
+	}()
 
 	docs, err := rag.Search(ctx, "键盘", 3)
 	if err != nil {

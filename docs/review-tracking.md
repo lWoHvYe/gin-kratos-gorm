@@ -10,7 +10,7 @@ remaining risk is documented.
 |---|---|---|---|
 | 1 | Seckill TCC cancel bucket/mapping compensation | done | HELD/CONFIRMED paths implemented; closed-bucket HELD now writes normal ledger + stock.changed; MySQL tests cover open confirmed and closed late release. |
 | 2 | Late release after activity RELEASED writes available | done | Both closed-bucket paths now write normal reserved, inventory ledger and stock.changed. |
-| 3 | Qualification vs order release double-credit | partial | Guards and a sequential MySQL test exist; inventory stock events now carry version and catalog conditions `stock_version`; true concurrent race test still missing. |
+| 3 | Qualification vs order release double-credit | done | Guards + sequential and concurrent MySQL tests; stock events carry version and catalog conditions `stock_version`. |
 | 4 | MarkPaid/cancel race leaves CONFIRMED stock | done | Normal/seckill cancel compensation runs; partial multi-SKU confirm is rolled back; race injection still desirable. |
 | 5 | Coupon lock lost on crash | done | `locked_at`, TTL sweeper, pricing/0008 migration; live sweep verified. |
 
@@ -40,7 +40,7 @@ remaining risk is documented.
 - Compose etcd default: done (removed from default services; optional etcd-config docs remain).
 - BFF skeleton duplication / 1300-line admin: not adopted in this pass (refactor only, no behavior defect).
 - Duplicate migration scripts: not adopted (compose/k8s runners remain separate by design).
-- Docs drift: AI MaxStep and MySQL version fixed; reviewed other counts.
+- Docs drift: AI MaxStep, MySQL version, cancellation/DTM, metrics and compose etcd references fixed.
 - Frontend lint/test placeholders: not adopted (Vitest tests exist; ESLint toolchain not installed in this pass).
 - k8s observability addon: not adopted; compose observability has alerts/Alertmanager, k8s stack is separate.
 - Missing version/updated_at on some tables: partial (columns added; category/brand/SKU/address updates do not yet bump version).

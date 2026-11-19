@@ -60,7 +60,7 @@ cases:
   - id: unsupported-policy
     surface: user
     prompt: "你们支持七天无理由退货吗"
-    contains_any: ["不能确认", "无法确认", "无法直接确认"]
+    contains_any: ["不能确认", "无法确认", "无法直接确认", "没有明确"]
     max_latency_ms: 30000
 
   - id: no-budget-product

@@ -72,7 +72,7 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	if index == "" {
 		index = "ai_kb"
 	}
-	r := &redisRAG{client: client, embedder: emb, index: index, prefix: index + ":", log: logger}
+	r := &redisRAG{client: client, embedder: emb, base: index, log: logger}
 	docs, err := collectKnowledge(ctx, catalog)
 	if err != nil {
 		return nil, err
@@ -87,8 +87,9 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 type redisRAG struct {
 	client   redis.UniversalClient
 	embedder embedder
-	index    string
-	prefix   string
+	base     string
+	index    string // current alias used for searches
+	prefix   string // current versioned key prefix used for writes
 	log      *slog.Logger
 }
 
@@ -98,7 +99,7 @@ func collectKnowledge(ctx context.Context, catalog catalogClient) ([]ragDoc, err
 		docs = append(docs, ragDoc{ID: "policy:" + p.Title, Kind: "policy", Title: p.Title, Content: p.Content})
 	}
 	if catalog != nil {
-		for page := int32(1); page <= 5; page++ {
+		for page := int32(1); page <= 100; page++ {
 			list, err := catalog.ListProducts(ctx, &pb.ListProductsRequest{Page: page, PageSize: 100})
 			if err != nil {
 				return nil, fmt.Errorf("list products for rag: %w", err)
@@ -118,11 +119,10 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 	if len(docs) == 0 {
 		return fmt.Errorf("no documents to index")
 	}
-	// Recreate the index on startup: it is small and this avoids stale rows
-	// after catalog changes until an event-driven indexer exists.
-	_ = r.client.Do(ctx, "FT.DROPINDEX", r.index, "DD").Err()
+	versioned := fmt.Sprintf("%s_v%d", r.base, time.Now().UnixNano())
+	prefix := versioned + ":"
 	create := []interface{}{
-		"FT.CREATE", r.index, "ON", "HASH", "PREFIX", "1", r.prefix,
+		"FT.CREATE", versioned, "ON", "HASH", "PREFIX", "1", prefix,
 		"SCHEMA",
 		"kind", "TAG",
 		"title", "TEXT",
@@ -140,8 +140,6 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 	for i, d := range docs {
 		texts[i] = d.Title + "\n" + d.Content
 	}
-	// Embedding APIs cap batch sizes (Qwen's endpoint is small), so embed in
-	// fixed chunks and concatenate in document order.
 	const batchSize = 10
 	vectors := make([][]float32, 0, len(texts))
 	for start := 0; start < len(texts); start += batchSize {
@@ -163,7 +161,7 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 	}
 	pipe := r.client.Pipeline()
 	for i, d := range docs {
-		key := r.prefix + d.ID
+		key := prefix + d.ID
 		pipe.HSet(ctx, key,
 			"kind", d.Kind,
 			"title", d.Title,
@@ -176,8 +174,21 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("store rag documents: %w", err)
 	}
+
+	alias := r.base + "_current"
+	if err := r.client.Do(ctx, "FT.ALIASUPDATE", alias, versioned).Err(); err != nil {
+		if addErr := r.client.Do(ctx, "FT.ALIASADD", alias, versioned).Err(); addErr != nil {
+			return fmt.Errorf("switch rag alias: update=%v add=%v", err, addErr)
+		}
+	}
+	r.index = alias
+	r.prefix = prefix
 	return nil
 }
+
+// writeIndex returns the concrete index currently receiving writes; used by
+// tests/ops that need to drop a versioned index rather than the alias.
+func (r *redisRAG) writeIndex() string { return strings.TrimSuffix(r.prefix, ":") }
 
 func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDoc, error) {
 	if strings.TrimSpace(query) == "" {

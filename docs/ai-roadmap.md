@@ -64,6 +64,8 @@ and keep the assistant optional (failures must not affect browse/checkout).
 
 - Phase 5 (correctness): identity/eval/HITL binding+atomic save done;
   CampaignSpec unification remains.
-- Phase 6 (versioned RAG): versioned index + alias + full pagination done;
-  HA high-watermark/dual-write, quality metrics and semantic cache remain.
+- Phase 6 (versioned RAG): versioned index + alias + full pagination,
+  dual-write, post-build/15m reconciliation, retained old versions, quality
+  metrics and exact/semantic cache are done. Event-sequence watermark is
+  deliberately replaced by state convergence.
 - Phases 7-10: not started.

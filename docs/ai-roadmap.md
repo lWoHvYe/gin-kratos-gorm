@@ -80,10 +80,12 @@ baseline.
 
 ## Phase 7: customer task assistant (draft, never direct write)
 
-Current slice: `draft_cart` is a read-only tool that resolves SKU/price/stock and
-returns a structured draft with a 10-minute expiry. Confirmation UI, BFF
-revalidation and the original Cart RPC path are still required before this
-phase is done.
+Current slice: `draft_cart` is a read-only tool that resolves SKU/price/stock,
+persists the draft in Redis bound to the server-derived user, and returns a
+10-minute draft id. The BFF confirm endpoint revalidates price/status/stock and
+calls Cart. It is idempotent after completion (duplicate confirm returns
+`confirmed=true` without adding again). Still missing: an SSE `draft` event and
+the storefront confirmation card.
 
 Start with product comparison and budget shopping-list generation. The
 assistant uses read tools to produce a cart draft containing SKU, quantity,

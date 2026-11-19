@@ -909,6 +909,8 @@ service AIService {
   rpc FeedbackSummary (FeedbackSummaryRequest) returns (FeedbackSummaryReply);
   // Admin-only retrieval inspection for quality evaluation.
   rpc SearchKnowledge (KnowledgeSearchRequest) returns (KnowledgeSearchReply);
+  rpc GetCartDraft (GetCartDraftRequest) returns (CartDraftReply);
+  rpc CompleteCartDraft (CompleteCartDraftRequest) returns (Empty);
   // Admin-only draft review. Start interrupts; Resume closes the checkpoint
   // after the BFF has saved the draft through the normal apply endpoint.
   rpc StartCampaignDraft (StartCampaignDraftRequest) returns (CampaignDraftReply);
@@ -928,6 +930,9 @@ message FeedbackSummaryRequest { int32 days = 1; }
 message KnowledgeSearchRequest { string query = 1; int32 limit = 2; }
 message KnowledgeDoc { string id = 1; string title = 2; string content = 3; string kind = 4; double score = 5; }
 message KnowledgeSearchReply { repeated KnowledgeDoc docs = 1; }
+message GetCartDraftRequest { string draft_id = 1; int64 user_id = 2; }
+message CartDraftReply { string draft_json = 1; bool confirmed = 2; }
+message CompleteCartDraftRequest { string draft_id = 1; int64 user_id = 2; }
 message StartCampaignDraftRequest {
   int64 user_id = 1;
   string name = 2;

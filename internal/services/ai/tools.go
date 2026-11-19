@@ -51,6 +51,7 @@ type Deps struct {
 	Inventory  inventoryClient
 	Promotion  promotionClient
 	RAG        RAGSearcher
+	Drafts     CartDraftWriter
 }
 
 type deps = Deps
@@ -89,7 +90,7 @@ func newTools(d deps) ([]tool.BaseTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	draft, err := newDraftCartTool(d.Catalog, d.Inventory)
+	draft, err := newDraftCartTool(d.Catalog, d.Inventory, d.Drafts)
 	if err != nil {
 		return nil, err
 	}

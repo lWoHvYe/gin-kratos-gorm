@@ -927,3 +927,18 @@ paths:
       responses:
         '200':
           description: Feedback stored
+
+  /api/v1/ai/cart-drafts/confirm:
+    post:
+      summary: Confirm an AI cart draft and call the ordinary Cart RPC
+      tags: [ai]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [draft_id]
+              properties: { draft_id: { type: string } }
+      responses:
+        '200': { description: Cart updated or draft already confirmed }

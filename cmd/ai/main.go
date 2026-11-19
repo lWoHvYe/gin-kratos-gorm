@@ -141,6 +141,7 @@ func main() {
 		Inventory:  pb.NewInventoryServiceClient(inventoryConn),
 		Promotion:  pb.NewPromotionServiceClient(pricingConn),
 		RAG:        rag,
+		Drafts:     ai.NewCartDraftWriter(cache),
 	}, cache, logger)
 	if err != nil {
 		logger.Error("build ai service", "error", err)

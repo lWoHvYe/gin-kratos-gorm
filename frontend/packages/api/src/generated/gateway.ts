@@ -1915,6 +1915,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/cart-drafts/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm an AI cart draft and call the ordinary Cart RPC */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        draft_id: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Cart updated or draft already confirmed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

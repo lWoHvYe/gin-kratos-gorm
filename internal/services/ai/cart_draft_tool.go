@@ -41,7 +41,7 @@ type cartDraft struct {
 	NextAction string          `json:"next_action"`
 }
 
-func newDraftCartTool(catalog catalogClient, inventory inventoryClient) (tool.BaseTool, error) {
+func newDraftCartTool(catalog catalogClient, inventory inventoryClient, drafts CartDraftWriter) (tool.BaseTool, error) {
 	return utils.InferTool("draft_cart",
 		"Build a read-only cart draft from explicit SKU ids and quantities. Revalidates price and stock. Never writes the cart; the user must confirm in the UI.",
 		func(ctx context.Context, in draftCartInput) (cartDraft, error) {
@@ -83,6 +83,15 @@ func newDraftCartTool(catalog catalogClient, inventory inventoryClient) (tool.Ba
 				}
 				out.Items = append(out.Items, item)
 				out.TotalCent += item.PriceCent * int64(item.Quantity)
+			}
+			if drafts != nil {
+				uid, ok := userIDFromContext(ctx)
+				if !ok || uid == 0 {
+					return cartDraft{}, errInvalidDraft("identity is required")
+				}
+				if err := drafts.Save(ctx, out.DraftID, uid, out); err != nil {
+					return cartDraft{}, err
+				}
 			}
 			metrics.AIToolCalls.WithLabelValues("draft_cart", "ok").Inc()
 			return out, nil

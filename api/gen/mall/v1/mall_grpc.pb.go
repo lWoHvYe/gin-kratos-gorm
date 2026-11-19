@@ -5675,6 +5675,8 @@ const (
 	AIService_SubmitFeedback_FullMethodName      = "/mall.v1.AIService/SubmitFeedback"
 	AIService_FeedbackSummary_FullMethodName     = "/mall.v1.AIService/FeedbackSummary"
 	AIService_SearchKnowledge_FullMethodName     = "/mall.v1.AIService/SearchKnowledge"
+	AIService_GetCartDraft_FullMethodName        = "/mall.v1.AIService/GetCartDraft"
+	AIService_CompleteCartDraft_FullMethodName   = "/mall.v1.AIService/CompleteCartDraft"
 	AIService_StartCampaignDraft_FullMethodName  = "/mall.v1.AIService/StartCampaignDraft"
 	AIService_CheckCampaignDraft_FullMethodName  = "/mall.v1.AIService/CheckCampaignDraft"
 	AIService_ResumeCampaignDraft_FullMethodName = "/mall.v1.AIService/ResumeCampaignDraft"
@@ -5693,6 +5695,8 @@ type AIServiceClient interface {
 	FeedbackSummary(ctx context.Context, in *FeedbackSummaryRequest, opts ...grpc.CallOption) (*FeedbackSummaryReply, error)
 	// Admin-only retrieval inspection for quality evaluation.
 	SearchKnowledge(ctx context.Context, in *KnowledgeSearchRequest, opts ...grpc.CallOption) (*KnowledgeSearchReply, error)
+	GetCartDraft(ctx context.Context, in *GetCartDraftRequest, opts ...grpc.CallOption) (*CartDraftReply, error)
+	CompleteCartDraft(ctx context.Context, in *CompleteCartDraftRequest, opts ...grpc.CallOption) (*Empty, error)
 	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
 	// after the BFF has saved the draft through the normal apply endpoint.
 	StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error)
@@ -5757,6 +5761,26 @@ func (c *aIServiceClient) SearchKnowledge(ctx context.Context, in *KnowledgeSear
 	return out, nil
 }
 
+func (c *aIServiceClient) GetCartDraft(ctx context.Context, in *GetCartDraftRequest, opts ...grpc.CallOption) (*CartDraftReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CartDraftReply)
+	err := c.cc.Invoke(ctx, AIService_GetCartDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) CompleteCartDraft(ctx context.Context, in *CompleteCartDraftRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AIService_CompleteCartDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aIServiceClient) StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CampaignDraftReply)
@@ -5800,6 +5824,8 @@ type AIServiceServer interface {
 	FeedbackSummary(context.Context, *FeedbackSummaryRequest) (*FeedbackSummaryReply, error)
 	// Admin-only retrieval inspection for quality evaluation.
 	SearchKnowledge(context.Context, *KnowledgeSearchRequest) (*KnowledgeSearchReply, error)
+	GetCartDraft(context.Context, *GetCartDraftRequest) (*CartDraftReply, error)
+	CompleteCartDraft(context.Context, *CompleteCartDraftRequest) (*Empty, error)
 	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
 	// after the BFF has saved the draft through the normal apply endpoint.
 	StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error)
@@ -5826,6 +5852,12 @@ func (UnimplementedAIServiceServer) FeedbackSummary(context.Context, *FeedbackSu
 }
 func (UnimplementedAIServiceServer) SearchKnowledge(context.Context, *KnowledgeSearchRequest) (*KnowledgeSearchReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SearchKnowledge not implemented")
+}
+func (UnimplementedAIServiceServer) GetCartDraft(context.Context, *GetCartDraftRequest) (*CartDraftReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCartDraft not implemented")
+}
+func (UnimplementedAIServiceServer) CompleteCartDraft(context.Context, *CompleteCartDraftRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CompleteCartDraft not implemented")
 }
 func (UnimplementedAIServiceServer) StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartCampaignDraft not implemented")
@@ -5922,6 +5954,42 @@ func _AIService_SearchKnowledge_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_GetCartDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCartDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).GetCartDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_GetCartDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).GetCartDraft(ctx, req.(*GetCartDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_CompleteCartDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteCartDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).CompleteCartDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_CompleteCartDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).CompleteCartDraft(ctx, req.(*CompleteCartDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AIService_StartCampaignDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartCampaignDraftRequest)
 	if err := dec(in); err != nil {
@@ -5994,6 +6062,14 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SearchKnowledge",
 			Handler:    _AIService_SearchKnowledge_Handler,
+		},
+		{
+			MethodName: "GetCartDraft",
+			Handler:    _AIService_GetCartDraft_Handler,
+		},
+		{
+			MethodName: "CompleteCartDraft",
+			Handler:    _AIService_CompleteCartDraft_Handler,
 		},
 		{
 			MethodName: "StartCampaignDraft",

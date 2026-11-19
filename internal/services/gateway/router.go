@@ -81,6 +81,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	if opts.AIEnabled {
 		authed.POST("/ai/chat", h.aiChat)
 		authed.POST("/ai/feedback", h.aiFeedback)
+		authed.POST("/ai/cart-drafts/confirm", h.confirmCartDraft)
 	}
 	if opts.PaymentMockEnabled {
 		authed.POST("/payments/:paymentNo/pay", h.pay)

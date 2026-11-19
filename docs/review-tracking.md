@@ -9,7 +9,7 @@ risk is explicit.
 | ID | Status | Notes |
 |---|---|---|
 | P1#1 | done | Seckill allocate/release/hold/TCC-cancel paths that change normal reserved now write inventory ledger + `stock.changed`; closed-bucket HELD covered by MySQL test. |
-| P1#2 | partial | Multi-SKU partial Confirm is rolled back; cancel compensation includes seckill; failed direct restock emits `shop.inventory.compensation.requested.v1` with a retrying consumer. Consumer path has no fault-injection test yet. |
+| P1#2 | done | Multi-SKU partial Confirm is rolled back; cancel compensation includes seckill; failed direct restock emits a durable retry event; consumer handler re-restocks once (MySQL test, repeated delivery is idempotent). |
 | P1#3 | done | Stock events carry inventory `version`; catalog projects conditionally via `skus.stock_version`; MySQL test proves an older event cannot overwrite a newer projection. |
 | P1#4 | done | HITL checks draft binding before save; campaign+rule are one pricing transaction; checkpoint closes only after the business write. Live wrong-payload 409, correct 200, replay 404. |
 | P1#5 | done | Eval executes `contains_any` and rejects assertion-less cases; real eval 13/13. |

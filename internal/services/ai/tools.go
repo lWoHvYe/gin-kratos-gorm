@@ -812,27 +812,33 @@ func newPreviewCampaignTool(promotions promotionClient) (tool.BaseTool, error) {
 			if qty <= 0 {
 				qty = 1
 			}
-			var effect, condition string
+			var discount int64
+			var percent int32
 			switch typ {
 			case "THRESHOLD":
-				discount := in.DiscountCent
+				discount = in.DiscountCent
 				if discount <= 0 {
 					discount = 3000
 				}
-				condition = fmt.Sprintf("subtotal_cent >= %d", threshold)
-				effect = fmt.Sprintf(`{"type":"THRESHOLD","tiers":[{"min_cent":%d,"amount_cent":%d}]}`, threshold, discount)
 			case "PERCENT":
-				pct := in.Percent
-				if pct <= 0 {
-					pct = 10
+				percent = in.Percent
+				if percent <= 0 {
+					percent = 10
 				}
-				if pct > 100 {
+				if percent > 100 {
 					return previewCampaignOutput{}, fmt.Errorf("percent must be <= 100")
 				}
-				condition = fmt.Sprintf("subtotal_cent >= %d", threshold)
-				effect = fmt.Sprintf(`{"type":"PERCENT","percent":%d}`, pct)
 			default:
 				return previewCampaignOutput{}, fmt.Errorf("preview supports THRESHOLD or PERCENT")
+			}
+			// Use the same CampaignSpec builder as draft_campaign so preview and
+			// HITL cannot drift on effects/defaults.
+			draft, err := buildCampaignDraft(campaignDraftInput{
+				Name: "preview", Type: typ, ThresholdCent: threshold,
+				DiscountCent: discount, Percent: percent, Days: 1,
+			})
+			if err != nil {
+				return previewCampaignOutput{}, err
 			}
 			ctx, cancel := context.WithTimeout(ctx, toolTimeout)
 			defer cancel()
@@ -850,8 +856,9 @@ func newPreviewCampaignTool(promotions promotionClient) (tool.BaseTool, error) {
 				Campaign: &pb.Campaign{Name: "preview", StackMode: "PRIORITY", BudgetCent: 0},
 				Rule: &pb.PromotionRule{
 					Code: "PREVIEW", Name: "preview", Type: typ, Status: "DRAFT",
-					Priority: 10, ScopeJson: `{"all":true}`, ConditionExpr: condition,
-					EffectJson: effect, AllowWithCoupon: true,
+					Priority: 10, ScopeJson: draft.Rule.ScopeJSON, ConditionExpr: draft.Rule.ConditionExpr,
+					EffectJson: draft.Rule.EffectJSON, MaxDiscountCent: draft.Rule.MaxDiscountCent,
+					AllowWithCoupon: true,
 				},
 			})
 			if err != nil {

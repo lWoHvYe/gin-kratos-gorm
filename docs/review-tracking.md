@@ -10,7 +10,7 @@ risk is explicit.
 |---|---|---|
 | P1#1 | done | Seckill allocate/release/hold/TCC-cancel paths that change normal reserved now write inventory ledger + `stock.changed`; closed-bucket HELD covered by MySQL test. |
 | P1#2 | partial | Multi-SKU partial Confirm is rolled back; cancel compensation includes seckill; failed direct restock now emits `shop.inventory.compensation.requested.v1` with a retrying consumer. No fault-injection test yet. |
-| P1#3 | partial | Stock events carry inventory `version`; catalog projects conditionally via `skus.stock_version`. Code is deployed; no dedicated out-of-order projection integration test. |
+| P1#3 | done | Stock events carry inventory `version`; catalog projects conditionally via `skus.stock_version`; MySQL test proves an older event cannot overwrite a newer projection. |
 | P1#4 | done | HITL checks draft binding before save; campaign+rule are one pricing transaction; checkpoint closes only after the business write. Live wrong-payload 409, correct 200, replay 404. |
 | P1#5 | done | Eval executes `contains_any` and rejects assertion-less cases; real eval 13/13. |
 
@@ -52,7 +52,7 @@ risk is explicit.
 
 | Phase | Status |
 |---|---|
-| 5 Correctness foundation | partial: identity/eval/HITL binding+atomic save done; CampaignSpec pending |
+| 5 Correctness foundation | done: identity/eval/HITL binding+atomic save + CampaignSpec |
 | 6 Versioned RAG | partial: versioned index/alias/full pagination done; HA high-watermark, quality metrics, semantic cache pending |
 | 7 Cart assistant | not started |
 | 8 Personalization | not started |

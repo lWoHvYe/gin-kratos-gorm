@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 
@@ -40,21 +41,9 @@ func RunStockConsumer(ctx context.Context, client *mq.Client, svc *Service, logg
 		if event.WarehouseID > 0 && event.WarehouseID != 1 {
 			return nil
 		}
-		available := event.Available
-		if available < 0 {
-			available = 0
-		}
-		if event.Version <= 0 {
-			// Old producers have no version; do not let them race a newer event.
-			return nil
-		}
-		res, err := svc.db.ExecContext(hctx, `UPDATE skus SET stock = ?, stock_version = ?
-			WHERE id = ? AND stock_version < ?`, available, event.Version, event.SkuID, event.Version)
-		if err != nil {
+		changed, err := applyStockChanged(hctx, svc.db, event)
+		if err != nil || !changed {
 			return err
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return nil
 		}
 		svc.cacheEvictProductBySku(hctx, event.SkuID)
 		return nil
@@ -62,6 +51,28 @@ func RunStockConsumer(ctx context.Context, client *mq.Client, svc *Service, logg
 	if err != nil {
 		logger.Error("subscribe inventory.stock_changed", "error", err)
 	}
+}
+
+// applyStockChanged projects one versioned stock event. It returns false when
+// the projection already has an equal/newer version or the event is legacy.
+func applyStockChanged(ctx context.Context, db *sql.DB, event stockChangedEvent) (bool, error) {
+	available := event.Available
+	if available < 0 {
+		available = 0
+	}
+	if event.Version <= 0 {
+		return false, nil
+	}
+	res, err := db.ExecContext(ctx, `UPDATE skus SET stock = ?, stock_version = ?
+		WHERE id = ? AND stock_version < ?`, available, event.Version, event.SkuID, event.Version)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 func (s *Service) cacheEvictProductBySku(ctx context.Context, skuID int64) {

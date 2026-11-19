@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/metrics"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -204,6 +205,14 @@ func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDo
 	if limit > 8 {
 		limit = 8
 	}
+	cacheKey := r.queryCacheKey(query, limit)
+	if cached, err := r.client.Get(ctx, cacheKey).Bytes(); err == nil {
+		var docs []ragDoc
+		if json.Unmarshal(cached, &docs) == nil {
+			metrics.AIRAGSearch.WithLabelValues("cache").Inc()
+			return docs, nil
+		}
+	}
 	fetch := limit * 4
 	if fetch < 20 {
 		fetch = 20
@@ -235,9 +244,31 @@ func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDo
 		if r.log != nil {
 			r.log.Warn("rag lexical search failed; using knn only", "error", lexErr)
 		}
-		return rerankLexical(query, knn[:min(len(knn), limit)]), nil
+		docs := rerankLexical(query, knn[:min(len(knn), limit)])
+		r.cacheResults(ctx, cacheKey, docs)
+		metrics.AIRAGSearch.WithLabelValues("knn_fallback").Inc()
+		return docs, nil
 	}
-	return rerankLexical(query, fuseRRF(knn, lexical, limit)), nil
+	docs := rerankLexical(query, fuseRRF(knn, lexical, limit))
+	r.cacheResults(ctx, cacheKey, docs)
+	metrics.AIRAGSearch.WithLabelValues("hybrid").Inc()
+	return docs, nil
+}
+
+func (r *redisRAG) queryCacheKey(query string, limit int) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(strings.ToLower(query)) + "|" + fmt.Sprint(limit)))
+	return "ai:rag:q:" + r.writeIndex() + ":" + hex.EncodeToString(sum[:8])
+}
+
+func (r *redisRAG) cacheResults(ctx context.Context, key string, docs []ragDoc) {
+	if len(docs) == 0 {
+		metrics.AIRAGEmpty.Inc()
+	}
+	payload, err := json.Marshal(docs)
+	if err != nil {
+		return
+	}
+	_ = r.client.Set(ctx, key, payload, 5*time.Minute).Err()
 }
 
 // rerankLexical is a deterministic rerank: RRF rank is the base score, with a

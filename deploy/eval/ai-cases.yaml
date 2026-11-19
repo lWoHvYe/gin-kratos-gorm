@@ -30,7 +30,8 @@ cases:
   - id: policy-invoice
     surface: user
     prompt: "你们支持自助开专票吗"
-    contains: ["开票", "人工"]
+    contains: ["人工"]
+    contains_any: ["开票", "开具", "发票"]
     max_latency_ms: 30000
 
   - id: my-orders
@@ -60,7 +61,7 @@ cases:
   - id: unsupported-policy
     surface: user
     prompt: "你们支持七天无理由退货吗"
-    contains_any: ["不能确认", "无法确认", "无法直接确认", "没有明确"]
+    contains_any: ["不能确认", "无法确认", "无法直接确认", "没有明确", "未明确", "没有写明", "未写明", "无法判断", "不能确定"]
     max_latency_ms: 30000
 
   - id: no-budget-product

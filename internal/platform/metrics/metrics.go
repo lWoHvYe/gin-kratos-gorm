@@ -94,6 +94,16 @@ var (
 		Help: "Assistant feedback by rating.",
 	}, []string{"rating"})
 
+	// AIRAGSearch counts retrieval mode; AIRAGEmpty counts empty result sets.
+	AIRAGSearch = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "mall_ai_rag_search_total",
+		Help: "RAG searches by retrieval mode.",
+	}, []string{"mode"})
+	AIRAGEmpty = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mall_ai_rag_empty_total",
+		Help: "RAG searches that returned no documents.",
+	})
+
 	// AIRequests counts assistant turns by outcome.
 	AIRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mall_ai_requests_total",

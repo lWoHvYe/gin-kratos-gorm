@@ -141,13 +141,19 @@ migrations-check:
 wire:
 	$(GO) run github.com/google/wire/cmd/wire ./cmd/gateway ./cmd/admin ./cmd/order ./cmd/payment
 
+proto-guard:
+	python3 scripts/check-proto-evolution.py
+
+proto-baseline:
+	python3 scripts/check-proto-evolution.py --write
+
 proto:
 	protoc --proto_path=api/proto --proto_path=third_party \
 		--go_out=api/gen --go_opt=paths=source_relative \
 		--go-grpc_out=api/gen --go-grpc_opt=paths=source_relative \
 		api/proto/mall/v1/mall.proto
 
-verify: fmt-check vet test test-race build arch dtm-contract migrations-check
+verify: fmt-check vet test test-race build arch dtm-contract migrations-check proto-guard
 	@echo "verify: OK"
 
 dtm-smoke:

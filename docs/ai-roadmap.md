@@ -13,7 +13,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 6 | Versioned RAG and measurable quality | partial (see below) |
 | 7 | Customer task assistant: comparison, budget list, cart draft | partial: read-only `draft_cart` tool |
 | 8 | Controlled personalization / preference profile | partial: API + UI + prompt injection |
-| 9 | Proactive admin operations copilot | pending |
+| 9 | Proactive admin operations copilot | partial: deterministic brief API + UI |
 | 10 | Evidence-triggered advanced capabilities | conditional |
 
 ## Audit note correction (2026-11-20)
@@ -113,6 +113,11 @@ which influenced a recommendation. Eval must show improvement over no-memory
 and prove no cross-user leakage.
 
 ## Phase 9: proactive operations copilot
+
+Current slice: admin-only deterministic brief from order/after-sale/low-stock
+aggregates, with source window and generated_at, plus an admin UI button.
+Scheduling, delivery idempotency, exception explanation links and feedback
+actions still remain.
 
 Use a scheduled, controlled workflow rather than free-running multi-agent
 loops. Daily brief and exception explanations come only from existing aggregate

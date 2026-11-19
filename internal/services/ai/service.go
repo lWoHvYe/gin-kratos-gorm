@@ -57,6 +57,9 @@ type Service struct {
 	breaker    *circuitBreaker
 	rag        RAGSearcher
 	drafts     CartDraftWriter
+	orders     orderClient
+	afterSales afterSalesClient
+	inventory  inventoryClient
 	// budgets/prices are copied out of cfg for cheap per-request access.
 	dailyBudget      int64
 	globalBudget     int64
@@ -89,6 +92,9 @@ func NewService(ctx context.Context, cfg Config, provider ProviderConfig, d deps
 	svc.cache = cache
 	svc.rag = d.RAG
 	svc.drafts = d.Drafts
+	svc.orders = d.Orders
+	svc.afterSales = d.AfterSales
+	svc.inventory = d.Inventory
 	svc.adminAgent = adminRunner
 	svc.dailyBudget = cfg.DailyTokenBudget
 	svc.globalBudget = cfg.GlobalDailyTokenBudget

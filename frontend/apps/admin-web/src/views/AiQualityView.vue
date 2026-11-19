@@ -6,6 +6,8 @@ const days = ref(7)
 const summary = ref<FeedbackSummary | null>(null)
 const loading = ref(false)
 const error = ref('')
+const brief = ref<Awaited<ReturnType<typeof adminApi.ai.opsBrief>> | null>(null)
+const briefLoading = ref(false)
 
 const helpfulRate = computed(() => {
   const total = summary.value?.total ?? 0
@@ -25,6 +27,17 @@ async function load(): Promise<void> {
   }
 }
 
+async function loadBrief(): Promise<void> {
+  briefLoading.value = true
+  try {
+    brief.value = await adminApi.ai.opsBrief(days.value)
+  } catch (err) {
+    error.value = err instanceof ApiError || err instanceof Error ? err.message : '简报加载失败'
+  } finally {
+    briefLoading.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -39,6 +52,7 @@ onMounted(load)
           <el-option :value="30" label="近 30 天" />
         </el-select>
         <el-button :loading="loading" @click="load">刷新</el-button>
+        <el-button :loading="briefLoading" @click="loadBrief">运营简报</el-button>
       </div>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
@@ -48,6 +62,11 @@ onMounted(load)
       <el-col :xs="24" :sm="12" :lg="6"><div class="panel metric"><span>没帮助</span><strong>{{ summary?.not_helpful ?? 0 }}</strong></div></el-col>
       <el-col :xs="24" :sm="12" :lg="6"><div class="panel metric"><span>有帮助率</span><strong>{{ helpfulRate }}</strong></div></el-col>
     </el-row>
+    <div v-if="brief" class="panel section">
+      <h3>运营简报</h3>
+      <p>{{ brief.summary }}</p>
+      <p class="muted">订单 {{ brief.total_orders }} · 已支付 {{ brief.paid_orders }} · 售后 {{ brief.after_sales }} · 低库存 {{ brief.low_stock }}</p>
+    </div>
     <el-row :gutter="16" class="section">
       <el-col :xs="24" :lg="14">
         <div class="panel">
@@ -78,6 +97,7 @@ onMounted(load)
 .metric strong { font-size: 30px; line-height: 1.1; }
 .metric span { color: var(--mall-muted); font-size: 13px; }
 .section { margin-top: 16px; }
+.muted { color: var(--mall-muted); font-size: 13px; }
 h3 { margin: 0 0 12px; font-size: 16px; }
 .comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .comments li { border: 1px solid var(--mall-border); border-radius: 8px; padding: 10px; font-size: 14px; }

@@ -1,0 +1,47 @@
+package ai
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/apperr"
+)
+
+// OpsBrief is deterministic: every number comes from an aggregate RPC. The
+// model is not used, so numeric fidelity cannot drift.
+func (s *Service) OpsBrief(ctx context.Context, req *pb.OpsBriefRequest) (*pb.OpsBriefReply, error) {
+	days := int(req.GetDays())
+	if days <= 0 {
+		days = 1
+	}
+	if days > 30 {
+		days = 30
+	}
+	to := time.Now()
+	from := to.AddDate(0, 0, -days)
+	orders, err := s.orders.GetOrderStats(ctx, &pb.StatsRequest{FromUnix: from.Unix(), ToUnix: to.Unix()})
+	if err != nil {
+		return nil, apperr.Unavailable("load order stats", err)
+	}
+	after, err := s.afterSales.GetAfterSaleStats(ctx, &pb.StatsRequest{FromUnix: from.Unix(), ToUnix: to.Unix()})
+	if err != nil {
+		return nil, apperr.Unavailable("load after-sale stats", err)
+	}
+	low, err := s.inventory.ListLowStock(ctx, &pb.ListLowStockRequest{Threshold: 10, Limit: 5})
+	if err != nil {
+		return nil, apperr.Unavailable("load low stock", err)
+	}
+	reply := &pb.OpsBriefReply{
+		TotalOrders: orders.GetTotalOrders(), PaidOrders: orders.GetPaidOrders(),
+		PaidCent: orders.GetPaidCent(), AfterSales: after.GetTotal(),
+		RefundedCent: after.GetRefundedCent(), LowStock: low.GetTotal(),
+		FromUnix: from.Unix(), ToUnix: to.Unix(), GeneratedAt: time.Now().Unix(),
+	}
+	reply.Summary = fmt.Sprintf(
+		"过去 %d 天：订单 %d（已支付 %d，GMV %.2f 元），售后 %d（退款 %.2f 元），低库存 SKU %d。所有数字来自订单/售后/库存聚合接口。",
+		days, reply.TotalOrders, reply.PaidOrders, float64(reply.PaidCent)/100,
+		reply.AfterSales, float64(reply.RefundedCent)/100, reply.LowStock)
+	return reply, nil
+}

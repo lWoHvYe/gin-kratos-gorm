@@ -914,6 +914,7 @@ service AIService {
   rpc GetPreferences (GetAIPreferencesRequest) returns (AIPreferences);
   rpc SetPreferences (SetAIPreferencesRequest) returns (AIPreferences);
   rpc ClearPreferences (ClearAIPreferencesRequest) returns (Empty);
+  rpc OpsBrief (OpsBriefRequest) returns (OpsBriefReply);
   // Admin-only draft review. Start interrupts; Resume closes the checkpoint
   // after the BFF has saved the draft through the normal apply endpoint.
   rpc StartCampaignDraft (StartCampaignDraftRequest) returns (CampaignDraftReply);
@@ -947,6 +948,19 @@ message AIPreferences {
 message GetAIPreferencesRequest { int64 user_id = 1; }
 message SetAIPreferencesRequest { int64 user_id = 1; AIPreferences preferences = 2; }
 message ClearAIPreferencesRequest { int64 user_id = 1; }
+message OpsBriefRequest { int32 days = 1; }
+message OpsBriefReply {
+  string summary = 1;
+  int64 total_orders = 2;
+  int64 paid_orders = 3;
+  int64 paid_cent = 4;
+  int64 after_sales = 5;
+  int64 refunded_cent = 6;
+  int64 low_stock = 7;
+  int64 from_unix = 8;
+  int64 to_unix = 9;
+  int64 generated_at = 10;
+}
 message StartCampaignDraftRequest {
   int64 user_id = 1;
   string name = 2;

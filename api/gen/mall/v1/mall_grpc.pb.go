@@ -5680,6 +5680,7 @@ const (
 	AIService_GetPreferences_FullMethodName      = "/mall.v1.AIService/GetPreferences"
 	AIService_SetPreferences_FullMethodName      = "/mall.v1.AIService/SetPreferences"
 	AIService_ClearPreferences_FullMethodName    = "/mall.v1.AIService/ClearPreferences"
+	AIService_OpsBrief_FullMethodName            = "/mall.v1.AIService/OpsBrief"
 	AIService_StartCampaignDraft_FullMethodName  = "/mall.v1.AIService/StartCampaignDraft"
 	AIService_CheckCampaignDraft_FullMethodName  = "/mall.v1.AIService/CheckCampaignDraft"
 	AIService_ResumeCampaignDraft_FullMethodName = "/mall.v1.AIService/ResumeCampaignDraft"
@@ -5703,6 +5704,7 @@ type AIServiceClient interface {
 	GetPreferences(ctx context.Context, in *GetAIPreferencesRequest, opts ...grpc.CallOption) (*AIPreferences, error)
 	SetPreferences(ctx context.Context, in *SetAIPreferencesRequest, opts ...grpc.CallOption) (*AIPreferences, error)
 	ClearPreferences(ctx context.Context, in *ClearAIPreferencesRequest, opts ...grpc.CallOption) (*Empty, error)
+	OpsBrief(ctx context.Context, in *OpsBriefRequest, opts ...grpc.CallOption) (*OpsBriefReply, error)
 	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
 	// after the BFF has saved the draft through the normal apply endpoint.
 	StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error)
@@ -5817,6 +5819,16 @@ func (c *aIServiceClient) ClearPreferences(ctx context.Context, in *ClearAIPrefe
 	return out, nil
 }
 
+func (c *aIServiceClient) OpsBrief(ctx context.Context, in *OpsBriefRequest, opts ...grpc.CallOption) (*OpsBriefReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OpsBriefReply)
+	err := c.cc.Invoke(ctx, AIService_OpsBrief_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aIServiceClient) StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CampaignDraftReply)
@@ -5865,6 +5877,7 @@ type AIServiceServer interface {
 	GetPreferences(context.Context, *GetAIPreferencesRequest) (*AIPreferences, error)
 	SetPreferences(context.Context, *SetAIPreferencesRequest) (*AIPreferences, error)
 	ClearPreferences(context.Context, *ClearAIPreferencesRequest) (*Empty, error)
+	OpsBrief(context.Context, *OpsBriefRequest) (*OpsBriefReply, error)
 	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
 	// after the BFF has saved the draft through the normal apply endpoint.
 	StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error)
@@ -5906,6 +5919,9 @@ func (UnimplementedAIServiceServer) SetPreferences(context.Context, *SetAIPrefer
 }
 func (UnimplementedAIServiceServer) ClearPreferences(context.Context, *ClearAIPreferencesRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClearPreferences not implemented")
+}
+func (UnimplementedAIServiceServer) OpsBrief(context.Context, *OpsBriefRequest) (*OpsBriefReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpsBrief not implemented")
 }
 func (UnimplementedAIServiceServer) StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartCampaignDraft not implemented")
@@ -6092,6 +6108,24 @@ func _AIService_ClearPreferences_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_OpsBrief_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpsBriefRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).OpsBrief(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_OpsBrief_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).OpsBrief(ctx, req.(*OpsBriefRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AIService_StartCampaignDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartCampaignDraftRequest)
 	if err := dec(in); err != nil {
@@ -6184,6 +6218,10 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClearPreferences",
 			Handler:    _AIService_ClearPreferences_Handler,
+		},
+		{
+			MethodName: "OpsBrief",
+			Handler:    _AIService_OpsBrief_Handler,
 		},
 		{
 			MethodName: "StartCampaignDraft",

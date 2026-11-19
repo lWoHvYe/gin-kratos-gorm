@@ -172,6 +172,9 @@ chaos:
 	./scripts/chaos-nats.sh
 	./scripts/chaos-redis.sh
 
+ai-rag-eval:
+	$(GO) run ./cmd/ai-rag-eval -cases deploy/eval/rag-cases.yaml
+
 ai-eval:
 	$(GO) run ./cmd/ai-eval -cases deploy/eval/ai-cases.yaml
 

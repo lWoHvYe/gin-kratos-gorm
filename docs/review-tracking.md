@@ -53,7 +53,7 @@ risk is explicit.
 | Phase | Status |
 |---|---|
 | 5 Correctness foundation | done: identity test, repeated eval 26/26 with test resets, HITL binding/atomic/idempotent duplicate/save-failure recovery, CampaignSpec |
-| 6 Versioned RAG | partial: versioned index/alias + dual-write + leader lock + reconciliation + cache + lag/truncation/failure metrics + rollback runbook done; retrieval/groundedness quality eval remains |
+| 6 Versioned RAG | partial: versioned index/alias + dual-write + leader lock + reconciliation + cache + operational metrics + rollback runbook + retrieval hit@5 5/5 done; groundedness/refusal and tested rollback remain |
 | 7 Cart assistant | not started |
 | 8 Personalization | not started |
 | 9 Proactive ops | not started |

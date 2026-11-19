@@ -1359,3 +1359,17 @@ paths:
       responses:
         '200':
           description: Saved campaign and rule
+
+  /api/admin/v1/ai/rag/search:
+    get:
+      summary: Admin retrieval inspection for quality evaluation
+      tags: [ai]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 8 } }
+      responses:
+        '200':
+          description: Retrieved knowledge documents
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }

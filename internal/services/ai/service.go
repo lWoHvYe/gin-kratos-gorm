@@ -55,6 +55,7 @@ type Service struct {
 	usage      usageStore
 	cache      redis.UniversalClient
 	breaker    *circuitBreaker
+	rag        RAGSearcher
 	// budgets/prices are copied out of cfg for cheap per-request access.
 	dailyBudget      int64
 	globalBudget     int64
@@ -85,6 +86,7 @@ func NewService(ctx context.Context, cfg Config, provider ProviderConfig, d deps
 	}
 	svc := New(cfg, runner, newSessionStore(cache), newLimiter(cache, cfg.RateLimit, cfg.RateWindow), logger)
 	svc.cache = cache
+	svc.rag = d.RAG
 	svc.adminAgent = adminRunner
 	svc.dailyBudget = cfg.DailyTokenBudget
 	svc.globalBudget = cfg.GlobalDailyTokenBudget

@@ -190,6 +190,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 	admin.POST("/after-sales/:no/refund", h.refundAfterSale)
 	admin.GET("/payments/refunds", h.listRefunds)
 	admin.GET("/ai/feedback/summary", h.aiFeedbackSummary)
+	admin.GET("/ai/rag/search", h.ragSearch)
 	admin.GET("/campaigns", h.listCampaigns)
 	admin.POST("/campaigns", h.createCampaign)
 	admin.PUT("/campaigns/:id", h.updateCampaign)

@@ -69,3 +69,9 @@ rate. The AI user limit is 20 requests / 10 minutes and there is a daily token
 budget, so a full repeated gate can use the test-only
 `-redis-addr ... -reset-rate-limit -reset-budget` flags; otherwise later cases
 report `RATE_LIMITED`. These flags never affect a deployed service. The default remains one run.
+
+## Retrieval hit@k
+
+`make ai-rag-eval` calls the admin-only RAG search endpoint and reports hit@5
+against `deploy/eval/rag-cases.yaml`. Current demo result: 5/5. This measures
+retrieval only; groundedness/refusal remain in the chat eval.

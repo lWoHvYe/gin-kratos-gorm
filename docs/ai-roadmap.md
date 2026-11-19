@@ -69,9 +69,8 @@ Remaining:
    metrics and a tested rollback runbook remain.
 2. Metrics: expected vs indexed document count, truncation/empty-page signal,
    consumer lag, rebuild failures and version age.
-3. Quality eval beyond string matching: retrieval hit rate, groundedness,
-   unsupported-answer refusal, repeated-run stability, latency and token cost;
-   compare cache on/off and lexical vs semantic rerank.
+3. Quality eval beyond string matching: retrieval hit@5 is 5/5 via
+   `make ai-rag-eval`; groundedness/refusal and cache/rerank comparisons remain.
 4. A tested rollback runbook: switch alias back to the previous version and
    verify catch-up; retained versions alone are not a rollback guarantee.
 

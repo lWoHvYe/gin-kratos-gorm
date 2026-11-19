@@ -1,0 +1,16 @@
+cases:
+  - id: headphones
+    query: "降噪耳机"
+    expected_any: ["声谷 Max", "声谷 Air 3"]
+  - id: return-policy
+    query: "退货退款流程"
+    expected_any: ["退货退款流程"]
+  - id: student-phone
+    query: "适合学生的手机"
+    expected_any: ["云舟 M3"]
+  - id: coffee
+    query: "咖啡豆"
+    expected_any: ["咖啡豆"]
+  - id: laptop
+    query: "轻薄笔记本"
+    expected_any: ["笔记本"]

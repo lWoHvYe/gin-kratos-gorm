@@ -92,6 +92,12 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 			logger.Info("ai rag loaded current version", "index", current.Index, "prefix", current.Prefix)
 			return r, nil
 		}
+		// The pointer may be missing while a valid alias still serves traffic.
+		if current, ok := loadAliasVersion(ctx, client, index); ok {
+			r.index, r.prefix = current.Index, current.Prefix
+			logger.Warn("ai rag loaded alias without current pointer", "index", current.Index, "prefix", current.Prefix)
+			return r, nil
+		}
 		// The lock holder did not publish a version in time; try once to take
 		// over (a crashed builder's lock may have expired).
 		if locked, err = client.SetNX(ctx, lockKey, lockOwner, 10*time.Minute).Result(); err != nil || !locked {
@@ -140,6 +146,22 @@ func waitForCurrent(ctx context.Context, client redis.UniversalClient, base stri
 		case <-ctx.Done():
 			return ragVersion{}, false
 		case <-time.After(time.Second):
+		}
+	}
+	return ragVersion{}, false
+}
+
+func loadAliasVersion(ctx context.Context, client redis.UniversalClient, alias string) (ragVersion, bool) {
+	info, err := client.Do(ctx, "FT.INFO", alias).Slice()
+	if err != nil {
+		return ragVersion{}, false
+	}
+	for i := 0; i+1 < len(info); i += 2 {
+		if fmt.Sprint(info[i]) == "index_name" {
+			name := fmt.Sprint(info[i+1])
+			if name != "" && name != alias {
+				return ragVersion{Index: alias, Prefix: name + ":", CreatedAt: time.Now().Unix()}, true
+			}
 		}
 	}
 	return ragVersion{}, false

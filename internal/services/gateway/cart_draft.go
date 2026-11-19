@@ -82,21 +82,24 @@ func (h *handlers) confirmCartDraft(c *gin.Context) {
 			return
 		}
 	}
-	var cart *pb.Cart
+	// Cart owns the atomic/idempotent boundary; a retry after a partial
+	// BFF failure cannot add the draft twice.
+	lines := make([]*pb.CartItem, 0, len(draft.Items))
 	for _, item := range draft.Items {
-		cart, err = h.clients.Cart.AddItem(c.Request.Context(), &pb.AddItemRequest{
-			UserId: uid, SkuId: item.SkuID, Quantity: item.Quantity,
-		})
-		if err != nil {
-			httpx.Error(c, bff.RemoteError(err))
-			return
-		}
+		lines = append(lines, &pb.CartItem{SkuId: item.SkuID, Quantity: item.Quantity, PriceCent: item.PriceCent})
+	}
+	cart, err := h.clients.Cart.ConfirmCartDraft(c.Request.Context(), &pb.ConfirmCartDraftRequest{
+		UserId: uid, DraftId: body.DraftID, Items: lines,
+	})
+	if err != nil {
+		httpx.Error(c, bff.RemoteError(err))
+		return
 	}
 	if _, err := h.clients.AI.CompleteCartDraft(c.Request.Context(), &pb.CompleteCartDraftRequest{
 		DraftId: body.DraftID, UserId: uid,
 	}); err != nil {
-		httpx.Error(c, bff.RemoteError(err))
-		return
+		// Cart is already updated and idempotent; retrying is safe.
+		h.log.Warn("complete cart draft after cart update", "draft_id", body.DraftID, "error", err)
 	}
 	httpx.OK(c, gin.H{"confirmed": true, "cart": cart, "total_cent": draft.TotalCent, "message": fmt.Sprintf("已加入 %d 件商品", len(draft.Items))})
 }

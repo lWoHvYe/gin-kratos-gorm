@@ -13,6 +13,7 @@ import (
 	"gin-kratos-gorm/internal/platform/db"
 	"gin-kratos-gorm/internal/platform/outbox"
 
+	"github.com/go-sql-driver/mysql"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -327,4 +328,68 @@ func totalCent(items []*pb.CartItem) int64 {
 		total += item.GetPriceCent() * int64(item.GetQuantity())
 	}
 	return total
+}
+
+// ConfirmCartDraft applies a user-confirmed AI draft atomically and exactly
+// once. The (user_id, draft_id) unique key is the idempotency boundary; a retry
+// returns the already-updated cart without adding items again.
+func (s *Service) ConfirmCartDraft(ctx context.Context, req *pb.ConfirmCartDraftRequest) (*pb.Cart, error) {
+	userID, draftID := req.GetUserId(), strings.TrimSpace(req.GetDraftId())
+	if userID <= 0 || draftID == "" || len(draftID) > 64 {
+		return nil, apperr.Invalid("user_id and draft_id are required")
+	}
+	if len(req.GetItems()) == 0 || len(req.GetItems()) > 10 {
+		return nil, apperr.Invalid("items must contain 1-10 lines")
+	}
+	items := make([]*pb.CartItem, 0, len(req.GetItems()))
+	for _, line := range req.GetItems() {
+		if line.GetSkuId() <= 0 || line.GetQuantity() <= 0 || line.GetQuantity() > maxItemQuantity {
+			return nil, apperr.Invalid("invalid sku or quantity")
+		}
+		sku, err := s.fetchSku(ctx, line.GetSkuId())
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, &pb.CartItem{
+			SkuId: sku.GetId(), Name: s.skuDisplayName(ctx, sku), PriceCent: sku.GetPriceCent(),
+			Quantity: line.GetQuantity(), Selected: true,
+		})
+	}
+
+	var cart *pb.Cart
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		cartID, err := s.repo.ensureCart(ctx, tx, userID)
+		if err != nil {
+			return apperr.Internal("ensure cart", err)
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO cart_draft_confirmations (user_id, draft_id, cart_id)
+			VALUES (?, ?, ?)`, userID, draftID, cartID)
+		if err != nil {
+			var me *mysql.MySQLError
+			if errors.As(err, &me) && me.Number == 1062 {
+				var existingCartID int64
+				if err := tx.QueryRowContext(ctx, `SELECT cart_id FROM cart_draft_confirmations
+					WHERE user_id = ? AND draft_id = ?`, userID, draftID).Scan(&existingCartID); err != nil {
+					return apperr.Internal("load confirmed draft", err)
+				}
+				cart, err = s.cartFrom(ctx, tx, userID, existingCartID)
+				return err
+			}
+			return apperr.Internal("record cart draft confirmation", err)
+		}
+		for _, item := range items {
+			if err := s.repo.upsertItem(ctx, tx, cartID, item); err != nil {
+				return apperr.Internal("upsert cart item", err)
+			}
+			if err := s.appendEvent(ctx, tx, eventItemAdded, userID, item.GetSkuId()); err != nil {
+				return err
+			}
+		}
+		cart, err = s.cartFrom(ctx, tx, userID, cartID)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cart, nil
 }

@@ -7,7 +7,7 @@ Long-term choices for the Phase 5-10 implementation.
 | Phase 10 | Keep the evidence gate; defer multi-agent/multimodal/routing | deferred |
 | ADK streaming | Tool-aware streaming adapter that buffers until tool_calls are known, then streams the final answer | non-streaming; stable tools, no token deltas |
 | HITL recovery | Explicit `INTERRUPTED -> CONFIRMING -> SAVED/FAILED` record plus business idempotency key | unique draft-code idempotency; duplicate/save-failure tests pass |
-| Cart confirm | Atomic/bulk Cart RPC or a per-draft idempotency key in the Cart service | sequential AddItem then CompleteCartDraft |
+| Cart confirm | Atomic/bulk Cart RPC or a per-draft idempotency key in the Cart service | done: `Cart.ConfirmCartDraft` transaction + `(user_id,draft_id)` unique key |
 | RAG rebuild | Dedicated Job or elected leader with lease renewal | Redis leader lock; non-leader loads `ai:rag:current` |
 | RAG failure | Keep the last good alias serving and retry the build with backoff | startup reports RAG disabled if embedding fails |
 | Ops delivery | Outbox/durable delivery with retry | Redis date lock + `ai:ops:latest` snapshot |
@@ -24,13 +24,13 @@ Long-term choices for the Phase 5-10 implementation.
 
 ## Remaining known risks
 
-1. `confirmCartDraft` adds items one by one and marks the draft done afterwards.
-   A Cart failure can leave a partially added cart; a Redis failure after a
-   successful add can allow a retry to add again. A Cart-service idempotency key
-   is the durable fix.
+1. Cart confirmation is now atomic and idempotent in the Cart service. The AI
+   `CompleteCartDraft` call after the Cart update is best-effort; if it fails, a
+   retry is safe because Cart returns the existing confirmed cart.
 2. The RAG lock has a 10-minute TTL without renewal. A crashed builder blocks
-   rebuilds until expiry; a first build longer than the 60s follower wait leaves
-   followers with RAG disabled until restart.
+   rebuilds until expiry. Followers now fall back to a valid alias if the
+   `ai:rag:current` pointer is missing, but a first build longer than the 60s
+   follower wait can still leave followers without an alias.
 3. `RunOpsBriefScheduler` sets the date key before generating. A crash in that
    window skips the day; the outbox/job design is stronger.
 4. Admin low-stock links point at `/admin/inventory?sku_id=...`; confirm that

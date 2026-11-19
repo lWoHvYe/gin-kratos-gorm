@@ -2205,11 +2205,12 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	CartService_GetCart_FullMethodName       = "/mall.v1.CartService/GetCart"
-	CartService_AddItem_FullMethodName       = "/mall.v1.CartService/AddItem"
-	CartService_UpdateItem_FullMethodName    = "/mall.v1.CartService/UpdateItem"
-	CartService_RemoveItem_FullMethodName    = "/mall.v1.CartService/RemoveItem"
-	CartService_ClearSelected_FullMethodName = "/mall.v1.CartService/ClearSelected"
+	CartService_GetCart_FullMethodName          = "/mall.v1.CartService/GetCart"
+	CartService_AddItem_FullMethodName          = "/mall.v1.CartService/AddItem"
+	CartService_ConfirmCartDraft_FullMethodName = "/mall.v1.CartService/ConfirmCartDraft"
+	CartService_UpdateItem_FullMethodName       = "/mall.v1.CartService/UpdateItem"
+	CartService_RemoveItem_FullMethodName       = "/mall.v1.CartService/RemoveItem"
+	CartService_ClearSelected_FullMethodName    = "/mall.v1.CartService/ClearSelected"
 )
 
 // CartServiceClient is the client API for CartService service.
@@ -2220,6 +2221,7 @@ const (
 type CartServiceClient interface {
 	GetCart(ctx context.Context, in *GetCartRequest, opts ...grpc.CallOption) (*Cart, error)
 	AddItem(ctx context.Context, in *AddItemRequest, opts ...grpc.CallOption) (*Cart, error)
+	ConfirmCartDraft(ctx context.Context, in *ConfirmCartDraftRequest, opts ...grpc.CallOption) (*Cart, error)
 	UpdateItem(ctx context.Context, in *UpdateItemRequest, opts ...grpc.CallOption) (*Cart, error)
 	RemoveItem(ctx context.Context, in *RemoveItemRequest, opts ...grpc.CallOption) (*Cart, error)
 	ClearSelected(ctx context.Context, in *ClearCartRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -2247,6 +2249,16 @@ func (c *cartServiceClient) AddItem(ctx context.Context, in *AddItemRequest, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Cart)
 	err := c.cc.Invoke(ctx, CartService_AddItem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cartServiceClient) ConfirmCartDraft(ctx context.Context, in *ConfirmCartDraftRequest, opts ...grpc.CallOption) (*Cart, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Cart)
+	err := c.cc.Invoke(ctx, CartService_ConfirmCartDraft_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2291,6 +2303,7 @@ func (c *cartServiceClient) ClearSelected(ctx context.Context, in *ClearCartRequ
 type CartServiceServer interface {
 	GetCart(context.Context, *GetCartRequest) (*Cart, error)
 	AddItem(context.Context, *AddItemRequest) (*Cart, error)
+	ConfirmCartDraft(context.Context, *ConfirmCartDraftRequest) (*Cart, error)
 	UpdateItem(context.Context, *UpdateItemRequest) (*Cart, error)
 	RemoveItem(context.Context, *RemoveItemRequest) (*Cart, error)
 	ClearSelected(context.Context, *ClearCartRequest) (*Empty, error)
@@ -2309,6 +2322,9 @@ func (UnimplementedCartServiceServer) GetCart(context.Context, *GetCartRequest) 
 }
 func (UnimplementedCartServiceServer) AddItem(context.Context, *AddItemRequest) (*Cart, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddItem not implemented")
+}
+func (UnimplementedCartServiceServer) ConfirmCartDraft(context.Context, *ConfirmCartDraftRequest) (*Cart, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmCartDraft not implemented")
 }
 func (UnimplementedCartServiceServer) UpdateItem(context.Context, *UpdateItemRequest) (*Cart, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateItem not implemented")
@@ -2372,6 +2388,24 @@ func _CartService_AddItem_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CartServiceServer).AddItem(ctx, req.(*AddItemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CartService_ConfirmCartDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmCartDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CartServiceServer).ConfirmCartDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CartService_ConfirmCartDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CartServiceServer).ConfirmCartDraft(ctx, req.(*ConfirmCartDraftRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2444,6 +2478,10 @@ var CartService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddItem",
 			Handler:    _CartService_AddItem_Handler,
+		},
+		{
+			MethodName: "ConfirmCartDraft",
+			Handler:    _CartService_ConfirmCartDraft_Handler,
 		},
 		{
 			MethodName: "UpdateItem",

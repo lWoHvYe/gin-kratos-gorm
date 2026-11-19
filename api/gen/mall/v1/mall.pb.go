@@ -11580,19 +11580,20 @@ func (x *OpsFeedbackRequest) GetAdminUserId() int64 {
 }
 
 type OpsBriefReply struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Summary       string                 `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
-	TotalOrders   int64                  `protobuf:"varint,2,opt,name=total_orders,json=totalOrders,proto3" json:"total_orders,omitempty"`
-	PaidOrders    int64                  `protobuf:"varint,3,opt,name=paid_orders,json=paidOrders,proto3" json:"paid_orders,omitempty"`
-	PaidCent      int64                  `protobuf:"varint,4,opt,name=paid_cent,json=paidCent,proto3" json:"paid_cent,omitempty"`
-	AfterSales    int64                  `protobuf:"varint,5,opt,name=after_sales,json=afterSales,proto3" json:"after_sales,omitempty"`
-	RefundedCent  int64                  `protobuf:"varint,6,opt,name=refunded_cent,json=refundedCent,proto3" json:"refunded_cent,omitempty"`
-	LowStock      int64                  `protobuf:"varint,7,opt,name=low_stock,json=lowStock,proto3" json:"low_stock,omitempty"`
-	FromUnix      int64                  `protobuf:"varint,8,opt,name=from_unix,json=fromUnix,proto3" json:"from_unix,omitempty"`
-	ToUnix        int64                  `protobuf:"varint,9,opt,name=to_unix,json=toUnix,proto3" json:"to_unix,omitempty"`
-	GeneratedAt   int64                  `protobuf:"varint,10,opt,name=generated_at,json=generatedAt,proto3" json:"generated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Summary        string                 `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
+	TotalOrders    int64                  `protobuf:"varint,2,opt,name=total_orders,json=totalOrders,proto3" json:"total_orders,omitempty"`
+	PaidOrders     int64                  `protobuf:"varint,3,opt,name=paid_orders,json=paidOrders,proto3" json:"paid_orders,omitempty"`
+	PaidCent       int64                  `protobuf:"varint,4,opt,name=paid_cent,json=paidCent,proto3" json:"paid_cent,omitempty"`
+	AfterSales     int64                  `protobuf:"varint,5,opt,name=after_sales,json=afterSales,proto3" json:"after_sales,omitempty"`
+	RefundedCent   int64                  `protobuf:"varint,6,opt,name=refunded_cent,json=refundedCent,proto3" json:"refunded_cent,omitempty"`
+	LowStock       int64                  `protobuf:"varint,7,opt,name=low_stock,json=lowStock,proto3" json:"low_stock,omitempty"`
+	FromUnix       int64                  `protobuf:"varint,8,opt,name=from_unix,json=fromUnix,proto3" json:"from_unix,omitempty"`
+	ToUnix         int64                  `protobuf:"varint,9,opt,name=to_unix,json=toUnix,proto3" json:"to_unix,omitempty"`
+	GeneratedAt    int64                  `protobuf:"varint,10,opt,name=generated_at,json=generatedAt,proto3" json:"generated_at,omitempty"`
+	ExceptionLinks []string               `protobuf:"bytes,11,rep,name=exception_links,json=exceptionLinks,proto3" json:"exception_links,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *OpsBriefReply) Reset() {
@@ -11693,6 +11694,13 @@ func (x *OpsBriefReply) GetGeneratedAt() int64 {
 		return x.GeneratedAt
 	}
 	return 0
+}
+
+func (x *OpsBriefReply) GetExceptionLinks() []string {
+	if x != nil {
+		return x.ExceptionLinks
+	}
+	return nil
 }
 
 type StartCampaignDraftRequest struct {
@@ -13244,7 +13252,7 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x03day\x18\x01 \x01(\tR\x03day\x12\x16\n" +
 	"\x06rating\x18\x02 \x01(\x05R\x06rating\x12\x18\n" +
 	"\acomment\x18\x03 \x01(\tR\acomment\x12\"\n" +
-	"\radmin_user_id\x18\x04 \x01(\x03R\vadminUserId\"\xc6\x02\n" +
+	"\radmin_user_id\x18\x04 \x01(\x03R\vadminUserId\"\xef\x02\n" +
 	"\rOpsBriefReply\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12!\n" +
 	"\ftotal_orders\x18\x02 \x01(\x03R\vtotalOrders\x12\x1f\n" +
@@ -13258,7 +13266,8 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\tfrom_unix\x18\b \x01(\x03R\bfromUnix\x12\x17\n" +
 	"\ato_unix\x18\t \x01(\x03R\x06toUnix\x12!\n" +
 	"\fgenerated_at\x18\n" +
-	" \x01(\x03R\vgeneratedAt\"\x9d\x02\n" +
+	" \x01(\x03R\vgeneratedAt\x12'\n" +
+	"\x0fexception_links\x18\v \x03(\tR\x0eexceptionLinks\"\x9d\x02\n" +
 	"\x19StartCampaignDraftRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +

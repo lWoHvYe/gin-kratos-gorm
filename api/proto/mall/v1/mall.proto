@@ -968,6 +968,7 @@ message OpsBriefReply {
   int64 from_unix = 8;
   int64 to_unix = 9;
   int64 generated_at = 10;
+  repeated string exception_links = 11;
 }
 message StartCampaignDraftRequest {
   int64 user_id = 1;

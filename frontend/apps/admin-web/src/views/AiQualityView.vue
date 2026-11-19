@@ -78,6 +78,9 @@ onMounted(load)
       <h3>运营简报</h3>
       <p>{{ brief.summary }}</p>
       <p class="muted">订单 {{ brief.total_orders }} · 已支付 {{ brief.paid_orders }} · 售后 {{ brief.after_sales }} · 低库存 {{ brief.low_stock }}</p>
+      <ul v-if="brief.exception_links?.length" class="links">
+        <li v-for="link in brief.exception_links" :key="link"><a :href="link">{{ link }}</a></li>
+      </ul>
       <div class="brief-feedback">
         <span>这份简报有帮助吗？</span>
         <el-button size="small" :disabled="briefFeedback !== 0" @click="rateBrief(1)">👍</el-button>
@@ -116,6 +119,8 @@ onMounted(load)
 .metric span { color: var(--mall-muted); font-size: 13px; }
 .section { margin-top: 16px; }
 .muted { color: var(--mall-muted); font-size: 13px; }
+.links { margin: 6px 0; padding-left: 18px; font-size: 12px; }
+.links a { color: #2563eb; }
 .brief-feedback { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
 h3 { margin: 0 0 12px; font-size: 16px; }
 .comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }

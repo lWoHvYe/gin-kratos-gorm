@@ -321,6 +321,7 @@ export interface OpsBrief {
   refunded_cent: number
   low_stock: number
   generated_at: number
+  exception_links?: string[]
 }
 
 export interface FeedbackSummary {

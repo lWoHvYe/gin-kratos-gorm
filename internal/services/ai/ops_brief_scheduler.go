@@ -18,19 +18,26 @@ func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc 
 	}
 	run := func() {
 		day := time.Now().Format("2006-01-02")
-		key := "ai:ops:brief:" + day
-		ok, err := cache.SetNX(ctx, key, "1", 48*time.Hour).Result()
+		doneKey := "ai:ops:brief:" + day
+		lockKey := "ai:ops:brief:lock:" + day
+		if exists, _ := cache.Exists(ctx, doneKey).Result(); exists > 0 {
+			return
+		}
+		// A crash while generating must not consume the day. The short-lived
+		// lock is released by expiry; only a successful generation writes done.
+		ok, err := cache.SetNX(ctx, lockKey, "1", 30*time.Minute).Result()
 		if err != nil || !ok {
 			return
 		}
+		defer cache.Del(ctx, lockKey)
 		brief, err := svc.OpsBrief(ctx, nil)
 		if err != nil {
-			_ = cache.Del(ctx, key).Err()
 			logger.Warn("ops brief generation failed", "error", err)
 			return
 		}
 		raw, _ := json.Marshal(brief)
 		_ = cache.Set(ctx, "ai:ops:latest", raw, 48*time.Hour).Err()
+		_ = cache.Set(ctx, doneKey, "1", 48*time.Hour).Err()
 		logger.Info("ops brief generated", "day", day, "orders", brief.GetTotalOrders(), "low_stock", brief.GetLowStock())
 	}
 	run()

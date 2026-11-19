@@ -45,10 +45,10 @@ func (s *Service) OpsBrief(ctx context.Context, req *pb.OpsBriefRequest) (*pb.Op
 	}
 	for _, stock := range low.GetStocks() {
 		reply.ExceptionLinks = append(reply.ExceptionLinks,
-			fmt.Sprintf("/admin/inventory?sku_id=%d", stock.GetSkuId()))
+			fmt.Sprintf("/inventory?sku_id=%d", stock.GetSkuId()))
 	}
 	if len(reply.ExceptionLinks) == 0 && low.GetTotal() > 0 {
-		reply.ExceptionLinks = append(reply.ExceptionLinks, "/admin/inventory?low_stock=1")
+		reply.ExceptionLinks = append(reply.ExceptionLinks, "/inventory?low_stock=1")
 	}
 	reply.Summary = fmt.Sprintf(
 		"过去 %d 天：订单 %d（已支付 %d，GMV %.2f 元），售后 %d（退款 %.2f 元），低库存 SKU %d。所有数字来自订单/售后/库存聚合接口。",

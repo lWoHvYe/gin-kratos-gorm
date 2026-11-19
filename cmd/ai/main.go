@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/config"
@@ -105,6 +106,9 @@ func main() {
 			defer natsClient.Close()
 			workers.Go(func(ctx context.Context) {
 				ai.RunCatalogIndexConsumer(ctx, natsClient, catalog, rag, logger)
+			})
+			workers.Go(func(ctx context.Context) {
+				ai.RunRAGReconcile(ctx, rag, catalog, logger, 15*time.Minute)
 			})
 		}
 	}

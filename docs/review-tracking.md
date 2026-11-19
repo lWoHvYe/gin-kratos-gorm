@@ -9,7 +9,7 @@ risk is explicit.
 | ID | Status | Notes |
 |---|---|---|
 | P1#1 | done | Seckill allocate/release/hold/TCC-cancel paths that change normal reserved now write inventory ledger + `stock.changed`; closed-bucket HELD covered by MySQL test. |
-| P1#2 | partial | Multi-SKU partial Confirm is rolled back; cancel compensation includes seckill; failed direct restock now emits `shop.inventory.compensation.requested.v1` with a retrying consumer. No fault-injection test yet. |
+| P1#2 | partial | Multi-SKU partial Confirm is rolled back; cancel compensation includes seckill; failed direct restock emits `shop.inventory.compensation.requested.v1` with a retrying consumer. Consumer path has no fault-injection test yet. |
 | P1#3 | done | Stock events carry inventory `version`; catalog projects conditionally via `skus.stock_version`; MySQL test proves an older event cannot overwrite a newer projection. |
 | P1#4 | done | HITL checks draft binding before save; campaign+rule are one pricing transaction; checkpoint closes only after the business write. Live wrong-payload 409, correct 200, replay 404. |
 | P1#5 | done | Eval executes `contains_any` and rejects assertion-less cases; real eval 13/13. |
@@ -19,7 +19,7 @@ risk is explicit.
 | ID | Status | Notes |
 |---|---|---|
 | P2#6 | done | Outbox prune selects one ID batch and archives/deletes those IDs in one transaction; MySQL test passes. |
-| P2#7 | partial | Quote child/parent deletion is one transaction; inventory_ledger retention/archive policy still open (growth metrics only). |
+| P2#7 | done | Quote cleanup is one transaction; inventory_ledger has a 180-day archive table/worker with MySQL test; growth metrics retained. |
 | P2#8 | done | SQL fallback SKU predicate now includes `price_cent > 0`, matching GORM. |
 | P2#9 | partial | BFF and catalog gRPC clamp page > 1000; keyset pagination not implemented. |
 | P2#10 | rejected | Rechecked: only cart add and admin product detail call `GetStock`; checkout uses quote lines. No checkout/cart-merge per-SKU loop exists. |
@@ -29,7 +29,7 @@ risk is explicit.
 | P2#14 | done | `users.token_version` in JWT; status changes bump it; admin + high-risk checkout/payment BFFs revalidate. Live old demo token -> 401 after disable. |
 | P2#15 | partial | Added true concurrent seckill release MySQL test; no crash/chaos harness. |
 | P2#16 | done | Preview uses the same `userIDFromContext` as tools and errors when identity is missing; no fixed user 1. |
-| P2#17 | partial | RAG builds a versioned index, switches a `_current` alias, and paginates fully. HA rolling high-watermark/dual-write and index quality metrics are still open. |
+| P2#17 | partial | Versioned index/alias/full pagination plus 15m full reconciliation with content-hash skip; true event high-watermark/dual-write and index quality metrics still open. |
 | P2#18 | done | topologySpreadConstraints added; PDBs cover gateway/seckill/order/inventory/identity/catalog/pricing/payment; HA template renders. |
 | P2#19 | done | Alertmanager added to observability target; Prometheus scrapes ai:9111; compose config valid. |
 
@@ -53,7 +53,7 @@ risk is explicit.
 | Phase | Status |
 |---|---|
 | 5 Correctness foundation | done: identity/eval/HITL binding+atomic save + CampaignSpec |
-| 6 Versioned RAG | partial: versioned index/alias/full pagination done; HA high-watermark, quality metrics, semantic cache pending |
+| 6 Versioned RAG | partial: versioned index/alias/full pagination + periodic reconciliation done; high-watermark, quality metrics, semantic cache pending |
 | 7 Cart assistant | not started |
 | 8 Personalization | not started |
 | 9 Proactive ops | not started |

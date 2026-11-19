@@ -3,7 +3,9 @@ package ai
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -39,6 +41,7 @@ type RAGIndex interface {
 	RAGSearcher
 	UpsertProduct(ctx context.Context, p *pb.Product) error
 	DeleteProduct(ctx context.Context, id int64) error
+	ReconcileProducts(ctx context.Context, catalog catalogClient) error
 }
 
 // embedder turns text into a vector. Redis stores/searches the vectors; it does
@@ -168,6 +171,7 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 			"content", d.Content,
 			"terms", lexicalTerms(d.Title+"\n"+d.Content),
 			"product_id", d.ProductID,
+			"content_hash", contentHash(d.Title+"\n"+d.Content),
 			"embedding", encodeVector(vectors[i]),
 		)
 	}
@@ -613,6 +617,10 @@ func productDoc(p *pb.Product) ragDoc {
 // UpsertProduct indexes one product without rebuilding the whole index.
 func (r *redisRAG) UpsertProduct(ctx context.Context, p *pb.Product) error {
 	doc := productDoc(p)
+	hash := contentHash(doc.Title + "\n" + doc.Content)
+	if existing, err := r.client.HGet(ctx, r.prefix+doc.ID, "content_hash").Result(); err == nil && existing == hash {
+		return nil
+	}
 	vec, err := r.embedder.Embed(ctx, []string{doc.Title + "\n" + doc.Content})
 	if err != nil || len(vec) != 1 {
 		return fmt.Errorf("embed product %d: %w", p.GetId(), err)
@@ -620,10 +628,54 @@ func (r *redisRAG) UpsertProduct(ctx context.Context, p *pb.Product) error {
 	return r.client.HSet(ctx, r.prefix+doc.ID,
 		"kind", doc.Kind, "title", doc.Title, "content", doc.Content,
 		"terms", lexicalTerms(doc.Title+"\n"+doc.Content),
-		"product_id", doc.ProductID, "embedding", encodeVector(vec[0])).Err()
+		"product_id", doc.ProductID, "content_hash", hash, "embedding", encodeVector(vec[0])).Err()
 }
 
 // DeleteProduct removes a product from the index on unpublish/delete.
 func (r *redisRAG) DeleteProduct(ctx context.Context, id int64) error {
 	return r.client.Del(ctx, r.prefix+fmt.Sprintf("product:%d", id)).Err()
+}
+
+// ReconcileProducts catches events missed during an index build or consumed by
+// an older replica. Unchanged products are skipped by content hash.
+func (r *redisRAG) ReconcileProducts(ctx context.Context, catalog catalogClient) error {
+	if catalog == nil {
+		return nil
+	}
+	seen := map[int64]struct{}{}
+	for page := int32(1); page <= 100; page++ {
+		list, err := catalog.ListProducts(ctx, &pb.ListProductsRequest{Page: page, PageSize: 100})
+		if err != nil {
+			return fmt.Errorf("reconcile list products: %w", err)
+		}
+		for _, p := range list.GetProducts() {
+			seen[p.GetId()] = struct{}{}
+			if err := r.UpsertProduct(ctx, p); err != nil {
+				return fmt.Errorf("reconcile product %d: %w", p.GetId(), err)
+			}
+		}
+		if len(list.GetProducts()) < 100 {
+			break
+		}
+	}
+	iter := r.client.Scan(ctx, 0, r.prefix+"product:*", 200).Iterator()
+	for iter.Next(ctx) {
+		key := iter.Val()
+		idStr := strings.TrimPrefix(key, r.prefix+"product:")
+		var id int64
+		if _, err := fmt.Sscan(idStr, &id); err != nil {
+			continue
+		}
+		if _, ok := seen[id]; !ok {
+			if err := r.client.Del(ctx, key).Err(); err != nil {
+				return err
+			}
+		}
+	}
+	return iter.Err()
+}
+
+func contentHash(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
 }

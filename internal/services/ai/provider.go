@@ -101,6 +101,9 @@ func (m *mockModel) mockToolCall(query string) (string, map[string]any) {
 		}
 		return false
 	}
+	if has("draft_cart") && (strings.Contains(q, "购物车") || strings.Contains(q, "草案")) {
+		return "draft_cart", map[string]any{"items": []map[string]any{{"sku_id": 10171, "quantity": 1}}}
+	}
 	if has("preview_campaign") && (strings.Contains(q, "预览") || strings.Contains(q, "试算")) {
 		return "preview_campaign", map[string]any{"type": "THRESHOLD", "threshold_cent": 30000, "discount_cent": 3000, "sample_price_cent": 30000, "quantity": 1}
 	}

@@ -7,7 +7,9 @@ dual-write registry while retained.
 1. Inspect versions:
    `redis-cli --scan --pattern 'ai_kb_v*'`
    `redis-cli GET ai:rag:current`
-2. Choose a previous concrete index and its prefix.
+2. Choose a previous concrete index and its prefix. Verify
+   `FT.INFO <index>` reports the expected `num_docs` (the demo index is 64);
+   never switch to a 0-document failed build.
 3. Switch the alias atomically:
    `FT.ALIASUPDATE ai_kb_current ai_kb_v<timestamp>`
 4. Publish the matching current pointer:

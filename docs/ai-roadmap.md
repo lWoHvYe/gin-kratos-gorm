@@ -11,7 +11,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
 | 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
 | 6 | Versioned RAG and measurable quality | partial (see below) |
-| 7 | Customer task assistant: comparison, budget list, cart draft | partial: mock E2E done; real-model E2E blocked by provider |
+| 7 | Customer task assistant: comparison, budget list, cart draft | done: real-model draft SSE -> confirm 200 |
 | 8 | Controlled personalization / preference profile | partial: API + UI + prompt injection |
 | 9 | Proactive admin operations copilot | done: deterministic daily brief, latest snapshot, low-stock links, feedback |
 | 10 | Evidence-triggered advanced capabilities | conditional |
@@ -85,8 +85,8 @@ persists the draft in Redis bound to the server-derived user, and returns a
 10-minute draft id. The BFF confirm endpoint revalidates price/status/stock and
 calls Cart. It is idempotent after completion (duplicate confirm returns
 `confirmed=true` without adding again). An SSE `draft` event and the storefront
-confirmation card are implemented. Mock-provider E2E passed (draft SSE then
-confirm 200); real-model E2E remains blocked by provider empty streams.
+confirmation card are implemented. Real-model E2E passed (draft SSE then
+confirm 200); duplicate draft frames are tolerated by the client.
 
 Start with product comparison and budget shopping-list generation. The
 assistant uses read tools to produce a cart draft containing SKU, quantity,
@@ -103,7 +103,8 @@ ordinary chat remains the fallback.
 Current slice: server-side Redis profile keyed by user id, 180-day retention,
 GET/PUT/DELETE BFF endpoints, storefront edit/clear panel, and a system-message
 injection for customer chat. Live isolation check: demo preferences are empty
-for the admin user. Eval against no-memory recommendations still remains.
+for the admin user. A/B live run showed the preference-aware answer explicitly
+framing 云舟 and the 3000元 budget; a formal no-memory benchmark remains.
 
 Start with a small server-side preference profile (brands/categories, budget
 range, size where relevant), not unrestricted transcript memory. Preferences are

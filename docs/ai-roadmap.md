@@ -11,7 +11,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
 | 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
 | 6 | Versioned RAG and measurable quality | partial (see below) |
-| 7 | Customer task assistant: comparison, budget list, cart draft | pending |
+| 7 | Customer task assistant: comparison, budget list, cart draft | partial: read-only `draft_cart` tool |
 | 8 | Controlled personalization / preference profile | pending |
 | 9 | Proactive admin operations copilot | pending |
 | 10 | Evidence-triggered advanced capabilities | conditional |
@@ -79,6 +79,11 @@ serving; >500 products fully indexed; quality is measured against the Phase 5
 baseline.
 
 ## Phase 7: customer task assistant (draft, never direct write)
+
+Current slice: `draft_cart` is a read-only tool that resolves SKU/price/stock and
+returns a structured draft with a 10-minute expiry. Confirmation UI, BFF
+revalidation and the original Cart RPC path are still required before this
+phase is done.
 
 Start with product comparison and budget shopping-list generation. The
 assistant uses read tools to produce a cart draft containing SKU, quantity,

@@ -60,6 +60,10 @@ func (fakeInventory) ListLowStock(_ context.Context, _ *pb.ListLowStockRequest, 
 	return &pb.StockList{Total: 1, Stocks: []*pb.Stock{{SkuId: 9, WarehouseId: 1, OnHand: 8, Reserved: 2, Available: 6}}}, nil
 }
 
+func (fakeInventory) GetStock(_ context.Context, in *pb.GetStockRequest, _ ...grpc.CallOption) (*pb.Stock, error) {
+	return &pb.Stock{SkuId: in.GetSkuId(), WarehouseId: 1, OnHand: 8, Reserved: 2, Available: 6}, nil
+}
+
 func runTool(t *testing.T, base tool.BaseTool, ctx context.Context, args string) (string, error) {
 	t.Helper()
 	invokable, ok := base.(tool.InvokableTool)

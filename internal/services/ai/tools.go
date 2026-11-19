@@ -19,6 +19,7 @@ import (
 type catalogClient interface {
 	ListProducts(ctx context.Context, in *pb.ListProductsRequest, opts ...grpc.CallOption) (*pb.ProductList, error)
 	GetProduct(ctx context.Context, in *pb.GetProductRequest, opts ...grpc.CallOption) (*pb.Product, error)
+	GetSku(ctx context.Context, in *pb.GetSkuRequest, opts ...grpc.CallOption) (*pb.Sku, error)
 }
 
 type orderClient interface {
@@ -35,6 +36,7 @@ type afterSalesClient interface {
 
 type inventoryClient interface {
 	ListLowStock(ctx context.Context, in *pb.ListLowStockRequest, opts ...grpc.CallOption) (*pb.StockList, error)
+	GetStock(ctx context.Context, in *pb.GetStockRequest, opts ...grpc.CallOption) (*pb.Stock, error)
 }
 
 type promotionClient interface {
@@ -87,7 +89,11 @@ func newTools(d deps) ([]tool.BaseTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := []tool.BaseTool{search, getProduct, listOrders, getOrder, listAfterSales, getAfterSale, policy}
+	draft, err := newDraftCartTool(d.Catalog, d.Inventory)
+	if err != nil {
+		return nil, err
+	}
+	out := []tool.BaseTool{search, getProduct, listOrders, getOrder, listAfterSales, getAfterSale, policy, draft}
 	if d.RAG != nil {
 		knowledge, err := newKnowledgeTool(d.RAG)
 		if err != nil {

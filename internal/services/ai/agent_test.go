@@ -36,6 +36,10 @@ func (f *fakeCatalog) GetProduct(_ context.Context, in *pb.GetProductRequest, _ 
 	return &pb.Product{Id: in.GetId(), Name: "静音键盘", MinPriceCent: 29900}, nil
 }
 
+func (f *fakeCatalog) GetSku(_ context.Context, in *pb.GetSkuRequest, _ ...grpc.CallOption) (*pb.Sku, error) {
+	return &pb.Sku{Id: in.GetSkuId(), SpuId: 7, PriceCent: 29900, Status: "ENABLED"}, nil
+}
+
 func TestMockAgentCallsCatalogTool(t *testing.T) {
 	catalog := &fakeCatalog{}
 	ag, err := buildADKAgent(context.Background(), ProviderConfig{Provider: "mock"}, Deps{Catalog: catalog}, false)

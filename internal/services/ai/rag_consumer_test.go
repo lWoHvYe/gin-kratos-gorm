@@ -31,6 +31,9 @@ func (c indexCatalog) ListProducts(context.Context, *pb.ListProductsRequest, ...
 func (c indexCatalog) GetProduct(context.Context, *pb.GetProductRequest, ...grpcCallOption) (*pb.Product, error) {
 	return c.product, c.err
 }
+func (c indexCatalog) GetSku(context.Context, *pb.GetSkuRequest, ...grpcCallOption) (*pb.Sku, error) {
+	return &pb.Sku{}, c.err
+}
 
 func TestApplyCatalogChangeUpsertsAndDeletes(t *testing.T) {
 	idx := &fakeIndexer{}

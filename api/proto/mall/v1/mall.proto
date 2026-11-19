@@ -540,6 +540,7 @@ service PromotionService {
   rpc ConfirmPromotions (PromotionOrderRequest) returns (Empty);
   rpc ReleasePromotions (PromotionOrderRequest) returns (Empty);
   rpc CreateCampaign (Campaign) returns (Campaign);
+  rpc CreateCampaignWithRule (CreateCampaignWithRuleRequest) returns (CampaignWithRule);
   rpc UpdateCampaign (Campaign) returns (Campaign);
   rpc SetCampaignStatus (SetPromotionStatusRequest) returns (Empty);
   rpc ListCampaigns (Empty) returns (CampaignList);
@@ -591,6 +592,14 @@ message PromotionRule {
   int64 version = 21;
 }
 
+message CreateCampaignWithRuleRequest {
+  Campaign campaign = 1;
+  PromotionRule rule = 2;
+}
+message CampaignWithRule {
+  Campaign campaign = 1;
+  PromotionRule rule = 2;
+}
 message CampaignList { repeated Campaign campaigns = 1; }
 message PromotionListRequest { int64 campaign_id = 1; string status = 2; int32 page = 3; int32 page_size = 4; }
 message PromotionRuleList { repeated PromotionRule promotions = 1; int64 total = 2; }
@@ -893,6 +902,7 @@ service AIService {
   // Admin-only draft review. Start interrupts; Resume closes the checkpoint
   // after the BFF has saved the draft through the normal apply endpoint.
   rpc StartCampaignDraft (StartCampaignDraftRequest) returns (CampaignDraftReply);
+  rpc CheckCampaignDraft (ResumeCampaignDraftRequest) returns (Empty);
   rpc ResumeCampaignDraft (ResumeCampaignDraftRequest) returns (Empty);
 }
 
@@ -923,6 +933,8 @@ message CampaignDraftReply {
 message ResumeCampaignDraftRequest {
   int64 user_id = 1;
   string checkpoint_id = 2;
+  string campaign_code = 3;
+  string rule_code = 4;
 }
 message FeedbackDaySummary {
   string day = 1;

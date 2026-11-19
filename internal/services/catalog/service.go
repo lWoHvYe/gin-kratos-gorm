@@ -731,6 +731,11 @@ func normalizePage(page, size *int32) {
 	if *page <= 0 {
 		*page = 1
 	}
+	// BFFs reject page > 1000; clamp direct gRPC callers too so an internal
+	// caller cannot force an unbounded OFFSET.
+	if *page > 1000 {
+		*page = 1000
+	}
 	if *size <= 0 || *size > 100 {
 		*size = 20
 	}
@@ -917,7 +922,7 @@ func (s *Service) loadProduct(ctx context.Context, id int64, activeOnly bool) (*
 	}
 	skuQuery := `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status, image_url FROM skus WHERE spu_id = ?`
 	if activeOnly {
-		skuQuery += ` AND status = 'ENABLED'`
+		skuQuery += ` AND status = 'ENABLED' AND price_cent > 0`
 	}
 	skuQuery += ` ORDER BY id`
 	rows, err := s.db.QueryContext(ctx, skuQuery, id)
@@ -1134,7 +1139,7 @@ func (s *Service) loadProductsSQL(ctx context.Context, ids []int64, activeOnly b
 	skuQuery := `SELECT id, spu_id, sku_code, specs_json, price_cent, stock, status, image_url
 		FROM skus WHERE spu_id IN (` + ph + `)`
 	if activeOnly {
-		skuQuery += ` AND status = 'ENABLED'`
+		skuQuery += ` AND status = 'ENABLED' AND price_cent > 0`
 	}
 	skuQuery += ` ORDER BY id`
 	skuRows, err := s.db.QueryContext(ctx, skuQuery, args...)

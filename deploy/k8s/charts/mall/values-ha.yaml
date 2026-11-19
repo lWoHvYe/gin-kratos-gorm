@@ -113,6 +113,18 @@ podDisruptionBudgets:
   inventory:
     enabled: true
     minAvailable: 1
+  identity:
+    enabled: true
+    minAvailable: 1
+  catalog:
+    enabled: true
+    minAvailable: 1
+  pricing:
+    enabled: true
+    minAvailable: 1
+  payment:
+    enabled: true
+    minAvailable: 1
   admin-web:
     enabled: true
     minAvailable: 1

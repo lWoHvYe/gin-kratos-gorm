@@ -313,49 +313,90 @@ func pruneOnce(ctx context.Context, db *sql.DB) (int64, error) {
 		if err != nil {
 			return total, err
 		}
-		// pruneAfter is a constant, so formatting it keeps the statement free of
-		// placeholders inside INTERVAL, which some MySQL versions reject.
-		res, err := tx.ExecContext(ctx, fmt.Sprintf(`INSERT IGNORE INTO outbox_dead_letters
-			(event_id, topic, aggregate_type, aggregate_id, event_type, payload, attempts,
-			 last_error, created_at, published_at, dead_lettered_at, archived_at)
-			SELECT event_id, topic, aggregate_type, aggregate_id, event_type, payload, attempts,
-			       last_error, created_at, published_at, dead_lettered_at, NOW(3)
-			FROM outbox_events
+		// Select the exact batch once, then archive and delete those ids. The
+		// previous separate INSERT..SELECT/DELETE could touch different LIMIT
+		// batches under concurrent writes.
+		deadIDs, err := selectIDs(ctx, tx, fmt.Sprintf(`SELECT id FROM outbox_events
 			WHERE dead_lettered_at IS NOT NULL
 			  AND dead_lettered_at < DATE_SUB(NOW(3), INTERVAL %d DAY)
-			LIMIT 1000`, days))
+			ORDER BY id LIMIT 1000`, days))
 		if err != nil {
 			_ = tx.Rollback()
 			return total, err
 		}
-		archived, _ := res.RowsAffected()
-		res, err = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM outbox_events
-			WHERE dead_lettered_at IS NOT NULL
-			  AND dead_lettered_at < DATE_SUB(NOW(3), INTERVAL %d DAY)
-			LIMIT 1000`, days))
-		if err != nil {
-			_ = tx.Rollback()
-			return total, err
+		archived := int64(0)
+		if len(deadIDs) > 0 {
+			ph := idPlaceholders(len(deadIDs))
+			args := idArgs(deadIDs)
+			res, err := tx.ExecContext(ctx, `INSERT IGNORE INTO outbox_dead_letters
+				(event_id, topic, aggregate_type, aggregate_id, event_type, payload, attempts,
+				 last_error, created_at, published_at, dead_lettered_at, archived_at)
+				SELECT event_id, topic, aggregate_type, aggregate_id, event_type, payload, attempts,
+				       last_error, created_at, published_at, dead_lettered_at, NOW(3)
+				FROM outbox_events WHERE id IN (`+ph+`)`, args...)
+			if err != nil {
+				_ = tx.Rollback()
+				return total, err
+			}
+			archived, _ = res.RowsAffected()
+			if _, err := tx.ExecContext(ctx, `DELETE FROM outbox_events WHERE id IN (`+ph+`)`, args...); err != nil {
+				_ = tx.Rollback()
+				return total, err
+			}
 		}
-		deletedDL, _ := res.RowsAffected()
-		res, err = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM outbox_events
+		publishedIDs, err := selectIDs(ctx, tx, fmt.Sprintf(`SELECT id FROM outbox_events
 			WHERE published_at IS NOT NULL AND dead_lettered_at IS NULL
 			  AND published_at < DATE_SUB(NOW(3), INTERVAL %d DAY)
-			LIMIT 1000`, days))
+			ORDER BY id LIMIT 1000`, days))
 		if err != nil {
 			_ = tx.Rollback()
 			return total, err
 		}
-		deletedPublished, _ := res.RowsAffected()
+		if len(publishedIDs) > 0 {
+			ph := idPlaceholders(len(publishedIDs))
+			if _, err := tx.ExecContext(ctx, `DELETE FROM outbox_events WHERE id IN (`+ph+`)`, idArgs(publishedIDs)...); err != nil {
+				_ = tx.Rollback()
+				return total, err
+			}
+		}
 		if err := tx.Commit(); err != nil {
 			return total, err
 		}
-		total += deletedPublished + deletedDL
-		if archived < 1000 && deletedDL < 1000 && deletedPublished < 1000 {
+		total += archived + int64(len(publishedIDs))
+		if len(deadIDs) < 1000 && len(publishedIDs) < 1000 {
 			break
 		}
 	}
 	return total, nil
+}
+
+func selectIDs(ctx context.Context, tx *sql.Tx, query string) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func idPlaceholders(n int) string {
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+func idArgs(ids []int64) []any {
+	out := make([]any, len(ids))
+	for i, id := range ids {
+		out[i] = id
+	}
+	return out
 }
 
 // encodePayload accepts already-marshalled JSON as well as Go values. Passing a

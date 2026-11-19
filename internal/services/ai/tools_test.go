@@ -209,7 +209,7 @@ func TestPreviewCampaignUsesDraftEvaluation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := runTool(t, tl, context.Background(), `{"type":"THRESHOLD","threshold_cent":30000,"discount_cent":3000,"sample_price_cent":30000}`)
+	out, err := runTool(t, tl, withUserID(context.Background(), 7), `{"type":"THRESHOLD","threshold_cent":30000,"discount_cent":3000,"sample_price_cent":30000}`)
 	if err != nil {
 		t.Fatal(err)
 	}

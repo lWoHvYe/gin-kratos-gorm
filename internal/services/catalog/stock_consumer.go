@@ -17,6 +17,7 @@ type stockChangedEvent struct {
 	OnHand      int64 `json:"on_hand"`
 	Reserved    int64 `json:"reserved"`
 	Available   int64 `json:"available"`
+	Version     int64 `json:"version"`
 }
 
 // RunStockConsumer keeps catalog.skus.stock as a display projection of the
@@ -43,8 +44,17 @@ func RunStockConsumer(ctx context.Context, client *mq.Client, svc *Service, logg
 		if available < 0 {
 			available = 0
 		}
-		if _, err := svc.db.ExecContext(hctx, `UPDATE skus SET stock = ? WHERE id = ?`, available, event.SkuID); err != nil {
+		if event.Version <= 0 {
+			// Old producers have no version; do not let them race a newer event.
+			return nil
+		}
+		res, err := svc.db.ExecContext(hctx, `UPDATE skus SET stock = ?, stock_version = ?
+			WHERE id = ? AND stock_version < ?`, available, event.Version, event.SkuID, event.Version)
+		if err != nil {
 			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return nil
 		}
 		svc.cacheEvictProductBySku(hctx, event.SkuID)
 		return nil

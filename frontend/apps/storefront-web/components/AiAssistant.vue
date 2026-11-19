@@ -48,7 +48,7 @@ const { token } = useApi()
 const open = ref(false)
 // The server is the capability source of truth: AI_ENABLED hides the entry
 // instead of leaving a dead button in the storefront.
-const available = ref(true)
+const available = ref(false)
 
 onMounted(async () => {
   try {
@@ -58,7 +58,9 @@ onMounted(async () => {
       available.value = body.enabled === true
     }
   } catch {
-    // Keep the entry; the chat request will surface a clean error if needed.
+    // Unknown capability: keep the entry hidden rather than rendering a dead
+    // button when the status endpoint or the service is unavailable.
+    available.value = false
   }
 })
 const input = ref('')

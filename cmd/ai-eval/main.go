@@ -149,6 +149,21 @@ func runCase(c caseSpec, userURL, adminURL, userToken, adminToken string) result
 			r.Failures = append(r.Failures, "missing "+want)
 		}
 	}
+	if len(c.ContainsAny) > 0 {
+		matched := false
+		for _, want := range c.ContainsAny {
+			if strings.Contains(low, strings.ToLower(want)) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			r.Failures = append(r.Failures, "missing any of "+strings.Join(c.ContainsAny, " / "))
+		}
+	}
+	if len(c.Contains)+len(c.ContainsAny)+len(c.NotContains)+len(c.ToolsAny) == 0 {
+		r.Failures = append(r.Failures, "case has no semantic assertion")
+	}
 	for _, bad := range c.NotContains {
 		if strings.Contains(low, strings.ToLower(bad)) {
 			r.Failures = append(r.Failures, "unexpected "+bad)

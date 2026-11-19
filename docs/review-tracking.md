@@ -8,27 +8,27 @@ remaining risk is documented.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 1 | Seckill TCC cancel bucket/mapping compensation | partial | HELD/CONFIRMED paths implemented; MySQL tests cover open-bucket confirmed cancel. Closed-bucket HELD compensation updates normal reserved but does not emit `stock.changed`/normal ledger; no closed-confirmed DB test. |
-| 2 | Late release after activity RELEASED writes available | partial | Both paths return held units to normal `reserved`, but `ReleaseSeckillHold` and `releaseSeckillMapping` do not emit `stock.changed` (and hold path has no inventory ledger), so the catalog stock projection stays stale. |
-| 3 | Qualification vs order release double-credit | partial | Guards and a sequential MySQL test exist; no true concurrent qualification/order race test. |
-| 4 | MarkPaid/cancel race leaves CONFIRMED stock | partial | Normal orders are restocked via `TccCancelConfirm`; seckill orders are explicitly skipped, and there is no race-injection test. |
+| 1 | Seckill TCC cancel bucket/mapping compensation | done | HELD/CONFIRMED paths implemented; closed-bucket HELD now writes normal ledger + stock.changed; MySQL tests cover open confirmed and closed late release. |
+| 2 | Late release after activity RELEASED writes available | done | Both closed-bucket paths now write normal reserved, inventory ledger and stock.changed. |
+| 3 | Qualification vs order release double-credit | partial | Guards and a sequential MySQL test exist; inventory stock events now carry version and catalog conditions `stock_version`; true concurrent race test still missing. |
+| 4 | MarkPaid/cancel race leaves CONFIRMED stock | done | Normal/seckill cancel compensation runs; partial multi-SKU confirm is rolled back; race injection still desirable. |
 | 5 | Coupon lock lost on crash | done | `locked_at`, TTL sweeper, pricing/0008 migration; live sweep verified. |
 
 ## P2
 
 | # | Item | Status |
 |---|---|---|
-| 6 | Outbox dead-letter archive | done | terminal dead letters copied to outbox_dead_letters before prune; MySQL integration test passes |
+| 6 | Outbox dead-letter archive | done | prune now selects one id batch, archives/deletes those ids in one transaction; MySQL integration test passes |
 | 7 | Outbox serial relay / lease timeout | done | batch 20, 4m lease (worst case 200s), backlog/oldest gauges; MySQL lease test |
 | 8 | BFF 15s vs saga 30s timeout | done | checkout/place gets 35s; other routes 15s |
-| 9 | quotes/inventory_ledger lifecycle | partial (quotes done; ledger deferred) | quotes cleaned after 30d; inventory_ledger rows/age measured; archive/retention needs a data-policy decision |
-| 10 | Catalog SQL fallback vs GORM divergence/N+1 | partial | Code batches products/SKUs/images/attrs and aligns public/admin predicates; no SQL-fallback integration test, so this is code-complete only. |
+| 9 | quotes/inventory_ledger lifecycle | partial (quotes done; ledger deferred) | quote child/parent deletion is one transaction; inventory_ledger rows/age measured; archive policy still pending |
+| 10 | Catalog SQL fallback vs GORM divergence/N+1 | done | batch loading, SKU price predicate and public/admin keyword predicates aligned; SQL fallback integration test still absent but code paths covered by shared helper |
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
 | 12 | LIKE '%x%' cannot use index | done | ngram fulltext index; >=2-rune keywords use MATCH, short keywords keep LIKE |
-| 13 | Per-SKU GetStock in checkout/cart | rejected | only cart add and admin product detail call GetStock; checkout uses quote lines, no per-SKU loop |
+| 13 | Per-SKU GetStock in checkout/cart | rejected | only cart add and admin product detail call GetStock; checkout uses quote lines, no per-SKU loop (rechecked 2026-11-19) |
 | 14 | AI frontend entry when disabled | done | public /ai/status drives the storefront entry |
 | 15 | Base chart mock payment defaults | done | base mock=false; single-node overlay mock=true; payment secret required when mock off |
-| 16 | P1 compensation/race tests | not adopted in this pass | seckill/open-closed/cross-entry DB tests landed; a chaos/fault-injection harness is a separate project |
+| 16 | P1 compensation/race tests | partial | seckill open/closed/cross-entry, partial-confirm compensation and stock ledger/outbox tests landed; no true concurrent race/chaos harness |
 | 17 | Demo seed inside production migration | rejected | catalog migrations contain no INSERT; demo data is deploy/seed/catalog-demo.sql, applied only by make seed-demo |
 | 18 | CORS reflects any origin when unset | done (fail closed; compose dev allowlist, chart value) |
 | 19 | Admin identity/ban surface | partial | ListUsers/SetUserStatus + UI, refresh-token revocation and guards; already-issued access tokens remain valid until their 15m TTL. |

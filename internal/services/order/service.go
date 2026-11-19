@@ -569,6 +569,7 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 		if err != nil {
 			return nil, apperr.Internal("load order items before payment", err)
 		}
+		confirmed := make([]*pb.OrderItem, 0, len(items))
 		for _, item := range items {
 			if _, err := s.inventory.Confirm(ctx, &pb.ReserveRequest{
 				OrderNo:     orderNo,
@@ -576,8 +577,19 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 				WarehouseId: defaultWarehouseID,
 				Quantity:    item.GetQuantity(),
 			}); err != nil {
+				// A multi-SKU confirm can fail after earlier SKUs succeeded. Roll
+				// back those confirmations; TccCancelConfirm is idempotent and
+				// handles normal and seckill reservations.
+				if len(confirmed) > 0 {
+					if _, cerr := s.inventory.TccCancelConfirm(ctx, &pb.TccPaymentRequest{
+						OrderNo: orderNo, Items: confirmed,
+					}); cerr != nil {
+						s.log.Error("compensate partially confirmed inventory", "order_no", orderNo, "error", cerr)
+					}
+				}
 				return nil, apperr.Unavailable("confirm inventory before payment: "+err.Error(), err)
 			}
+			confirmed = append(confirmed, item)
 		}
 	}
 	paymentNo := strings.TrimSpace(req.GetPaymentNo())
@@ -650,9 +662,7 @@ func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *order
 	// MarkPaid confirms inventory before the status CAS. If a concurrent cancel
 	// won that CAS, the reservation is CONFIRMED and must be restocked here;
 	// otherwise the stock stays consumed for a refunded, cancelled order.
-	// Seckill reservations have a separate bucket compensation path, so keep
-	// them out of the generic restock until that state machine is unified.
-	if s.inventory != nil && !strings.HasPrefix(record.QuoteID, "seckill:") {
+	if s.inventory != nil {
 		items, err := loadOrderItems(ctx, s.db, record.OrderNo)
 		if err != nil {
 			s.log.Error("load items for cancelled-after-confirm restock", "order_no", record.OrderNo, "error", err)

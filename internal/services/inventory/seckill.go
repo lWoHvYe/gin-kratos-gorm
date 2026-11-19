@@ -101,6 +101,20 @@ func (s *Service) AllocateSeckillStock(ctx context.Context, req *pb.AllocateSeck
 			req.GetActivityId(), req.GetQuantity(), req.GetQuantity(), seckillLedgerAllocate, fmt.Sprintf("activity:%d", req.GetActivityId())); err != nil {
 			return apperr.Internal("insert seckill ledger", err)
 		}
+		inv, err := s.stock(ctx, tx, req.GetSkuId(), warehouseID)
+		if err != nil {
+			return err
+		}
+		ledger := &reservation{
+			reservationNo: id.Event(), orderNo: fmt.Sprintf("seckill:%d", req.GetActivityId()),
+			skuID: req.GetSkuId(), warehouseID: warehouseID, quantity: req.GetQuantity(),
+		}
+		if err := insertLedger(ctx, tx, ledger, entryReserve, inv); err != nil {
+			return err
+		}
+		if err := appendStockChanged(ctx, tx, inv); err != nil {
+			return err
+		}
 		created, err = s.getSeckillStock(ctx, tx, req.GetActivityId(), false)
 		return err
 	})
@@ -161,6 +175,20 @@ func (s *Service) ReleaseSeckillStock(ctx context.Context, req *pb.ReleaseSeckil
 			(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, 0, ?, ?)`,
 			current.activityID, -current.available, seckillLedgerRelease, fmt.Sprintf("activity:%d", current.activityID)); err != nil {
 			return apperr.Internal("insert seckill release ledger", err)
+		}
+		inv, err := s.stock(ctx, tx, current.skuID, current.warehouseID)
+		if err != nil {
+			return err
+		}
+		ledger := &reservation{
+			reservationNo: id.Event(), orderNo: fmt.Sprintf("seckill:%d", current.activityID),
+			skuID: current.skuID, warehouseID: current.warehouseID, quantity: current.available,
+		}
+		if err := insertLedger(ctx, tx, ledger, entryRelease, inv); err != nil {
+			return err
+		}
+		if err := appendStockChanged(ctx, tx, inv); err != nil {
+			return err
 		}
 		released, err = s.getSeckillStock(ctx, tx, current.activityID, false)
 		return err
@@ -318,6 +346,22 @@ func (s *Service) ReleaseSeckillHold(ctx context.Context, req *pb.ReleaseSeckill
 			(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,
 			req.GetActivityId(), req.GetQuantity(), current.available+req.GetQuantity(), seckillLedgerReleaseHold, req.GetRefNo()); err != nil {
 			return apperr.Internal("insert seckill release-hold ledger", err)
+		}
+		if current.status == seckillStatusReleased {
+			inv, err := s.stock(ctx, tx, current.skuID, current.warehouseID)
+			if err != nil {
+				return err
+			}
+			ledger := &reservation{
+				reservationNo: id.Event(), orderNo: fmt.Sprintf("seckill:%d", req.GetActivityId()),
+				skuID: current.skuID, warehouseID: current.warehouseID, quantity: req.GetQuantity(),
+			}
+			if err := insertLedger(ctx, tx, ledger, entryRelease, inv); err != nil {
+				return err
+			}
+			if err := appendStockChanged(ctx, tx, inv); err != nil {
+				return err
+			}
 		}
 		out, err = s.getSeckillStock(ctx, tx, req.GetActivityId(), false)
 		return err
@@ -533,6 +577,26 @@ func (s *Service) releaseSeckillMapping(ctx context.Context, tx *sql.Tx, r *rese
 	if _, err := tx.ExecContext(ctx, `UPDATE seckill_order_stock SET status=? WHERE order_no=? AND sku_id=?`,
 		statusReleased, m.orderNo, m.skuID); err != nil {
 		return true, apperr.Internal("release seckill order mapping", err)
+	}
+	if st.status == seckillStatusReleased {
+		inv, err := s.stock(ctx, tx, st.skuID, st.warehouseID)
+		if err != nil {
+			return true, err
+		}
+		resNo := r.reservationNo
+		if resNo == "" {
+			resNo = id.Event()
+		}
+		ledger := &reservation{
+			reservationNo: resNo, orderNo: r.orderNo,
+			skuID: st.skuID, warehouseID: st.warehouseID, quantity: m.quantity,
+		}
+		if err := insertLedger(ctx, tx, ledger, entryRelease, inv); err != nil {
+			return true, err
+		}
+		if err := appendStockChanged(ctx, tx, inv); err != nil {
+			return true, err
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_stock_ledger
 		(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,

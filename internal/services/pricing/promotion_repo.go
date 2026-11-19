@@ -11,6 +11,7 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/db"
 	"gin-kratos-gorm/internal/platform/id"
 
 	"github.com/go-sql-driver/mysql"
@@ -654,4 +655,79 @@ func (s *PromotionService) ReleaseExpired(ctx context.Context, limit int) (int, 
 		released++
 	}
 	return released, rows.Err()
+}
+
+// CreateCampaignWithRule inserts an admin draft campaign and its rule in one
+// transaction. A rule validation/insert failure leaves no orphan campaign.
+func (s *PromotionService) CreateCampaignWithRule(ctx context.Context, req *pb.CreateCampaignWithRuleRequest) (*pb.CampaignWithRule, error) {
+	c, rule := req.GetCampaign(), req.GetRule()
+	if c == nil || rule == nil || strings.TrimSpace(c.GetCode()) == "" || strings.TrimSpace(c.GetName()) == "" {
+		return nil, apperr.Invalid("campaign and rule are required")
+	}
+	status := strings.ToUpper(strings.TrimSpace(c.GetStatus()))
+	if status == "" {
+		status = campaignStatusDraft
+	}
+	if !validCampaignStatus(status) {
+		return nil, apperr.Invalid("invalid campaign status")
+	}
+	if c.GetEndAtUnix() <= c.GetStartAtUnix() {
+		return nil, apperr.Invalid("campaign end must be after start")
+	}
+	if !validStackMode(defaultString(c.GetStackMode(), "PRIORITY")) {
+		return nil, apperr.Invalid("invalid stack_mode")
+	}
+	// The campaign is created in this transaction, so a caller-supplied id is
+	// neither known nor trusted; validate the rest of the rule, then bind it.
+	originalCampaignID := rule.CampaignId
+	rule.CampaignId = 1
+	err := validateRulePayload(rule)
+	rule.CampaignId = originalCampaignID
+	if err != nil {
+		return nil, err
+	}
+	ruleStatus := strings.ToUpper(strings.TrimSpace(rule.GetStatus()))
+	if ruleStatus == "" {
+		ruleStatus = ruleStatusDraft
+	}
+	if !validRuleStatus(ruleStatus) {
+		return nil, apperr.Invalid("invalid promotion status")
+	}
+	var created *pb.Campaign
+	var saved *pb.PromotionRule
+	err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `INSERT INTO promotion_campaigns
+			(code,name,type,status,start_at,end_at,priority,budget_cent,per_user_limit,stack_mode)
+			VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			strings.TrimSpace(c.GetCode()), strings.TrimSpace(c.GetName()), defaultString(c.GetType(), "NORMAL"),
+			status, time.Unix(c.GetStartAtUnix(), 0), time.Unix(c.GetEndAtUnix(), 0), c.GetPriority(),
+			c.GetBudgetCent(), c.GetPerUserLimit(), defaultString(c.GetStackMode(), "PRIORITY"))
+		if err != nil {
+			return apperr.Internal("create campaign", err)
+		}
+		c.Id, _ = res.LastInsertId()
+		c.Status = status
+		rule.CampaignId = c.Id
+		rule.Status = ruleStatus
+		res, err = tx.ExecContext(ctx, `INSERT INTO promotion_rules
+			(campaign_id,code,name,type,status,priority,exclusive,stack_group,scope_json,condition_expr,effect_json,
+			 max_discount_cent,budget_cent,per_user_limit,allow_with_coupon,start_at,end_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			rule.GetCampaignId(), strings.TrimSpace(rule.GetCode()), strings.TrimSpace(rule.GetName()),
+			strings.ToUpper(strings.TrimSpace(rule.GetType())), ruleStatus, rule.GetPriority(), rule.GetExclusive(),
+			strings.TrimSpace(rule.GetStackGroup()), defaultString(rule.GetScopeJson(), `{"all":true}`),
+			strings.TrimSpace(rule.GetConditionExpr()), rule.GetEffectJson(), rule.GetMaxDiscountCent(),
+			rule.GetBudgetCent(), rule.GetPerUserLimit(), rule.GetAllowWithCoupon(),
+			time.Unix(rule.GetStartAtUnix(), 0), time.Unix(rule.GetEndAtUnix(), 0))
+		if err != nil {
+			return apperr.Internal("create promotion", err)
+		}
+		rule.Id, _ = res.LastInsertId()
+		created, saved = c, rule
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.CampaignWithRule{Campaign: created, Rule: saved}, nil
 }

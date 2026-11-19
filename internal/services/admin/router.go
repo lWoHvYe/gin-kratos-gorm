@@ -1177,19 +1177,16 @@ func (h *handlers) saveDraft(ctx context.Context, campaign *pb.Campaign, rule *p
 	if strings.TrimSpace(campaign.GetStatus()) == "" {
 		campaign.Status = "DRAFT"
 	}
-	created, err := h.clients.Promotion.CreateCampaign(ctx, campaign)
-	if err != nil {
-		return nil, nil, err
-	}
-	rule.CampaignId = created.GetId()
 	if strings.TrimSpace(rule.GetStatus()) == "" {
 		rule.Status = "DRAFT"
 	}
-	saved, err := h.clients.Promotion.CreatePromotion(ctx, rule)
+	reply, err := h.clients.Promotion.CreateCampaignWithRule(ctx, &pb.CreateCampaignWithRuleRequest{
+		Campaign: campaign, Rule: rule,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
-	return created, saved, nil
+	return reply.GetCampaign(), reply.GetRule(), nil
 }
 
 func (h *handlers) evaluateDraft(c *gin.Context) {

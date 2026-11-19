@@ -36,6 +36,7 @@ scrape_configs:
           - fulfillment:9108
           - aftersales:9109
           - seckill:9110
+          - ai:9111
 
   # BFFs expose /metrics on their own HTTP port (no separate health port).
   - job_name: mall-bff

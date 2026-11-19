@@ -61,12 +61,29 @@ func seckillTestDB(t *testing.T) *sql.DB {
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, activity_id BIGINT NOT NULL,
 			delta BIGINT NOT NULL, balance_after BIGINT NOT NULL, reason VARCHAR(32) NOT NULL,
 			ref_no VARCHAR(64) NOT NULL, created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS inventory_ledger (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, reservation_no VARCHAR(64) NOT NULL,
+			order_no VARCHAR(64) NOT NULL, sku_id BIGINT NOT NULL, warehouse_id BIGINT NOT NULL,
+			quantity BIGINT NOT NULL, entry_type VARCHAR(16) NOT NULL,
+			on_hand_after BIGINT NOT NULL DEFAULT 0, reserved_after BIGINT NOT NULL DEFAULT 0,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			UNIQUE KEY uk_ledger_reservation_entry (reservation_no, entry_type))`,
+		`CREATE TABLE IF NOT EXISTS outbox_events (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, event_id VARCHAR(64) NOT NULL,
+			topic VARCHAR(128) NOT NULL, aggregate_type VARCHAR(64) NOT NULL,
+			aggregate_id VARCHAR(64) NOT NULL, event_type VARCHAR(64) NOT NULL,
+			payload JSON NOT NULL, attempts INT NOT NULL DEFAULT 0,
+			last_error VARCHAR(1024) NOT NULL DEFAULT '', next_attempt_at DATETIME(3) NULL,
+			published_at DATETIME(3) NULL, dead_lettered_at DATETIME(3) NULL,
+			lease_owner VARCHAR(128) NULL, lease_until DATETIME(3) NULL,
+			traceparent VARCHAR(256) NULL, created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			UNIQUE KEY uk_outbox_event_id (event_id))`,
 	} {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatalf("create test table: %v", err)
 		}
 	}
-	for _, table := range []string{"inventory_stocks", "stock_reservations", "seckill_stocks", "seckill_order_stock", "seckill_stock_ledger"} {
+	for _, table := range []string{"inventory_stocks", "stock_reservations", "seckill_stocks", "seckill_order_stock", "seckill_stock_ledger", "inventory_ledger", "outbox_events"} {
 		if _, err := db.Exec("DELETE FROM " + table); err != nil {
 			t.Fatal(err)
 		}
@@ -153,6 +170,16 @@ func TestReleaseHeldAfterBucketClosedReturnsNormalReserved(t *testing.T) {
 	}
 	if reserved != 2 || held != 0 || available != 0 {
 		t.Fatalf("reserved=%d held=%d available=%d, want 2/0/0", reserved, held, available)
+	}
+	var ledgerRows, outboxRows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM inventory_ledger`).Scan(&ledgerRows); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM outbox_events`).Scan(&outboxRows); err != nil {
+		t.Fatal(err)
+	}
+	if ledgerRows == 0 || outboxRows == 0 {
+		t.Fatalf("closed-bucket release ledger=%d outbox=%d, want both > 0", ledgerRows, outboxRows)
 	}
 }
 

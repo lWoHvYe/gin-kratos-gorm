@@ -13,8 +13,8 @@ COMPOSE := docker compose $(COMPOSE_ENV_ARG) \
 	-f $(COMPOSE_DIR)/services.yml
 
 SERVICES := gateway admin identity catalog inventory cart pricing order payment fulfillment aftersales seckill ai
-INFRA_SERVICES := mysql redis nats etcd dtm
-OBS_SERVICES := prometheus grafana
+INFRA_SERVICES := mysql redis nats dtm
+OBS_SERVICES := prometheus alertmanager grafana
 K8S_DIR := deploy/k8s
 K8S_MALL_VALUES := $(K8S_DIR)/charts/mall/values-single-node.yaml
 K8S_INFRA_VALUES := $(K8S_DIR)/charts/infra/values-single-node.yaml
@@ -39,7 +39,7 @@ help:
 	@echo "  fmt                               gofmt all Go sources"
 	@echo "  fmt-check                         fail when gofmt would change files"
 	@echo "  vet                               run go vet ./..."
-	@echo "  run-infra                         start mysql, redis, nats, etcd, dtm"
+	@echo "  run-infra                         start mysql, redis, nats, dtm"
 	@echo "  run-observability                 start prometheus + grafana (profile)"
 	@echo "  run-gateway                       build and start gateway + dependencies"
 	@echo "  run-admin                         build and start admin + dependencies"

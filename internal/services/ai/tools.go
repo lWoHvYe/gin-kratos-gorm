@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
-	"gin-kratos-gorm/internal/platform/auth"
 	"gin-kratos-gorm/internal/platform/metrics"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -837,11 +836,11 @@ func newPreviewCampaignTool(promotions promotionClient) (tool.BaseTool, error) {
 			}
 			ctx, cancel := context.WithTimeout(ctx, toolTimeout)
 			defer cancel()
-			// Preview belongs to the requesting admin; never take a user id from
-			// model arguments.
-			userID := int64(1)
-			if uid, ok := auth.UserID(ctx); ok {
-				userID = int64(uid)
+			// Preview belongs to the requesting admin; the context is the only
+			// identity source and a missing identity is an error, not user 1.
+			userID, ok := userIDFromContext(ctx)
+			if !ok {
+				return previewCampaignOutput{}, fmt.Errorf("authenticated user is required")
 			}
 			reply, err := promotions.EvaluateDraft(ctx, &pb.EvaluateDraftRequest{
 				Evaluation: &pb.PromotionEvaluateRequest{

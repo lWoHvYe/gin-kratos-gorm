@@ -3775,6 +3775,7 @@ const (
 	PromotionService_ConfirmPromotions_FullMethodName         = "/mall.v1.PromotionService/ConfirmPromotions"
 	PromotionService_ReleasePromotions_FullMethodName         = "/mall.v1.PromotionService/ReleasePromotions"
 	PromotionService_CreateCampaign_FullMethodName            = "/mall.v1.PromotionService/CreateCampaign"
+	PromotionService_CreateCampaignWithRule_FullMethodName    = "/mall.v1.PromotionService/CreateCampaignWithRule"
 	PromotionService_UpdateCampaign_FullMethodName            = "/mall.v1.PromotionService/UpdateCampaign"
 	PromotionService_SetCampaignStatus_FullMethodName         = "/mall.v1.PromotionService/SetCampaignStatus"
 	PromotionService_ListCampaigns_FullMethodName             = "/mall.v1.PromotionService/ListCampaigns"
@@ -3795,6 +3796,7 @@ type PromotionServiceClient interface {
 	ConfirmPromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error)
 	ReleasePromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error)
 	CreateCampaign(ctx context.Context, in *Campaign, opts ...grpc.CallOption) (*Campaign, error)
+	CreateCampaignWithRule(ctx context.Context, in *CreateCampaignWithRuleRequest, opts ...grpc.CallOption) (*CampaignWithRule, error)
 	UpdateCampaign(ctx context.Context, in *Campaign, opts ...grpc.CallOption) (*Campaign, error)
 	SetCampaignStatus(ctx context.Context, in *SetPromotionStatusRequest, opts ...grpc.CallOption) (*Empty, error)
 	ListCampaigns(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*CampaignList, error)
@@ -3867,6 +3869,16 @@ func (c *promotionServiceClient) CreateCampaign(ctx context.Context, in *Campaig
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Campaign)
 	err := c.cc.Invoke(ctx, PromotionService_CreateCampaign_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) CreateCampaignWithRule(ctx context.Context, in *CreateCampaignWithRuleRequest, opts ...grpc.CallOption) (*CampaignWithRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CampaignWithRule)
+	err := c.cc.Invoke(ctx, PromotionService_CreateCampaignWithRule_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3963,6 +3975,7 @@ type PromotionServiceServer interface {
 	ConfirmPromotions(context.Context, *PromotionOrderRequest) (*Empty, error)
 	ReleasePromotions(context.Context, *PromotionOrderRequest) (*Empty, error)
 	CreateCampaign(context.Context, *Campaign) (*Campaign, error)
+	CreateCampaignWithRule(context.Context, *CreateCampaignWithRuleRequest) (*CampaignWithRule, error)
 	UpdateCampaign(context.Context, *Campaign) (*Campaign, error)
 	SetCampaignStatus(context.Context, *SetPromotionStatusRequest) (*Empty, error)
 	ListCampaigns(context.Context, *Empty) (*CampaignList, error)
@@ -3998,6 +4011,9 @@ func (UnimplementedPromotionServiceServer) ReleasePromotions(context.Context, *P
 }
 func (UnimplementedPromotionServiceServer) CreateCampaign(context.Context, *Campaign) (*Campaign, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateCampaign not implemented")
+}
+func (UnimplementedPromotionServiceServer) CreateCampaignWithRule(context.Context, *CreateCampaignWithRuleRequest) (*CampaignWithRule, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateCampaignWithRule not implemented")
 }
 func (UnimplementedPromotionServiceServer) UpdateCampaign(context.Context, *Campaign) (*Campaign, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCampaign not implemented")
@@ -4148,6 +4164,24 @@ func _PromotionService_CreateCampaign_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PromotionServiceServer).CreateCampaign(ctx, req.(*Campaign))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_CreateCampaignWithRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCampaignWithRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).CreateCampaignWithRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_CreateCampaignWithRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).CreateCampaignWithRule(ctx, req.(*CreateCampaignWithRuleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4326,6 +4360,10 @@ var PromotionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateCampaign",
 			Handler:    _PromotionService_CreateCampaign_Handler,
+		},
+		{
+			MethodName: "CreateCampaignWithRule",
+			Handler:    _PromotionService_CreateCampaignWithRule_Handler,
 		},
 		{
 			MethodName: "UpdateCampaign",
@@ -5599,6 +5637,7 @@ const (
 	AIService_SubmitFeedback_FullMethodName      = "/mall.v1.AIService/SubmitFeedback"
 	AIService_FeedbackSummary_FullMethodName     = "/mall.v1.AIService/FeedbackSummary"
 	AIService_StartCampaignDraft_FullMethodName  = "/mall.v1.AIService/StartCampaignDraft"
+	AIService_CheckCampaignDraft_FullMethodName  = "/mall.v1.AIService/CheckCampaignDraft"
 	AIService_ResumeCampaignDraft_FullMethodName = "/mall.v1.AIService/ResumeCampaignDraft"
 )
 
@@ -5616,6 +5655,7 @@ type AIServiceClient interface {
 	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
 	// after the BFF has saved the draft through the normal apply endpoint.
 	StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error)
+	CheckCampaignDraft(ctx context.Context, in *ResumeCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error)
 	ResumeCampaignDraft(ctx context.Context, in *ResumeCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
@@ -5676,6 +5716,16 @@ func (c *aIServiceClient) StartCampaignDraft(ctx context.Context, in *StartCampa
 	return out, nil
 }
 
+func (c *aIServiceClient) CheckCampaignDraft(ctx context.Context, in *ResumeCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AIService_CheckCampaignDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aIServiceClient) ResumeCampaignDraft(ctx context.Context, in *ResumeCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -5700,6 +5750,7 @@ type AIServiceServer interface {
 	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
 	// after the BFF has saved the draft through the normal apply endpoint.
 	StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error)
+	CheckCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error)
 	ResumeCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
@@ -5722,6 +5773,9 @@ func (UnimplementedAIServiceServer) FeedbackSummary(context.Context, *FeedbackSu
 }
 func (UnimplementedAIServiceServer) StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartCampaignDraft not implemented")
+}
+func (UnimplementedAIServiceServer) CheckCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckCampaignDraft not implemented")
 }
 func (UnimplementedAIServiceServer) ResumeCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResumeCampaignDraft not implemented")
@@ -5812,6 +5866,24 @@ func _AIService_StartCampaignDraft_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_CheckCampaignDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeCampaignDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).CheckCampaignDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_CheckCampaignDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).CheckCampaignDraft(ctx, req.(*ResumeCampaignDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AIService_ResumeCampaignDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResumeCampaignDraftRequest)
 	if err := dec(in); err != nil {
@@ -5848,6 +5920,10 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartCampaignDraft",
 			Handler:    _AIService_StartCampaignDraft_Handler,
+		},
+		{
+			MethodName: "CheckCampaignDraft",
+			Handler:    _AIService_CheckCampaignDraft_Handler,
 		},
 		{
 			MethodName: "ResumeCampaignDraft",

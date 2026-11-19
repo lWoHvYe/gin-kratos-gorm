@@ -50,6 +50,7 @@ type stock struct {
 	warehouseID int64
 	onHand      int64
 	reserved    int64
+	version     int64
 }
 
 func (s *stock) available() int64 { return s.onHand - s.reserved }
@@ -80,9 +81,9 @@ func scanReservation(row *sql.Row) (*reservation, error) {
 // invents stock.
 func (s *Service) stock(ctx context.Context, q rowQuerier, skuID, warehouseID int64) (*stock, error) {
 	var st stock
-	err := q.QueryRowContext(ctx, `SELECT sku_id, warehouse_id, on_hand, reserved
+	err := q.QueryRowContext(ctx, `SELECT sku_id, warehouse_id, on_hand, reserved, version
 		FROM inventory_stocks WHERE sku_id = ? AND warehouse_id = ?`, skuID, warehouseID).
-		Scan(&st.skuID, &st.warehouseID, &st.onHand, &st.reserved)
+		Scan(&st.skuID, &st.warehouseID, &st.onHand, &st.reserved, &st.version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound(fmt.Sprintf("stock not found for sku %d in warehouse %d", skuID, warehouseID))
 	}
@@ -385,6 +386,7 @@ func appendStockChanged(ctx context.Context, tx *sql.Tx, st *stock) error {
 			"on_hand":      st.onHand,
 			"reserved":     st.reserved,
 			"available":    st.available(),
+			"version":      st.version,
 			"changed_at":   time.Now().Unix(),
 		},
 	})

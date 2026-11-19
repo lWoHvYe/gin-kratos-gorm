@@ -25,6 +25,13 @@ spec:
       serviceAccountName: {{ $name }}-sa
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 20
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "mall.selectorLabels" (dict "name" $name "root" $) | nindent 14 }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -140,6 +147,8 @@ spec:
             {{- if or (eq $name "gateway") (eq $name "admin") }}
             - name: AI_ENABLED
               value: {{ $.Values.ai.enabled | quote }}
+            - name: CORS_ALLOWED_ORIGINS
+              value: {{ $.Values.corsAllowedOrigins | quote }}
             {{- end }}
             {{- if or (eq $name "gateway") (eq $name "payment") }}
             - name: PAYMENT_MOCK_ENABLED

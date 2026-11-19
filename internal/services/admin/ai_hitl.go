@@ -68,8 +68,9 @@ func (h *handlers) confirmCampaignDraft(c *gin.Context) {
 		httpx.Error(c, apperr.Invalid("confirm=true is required to save a draft"))
 		return
 	}
-	if _, err := h.clients.AI.ResumeCampaignDraft(c.Request.Context(), &pb.ResumeCampaignDraftRequest{
+	if _, err := h.clients.AI.CheckCampaignDraft(c.Request.Context(), &pb.ResumeCampaignDraftRequest{
 		UserId: uid, CheckpointId: checkpoint,
+		CampaignCode: in.Campaign.GetCode(), RuleCode: in.Rule.GetCode(),
 	}); err != nil {
 		httpx.Error(c, bff.RemoteError(err))
 		return
@@ -79,5 +80,14 @@ func (h *handlers) confirmCampaignDraft(c *gin.Context) {
 		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
-	httpx.OK(c, map[string]any{"campaign": created, "rule": saved, "checkpoint_closed": true})
+	closed := true
+	if _, err := h.clients.AI.ResumeCampaignDraft(c.Request.Context(), &pb.ResumeCampaignDraftRequest{
+		UserId: uid, CheckpointId: checkpoint,
+		CampaignCode: in.Campaign.GetCode(), RuleCode: in.Rule.GetCode(),
+	}); err != nil {
+		// The business write is committed; do not hide it. The checkpoint
+		// remains open so an operator can inspect/close it separately.
+		closed = false
+	}
+	httpx.OK(c, map[string]any{"campaign": created, "rule": saved, "checkpoint_closed": closed})
 }

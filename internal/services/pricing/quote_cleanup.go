@@ -58,17 +58,28 @@ func cleanupQuotes(ctx context.Context, database *sql.DB, logger *slog.Logger) {
 		for i, id := range ids {
 			args[i] = id
 		}
-		if _, err := database.ExecContext(ctx, `DELETE FROM quote_lines WHERE quote_id IN (`+placeholders+`)`, args...); err != nil {
+		tx, err := database.BeginTx(ctx, nil)
+		if err != nil {
+			logger.Warn("quote cleanup transaction failed", "error", err)
+			return
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM quote_lines WHERE quote_id IN (`+placeholders+`)`, args...); err != nil {
+			_ = tx.Rollback()
 			logger.Warn("quote line cleanup failed", "error", err)
 			return
 		}
-		args = append(args, cutoff)
-		res, err := database.ExecContext(ctx, `DELETE FROM quotes WHERE quote_id IN (`+placeholders+`) AND expires_at < ?`, args...)
+		deleteArgs := append(append([]any{}, args...), cutoff)
+		res, err := tx.ExecContext(ctx, `DELETE FROM quotes WHERE quote_id IN (`+placeholders+`) AND expires_at < ?`, deleteArgs...)
 		if err != nil {
+			_ = tx.Rollback()
 			logger.Warn("quote cleanup failed", "error", err)
 			return
 		}
 		quotes, _ := res.RowsAffected()
+		if err := tx.Commit(); err != nil {
+			logger.Warn("quote cleanup commit failed", "error", err)
+			return
+		}
 		removed += quotes
 		metrics.QuotesCleaned.Add(float64(quotes))
 		if len(ids) < 500 {

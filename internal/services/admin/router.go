@@ -22,6 +22,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -1186,6 +1188,16 @@ func (h *handlers) saveDraft(ctx context.Context, campaign *pb.Campaign, rule *p
 		Campaign: campaign, Rule: rule,
 	})
 	if err != nil {
+		// Duplicate confirm after a successful save is idempotent: the draft
+		// codes are unique, so return the existing pair.
+		if status.Code(err) == codes.AlreadyExists {
+			existing, lookupErr := h.clients.Promotion.GetCampaignWithRuleByCode(ctx, &pb.GetCampaignWithRuleByCodeRequest{
+				CampaignCode: campaign.GetCode(), RuleCode: rule.GetCode(),
+			})
+			if lookupErr == nil {
+				return existing.GetCampaign(), existing.GetRule(), nil
+			}
+		}
 		return nil, nil, err
 	}
 	return reply.GetCampaign(), reply.GetRule(), nil

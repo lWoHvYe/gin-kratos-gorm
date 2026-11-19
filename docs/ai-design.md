@@ -279,3 +279,11 @@ start returns `checkpoint_id` + draft JSON, confirm closes the checkpoint and
 then saves through the normal DRAFT endpoint. Checkpoints are one-shot, 30-minute
 TTL, and bound to the admin who started them. The customer assistant still uses
 the ADK runtime for both customer and admin surfaces; the phase-4 migration kept eval parity.
+
+## ADK streaming tradeoff
+
+The ADK runner currently executes non-streaming because DeepSeek can emit a
+preamble before `tool_calls` and end the streamed turn early. Tool events and a
+final delta are still sent over SSE, but token-by-token assistant deltas are
+lost. A tool-aware streaming adapter is the long-term fix; correctness was
+prioritized for the Phase 5 gate.

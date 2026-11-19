@@ -42,12 +42,13 @@ Done:
 Remaining before calling the gate done:
 1. ~~Add a test that captures `EvaluateDraftRequest.UserId`~~ (done).
 2. Run eval repeatedly (not one 13/13 run): reporting and `-repeat` are added;
-   the 20/10m user limit makes a full repeated run need a reset/test budget.
-   Tool-selection accuracy and raw-answer archive remain.
-3. HITL recovery state machine: derive a business idempotency key from the
-   checkpoint, model `INTERRUPTED -> CONFIRMED -> SAVING -> SAVED/FAILED`, make
-   duplicate confirmation return the same saved result, and test save failure
-   plus retry.
+   a paced repeated run reached 24/26 (last case hit the 20/10m user limit, one
+   budget-boundary answer failed). Tool-selection accuracy, raw-answer archive
+   and a stable gate budget remain.
+3. ~~HITL recovery/idempotency~~: duplicate confirm now returns the existing
+   campaign/rule via unique draft codes; a failed save leaves the checkpoint
+   open and retry succeeds. A formal state-machine record is still optional;
+   save-failure and duplicate-confirm live tests pass.
 4. Keep the plain apply path available; HITL must not be a single point of
    failure for admins.
 
@@ -67,7 +68,8 @@ Done:
 Remaining:
 1. ~~Move the full rebuild out of every Pod startup into an elected leader or a
    Job~~ (Redis leader lock + non-leader loads `ai:rag:current`; a dedicated Job
-   remains optional).
+   remains optional). Quality eval, consumer lag/truncation/rebuild-failure
+   metrics and a tested rollback runbook remain.
 2. Metrics: expected vs indexed document count, truncation/empty-page signal,
    consumer lag, rebuild failures and version age.
 3. Quality eval beyond string matching: retrieval hit rate, groundedness,

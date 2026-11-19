@@ -703,6 +703,10 @@ func (s *PromotionService) CreateCampaignWithRule(ctx context.Context, req *pb.C
 			status, time.Unix(c.GetStartAtUnix(), 0), time.Unix(c.GetEndAtUnix(), 0), c.GetPriority(),
 			c.GetBudgetCent(), c.GetPerUserLimit(), defaultString(c.GetStackMode(), "PRIORITY"))
 		if err != nil {
+			var me *mysql.MySQLError
+			if errors.As(err, &me) && me.Number == 1062 {
+				return apperr.Conflict("campaign code already exists")
+			}
 			return apperr.Internal("create campaign", err)
 		}
 		c.Id, _ = res.LastInsertId()
@@ -720,6 +724,10 @@ func (s *PromotionService) CreateCampaignWithRule(ctx context.Context, req *pb.C
 			rule.GetBudgetCent(), rule.GetPerUserLimit(), rule.GetAllowWithCoupon(),
 			time.Unix(rule.GetStartAtUnix(), 0), time.Unix(rule.GetEndAtUnix(), 0))
 		if err != nil {
+			var me *mysql.MySQLError
+			if errors.As(err, &me) && me.Number == 1062 {
+				return apperr.Conflict("promotion code already exists")
+			}
 			return apperr.Internal("create promotion", err)
 		}
 		rule.Id, _ = res.LastInsertId()
@@ -730,4 +738,47 @@ func (s *PromotionService) CreateCampaignWithRule(ctx context.Context, req *pb.C
 		return nil, err
 	}
 	return &pb.CampaignWithRule{Campaign: created, Rule: saved}, nil
+}
+
+// GetCampaignWithRuleByCode makes the admin HITL confirm idempotent: a retry
+// after a successful save can return the existing draft instead of failing on
+// the unique code.
+func (s *PromotionService) GetCampaignWithRuleByCode(ctx context.Context, req *pb.GetCampaignWithRuleByCodeRequest) (*pb.CampaignWithRule, error) {
+	var c pb.Campaign
+	var cStart, cEnd time.Time
+	err := s.db.QueryRowContext(ctx, `SELECT id,code,name,type,status,start_at,end_at,priority,budget_cent,
+		reserved_cent,consumed_cent,per_user_limit,stack_mode,version
+		FROM promotion_campaigns WHERE code = ? LIMIT 1`, strings.TrimSpace(req.GetCampaignCode())).Scan(
+		&c.Id, &c.Code, &c.Name, &c.Type, &c.Status, &cStart, &cEnd, &c.Priority,
+		&c.BudgetCent, &c.ReservedCent, &c.ConsumedCent, &c.PerUserLimit, &c.StackMode, &c.Version)
+	if err == nil {
+		c.StartAtUnix, c.EndAtUnix = cStart.Unix(), cEnd.Unix()
+	}
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperr.NotFound("campaign not found")
+		}
+		return nil, apperr.Internal("load campaign by code", err)
+	}
+	var r pb.PromotionRule
+	var rStart, rEnd time.Time
+	err = s.db.QueryRowContext(ctx, `SELECT id,campaign_id,code,name,type,status,priority,exclusive,stack_group,
+		scope_json,condition_expr,effect_json,max_discount_cent,budget_cent,reserved_cent,consumed_cent,
+		per_user_limit,allow_with_coupon,start_at,end_at,version
+		FROM promotion_rules WHERE campaign_id = ? AND code = ? LIMIT 1`,
+		c.Id, strings.TrimSpace(req.GetRuleCode())).Scan(
+		&r.Id, &r.CampaignId, &r.Code, &r.Name, &r.Type, &r.Status, &r.Priority, &r.Exclusive,
+		&r.StackGroup, &r.ScopeJson, &r.ConditionExpr, &r.EffectJson, &r.MaxDiscountCent,
+		&r.BudgetCent, &r.ReservedCent, &r.ConsumedCent, &r.PerUserLimit, &r.AllowWithCoupon,
+		&rStart, &rEnd, &r.Version)
+	if err == nil {
+		r.StartAtUnix, r.EndAtUnix = rStart.Unix(), rEnd.Unix()
+	}
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperr.NotFound("promotion not found")
+		}
+		return nil, apperr.Internal("load rule by code", err)
+	}
+	return &pb.CampaignWithRule{Campaign: &c, Rule: &r}, nil
 }

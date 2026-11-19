@@ -3776,6 +3776,7 @@ const (
 	PromotionService_ReleasePromotions_FullMethodName         = "/mall.v1.PromotionService/ReleasePromotions"
 	PromotionService_CreateCampaign_FullMethodName            = "/mall.v1.PromotionService/CreateCampaign"
 	PromotionService_CreateCampaignWithRule_FullMethodName    = "/mall.v1.PromotionService/CreateCampaignWithRule"
+	PromotionService_GetCampaignWithRuleByCode_FullMethodName = "/mall.v1.PromotionService/GetCampaignWithRuleByCode"
 	PromotionService_UpdateCampaign_FullMethodName            = "/mall.v1.PromotionService/UpdateCampaign"
 	PromotionService_SetCampaignStatus_FullMethodName         = "/mall.v1.PromotionService/SetCampaignStatus"
 	PromotionService_ListCampaigns_FullMethodName             = "/mall.v1.PromotionService/ListCampaigns"
@@ -3797,6 +3798,7 @@ type PromotionServiceClient interface {
 	ReleasePromotions(ctx context.Context, in *PromotionOrderRequest, opts ...grpc.CallOption) (*Empty, error)
 	CreateCampaign(ctx context.Context, in *Campaign, opts ...grpc.CallOption) (*Campaign, error)
 	CreateCampaignWithRule(ctx context.Context, in *CreateCampaignWithRuleRequest, opts ...grpc.CallOption) (*CampaignWithRule, error)
+	GetCampaignWithRuleByCode(ctx context.Context, in *GetCampaignWithRuleByCodeRequest, opts ...grpc.CallOption) (*CampaignWithRule, error)
 	UpdateCampaign(ctx context.Context, in *Campaign, opts ...grpc.CallOption) (*Campaign, error)
 	SetCampaignStatus(ctx context.Context, in *SetPromotionStatusRequest, opts ...grpc.CallOption) (*Empty, error)
 	ListCampaigns(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*CampaignList, error)
@@ -3879,6 +3881,16 @@ func (c *promotionServiceClient) CreateCampaignWithRule(ctx context.Context, in 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CampaignWithRule)
 	err := c.cc.Invoke(ctx, PromotionService_CreateCampaignWithRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *promotionServiceClient) GetCampaignWithRuleByCode(ctx context.Context, in *GetCampaignWithRuleByCodeRequest, opts ...grpc.CallOption) (*CampaignWithRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CampaignWithRule)
+	err := c.cc.Invoke(ctx, PromotionService_GetCampaignWithRuleByCode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3976,6 +3988,7 @@ type PromotionServiceServer interface {
 	ReleasePromotions(context.Context, *PromotionOrderRequest) (*Empty, error)
 	CreateCampaign(context.Context, *Campaign) (*Campaign, error)
 	CreateCampaignWithRule(context.Context, *CreateCampaignWithRuleRequest) (*CampaignWithRule, error)
+	GetCampaignWithRuleByCode(context.Context, *GetCampaignWithRuleByCodeRequest) (*CampaignWithRule, error)
 	UpdateCampaign(context.Context, *Campaign) (*Campaign, error)
 	SetCampaignStatus(context.Context, *SetPromotionStatusRequest) (*Empty, error)
 	ListCampaigns(context.Context, *Empty) (*CampaignList, error)
@@ -4014,6 +4027,9 @@ func (UnimplementedPromotionServiceServer) CreateCampaign(context.Context, *Camp
 }
 func (UnimplementedPromotionServiceServer) CreateCampaignWithRule(context.Context, *CreateCampaignWithRuleRequest) (*CampaignWithRule, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateCampaignWithRule not implemented")
+}
+func (UnimplementedPromotionServiceServer) GetCampaignWithRuleByCode(context.Context, *GetCampaignWithRuleByCodeRequest) (*CampaignWithRule, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCampaignWithRuleByCode not implemented")
 }
 func (UnimplementedPromotionServiceServer) UpdateCampaign(context.Context, *Campaign) (*Campaign, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCampaign not implemented")
@@ -4182,6 +4198,24 @@ func _PromotionService_CreateCampaignWithRule_Handler(srv interface{}, ctx conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PromotionServiceServer).CreateCampaignWithRule(ctx, req.(*CreateCampaignWithRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PromotionService_GetCampaignWithRuleByCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCampaignWithRuleByCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PromotionServiceServer).GetCampaignWithRuleByCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PromotionService_GetCampaignWithRuleByCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PromotionServiceServer).GetCampaignWithRuleByCode(ctx, req.(*GetCampaignWithRuleByCodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4364,6 +4398,10 @@ var PromotionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateCampaignWithRule",
 			Handler:    _PromotionService_CreateCampaignWithRule_Handler,
+		},
+		{
+			MethodName: "GetCampaignWithRuleByCode",
+			Handler:    _PromotionService_GetCampaignWithRuleByCode_Handler,
 		},
 		{
 			MethodName: "UpdateCampaign",

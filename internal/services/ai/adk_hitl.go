@@ -124,7 +124,7 @@ func (s *Service) StartCampaignDraft(ctx context.Context, req *pb.StartCampaignD
 		return nil, apperr.Internal("store hitl owner", err)
 	}
 	meta, _ := json.Marshal(map[string]string{
-		"campaign_code": out.Campaign.Code, "rule_code": out.Rule.Code,
+		"campaign_code": out.Campaign.Code, "rule_code": out.Rule.Code, "state": "INTERRUPTED",
 	})
 	if err := s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, meta, hitlTTL).Err(); err != nil {
 		return nil, apperr.Internal("store hitl draft binding", err)
@@ -146,17 +146,20 @@ func (s *Service) validateDraftCheckpoint(ctx context.Context, uid int64, checkp
 	if owner != uid {
 		return apperr.Forbidden("checkpoint belongs to another admin")
 	}
-	if exists, err := s.cache.Exists(ctx, "ai:hitl:cp:"+checkpointID).Result(); err != nil {
-		return apperr.Internal("read hitl checkpoint", err)
-	} else if exists == 0 {
-		return apperr.NotFound("checkpoint not found or expired")
-	}
 	var binding map[string]string
 	if raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes(); err == nil {
 		_ = json.Unmarshal(raw, &binding)
 	}
 	if binding != nil && (campaignCode != binding["campaign_code"] || ruleCode != binding["rule_code"]) {
 		return apperr.Conflict("confirm payload does not match the reviewed draft")
+	}
+	if binding != nil && binding["state"] == "SAVED" {
+		return nil
+	}
+	if exists, err := s.cache.Exists(ctx, "ai:hitl:cp:"+checkpointID).Result(); err != nil {
+		return apperr.Internal("read hitl checkpoint", err)
+	} else if exists == 0 {
+		return apperr.NotFound("checkpoint not found or expired")
 	}
 	return nil
 }
@@ -192,6 +195,15 @@ func (s *Service) ResumeCampaignDraft(ctx context.Context, req *pb.ResumeCampaig
 	if err := s.validateDraftCheckpoint(ctx, uid, checkpointID, req.GetCampaignCode(), req.GetRuleCode()); err != nil {
 		return nil, err
 	}
+	// A repeated confirm after SAVED is a no-op; the BFF returns the existing
+	// campaign/rule via its code lookup.
+	if raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes(); err == nil {
+		var meta map[string]string
+		_ = json.Unmarshal(raw, &meta)
+		if meta["state"] == "SAVED" {
+			return &pb.Empty{}, nil
+		}
+	}
 	store := &redisCheckpointStore{cache: s.cache}
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent: &draftReviewAgent{}, CheckPointStore: store,
@@ -209,7 +221,15 @@ func (s *Service) ResumeCampaignDraft(ctx context.Context, req *pb.ResumeCampaig
 			return nil, apperr.Internal("resume campaign draft", event.Err)
 		}
 	}
-	if err := s.cache.Del(ctx, "ai:hitl:cp:"+checkpointID, "ai:hitl:owner:"+checkpointID, "ai:hitl:meta:"+checkpointID).Err(); err != nil {
+	if raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes(); err == nil {
+		var meta map[string]string
+		if json.Unmarshal(raw, &meta) == nil {
+			meta["state"] = "SAVED"
+			encoded, _ := json.Marshal(meta)
+			_ = s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, encoded, hitlTTL).Err()
+		}
+	}
+	if err := s.cache.Del(ctx, "ai:hitl:cp:"+checkpointID).Err(); err != nil {
 		s.log.Warn("delete hitl checkpoint", "checkpoint", checkpointID, "error", err)
 	}
 	return &pb.Empty{}, nil

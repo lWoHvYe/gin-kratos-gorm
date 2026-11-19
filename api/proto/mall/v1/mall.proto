@@ -544,6 +544,7 @@ service PromotionService {
   rpc ReleasePromotions (PromotionOrderRequest) returns (Empty);
   rpc CreateCampaign (Campaign) returns (Campaign);
   rpc CreateCampaignWithRule (CreateCampaignWithRuleRequest) returns (CampaignWithRule);
+  rpc GetCampaignWithRuleByCode (GetCampaignWithRuleByCodeRequest) returns (CampaignWithRule);
   rpc UpdateCampaign (Campaign) returns (Campaign);
   rpc SetCampaignStatus (SetPromotionStatusRequest) returns (Empty);
   rpc ListCampaigns (Empty) returns (CampaignList);
@@ -602,6 +603,10 @@ message CreateCampaignWithRuleRequest {
 message CampaignWithRule {
   Campaign campaign = 1;
   PromotionRule rule = 2;
+}
+message GetCampaignWithRuleByCodeRequest {
+  string campaign_code = 1;
+  string rule_code = 2;
 }
 message CampaignList { repeated Campaign campaigns = 1; }
 message PromotionListRequest { int64 campaign_id = 1; string status = 2; int32 page = 3; int32 page_size = 4; }

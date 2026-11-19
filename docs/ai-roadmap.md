@@ -7,65 +7,129 @@ and keep the assistant optional (failures must not affect browse/checkout).
 |---|---|---|
 | 1 | Feedback quality dashboard over `ai:feedback:*` | done |
 | 2 | ADK HITL pilot for admin campaign drafts | done (deterministic review agent; bound + atomic save) |
-| 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank; semantic cache deferred) |
-| 4 | Replace the customer/admin ReAct runtime with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
+| 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank + versioned semantic cache) |
+| 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
+| 5 | Correctness and recovery gate | partial (see below) |
+| 6 | Versioned RAG and measurable quality | partial (see below) |
+| 7 | Customer task assistant: comparison, budget list, cart draft | pending |
+| 8 | Controlled personalization / preference profile | pending |
+| 9 | Proactive admin operations copilot | pending |
+| 10 | Evidence-triggered advanced capabilities | conditional |
 
-## Phase 1 acceptance
+## Audit note correction (2026-11-20)
 
-- Admin BFF `GET /api/admin/v1/ai/feedback/summary?days=1..30`
-- AI `FeedbackSummary` aggregates daily helpful/not-helpful counts and recent
-  not-helpful comments from Redis (per-day list capped at 5000)
-- Admin SPA `/ai/quality` shows totals, helpful rate, daily table and comments
-- Live check: summary returns the stored feedback entry; web build passes.
+The earlier audit note listed four runtime boundaries. Current code has moved:
 
-## Phase 2 shape (ADK HITL)
+- `preview_campaign` no longer falls back to user 1; it uses
+  `userIDFromContext` and errors when identity is absent.
+- `cmd/ai-eval` executes `contains_any` and rejects cases without an executable
+  assertion.
+- HITL now checks draft binding before saving, saves campaign+rule in one
+  transaction, and closes the checkpoint only after that write.
+- RAG no longer drops the live index or caps collection at 500 products; it
+  builds a versioned index, switches `_current`, and paginates fully.
 
-- New admin-only draft endpoint returns `checkpoint_id` + draft, then a confirm
-  endpoint resumes via `adk.Runner.ResumeWithParams`; only the resume path calls
-  the existing `apply-draft` with `confirm=true`.
-- Checkpoints in Redis with TTL and admin identity binding; feature flag
-  `AI_ADK_HITL`; fallback remains the current hand-rolled flow.
-- No direct writes from the model; the BFF keeps the admin role check.
+So the roadmap should not repeat those as open defects. What remains is below.
 
-## Phase 2 acceptance (done)
+## Phase 5: correctness and recovery gate
 
-- `adk.Runner` with a Redis `CheckPointStore`; start interrupts with a draft,
-  confirm resumes once and then calls the existing `apply-draft` path.
-- Checkpoint is one-shot, 30-minute TTL, bound to the starting admin id.
-- Admin UI exposes "ADK 生成草案" / "ADK 确认保存"; the plain save path remains.
-- Live test: checkpoint `1-...` created, confirm created DRAFT campaign 62 /
-  rule 17, replay returned NOT_FOUND.
-- The deterministic draft-review agent isolates checkpoint mechanics; the
-  conversational `ChatModelAgent` migration remains phase 4.
+Done:
+- server-injected identity is the only identity source
+- `contains_any` and assertion-less-case rejection in eval
+- HITL binding check, atomic campaign+rule transaction, close-after-save
+- draft/preview/HITL share one CampaignSpec builder
 
-## Phase 3 acceptance (done)
+Remaining before calling the gate done:
+1. Add a test that captures `EvaluateDraftRequest.UserId` and proves a missing
+   identity cannot become user 1.
+2. Run eval repeatedly (not one 13/13 run): report pass rate, tool-selection
+   accuracy, raw answers and latency/token cost; keep negative cases.
+3. HITL recovery state machine: derive a business idempotency key from the
+   checkpoint, model `INTERRUPTED -> CONFIRMED -> SAVING -> SAVED/FAILED`, make
+   duplicate confirmation return the same saved result, and test save failure
+   plus retry.
+4. Keep the plain apply path available; HITL must not be a single point of
+   failure for admins.
 
-- A pre-tokenized `terms` TEXT field makes CJK lexical retrieval work with
-  Redis' default tokenizer; `SCORER BM25` ranks it.
-- Search fetches KNN and BM25 candidates (up to 40), merges with RRF (k=60),
-  then applies a deterministic query-token coverage rerank.
-- Lexical failure falls back to KNN only; the assistant never fails because the
-  lexical branch is unavailable.
-- Real-model eval after deployment: 13/13 passed, including `rag-student`.
-- A semantic cache is deferred (exact query caching would go stale on catalog
-  events; revisit with an index version).
+Exit gate: repeated real-model eval meets the agreed threshold; identity,
+save-failure and duplicate-confirm tests pass; AI remains outside browse and
+checkout.
 
-## Phase 4 acceptance (done)
+## Phase 6: versioned RAG and measurable quality
 
-- Both customer and admin agents are `adk.ChatModelAgent`; the ReAct builders,
-  compose callback handler and `StreamToolCallChecker` are removed.
-- The ADK event adapter emits assistant deltas, maps tool events to `tool` SSE,
-  and reads token usage from assistant `ResponseMeta` into the existing
-  budget/metrics path.
-- Real-model eval after the switch: 13/13, including tool events and admin
-  preview; no runtime flag remains.
+Done:
+- independent versioned index/prefix, `_current` alias switch, full pagination
+- dual-write registry, post-build reconcile, 15-minute state reconciliation,
+  7-day old-version retention
+- version-bound exact + semantic cache
+- document/build/version metrics and search-mode/empty metrics
 
-## Later phases
+Remaining:
+1. Move the full rebuild out of every Pod startup into an elected leader or a
+   Job; non-leaders must load the current alias, not rebuild. This is the main
+   remaining HA risk.
+2. Metrics: expected vs indexed document count, truncation/empty-page signal,
+   consumer lag, rebuild failures and version age.
+3. Quality eval beyond string matching: retrieval hit rate, groundedness,
+   unsupported-answer refusal, repeated-run stability, latency and token cost;
+   compare cache on/off and lexical vs semantic rerank.
+4. A tested rollback runbook: switch alias back to the previous version and
+   verify catch-up; retained versions alone are not a rollback guarantee.
 
-- Phase 5 (correctness): identity/eval/HITL binding+atomic save done;
-  CampaignSpec unification remains.
-- Phase 6 (versioned RAG): versioned index + alias + full pagination,
-  dual-write, post-build/15m reconciliation, retained old versions, quality
-  metrics and exact/semantic cache are done. Event-sequence watermark is
-  deliberately replaced by state convergence.
-- Phases 7-10: not started.
+Exit gate: rolling restart and embedding failure leave the last good index
+serving; >500 products fully indexed; quality is measured against the Phase 5
+baseline.
+
+## Phase 7: customer task assistant (draft, never direct write)
+
+Start with product comparison and budget shopping-list generation. The
+assistant uses read tools to produce a cart draft containing SKU, quantity,
+price quote and stock timestamp. The UI renders the draft; only explicit user
+confirmation calls existing cart/checkout RPCs with server-injected identity.
+
+Acceptance: price/stock/status/quote expiry revalidated at confirmation;
+duplicate confirmation idempotent; expired/changed drafts require re-preview;
+eval covers comparison, budget compliance, price/stock changes and rejection;
+ordinary chat remains the fallback.
+
+## Phase 8: controlled personalization
+
+Start with a small server-side preference profile (brands/categories, budget
+range, size where relevant), not unrestricted transcript memory. Preferences are
+user-scoped, visible, editable and clearable; retention/deletion is explicit; do
+not infer sensitive attributes. Inject only relevant preferences and record
+which influenced a recommendation. Eval must show improvement over no-memory
+and prove no cross-user leakage.
+
+## Phase 9: proactive operations copilot
+
+Use a scheduled, controlled workflow rather than free-running multi-agent
+loops. Daily brief and exception explanations come only from existing aggregate
+admin RPCs; every number must be traceable to a tool response. Delivery stays
+outside transaction paths, is idempotent, records source timestamps, and AI
+failure only skips a brief. Eval checks numeric fidelity and that anomalies are
+not invented.
+
+## Phase 10: evidence-triggered advanced capabilities
+
+- Supervisor / Plan-Execute only if Phase 7-9 eval shows a single
+  ChatModelAgent/Workflow cannot decompose the task; set step/token/time/sub-agent
+  budgets.
+- Multimodal search only after a multimodal model, image governance and a
+  measurable user scenario exist.
+- Model routing/reasoning models only after per-intent quality/latency/cost
+  measurements show a benefit; retain a deterministic fallback and breaker.
+
+## Roadmap decisions
+
+Accepted into the roadmap: Phase 5 recovery/identity/eval gate, Phase 6
+leader/Job rebuild + quality metrics + eval + rollback runbook, Phase 7 cart
+draft, Phase 8 preference profile, Phase 9 scheduled ops brief.
+
+Not adopted now: reintroducing an `AI_ADK_HITL` flag (ADK is already the only
+chat runtime); free-running multi-agent; multimodal; routing before measurement;
+moving the transaction core to an ORM.
+
+Every phase keeps the invariants: AI optional; read-only tools by default;
+writes are draft -> human confirmation -> original business RPC; identity only
+from server context; model/embedding keys only from Secrets.

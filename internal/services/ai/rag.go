@@ -88,6 +88,12 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	return r, nil
 }
 
+type ragVersion struct {
+	Index     string `json:"index"`
+	Prefix    string `json:"prefix"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 type redisRAG struct {
 	client   redis.UniversalClient
 	embedder embedder
@@ -139,6 +145,12 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 	if err := r.client.Do(ctx, create...).Err(); err != nil {
 		return fmt.Errorf("create rag index: %w", err)
 	}
+	// Register before writing docs so other replicas' consumers can dual-write
+	// catalog events into this version while it is being built.
+	encodedVersion, _ := json.Marshal(ragVersion{Index: versioned, Prefix: prefix, CreatedAt: time.Now().Unix()})
+	if err := r.client.SAdd(ctx, "ai:rag:versions", encodedVersion).Err(); err != nil {
+		return fmt.Errorf("register rag version: %w", err)
+	}
 
 	texts := make([]string, len(docs))
 	for i, d := range docs {
@@ -188,7 +200,24 @@ func (r *redisRAG) reindex(ctx context.Context, docs []ragDoc) error {
 	}
 	r.index = alias
 	r.prefix = prefix
+	r.pruneVersions(ctx)
 	return nil
+}
+
+// pruneVersions drops dual-write registrations older than seven days so a
+// rolling deployment does not grow the fan-out forever.
+func (r *redisRAG) pruneVersions(ctx context.Context) {
+	values, err := r.client.SMembers(ctx, "ai:rag:versions").Result()
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-7 * 24 * time.Hour).Unix()
+	for _, raw := range values {
+		var version ragVersion
+		if json.Unmarshal([]byte(raw), &version) != nil || version.CreatedAt == 0 || version.CreatedAt < cutoff {
+			_ = r.client.SRem(ctx, "ai:rag:versions", raw).Err()
+		}
+	}
 }
 
 // writeIndex returns the concrete index currently receiving writes; used by
@@ -656,15 +685,47 @@ func (r *redisRAG) UpsertProduct(ctx context.Context, p *pb.Product) error {
 	if err != nil || len(vec) != 1 {
 		return fmt.Errorf("embed product %d: %w", p.GetId(), err)
 	}
-	return r.client.HSet(ctx, r.prefix+doc.ID,
-		"kind", doc.Kind, "title", doc.Title, "content", doc.Content,
-		"terms", lexicalTerms(doc.Title+"\n"+doc.Content),
-		"product_id", doc.ProductID, "content_hash", hash, "embedding", encodeVector(vec[0])).Err()
+	versions := r.activeVersions(ctx)
+	if len(versions) == 0 {
+		versions = []ragVersion{{Index: r.writeIndex(), Prefix: r.prefix}}
+	}
+	pipe := r.client.Pipeline()
+	for _, version := range versions {
+		pipe.HSet(ctx, version.Prefix+doc.ID,
+			"kind", doc.Kind, "title", doc.Title, "content", doc.Content,
+			"terms", lexicalTerms(doc.Title+"\n"+doc.Content),
+			"product_id", doc.ProductID, "content_hash", hash, "embedding", encodeVector(vec[0]))
+	}
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+func (r *redisRAG) activeVersions(ctx context.Context) []ragVersion {
+	values, err := r.client.SMembers(ctx, "ai:rag:versions").Result()
+	if err != nil {
+		return nil
+	}
+	out := make([]ragVersion, 0, len(values))
+	for _, raw := range values {
+		var version ragVersion
+		if json.Unmarshal([]byte(raw), &version) == nil && version.Prefix != "" {
+			out = append(out, version)
+		}
+	}
+	return out
 }
 
 // DeleteProduct removes a product from the index on unpublish/delete.
 func (r *redisRAG) DeleteProduct(ctx context.Context, id int64) error {
-	return r.client.Del(ctx, r.prefix+fmt.Sprintf("product:%d", id)).Err()
+	versions := r.activeVersions(ctx)
+	if len(versions) == 0 {
+		versions = []ragVersion{{Prefix: r.prefix}}
+	}
+	keys := make([]string, 0, len(versions))
+	for _, version := range versions {
+		keys = append(keys, version.Prefix+fmt.Sprintf("product:%d", id))
+	}
+	return r.client.Del(ctx, keys...).Err()
 }
 
 // ReconcileProducts catches events missed during an index build or consumed by

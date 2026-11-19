@@ -585,6 +585,7 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 						OrderNo: orderNo, Items: confirmed,
 					}); cerr != nil {
 						s.log.Error("compensate partially confirmed inventory", "order_no", orderNo, "error", cerr)
+						s.queueInventoryCompensation(ctx, orderNo, confirmed)
 					}
 				}
 				return nil, apperr.Unavailable("confirm inventory before payment: "+err.Error(), err)
@@ -656,6 +657,22 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	return s.replyFor(ctx, s.db, updated)
 }
 
+func (s *Service) queueInventoryCompensation(ctx context.Context, orderNo string, items []*pb.OrderItem) {
+	payload := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		payload = append(payload, map[string]any{"sku_id": item.GetSkuId(), "quantity": item.GetQuantity()})
+	}
+	if err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		return outbox.Append(ctx, tx, outbox.Event{
+			Topic: "shop.inventory.compensation.requested.v1", AggregateType: "order",
+			AggregateID: orderNo, EventType: "inventory.compensation_requested",
+			Payload: map[string]any{"order_no": orderNo, "items": payload, "created_at": time.Now().Unix()},
+		})
+	}); err != nil {
+		s.log.Error("queue inventory compensation", "order_no", orderNo, "error", err)
+	}
+}
+
 // refundCancelledAfterConfirm asks the payment service to refund a capture whose
 // order was cancelled between the inventory confirm and the status CAS.
 func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *orderRecord, paidCent int64, paymentNo string) {
@@ -670,6 +687,7 @@ func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *order
 			OrderNo: record.OrderNo, Items: items,
 		}); err != nil {
 			s.log.Error("restock cancelled-after-confirm order", "order_no", record.OrderNo, "error", err)
+			s.queueInventoryCompensation(ctx, record.OrderNo, items)
 		}
 	}
 	if paidCent <= 0 || paymentNo == "" {

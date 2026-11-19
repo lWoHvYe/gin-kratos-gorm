@@ -109,7 +109,7 @@ func (s *Service) ensurePayment(ctx context.Context, cmd orderCommand, order *pb
 
 func (s *Service) markOrdered(ctx context.Context, cmd orderCommand, orderNo, paymentNo string) {
 	if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications
-		SET status='ORDERED', order_no=?, payment_no=? WHERE token_hash=? AND status IN ('ISSUED','ORDERING')`, orderNo, paymentNo, cmd.TokenHash); err != nil {
+		SET status='ORDERED', order_no=?, payment_no=?, version=version+1 WHERE token_hash=? AND status IN ('ISSUED','ORDERING')`, orderNo, paymentNo, cmd.TokenHash); err != nil {
 		s.log.Error("mark qualification ordered", "activity_id", cmd.ActivityID, "error", err)
 	}
 	if s.cache != nil {
@@ -123,7 +123,7 @@ func (s *Service) markOrdered(ctx context.Context, cmd orderCommand, orderNo, pa
 func (s *Service) failQualification(ctx context.Context, cmd orderCommand, cause error) {
 	s.log.Error("seckill order command failed", "activity_id", cmd.ActivityID, "token_hash", cmd.TokenHash, "error", cause)
 	if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications
-		SET status='FAILED' WHERE token_hash=? AND status IN ('ISSUED','ORDERING')`, cmd.TokenHash); err != nil {
+		SET status='FAILED', version=version+1 WHERE token_hash=? AND status IN ('ISSUED','ORDERING')`, cmd.TokenHash); err != nil {
 		s.log.Error("mark qualification failed", "error", err)
 	}
 	// Keep the inventory hold and Redis unit until the qualification expiry

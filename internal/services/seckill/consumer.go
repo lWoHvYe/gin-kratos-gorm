@@ -33,7 +33,7 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 			return consumer.Permanent(errMissingOrderNo)
 		}
 		_, err := svc.db.ExecContext(hctx, `UPDATE seckill_qualifications
-			SET status='CANCELLED' WHERE order_no=? AND status IN ('ORDERED','ORDERING')`, event.OrderNo)
+			SET status='CANCELLED', version=version+1 WHERE order_no=? AND status IN ('ORDERED','ORDERING')`, event.OrderNo)
 		return err
 	})
 	if err != nil {

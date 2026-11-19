@@ -52,7 +52,7 @@ func (s *Service) expireQualifications(ctx context.Context) {
 		// releasing it here as well would double-credit the bucket.
 		if q.orderNo != "" {
 			if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications
-				SET status='ORDERED' WHERE token_hash=? AND status IN ('ISSUED','FAILED')`, q.tokenHash); err != nil {
+				SET status='ORDERED', version=version+1 WHERE token_hash=? AND status IN ('ISSUED','FAILED')`, q.tokenHash); err != nil {
 				s.log.Warn("mark converted qualification ordered", "error", err)
 			}
 			continue
@@ -65,7 +65,7 @@ func (s *Service) expireQualifications(ctx context.Context) {
 		// FAILED rows need the same terminal transition: otherwise every scan
 		// retries the release and compensation for a row that can never change.
 		if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications
-			SET status='EXPIRED' WHERE token_hash=? AND status IN ('ISSUED','FAILED')`, q.tokenHash); err != nil {
+			SET status='EXPIRED', version=version+1 WHERE token_hash=? AND status IN ('ISSUED','FAILED')`, q.tokenHash); err != nil {
 			s.log.Warn("mark seckill qualification expired", "activity_id", q.activityID, "error", err)
 		}
 	}

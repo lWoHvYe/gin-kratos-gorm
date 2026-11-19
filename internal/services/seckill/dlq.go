@@ -49,7 +49,7 @@ func (s *Service) ReplayDLQ(ctx context.Context, req *pb.ReplaySeckillDLQRequest
 			continue
 		}
 		if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications
-			SET status='ISSUED', published_at=NULL WHERE token_hash=? AND status='FAILED'`, cmd.TokenHash); err != nil {
+			SET status='ISSUED', published_at=NULL, version=version+1 WHERE token_hash=? AND status='FAILED'`, cmd.TokenHash); err != nil {
 			errs = append(errs, fmt.Sprintf("token %s: %v", cmd.TokenHash, err))
 			reply.Skipped++
 			continue

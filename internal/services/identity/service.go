@@ -189,7 +189,7 @@ func (s *Service) CreateAddress(ctx context.Context, req *pb.CreateAddressReques
 			return err
 		}
 		if a.GetIsDefault() {
-			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0 WHERE user_id = ?`, a.GetUserId()); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0, version = version + 1 WHERE user_id = ?`, a.GetUserId()); err != nil {
 				return apperr.Internal("clear default address", err)
 			}
 		}
@@ -228,12 +228,12 @@ func (s *Service) UpdateAddress(ctx context.Context, req *pb.UpdateAddressReques
 			return apperr.NotFound("address not found")
 		}
 		if a.GetIsDefault() {
-			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0 WHERE user_id = ?`, a.GetUserId()); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0, version = version + 1 WHERE user_id = ?`, a.GetUserId()); err != nil {
 				return apperr.Internal("clear default address", err)
 			}
 		}
 		_, err := tx.ExecContext(ctx, `UPDATE user_addresses
-			SET receiver = ?, phone = ?, province = ?, city = ?, district = ?, detail = ?, is_default = ?
+			SET receiver = ?, phone = ?, province = ?, city = ?, district = ?, detail = ?, is_default = ?, version = version + 1
 			WHERE id = ? AND user_id = ?`,
 			a.GetReceiver(), a.GetPhone(), a.GetProvince(), a.GetCity(), a.GetDistrict(), a.GetDetail(), a.GetIsDefault(), a.GetId(), a.GetUserId())
 		if err != nil {
@@ -294,10 +294,10 @@ func (s *Service) SetDefaultAddress(ctx context.Context, req *pb.SetDefaultAddre
 		if exists == 0 {
 			return apperr.NotFound("address not found")
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0 WHERE user_id = ?`, req.GetUserId()); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 0, version = version + 1 WHERE user_id = ?`, req.GetUserId()); err != nil {
 			return apperr.Internal("clear default address", err)
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 1 WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId()); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 1, version = version + 1 WHERE id = ? AND user_id = ?`, req.GetAddressId(), req.GetUserId()); err != nil {
 			return apperr.Internal("set default address", err)
 		}
 		return nil

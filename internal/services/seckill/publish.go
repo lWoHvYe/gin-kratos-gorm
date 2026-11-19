@@ -81,7 +81,7 @@ func (s *Service) publishQualification(ctx context.Context, q *qualification, a 
 	if err := s.mq.PublishMsg(ctx, msg); err != nil {
 		return apperr.Unavailable("publish seckill order command", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications SET published_at=NOW(3)
+	if _, err := s.db.ExecContext(ctx, `UPDATE seckill_qualifications SET published_at=NOW(3), version=version+1
 		WHERE token_hash=? AND published_at IS NULL`, q.tokenHash); err != nil {
 		return apperr.Internal("mark seckill command published", err)
 	}

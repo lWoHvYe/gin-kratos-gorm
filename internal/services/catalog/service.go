@@ -264,7 +264,7 @@ func (s *Service) UpdateCategory(ctx context.Context, req *pb.UpdateCategoryRequ
 	if status != "ENABLED" && status != "DISABLED" {
 		return nil, apperr.Invalid("invalid category status")
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE categories SET parent_id = ?, name = ?, level = ?, sort = ?, status = ? WHERE id = ?`,
+	if _, err := s.db.ExecContext(ctx, `UPDATE categories SET parent_id = ?, name = ?, level = ?, sort = ?, status = ?, version = version + 1 WHERE id = ?`,
 		c.GetParentId(), strings.TrimSpace(c.GetName()), level, c.GetSort(), status, c.GetId()); err != nil {
 		return nil, apperr.Internal("update category", err)
 	}
@@ -352,7 +352,7 @@ func (s *Service) UpdateBrand(ctx context.Context, req *pb.UpdateBrandRequest) (
 	if strings.TrimSpace(logo) == "" {
 		logo = currentLogo
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE brands SET name = ?, logo = ?, status = ? WHERE id = ?`,
+	if _, err := s.db.ExecContext(ctx, `UPDATE brands SET name = ?, logo = ?, status = ?, version = version + 1 WHERE id = ?`,
 		strings.TrimSpace(b.GetName()), logo, status, b.GetId()); err != nil {
 		return nil, apperr.Internal("update brand", err)
 	}
@@ -652,7 +652,7 @@ func (s *Service) UpdateSku(ctx context.Context, req *pb.UpdateSkuRequest) (*pb.
 		return nil, apperr.Internal("begin update sku", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	_, err = tx.ExecContext(ctx, `UPDATE skus SET sku_code = ?, specs_json = ?, price_cent = ?, status = ?, image_url = ? WHERE id = ?`,
+	_, err = tx.ExecContext(ctx, `UPDATE skus SET sku_code = ?, specs_json = ?, price_cent = ?, status = ?, image_url = ?, version = version + 1 WHERE id = ?`,
 		strings.TrimSpace(req.GetSkuCode()), specs, req.GetPriceCent(), status, req.GetImageUrl(), req.GetId())
 	if err != nil {
 		return nil, apperr.Internal("update sku", err)
@@ -710,7 +710,7 @@ func (s *Service) setSkuStatus(ctx context.Context, id int64, status string) err
 	if err := tx.QueryRowContext(ctx, `SELECT spu_id FROM skus WHERE id = ?`, id).Scan(&spuID); err != nil {
 		return apperr.NotFound("sku not found")
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE skus SET status = ? WHERE id = ?`, status, id); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE skus SET status = ?, version = version + 1 WHERE id = ?`, status, id); err != nil {
 		return apperr.Internal("set sku status", err)
 	}
 	if err := recalcMinPrice(ctx, tx, spuID); err != nil {

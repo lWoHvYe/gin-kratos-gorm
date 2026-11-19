@@ -147,6 +147,12 @@ var (
 		Help: "Age of the oldest inventory_ledger row.",
 	})
 
+	// InventoryLedgerArchived counts rows moved out of the hot ledger.
+	InventoryLedgerArchived = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "mall_inventory_ledger_archived_total",
+		Help: "Inventory ledger rows moved to the archive.",
+	})
+
 	// QuotesCleaned counts expired quote rows removed by retention.
 	QuotesCleaned = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "mall_quotes_cleaned_total",

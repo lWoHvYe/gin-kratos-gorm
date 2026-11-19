@@ -14,7 +14,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 7 | Customer task assistant: comparison, budget list, cart draft | done: real-model draft SSE -> confirm 200 |
 | 8 | Controlled personalization / preference profile | done (A/B benchmark PASS) |
 | 9 | Proactive admin operations copilot | done: deterministic daily brief, latest snapshot, low-stock links, feedback |
-| 10 | Evidence-triggered advanced capabilities | conditional |
+| 10 | Evidence-triggered advanced capabilities | deferred by evidence gate (no adoption) |
 
 ## Audit note correction (2026-11-20)
 

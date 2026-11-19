@@ -986,4 +986,6 @@ message AIChatEvent {
   string delta = 2;
   string tool = 3;
   string error = 4;
+  // draft_json is set when type=draft (currently a cart draft).
+  string draft_json = 5;
 }

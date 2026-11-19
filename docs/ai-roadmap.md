@@ -84,8 +84,9 @@ Current slice: `draft_cart` is a read-only tool that resolves SKU/price/stock,
 persists the draft in Redis bound to the server-derived user, and returns a
 10-minute draft id. The BFF confirm endpoint revalidates price/status/stock and
 calls Cart. It is idempotent after completion (duplicate confirm returns
-`confirmed=true` without adding again). Still missing: an SSE `draft` event and
-the storefront confirmation card.
+`confirmed=true` without adding again). An SSE `draft` event and the storefront
+confirmation card are implemented; the live SSE check was blocked by the
+provider returning an empty stream during this run.
 
 Start with product comparison and budget shopping-list generation. The
 assistant uses read tools to produce a cart draft containing SKU, quantity,

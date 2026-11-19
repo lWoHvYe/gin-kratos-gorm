@@ -84,6 +84,7 @@ func newDraftCartTool(catalog catalogClient, inventory inventoryClient, drafts C
 				out.Items = append(out.Items, item)
 				out.TotalCent += item.PriceCent * int64(item.Quantity)
 			}
+			publishDraft(ctx, out)
 			if drafts != nil {
 				uid, ok := userIDFromContext(ctx)
 				if !ok || uid == 0 {

@@ -56,6 +56,7 @@ type Service struct {
 	cache      redis.UniversalClient
 	breaker    *circuitBreaker
 	rag        RAGSearcher
+	drafts     CartDraftWriter
 	// budgets/prices are copied out of cfg for cheap per-request access.
 	dailyBudget      int64
 	globalBudget     int64
@@ -87,6 +88,7 @@ func NewService(ctx context.Context, cfg Config, provider ProviderConfig, d deps
 	svc := New(cfg, runner, newSessionStore(cache), newLimiter(cache, cfg.RateLimit, cfg.RateWindow), logger)
 	svc.cache = cache
 	svc.rag = d.RAG
+	svc.drafts = d.Drafts
 	svc.adminAgent = adminRunner
 	svc.dailyBudget = cfg.DailyTokenBudget
 	svc.globalBudget = cfg.GlobalDailyTokenBudget
@@ -192,6 +194,7 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 	// Tools read the user id from this context; model arguments can never
 	// select another user's data.
 	ctx = withUserID(ctx, req.GetUserId())
+	ctx, draftSink := withDraftSink(ctx)
 
 	history, err := s.sessions.Load(ctx, req.GetUserId(), sessionID)
 	if err != nil {
@@ -243,6 +246,9 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 			if chunk.ToolName != "" {
 				_ = stream.Send(&pb.AIChatEvent{Type: "tool", Tool: chunk.ToolName})
 			}
+			if chunk.ToolName == "draft_cart" && strings.HasPrefix(strings.TrimSpace(chunk.Content), "{") {
+				_ = stream.Send(&pb.AIChatEvent{Type: "draft", DraftJson: chunk.Content})
+			}
 			continue
 		}
 		if chunk.ResponseMeta != nil && chunk.ResponseMeta.Usage != nil {
@@ -275,6 +281,13 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 	s.log.Info("ai chat", "user_id", req.GetUserId(), "session_id", sessionID, "admin", req.GetAdmin(),
 		"provider", s.cfg.Provider, "model", s.cfg.Model, "prompt_version", promptVersion,
 		"latency_ms", time.Since(start).Milliseconds(), "chars", answer.Len())
+	raw := draftSink.take()
+	if len(raw) == 0 && s.drafts != nil {
+		raw, _ = s.drafts.PopRecent(ctx, req.GetUserId())
+	}
+	if len(raw) > 0 {
+		_ = stream.Send(&pb.AIChatEvent{Type: "draft", DraftJson: string(raw)})
+	}
 	return stream.Send(&pb.AIChatEvent{Type: "done"})
 }
 

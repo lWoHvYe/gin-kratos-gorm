@@ -47,7 +47,11 @@ func (r *adkStreamRunner) Stream(ctx context.Context, input []*schema.Message) (
 			variant := event.Output.MessageOutput
 			if variant.Role == schema.Tool {
 				if variant.ToolName != "" {
-					writer.Send(schema.ToolMessage("", "", schema.WithToolName(variant.ToolName)), nil)
+					content := ""
+					if variant.Message != nil {
+						content = variant.Message.Content
+					}
+					writer.Send(schema.ToolMessage(content, "", schema.WithToolName(variant.ToolName)), nil)
 				}
 				continue
 			}

@@ -11732,10 +11732,12 @@ func (x *AIFeedbackRequest) GetUserId() int64 {
 type AIChatEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// type is one of: delta, tool, done, error.
-	Type          string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	Delta         string `protobuf:"bytes,2,opt,name=delta,proto3" json:"delta,omitempty"`
-	Tool          string `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
-	Error         string `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	Type  string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	Delta string `protobuf:"bytes,2,opt,name=delta,proto3" json:"delta,omitempty"`
+	Tool  string `protobuf:"bytes,3,opt,name=tool,proto3" json:"tool,omitempty"`
+	Error string `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	// draft_json is set when type=draft (currently a cart draft).
+	DraftJson     string `protobuf:"bytes,5,opt,name=draft_json,json=draftJson,proto3" json:"draft_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11794,6 +11796,13 @@ func (x *AIChatEvent) GetTool() string {
 func (x *AIChatEvent) GetError() string {
 	if x != nil {
 		return x.Error
+	}
+	return ""
+}
+
+func (x *AIChatEvent) GetDraftJson() string {
+	if x != nil {
+		return x.DraftJson
 	}
 	return ""
 }
@@ -12802,12 +12811,14 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n" +
 	"\x06rating\x18\x02 \x01(\x05R\x06rating\x12\x18\n" +
 	"\acomment\x18\x03 \x01(\tR\acomment\x12\x17\n" +
-	"\auser_id\x18\x04 \x01(\x03R\x06userId\"a\n" +
+	"\auser_id\x18\x04 \x01(\x03R\x06userId\"\x80\x01\n" +
 	"\vAIChatEvent\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05delta\x18\x02 \x01(\tR\x05delta\x12\x12\n" +
 	"\x04tool\x18\x03 \x01(\tR\x04tool\x12\x14\n" +
-	"\x05error\x18\x04 \x01(\tR\x05error2\xe5\x05\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"draft_json\x18\x05 \x01(\tR\tdraftJson2\xe5\x05\n" +
 	"\x0fIdentityService\x129\n" +
 	"\bRegister\x12\x18.mall.v1.RegisterRequest\x1a\x13.mall.v1.LoginReply\x123\n" +
 	"\x05Login\x12\x15.mall.v1.LoginRequest\x1a\x13.mall.v1.LoginReply\x127\n" +

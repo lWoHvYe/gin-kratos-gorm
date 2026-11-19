@@ -11,7 +11,24 @@
           可以问我商品推荐、订单状态或退货政策。示例：“Widget 有什么”“我的订单”“退货政策”。
         </p>
         <div v-for="(m, i) in messages" :key="i" :class="['ai-msg', m.role]">
-          {{ m.text }}
+          <span>{{ m.text }}</span>
+          <div v-if="m.draft" class="ai-draft">
+            <strong>购物车草案</strong>
+            <ul>
+              <li v-for="item in m.draft.items" :key="item.sku_id">
+                {{ item.name || ('SKU ' + item.sku_id) }} × {{ item.quantity }}
+                <span>{{ (item.price_cent / 100).toFixed(2) }}</span>
+              </li>
+            </ul>
+            <p>合计 {{ (m.draft.total_cent / 100).toFixed(2) }}</p>
+            <button
+              type="button"
+              :disabled="m.draftConfirmed || m.draftSaving"
+              @click="confirmDraft(m)"
+            >
+              {{ m.draftConfirmed ? '已加入购物车' : (m.draftSaving ? '确认中…' : '确认加入购物车') }}
+            </button>
+          </div>
         </div>
         <div v-if="canRate" class="ai-feedback">
           <span>有帮助吗？</span>
@@ -39,9 +56,28 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 import { parseSSEChunk, type SSEEvent } from '~/utils/sse'
 
+interface DraftItem {
+  sku_id: number
+  name?: string
+  price_cent: number
+  quantity: number
+  available: number
+  stock_timestamp: number
+}
+
+interface CartDraft {
+  draft_id: string
+  items: DraftItem[]
+  total_cent: number
+  expires_at: number
+}
+
 interface Message {
   role: 'user' | 'assistant'
   text: string
+  draft?: CartDraft
+  draftSaving?: boolean
+  draftConfirmed?: boolean
 }
 
 const { token } = useApi()
@@ -113,7 +149,37 @@ function applyEvent(index: number, ev: SSEEvent) {
   const message = messages.value[index]
   if (!message) return
   if (ev.type === 'delta' && ev.delta) message.text += ev.delta
+  if (ev.type === 'draft' && ev.draft_json) {
+    try {
+      message.draft = JSON.parse(ev.draft_json) as CartDraft
+    } catch {
+      // Ignore malformed drafts; the assistant text remains the fallback.
+    }
+  }
   if (ev.type === 'error') message.text = ev.error || '助手暂时不可用，请稍后再试。'
+}
+
+async function confirmDraft(message: Message): Promise<void> {
+  if (!message.draft || !token.value || message.draftSaving || message.draftConfirmed) return
+  message.draftSaving = true
+  try {
+    const response = await fetch('/api/v1/ai/cart-drafts/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
+      body: JSON.stringify({ draft_id: message.draft.draft_id }),
+    })
+    const body = await response.json().catch(() => null) as { message?: string } | null
+    if (!response.ok) {
+      message.text += `\n${body?.message || '草案已失效，请重新生成。'}`
+      return
+    }
+    message.draftConfirmed = true
+    message.text += '\n已确认加入购物车。'
+  } catch {
+    message.text += '\n确认失败，请稍后重试。'
+  } finally {
+    message.draftSaving = false
+  }
 }
 
 async function send() {
@@ -199,6 +265,17 @@ async function send() {
 .ai-input input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; }
 .ai-input button { padding: 8px 14px; border: 0; border-radius: 8px; background: var(--mall-primary, #2563eb); color: #fff; cursor: pointer; }
 .ai-input button:disabled { opacity: 0.5; cursor: default; }
+.ai-draft {
+  margin-top: 8px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px;
+  background: #f8fbff; font-size: 13px;
+}
+.ai-draft ul { margin: 6px 0; padding-left: 18px; }
+.ai-draft li { margin: 3px 0; }
+.ai-draft button {
+  border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer;
+  background: var(--mall-primary, #2563eb); color: #fff;
+}
+.ai-draft button:disabled { opacity: 0.6; cursor: default; }
 .ai-feedback { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; color: #6b7280; font-size: 12px; }
 .ai-feedback button { border: 1px solid #e5e7eb; background: #fff; border-radius: 6px; cursor: pointer; padding: 2px 6px; }
 </style>

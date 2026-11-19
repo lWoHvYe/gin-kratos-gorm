@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -15,6 +16,7 @@ const cartDraftTTL = 10 * time.Minute
 
 type CartDraftWriter interface {
 	Save(ctx context.Context, draftID string, userID int64, draft any) error
+	PopRecent(ctx context.Context, userID int64) ([]byte, bool)
 }
 
 type redisCartDraftWriter struct{ cache redis.UniversalClient }
@@ -37,7 +39,22 @@ func (w *redisCartDraftWriter) Save(ctx context.Context, draftID string, userID 
 	if err != nil {
 		return err
 	}
-	return w.cache.Set(ctx, "ai:cart:draft:"+draftID, body, cartDraftTTL).Err()
+	if err := w.cache.Set(ctx, "ai:cart:draft:"+draftID, body, cartDraftTTL).Err(); err != nil {
+		return err
+	}
+	recent := "ai:cart:recent:" + fmt.Sprintf("%d", userID)
+	_ = w.cache.LPush(ctx, recent, raw).Err()
+	_ = w.cache.LTrim(ctx, recent, 0, 4).Err()
+	_ = w.cache.Expire(ctx, recent, cartDraftTTL).Err()
+	return nil
+}
+
+func (w *redisCartDraftWriter) PopRecent(ctx context.Context, userID int64) ([]byte, bool) {
+	raw, err := w.cache.LPop(ctx, "ai:cart:recent:"+fmt.Sprintf("%d", userID)).Bytes()
+	if err != nil {
+		return nil, false
+	}
+	return raw, true
 }
 
 func (s *Service) GetCartDraft(ctx context.Context, req *pb.GetCartDraftRequest) (*pb.CartDraftReply, error) {

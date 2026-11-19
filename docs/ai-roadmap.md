@@ -13,7 +13,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 6 | Versioned RAG and measurable quality | partial (see below) |
 | 7 | Customer task assistant: comparison, budget list, cart draft | partial: read-only `draft_cart` tool |
 | 8 | Controlled personalization / preference profile | partial: API + UI + prompt injection |
-| 9 | Proactive admin operations copilot | partial: deterministic brief API + UI |
+| 9 | Proactive admin operations copilot | done: deterministic daily brief, latest snapshot, low-stock links, feedback |
 | 10 | Evidence-triggered advanced capabilities | conditional |
 
 ## Audit note correction (2026-11-20)

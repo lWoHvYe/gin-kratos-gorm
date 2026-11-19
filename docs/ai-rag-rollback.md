@@ -12,10 +12,12 @@ dual-write registry while retained.
    never switch to a 0-document failed build.
 3. Switch the alias atomically:
    `FT.ALIASUPDATE ai_kb_current ai_kb_v<timestamp>`
-4. Publish the matching current pointer:
+4. Invalidate the version-bound query caches (`ai:rag:q:*`, `ai:rag:sem:*`);
+   otherwise a rollback can still serve cached documents from the old target.
+5. Publish the matching current pointer:
    `SET ai:rag:current '{"index":"ai_kb_current","prefix":"ai_kb_v<timestamp>:","created_at":...}'`
-5. Restart AI replicas so they load the pointer (non-leaders do not rebuild).
-6. Verify: search "耳机" returns documents, `mall_ai_rag_search_total` grows, and
+6. Restart AI replicas so they load the pointer (non-leaders do not rebuild).
+7. Verify: search "耳机" returns documents, `mall_ai_rag_search_total` grows, and
    the eval set still passes. If the old version is stale, run reconciliation
    by restarting one leader Pod or wait for the 15-minute worker.
 

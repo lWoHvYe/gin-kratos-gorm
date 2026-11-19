@@ -21,7 +21,7 @@ risk is explicit.
 | P2#6 | done | Outbox prune selects one ID batch and archives/deletes those IDs in one transaction; MySQL test passes. |
 | P2#7 | done | Quote cleanup is one transaction; inventory_ledger has a 180-day archive table/worker with MySQL test; growth metrics retained. |
 | P2#8 | done | SQL fallback SKU predicate now includes `price_cent > 0`, matching GORM. |
-| P2#9 | partial | BFF and catalog gRPC clamp page > 1000; keyset pagination not implemented. |
+| P2#9 | done | BFF/catalog page cap; public product list supports opaque keyset cursor (price/id), verified no overlap; admin lists keep page cap. |
 | P2#10 | rejected | Rechecked: only cart add and admin product detail call `GetStock`; checkout uses quote lines. No checkout/cart-merge per-SKU loop exists. |
 | P2#11 | done | AI entry defaults hidden and remains hidden on status failure/non-2xx. |
 | P2#12 | done | Forward cleanup migrations remove exact smoke seed; demo data remains an explicit `deploy/seed` script. Applied: smoke SPUs now 0. |

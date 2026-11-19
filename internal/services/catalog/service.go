@@ -1009,31 +1009,75 @@ func (s *Service) listProductsSQL(ctx context.Context, req *pb.ListProductsReque
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM spus "+where, args...).Scan(&total); err != nil {
 		return nil, apperr.Internal("count products", err)
 	}
+	sortName := normalizeSort(req.GetSort())
 	order := "id DESC"
-	if req.GetSort() == "price_asc" {
+	if sortName == "price_asc" {
 		order = "min_price_cent ASC, id DESC"
-	} else if req.GetSort() == "price_desc" {
+	} else if sortName == "price_desc" {
 		order = "min_price_cent DESC, id DESC"
 	}
-	args = append(args, req.GetPageSize(), (req.GetPage()-1)*req.GetPageSize())
-	rows, err := s.db.QueryContext(ctx, "SELECT id FROM spus "+where+" ORDER BY "+order+" LIMIT ? OFFSET ?", args...)
+	cursor, err := decodeProductCursor(req.GetCursor())
+	if err != nil {
+		return nil, apperr.Invalid("invalid cursor")
+	}
+	if cursor != nil {
+		if cursor.Sort != sortName {
+			return nil, apperr.Invalid("cursor sort does not match request")
+		}
+		switch sortName {
+		case "price_asc":
+			where += " AND (min_price_cent > ? OR (min_price_cent = ? AND id < ?))"
+			args = append(args, cursor.Price, cursor.Price, cursor.ID)
+		case "price_desc":
+			where += " AND (min_price_cent < ? OR (min_price_cent = ? AND id < ?))"
+			args = append(args, cursor.Price, cursor.Price, cursor.ID)
+		default:
+			where += " AND id < ?"
+			args = append(args, cursor.ID)
+		}
+	}
+	queryArgs := append([]any{}, args...)
+	queryArgs = append(queryArgs, req.GetPageSize()+1)
+	if cursor == nil {
+		queryArgs = append(queryArgs, (req.GetPage()-1)*req.GetPageSize())
+	}
+	rows, err := s.db.QueryContext(ctx, "SELECT id, min_price_cent FROM spus "+where+" ORDER BY "+order+" LIMIT ?"+
+		func() string {
+			if cursor == nil {
+				return " OFFSET ?"
+			}
+			return ""
+		}(), queryArgs...)
 	if err != nil {
 		return nil, apperr.Internal("list products", err)
 	}
 	defer rows.Close()
 	var ids []int64
+	var lastPrice int64
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
+		var id, price int64
+		if err := rows.Scan(&id, &price); err != nil {
 			return nil, apperr.Internal("scan product id", err)
 		}
+		if int32(len(ids)) < req.GetPageSize() {
+			lastPrice = price
+		}
 		ids = append(ids, id)
+	}
+	rows.Close()
+	hasMore := int32(len(ids)) > req.GetPageSize()
+	if hasMore {
+		ids = ids[:req.GetPageSize()]
 	}
 	products, err := s.loadProductsSQL(ctx, ids, true)
 	if err != nil {
 		return nil, err
 	}
-	return &pb.ProductList{Total: total, Products: products}, rows.Err()
+	out := &pb.ProductList{Total: total, Products: products}
+	if hasMore && len(products) > 0 {
+		out.NextCursor = encodeProductCursor(sortName, lastPrice, ids[len(ids)-1])
+	}
+	return out, rows.Err()
 }
 
 func (s *Service) listAdminProductsSQL(ctx context.Context, req *pb.ListAdminProductsRequest) (*pb.ProductList, error) {

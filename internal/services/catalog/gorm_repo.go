@@ -149,30 +149,56 @@ func (g *gormReader) ListProducts(ctx context.Context, req *pb.ListProductsReque
 	if err := base().Count(&total).Error; err != nil {
 		return nil, err
 	}
+	sortName := normalizeSort(req.GetSort())
 	order := "id DESC"
-	switch req.GetSort() {
+	switch sortName {
 	case "price_asc":
 		order = "min_price_cent ASC, id DESC"
 	case "price_desc":
 		order = "min_price_cent DESC, id DESC"
-	case "newest", "":
-		order = "id DESC"
 	}
-	var rows []gormSPU
-	if err := base().
-		Preload("Skus", func(db *gorm.DB) *gorm.DB {
-			return db.Where("status = ? AND price_cent > 0", "ENABLED").Order("id")
-		}).
-		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort, id") }).
-		Preload("Attributes", func(db *gorm.DB) *gorm.DB { return db.Order("sort, id") }).
-		Order(order).
-		Limit(int(req.GetPageSize())).Offset(int((req.GetPage() - 1) * req.GetPageSize())).
-		Find(&rows).Error; err != nil {
+	cursor, err := decodeProductCursor(req.GetCursor())
+	if err != nil {
 		return nil, err
+	}
+	query := base()
+	if cursor != nil {
+		if cursor.Sort != sortName {
+			return nil, fmt.Errorf("cursor sort does not match request")
+		}
+		switch sortName {
+		case "price_asc":
+			query = query.Where("(min_price_cent > ? OR (min_price_cent = ? AND id < ?))", cursor.Price, cursor.Price, cursor.ID)
+		case "price_desc":
+			query = query.Where("(min_price_cent < ? OR (min_price_cent = ? AND id < ?))", cursor.Price, cursor.Price, cursor.ID)
+		default:
+			query = query.Where("id < ?", cursor.ID)
+		}
+	}
+	size := int(req.GetPageSize())
+	var rows []gormSPU
+	query = query.Preload("Skus", func(db *gorm.DB) *gorm.DB {
+		return db.Where("status = ? AND price_cent > 0", "ENABLED").Order("id")
+	}).Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort, id") }).
+		Preload("Attributes", func(db *gorm.DB) *gorm.DB { return db.Order("sort, id") }).
+		Order(order).Limit(size + 1)
+	if cursor == nil {
+		query = query.Offset(int((req.GetPage() - 1) * req.GetPageSize()))
+	}
+	if err := query.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	hasMore := len(rows) > size
+	if hasMore {
+		rows = rows[:size]
 	}
 	out := &pb.ProductList{Total: total, Products: make([]*pb.Product, 0, len(rows))}
 	for i := range rows {
 		out.Products = append(out.Products, rows[i].toPB())
+	}
+	if hasMore && len(rows) > 0 {
+		last := rows[len(rows)-1]
+		out.NextCursor = encodeProductCursor(sortName, last.MinPriceCent, last.ID)
 	}
 	return out, nil
 }

@@ -75,7 +75,7 @@ func (h *handlers) listProducts(c *gin.Context) {
 	reply, err := h.clients.Catalog.ListProducts(c.Request.Context(), &pb.ListProductsRequest{
 		Page: page, PageSize: pageSize, Keyword: strings.TrimSpace(c.Query("keyword")),
 		CategoryId: categoryID, BrandId: brandID, MinPriceCent: minPrice, MaxPriceCent: maxPrice,
-		Sort: strings.TrimSpace(c.Query("sort")),
+		Sort: strings.TrimSpace(c.Query("sort")), Cursor: strings.TrimSpace(c.Query("cursor")),
 	})
 	if err != nil {
 		httpx.Error(c, bff.RemoteError(err))

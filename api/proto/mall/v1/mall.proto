@@ -171,6 +171,7 @@ message ListProductsRequest {
   int64 min_price_cent = 6;
   int64 max_price_cent = 7;
   string sort = 8;
+  string cursor = 9;
 }
 message ListAdminProductsRequest {
   int32 page = 1;
@@ -183,6 +184,7 @@ message ListAdminProductsRequest {
 message ProductList {
   repeated Product products = 1;
   int64 total = 2;
+  string next_cursor = 3;
 }
 message GetSkuRequest { int64 sku_id = 1; }
 message SkuInput {

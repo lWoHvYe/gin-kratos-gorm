@@ -1911,6 +1911,7 @@ type ListProductsRequest struct {
 	MinPriceCent  int64                  `protobuf:"varint,6,opt,name=min_price_cent,json=minPriceCent,proto3" json:"min_price_cent,omitempty"`
 	MaxPriceCent  int64                  `protobuf:"varint,7,opt,name=max_price_cent,json=maxPriceCent,proto3" json:"max_price_cent,omitempty"`
 	Sort          string                 `protobuf:"bytes,8,opt,name=sort,proto3" json:"sort,omitempty"`
+	Cursor        string                 `protobuf:"bytes,9,opt,name=cursor,proto3" json:"cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1997,6 +1998,13 @@ func (x *ListProductsRequest) GetMaxPriceCent() int64 {
 func (x *ListProductsRequest) GetSort() string {
 	if x != nil {
 		return x.Sort
+	}
+	return ""
+}
+
+func (x *ListProductsRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
 	}
 	return ""
 }
@@ -2089,6 +2097,7 @@ type ProductList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Products      []*Product             `protobuf:"bytes,1,rep,name=products,proto3" json:"products,omitempty"`
 	Total         int64                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	NextCursor    string                 `protobuf:"bytes,3,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2135,6 +2144,13 @@ func (x *ProductList) GetTotal() int64 {
 		return x.Total
 	}
 	return 0
+}
+
+func (x *ProductList) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
 }
 
 type GetSkuRequest struct {
@@ -11544,7 +11560,7 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"attributes\x18\f \x03(\v2\x19.mall.v1.ProductAttributeR\n" +
 	"attributes\"#\n" +
 	"\x11GetProductRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\"\xfc\x01\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"\x94\x02\n" +
 	"\x13ListProductsRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x18\n" +
@@ -11554,7 +11570,8 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\bbrand_id\x18\x05 \x01(\x03R\abrandId\x12$\n" +
 	"\x0emin_price_cent\x18\x06 \x01(\x03R\fminPriceCent\x12$\n" +
 	"\x0emax_price_cent\x18\a \x01(\x03R\fmaxPriceCent\x12\x12\n" +
-	"\x04sort\x18\b \x01(\tR\x04sort\"\xb9\x01\n" +
+	"\x04sort\x18\b \x01(\tR\x04sort\x12\x16\n" +
+	"\x06cursor\x18\t \x01(\tR\x06cursor\"\xb9\x01\n" +
 	"\x18ListAdminProductsRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x18\n" +
@@ -11562,10 +11579,12 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\vcategory_id\x18\x04 \x01(\x03R\n" +
 	"categoryId\x12\x19\n" +
 	"\bbrand_id\x18\x05 \x01(\x03R\abrandId\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\"Q\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\"r\n" +
 	"\vProductList\x12,\n" +
 	"\bproducts\x18\x01 \x03(\v2\x10.mall.v1.ProductR\bproducts\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x03R\x05total\"&\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x1f\n" +
+	"\vnext_cursor\x18\x03 \x01(\tR\n" +
+	"nextCursor\"&\n" +
 	"\rGetSkuRequest\x12\x15\n" +
 	"\x06sku_id\x18\x01 \x01(\x03R\x05skuId\"\x96\x01\n" +
 	"\bSkuInput\x12\x19\n" +

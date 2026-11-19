@@ -12,7 +12,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
 | 6 | Versioned RAG and measurable quality | done (hit@5 5/5, grounded/refusal cases, rollback drill) |
 | 7 | Customer task assistant: comparison, budget list, cart draft | done: real-model draft SSE -> confirm 200 |
-| 8 | Controlled personalization / preference profile | done (A/B benchmark PASS) |
+| 8 | Controlled personalization / preference profile | done (A/B benchmark 3/3 PASS) |
 | 9 | Proactive admin operations copilot | done: deterministic daily brief, latest snapshot, low-stock links, feedback |
 | 10 | Evidence-triggered advanced capabilities | deferred by evidence gate (no adoption) |
 

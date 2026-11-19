@@ -30,13 +30,13 @@ Long-term choices for the Phase 5-10 implementation.
 2. The RAG lock has a 10-minute TTL without renewal. A crashed builder blocks
    rebuilds until expiry. Followers now fall back to a valid alias if the
    `ai:rag:current` pointer is missing, but a first build longer than the 60s
-   follower wait can still leave followers without an alias.
+   follower wait can still leave followers without an alias. A Job/lease renewal
+   remains the long-term fix.
 3. `RunOpsBriefScheduler` sets the date key before generating. A crash in that
    window skips the day; the outbox/job design is stronger.
 4. Admin low-stock links point at `/admin/inventory?sku_id=...`; confirm that
    route exists in the admin SPA before relying on the link.
-5. Phase 8's benchmark is a single A/B run; repeated runs would make it a
-   stronger gate.
+5. Phase 8's benchmark passed 3/3 repeated A/B runs.
 6. Non-streaming ADK is a deliberate correctness tradeoff, not the final UX.
 
 ## Verification at the time of this review

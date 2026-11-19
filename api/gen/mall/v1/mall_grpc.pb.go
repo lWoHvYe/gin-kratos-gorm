@@ -5681,6 +5681,8 @@ const (
 	AIService_SetPreferences_FullMethodName      = "/mall.v1.AIService/SetPreferences"
 	AIService_ClearPreferences_FullMethodName    = "/mall.v1.AIService/ClearPreferences"
 	AIService_OpsBrief_FullMethodName            = "/mall.v1.AIService/OpsBrief"
+	AIService_LatestOpsBrief_FullMethodName      = "/mall.v1.AIService/LatestOpsBrief"
+	AIService_OpsFeedback_FullMethodName         = "/mall.v1.AIService/OpsFeedback"
 	AIService_StartCampaignDraft_FullMethodName  = "/mall.v1.AIService/StartCampaignDraft"
 	AIService_CheckCampaignDraft_FullMethodName  = "/mall.v1.AIService/CheckCampaignDraft"
 	AIService_ResumeCampaignDraft_FullMethodName = "/mall.v1.AIService/ResumeCampaignDraft"
@@ -5705,6 +5707,8 @@ type AIServiceClient interface {
 	SetPreferences(ctx context.Context, in *SetAIPreferencesRequest, opts ...grpc.CallOption) (*AIPreferences, error)
 	ClearPreferences(ctx context.Context, in *ClearAIPreferencesRequest, opts ...grpc.CallOption) (*Empty, error)
 	OpsBrief(ctx context.Context, in *OpsBriefRequest, opts ...grpc.CallOption) (*OpsBriefReply, error)
+	LatestOpsBrief(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*OpsBriefReply, error)
+	OpsFeedback(ctx context.Context, in *OpsFeedbackRequest, opts ...grpc.CallOption) (*Empty, error)
 	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
 	// after the BFF has saved the draft through the normal apply endpoint.
 	StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error)
@@ -5829,6 +5833,26 @@ func (c *aIServiceClient) OpsBrief(ctx context.Context, in *OpsBriefRequest, opt
 	return out, nil
 }
 
+func (c *aIServiceClient) LatestOpsBrief(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*OpsBriefReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OpsBriefReply)
+	err := c.cc.Invoke(ctx, AIService_LatestOpsBrief_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) OpsFeedback(ctx context.Context, in *OpsFeedbackRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AIService_OpsFeedback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aIServiceClient) StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CampaignDraftReply)
@@ -5878,6 +5902,8 @@ type AIServiceServer interface {
 	SetPreferences(context.Context, *SetAIPreferencesRequest) (*AIPreferences, error)
 	ClearPreferences(context.Context, *ClearAIPreferencesRequest) (*Empty, error)
 	OpsBrief(context.Context, *OpsBriefRequest) (*OpsBriefReply, error)
+	LatestOpsBrief(context.Context, *Empty) (*OpsBriefReply, error)
+	OpsFeedback(context.Context, *OpsFeedbackRequest) (*Empty, error)
 	// Admin-only draft review. Start interrupts; Resume closes the checkpoint
 	// after the BFF has saved the draft through the normal apply endpoint.
 	StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error)
@@ -5922,6 +5948,12 @@ func (UnimplementedAIServiceServer) ClearPreferences(context.Context, *ClearAIPr
 }
 func (UnimplementedAIServiceServer) OpsBrief(context.Context, *OpsBriefRequest) (*OpsBriefReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OpsBrief not implemented")
+}
+func (UnimplementedAIServiceServer) LatestOpsBrief(context.Context, *Empty) (*OpsBriefReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LatestOpsBrief not implemented")
+}
+func (UnimplementedAIServiceServer) OpsFeedback(context.Context, *OpsFeedbackRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpsFeedback not implemented")
 }
 func (UnimplementedAIServiceServer) StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartCampaignDraft not implemented")
@@ -6126,6 +6158,42 @@ func _AIService_OpsBrief_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_LatestOpsBrief_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).LatestOpsBrief(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_LatestOpsBrief_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).LatestOpsBrief(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_OpsFeedback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpsFeedbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).OpsFeedback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_OpsFeedback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).OpsFeedback(ctx, req.(*OpsFeedbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AIService_StartCampaignDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartCampaignDraftRequest)
 	if err := dec(in); err != nil {
@@ -6222,6 +6290,14 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OpsBrief",
 			Handler:    _AIService_OpsBrief_Handler,
+		},
+		{
+			MethodName: "LatestOpsBrief",
+			Handler:    _AIService_LatestOpsBrief_Handler,
+		},
+		{
+			MethodName: "OpsFeedback",
+			Handler:    _AIService_OpsFeedback_Handler,
 		},
 		{
 			MethodName: "StartCampaignDraft",

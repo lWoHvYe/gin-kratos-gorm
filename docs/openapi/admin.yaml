@@ -1382,3 +1382,27 @@ paths:
         - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 30 } }
       responses:
         '200': { description: Operations brief }
+
+  /api/admin/v1/ai/ops/latest:
+    get:
+      summary: Latest scheduled deterministic operations brief
+      tags: [ai]
+      responses:
+        '200': { description: Brief }
+  /api/admin/v1/ai/ops/feedback:
+    post:
+      summary: Admin feedback on an operations brief
+      tags: [ai]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                day: { type: string }
+                rating: { type: integer, enum: [1, -1] }
+                comment: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: Saved }

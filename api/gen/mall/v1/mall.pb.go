@@ -11511,6 +11511,74 @@ func (x *OpsBriefRequest) GetDays() int32 {
 	return 0
 }
 
+type OpsFeedbackRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Day           string                 `protobuf:"bytes,1,opt,name=day,proto3" json:"day,omitempty"`
+	Rating        int32                  `protobuf:"varint,2,opt,name=rating,proto3" json:"rating,omitempty"`
+	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
+	AdminUserId   int64                  `protobuf:"varint,4,opt,name=admin_user_id,json=adminUserId,proto3" json:"admin_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpsFeedbackRequest) Reset() {
+	*x = OpsFeedbackRequest{}
+	mi := &file_mall_v1_mall_proto_msgTypes[170]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpsFeedbackRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpsFeedbackRequest) ProtoMessage() {}
+
+func (x *OpsFeedbackRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mall_v1_mall_proto_msgTypes[170]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpsFeedbackRequest.ProtoReflect.Descriptor instead.
+func (*OpsFeedbackRequest) Descriptor() ([]byte, []int) {
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{170}
+}
+
+func (x *OpsFeedbackRequest) GetDay() string {
+	if x != nil {
+		return x.Day
+	}
+	return ""
+}
+
+func (x *OpsFeedbackRequest) GetRating() int32 {
+	if x != nil {
+		return x.Rating
+	}
+	return 0
+}
+
+func (x *OpsFeedbackRequest) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+func (x *OpsFeedbackRequest) GetAdminUserId() int64 {
+	if x != nil {
+		return x.AdminUserId
+	}
+	return 0
+}
+
 type OpsBriefReply struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Summary       string                 `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
@@ -11529,7 +11597,7 @@ type OpsBriefReply struct {
 
 func (x *OpsBriefReply) Reset() {
 	*x = OpsBriefReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[170]
+	mi := &file_mall_v1_mall_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11541,7 +11609,7 @@ func (x *OpsBriefReply) String() string {
 func (*OpsBriefReply) ProtoMessage() {}
 
 func (x *OpsBriefReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[170]
+	mi := &file_mall_v1_mall_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11554,7 +11622,7 @@ func (x *OpsBriefReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpsBriefReply.ProtoReflect.Descriptor instead.
 func (*OpsBriefReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{170}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *OpsBriefReply) GetSummary() string {
@@ -11644,7 +11712,7 @@ type StartCampaignDraftRequest struct {
 
 func (x *StartCampaignDraftRequest) Reset() {
 	*x = StartCampaignDraftRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[171]
+	mi := &file_mall_v1_mall_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11656,7 +11724,7 @@ func (x *StartCampaignDraftRequest) String() string {
 func (*StartCampaignDraftRequest) ProtoMessage() {}
 
 func (x *StartCampaignDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[171]
+	mi := &file_mall_v1_mall_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11669,7 +11737,7 @@ func (x *StartCampaignDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartCampaignDraftRequest.ProtoReflect.Descriptor instead.
 func (*StartCampaignDraftRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{171}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *StartCampaignDraftRequest) GetUserId() int64 {
@@ -11745,7 +11813,7 @@ type CampaignDraftReply struct {
 
 func (x *CampaignDraftReply) Reset() {
 	*x = CampaignDraftReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[172]
+	mi := &file_mall_v1_mall_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11757,7 +11825,7 @@ func (x *CampaignDraftReply) String() string {
 func (*CampaignDraftReply) ProtoMessage() {}
 
 func (x *CampaignDraftReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[172]
+	mi := &file_mall_v1_mall_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11770,7 +11838,7 @@ func (x *CampaignDraftReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CampaignDraftReply.ProtoReflect.Descriptor instead.
 func (*CampaignDraftReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{172}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *CampaignDraftReply) GetCheckpointId() string {
@@ -11799,7 +11867,7 @@ type ResumeCampaignDraftRequest struct {
 
 func (x *ResumeCampaignDraftRequest) Reset() {
 	*x = ResumeCampaignDraftRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[173]
+	mi := &file_mall_v1_mall_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11811,7 +11879,7 @@ func (x *ResumeCampaignDraftRequest) String() string {
 func (*ResumeCampaignDraftRequest) ProtoMessage() {}
 
 func (x *ResumeCampaignDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[173]
+	mi := &file_mall_v1_mall_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11824,7 +11892,7 @@ func (x *ResumeCampaignDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeCampaignDraftRequest.ProtoReflect.Descriptor instead.
 func (*ResumeCampaignDraftRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{173}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *ResumeCampaignDraftRequest) GetUserId() int64 {
@@ -11866,7 +11934,7 @@ type FeedbackDaySummary struct {
 
 func (x *FeedbackDaySummary) Reset() {
 	*x = FeedbackDaySummary{}
-	mi := &file_mall_v1_mall_proto_msgTypes[174]
+	mi := &file_mall_v1_mall_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11878,7 +11946,7 @@ func (x *FeedbackDaySummary) String() string {
 func (*FeedbackDaySummary) ProtoMessage() {}
 
 func (x *FeedbackDaySummary) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[174]
+	mi := &file_mall_v1_mall_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11891,7 +11959,7 @@ func (x *FeedbackDaySummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedbackDaySummary.ProtoReflect.Descriptor instead.
 func (*FeedbackDaySummary) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{174}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *FeedbackDaySummary) GetDay() string {
@@ -11925,7 +11993,7 @@ type FeedbackComment struct {
 
 func (x *FeedbackComment) Reset() {
 	*x = FeedbackComment{}
-	mi := &file_mall_v1_mall_proto_msgTypes[175]
+	mi := &file_mall_v1_mall_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11937,7 +12005,7 @@ func (x *FeedbackComment) String() string {
 func (*FeedbackComment) ProtoMessage() {}
 
 func (x *FeedbackComment) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[175]
+	mi := &file_mall_v1_mall_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11950,7 +12018,7 @@ func (x *FeedbackComment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedbackComment.ProtoReflect.Descriptor instead.
 func (*FeedbackComment) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{175}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *FeedbackComment) GetDay() string {
@@ -11980,7 +12048,7 @@ type FeedbackSummaryReply struct {
 
 func (x *FeedbackSummaryReply) Reset() {
 	*x = FeedbackSummaryReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[176]
+	mi := &file_mall_v1_mall_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11992,7 +12060,7 @@ func (x *FeedbackSummaryReply) String() string {
 func (*FeedbackSummaryReply) ProtoMessage() {}
 
 func (x *FeedbackSummaryReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[176]
+	mi := &file_mall_v1_mall_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12005,7 +12073,7 @@ func (x *FeedbackSummaryReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedbackSummaryReply.ProtoReflect.Descriptor instead.
 func (*FeedbackSummaryReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{176}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *FeedbackSummaryReply) GetTotal() int64 {
@@ -12057,7 +12125,7 @@ type AIFeedbackRequest struct {
 
 func (x *AIFeedbackRequest) Reset() {
 	*x = AIFeedbackRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[177]
+	mi := &file_mall_v1_mall_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12069,7 +12137,7 @@ func (x *AIFeedbackRequest) String() string {
 func (*AIFeedbackRequest) ProtoMessage() {}
 
 func (x *AIFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[177]
+	mi := &file_mall_v1_mall_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12082,7 +12150,7 @@ func (x *AIFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*AIFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{177}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *AIFeedbackRequest) GetSessionId() string {
@@ -12128,7 +12196,7 @@ type AIChatEvent struct {
 
 func (x *AIChatEvent) Reset() {
 	*x = AIChatEvent{}
-	mi := &file_mall_v1_mall_proto_msgTypes[178]
+	mi := &file_mall_v1_mall_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12140,7 +12208,7 @@ func (x *AIChatEvent) String() string {
 func (*AIChatEvent) ProtoMessage() {}
 
 func (x *AIChatEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[178]
+	mi := &file_mall_v1_mall_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12153,7 +12221,7 @@ func (x *AIChatEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIChatEvent.ProtoReflect.Descriptor instead.
 func (*AIChatEvent) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{178}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *AIChatEvent) GetType() string {
@@ -13171,7 +13239,12 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x19ClearAIPreferencesRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\"%\n" +
 	"\x0fOpsBriefRequest\x12\x12\n" +
-	"\x04days\x18\x01 \x01(\x05R\x04days\"\xc6\x02\n" +
+	"\x04days\x18\x01 \x01(\x05R\x04days\"|\n" +
+	"\x12OpsFeedbackRequest\x12\x10\n" +
+	"\x03day\x18\x01 \x01(\tR\x03day\x12\x16\n" +
+	"\x06rating\x18\x02 \x01(\x05R\x06rating\x12\x18\n" +
+	"\acomment\x18\x03 \x01(\tR\acomment\x12\"\n" +
+	"\radmin_user_id\x18\x04 \x01(\x03R\vadminUserId\"\xc6\x02\n" +
 	"\rOpsBriefReply\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12!\n" +
 	"\ftotal_orders\x18\x02 \x01(\x03R\vtotalOrders\x12\x1f\n" +
@@ -13383,7 +13456,7 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x10GetQualification\x12'.mall.v1.GetSeckillQualificationRequest\x1a\x1d.mall.v1.SeckillQualification\x12Q\n" +
 	"\x11GetPublicActivity\x12\".mall.v1.GetSeckillActivityRequest\x1a\x18.mall.v1.SeckillActivity\x12[\n" +
 	"\x14ListPublicActivities\x12%.mall.v1.ListSeckillActivitiesRequest\x1a\x1c.mall.v1.SeckillActivityList\x12M\n" +
-	"\tReplayDLQ\x12 .mall.v1.ReplaySeckillDLQRequest\x1a\x1e.mall.v1.ReplaySeckillDLQReply2\xc2\a\n" +
+	"\tReplayDLQ\x12 .mall.v1.ReplaySeckillDLQRequest\x1a\x1e.mall.v1.ReplaySeckillDLQReply2\xb8\b\n" +
 	"\tAIService\x126\n" +
 	"\x04Chat\x12\x16.mall.v1.AIChatRequest\x1a\x14.mall.v1.AIChatEvent0\x01\x12<\n" +
 	"\x0eSubmitFeedback\x12\x1a.mall.v1.AIFeedbackRequest\x1a\x0e.mall.v1.Empty\x12Q\n" +
@@ -13394,7 +13467,9 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x0eGetPreferences\x12 .mall.v1.GetAIPreferencesRequest\x1a\x16.mall.v1.AIPreferences\x12J\n" +
 	"\x0eSetPreferences\x12 .mall.v1.SetAIPreferencesRequest\x1a\x16.mall.v1.AIPreferences\x12F\n" +
 	"\x10ClearPreferences\x12\".mall.v1.ClearAIPreferencesRequest\x1a\x0e.mall.v1.Empty\x12<\n" +
-	"\bOpsBrief\x12\x18.mall.v1.OpsBriefRequest\x1a\x16.mall.v1.OpsBriefReply\x12U\n" +
+	"\bOpsBrief\x12\x18.mall.v1.OpsBriefRequest\x1a\x16.mall.v1.OpsBriefReply\x128\n" +
+	"\x0eLatestOpsBrief\x12\x0e.mall.v1.Empty\x1a\x16.mall.v1.OpsBriefReply\x12:\n" +
+	"\vOpsFeedback\x12\x1b.mall.v1.OpsFeedbackRequest\x1a\x0e.mall.v1.Empty\x12U\n" +
 	"\x12StartCampaignDraft\x12\".mall.v1.StartCampaignDraftRequest\x1a\x1b.mall.v1.CampaignDraftReply\x12I\n" +
 	"\x12CheckCampaignDraft\x12#.mall.v1.ResumeCampaignDraftRequest\x1a\x0e.mall.v1.Empty\x12J\n" +
 	"\x13ResumeCampaignDraft\x12#.mall.v1.ResumeCampaignDraftRequest\x1a\x0e.mall.v1.EmptyB(Z&gin-kratos-gorm/api/gen/mall/v1;mallv1b\x06proto3"
@@ -13411,7 +13486,7 @@ func file_mall_v1_mall_proto_rawDescGZIP() []byte {
 	return file_mall_v1_mall_proto_rawDescData
 }
 
-var file_mall_v1_mall_proto_msgTypes = make([]protoimpl.MessageInfo, 179)
+var file_mall_v1_mall_proto_msgTypes = make([]protoimpl.MessageInfo, 180)
 var file_mall_v1_mall_proto_goTypes = []any{
 	(*Empty)(nil),                            // 0: mall.v1.Empty
 	(*User)(nil),                             // 1: mall.v1.User
@@ -13583,15 +13658,16 @@ var file_mall_v1_mall_proto_goTypes = []any{
 	(*SetAIPreferencesRequest)(nil),          // 167: mall.v1.SetAIPreferencesRequest
 	(*ClearAIPreferencesRequest)(nil),        // 168: mall.v1.ClearAIPreferencesRequest
 	(*OpsBriefRequest)(nil),                  // 169: mall.v1.OpsBriefRequest
-	(*OpsBriefReply)(nil),                    // 170: mall.v1.OpsBriefReply
-	(*StartCampaignDraftRequest)(nil),        // 171: mall.v1.StartCampaignDraftRequest
-	(*CampaignDraftReply)(nil),               // 172: mall.v1.CampaignDraftReply
-	(*ResumeCampaignDraftRequest)(nil),       // 173: mall.v1.ResumeCampaignDraftRequest
-	(*FeedbackDaySummary)(nil),               // 174: mall.v1.FeedbackDaySummary
-	(*FeedbackComment)(nil),                  // 175: mall.v1.FeedbackComment
-	(*FeedbackSummaryReply)(nil),             // 176: mall.v1.FeedbackSummaryReply
-	(*AIFeedbackRequest)(nil),                // 177: mall.v1.AIFeedbackRequest
-	(*AIChatEvent)(nil),                      // 178: mall.v1.AIChatEvent
+	(*OpsFeedbackRequest)(nil),               // 170: mall.v1.OpsFeedbackRequest
+	(*OpsBriefReply)(nil),                    // 171: mall.v1.OpsBriefReply
+	(*StartCampaignDraftRequest)(nil),        // 172: mall.v1.StartCampaignDraftRequest
+	(*CampaignDraftReply)(nil),               // 173: mall.v1.CampaignDraftReply
+	(*ResumeCampaignDraftRequest)(nil),       // 174: mall.v1.ResumeCampaignDraftRequest
+	(*FeedbackDaySummary)(nil),               // 175: mall.v1.FeedbackDaySummary
+	(*FeedbackComment)(nil),                  // 176: mall.v1.FeedbackComment
+	(*FeedbackSummaryReply)(nil),             // 177: mall.v1.FeedbackSummaryReply
+	(*AIFeedbackRequest)(nil),                // 178: mall.v1.AIFeedbackRequest
+	(*AIChatEvent)(nil),                      // 179: mall.v1.AIChatEvent
 }
 var file_mall_v1_mall_proto_depIdxs = []int32{
 	1,   // 0: mall.v1.LoginReply.user:type_name -> mall.v1.User
@@ -13647,8 +13723,8 @@ var file_mall_v1_mall_proto_depIdxs = []int32{
 	136, // 50: mall.v1.SeckillActivityList.activities:type_name -> mall.v1.SeckillActivity
 	160, // 51: mall.v1.KnowledgeSearchReply.docs:type_name -> mall.v1.KnowledgeDoc
 	165, // 52: mall.v1.SetAIPreferencesRequest.preferences:type_name -> mall.v1.AIPreferences
-	174, // 53: mall.v1.FeedbackSummaryReply.days:type_name -> mall.v1.FeedbackDaySummary
-	175, // 54: mall.v1.FeedbackSummaryReply.not_helpful_comments:type_name -> mall.v1.FeedbackComment
+	175, // 53: mall.v1.FeedbackSummaryReply.days:type_name -> mall.v1.FeedbackDaySummary
+	176, // 54: mall.v1.FeedbackSummaryReply.not_helpful_comments:type_name -> mall.v1.FeedbackComment
 	2,   // 55: mall.v1.IdentityService.Register:input_type -> mall.v1.RegisterRequest
 	3,   // 56: mall.v1.IdentityService.Login:input_type -> mall.v1.LoginRequest
 	4,   // 57: mall.v1.IdentityService.Refresh:input_type -> mall.v1.RefreshRequest
@@ -13779,7 +13855,7 @@ var file_mall_v1_mall_proto_depIdxs = []int32{
 	140, // 182: mall.v1.SeckillService.ListPublicActivities:input_type -> mall.v1.ListSeckillActivitiesRequest
 	155, // 183: mall.v1.SeckillService.ReplayDLQ:input_type -> mall.v1.ReplaySeckillDLQRequest
 	157, // 184: mall.v1.AIService.Chat:input_type -> mall.v1.AIChatRequest
-	177, // 185: mall.v1.AIService.SubmitFeedback:input_type -> mall.v1.AIFeedbackRequest
+	178, // 185: mall.v1.AIService.SubmitFeedback:input_type -> mall.v1.AIFeedbackRequest
 	158, // 186: mall.v1.AIService.FeedbackSummary:input_type -> mall.v1.FeedbackSummaryRequest
 	159, // 187: mall.v1.AIService.SearchKnowledge:input_type -> mall.v1.KnowledgeSearchRequest
 	162, // 188: mall.v1.AIService.GetCartDraft:input_type -> mall.v1.GetCartDraftRequest
@@ -13788,153 +13864,157 @@ var file_mall_v1_mall_proto_depIdxs = []int32{
 	167, // 191: mall.v1.AIService.SetPreferences:input_type -> mall.v1.SetAIPreferencesRequest
 	168, // 192: mall.v1.AIService.ClearPreferences:input_type -> mall.v1.ClearAIPreferencesRequest
 	169, // 193: mall.v1.AIService.OpsBrief:input_type -> mall.v1.OpsBriefRequest
-	171, // 194: mall.v1.AIService.StartCampaignDraft:input_type -> mall.v1.StartCampaignDraftRequest
-	173, // 195: mall.v1.AIService.CheckCampaignDraft:input_type -> mall.v1.ResumeCampaignDraftRequest
-	173, // 196: mall.v1.AIService.ResumeCampaignDraft:input_type -> mall.v1.ResumeCampaignDraftRequest
-	6,   // 197: mall.v1.IdentityService.Register:output_type -> mall.v1.LoginReply
-	6,   // 198: mall.v1.IdentityService.Login:output_type -> mall.v1.LoginReply
-	6,   // 199: mall.v1.IdentityService.Refresh:output_type -> mall.v1.LoginReply
-	0,   // 200: mall.v1.IdentityService.Logout:output_type -> mall.v1.Empty
-	1,   // 201: mall.v1.IdentityService.GetUser:output_type -> mall.v1.User
-	11,  // 202: mall.v1.IdentityService.CreateAddress:output_type -> mall.v1.Address
-	11,  // 203: mall.v1.IdentityService.UpdateAddress:output_type -> mall.v1.Address
-	0,   // 204: mall.v1.IdentityService.DeleteAddress:output_type -> mall.v1.Empty
-	0,   // 205: mall.v1.IdentityService.SetDefaultAddress:output_type -> mall.v1.Empty
-	16,  // 206: mall.v1.IdentityService.ListAddresses:output_type -> mall.v1.AddressList
-	9,   // 207: mall.v1.IdentityService.ListUsers:output_type -> mall.v1.UserList
-	1,   // 208: mall.v1.IdentityService.SetUserStatus:output_type -> mall.v1.User
-	30,  // 209: mall.v1.CatalogService.GetProduct:output_type -> mall.v1.Product
-	34,  // 210: mall.v1.CatalogService.ListProducts:output_type -> mall.v1.ProductList
-	29,  // 211: mall.v1.CatalogService.GetSku:output_type -> mall.v1.Sku
-	17,  // 212: mall.v1.CatalogService.CreateCategory:output_type -> mall.v1.Category
-	17,  // 213: mall.v1.CatalogService.UpdateCategory:output_type -> mall.v1.Category
-	0,   // 214: mall.v1.CatalogService.DeleteCategory:output_type -> mall.v1.Empty
-	18,  // 215: mall.v1.CatalogService.ListCategories:output_type -> mall.v1.CategoryList
-	22,  // 216: mall.v1.CatalogService.CreateBrand:output_type -> mall.v1.Brand
-	22,  // 217: mall.v1.CatalogService.UpdateBrand:output_type -> mall.v1.Brand
-	0,   // 218: mall.v1.CatalogService.DeleteBrand:output_type -> mall.v1.Empty
-	23,  // 219: mall.v1.CatalogService.ListBrands:output_type -> mall.v1.BrandList
-	30,  // 220: mall.v1.CatalogService.CreateProduct:output_type -> mall.v1.Product
-	30,  // 221: mall.v1.CatalogService.UpdateProduct:output_type -> mall.v1.Product
-	0,   // 222: mall.v1.CatalogService.DeleteProduct:output_type -> mall.v1.Empty
-	0,   // 223: mall.v1.CatalogService.SetProductStatus:output_type -> mall.v1.Empty
-	34,  // 224: mall.v1.CatalogService.ListAdminProducts:output_type -> mall.v1.ProductList
-	30,  // 225: mall.v1.CatalogService.GetAdminProduct:output_type -> mall.v1.Product
-	29,  // 226: mall.v1.CatalogService.CreateSku:output_type -> mall.v1.Sku
-	29,  // 227: mall.v1.CatalogService.UpdateSku:output_type -> mall.v1.Sku
-	0,   // 228: mall.v1.CatalogService.DeleteSku:output_type -> mall.v1.Empty
-	29,  // 229: mall.v1.CatalogService.SetSkuStatus:output_type -> mall.v1.Sku
-	45,  // 230: mall.v1.InventoryService.GetStock:output_type -> mall.v1.Stock
-	48,  // 231: mall.v1.InventoryService.Reserve:output_type -> mall.v1.ReserveReply
-	0,   // 232: mall.v1.InventoryService.Confirm:output_type -> mall.v1.Empty
-	0,   // 233: mall.v1.InventoryService.Release:output_type -> mall.v1.Empty
-	45,  // 234: mall.v1.InventoryService.AdminAdjustStock:output_type -> mall.v1.Stock
-	51,  // 235: mall.v1.InventoryService.ListStocks:output_type -> mall.v1.StockList
-	51,  // 236: mall.v1.InventoryService.ListLowStock:output_type -> mall.v1.StockList
-	45,  // 237: mall.v1.InventoryService.Restock:output_type -> mall.v1.Stock
-	0,   // 238: mall.v1.InventoryService.TccTryConfirm:output_type -> mall.v1.Empty
-	0,   // 239: mall.v1.InventoryService.TccConfirm:output_type -> mall.v1.Empty
-	0,   // 240: mall.v1.InventoryService.TccCancelConfirm:output_type -> mall.v1.Empty
-	68,  // 241: mall.v1.InventoryService.TccQueryConfirm:output_type -> mall.v1.TccQueryReply
-	143, // 242: mall.v1.InventoryService.AllocateSeckillStock:output_type -> mall.v1.SeckillStock
-	143, // 243: mall.v1.InventoryService.ReleaseSeckillStock:output_type -> mall.v1.SeckillStock
-	143, // 244: mall.v1.InventoryService.GetSeckillStock:output_type -> mall.v1.SeckillStock
-	143, // 245: mall.v1.InventoryService.HoldSeckillStock:output_type -> mall.v1.SeckillStock
-	143, // 246: mall.v1.InventoryService.ReleaseSeckillHold:output_type -> mall.v1.SeckillStock
-	48,  // 247: mall.v1.InventoryService.CreateSeckillReservation:output_type -> mall.v1.ReserveReply
-	0,   // 248: mall.v1.InventoryService.ReleaseSeckillReservation:output_type -> mall.v1.Empty
-	55,  // 249: mall.v1.CartService.GetCart:output_type -> mall.v1.Cart
-	55,  // 250: mall.v1.CartService.AddItem:output_type -> mall.v1.Cart
-	55,  // 251: mall.v1.CartService.UpdateItem:output_type -> mall.v1.Cart
-	55,  // 252: mall.v1.CartService.RemoveItem:output_type -> mall.v1.Cart
-	0,   // 253: mall.v1.CartService.ClearSelected:output_type -> mall.v1.Empty
-	64,  // 254: mall.v1.PricingService.CreateQuote:output_type -> mall.v1.Quote
-	64,  // 255: mall.v1.PricingService.GetQuote:output_type -> mall.v1.Quote
-	0,   // 256: mall.v1.PricingService.LockCoupon:output_type -> mall.v1.Empty
-	0,   // 257: mall.v1.PricingService.UnlockCoupon:output_type -> mall.v1.Empty
-	0,   // 258: mall.v1.PricingService.ConsumeCoupon:output_type -> mall.v1.Empty
-	0,   // 259: mall.v1.PricingService.TccTryConsume:output_type -> mall.v1.Empty
-	0,   // 260: mall.v1.PricingService.TccConfirmConsume:output_type -> mall.v1.Empty
-	0,   // 261: mall.v1.PricingService.TccCancelConsume:output_type -> mall.v1.Empty
-	68,  // 262: mall.v1.PricingService.TccQueryConsume:output_type -> mall.v1.TccQueryReply
-	70,  // 263: mall.v1.OrderService.CreateOrder:output_type -> mall.v1.Order
-	70,  // 264: mall.v1.OrderService.CreateSeckillOrder:output_type -> mall.v1.Order
-	70,  // 265: mall.v1.OrderService.CreateOrderInner:output_type -> mall.v1.Order
-	70,  // 266: mall.v1.OrderService.CancelOrder:output_type -> mall.v1.Order
-	0,   // 267: mall.v1.OrderService.CancelOrderInner:output_type -> mall.v1.Empty
-	70,  // 268: mall.v1.OrderService.MarkPaid:output_type -> mall.v1.Order
-	70,  // 269: mall.v1.OrderService.GetOrder:output_type -> mall.v1.Order
-	78,  // 270: mall.v1.OrderService.ListOrders:output_type -> mall.v1.OrderList
-	80,  // 271: mall.v1.OrderService.GetOrderStats:output_type -> mall.v1.OrderStats
-	0,   // 272: mall.v1.OrderService.TccTryMarkPaid:output_type -> mall.v1.Empty
-	0,   // 273: mall.v1.OrderService.TccConfirmMarkPaid:output_type -> mall.v1.Empty
-	0,   // 274: mall.v1.OrderService.TccCancelMarkPaid:output_type -> mall.v1.Empty
-	68,  // 275: mall.v1.OrderService.TccQueryMarkPaid:output_type -> mall.v1.TccQueryReply
-	81,  // 276: mall.v1.PaymentService.CreateIntent:output_type -> mall.v1.Intent
-	81,  // 277: mall.v1.PaymentService.GetIntent:output_type -> mall.v1.Intent
-	85,  // 278: mall.v1.PaymentService.Callback:output_type -> mall.v1.CallbackReply
-	0,   // 279: mall.v1.PaymentService.Refund:output_type -> mall.v1.Empty
-	87,  // 280: mall.v1.PaymentService.RefundOrder:output_type -> mall.v1.RefundOrderReply
-	89,  // 281: mall.v1.PaymentService.VerifyPayment:output_type -> mall.v1.VerifyPaymentReply
-	93,  // 282: mall.v1.PaymentService.ListRefunds:output_type -> mall.v1.RefundList
-	109, // 283: mall.v1.PromotionService.EvaluatePromotions:output_type -> mall.v1.PromotionEvaluation
-	109, // 284: mall.v1.PromotionService.EvaluateDraft:output_type -> mall.v1.PromotionEvaluation
-	111, // 285: mall.v1.PromotionService.ReservePromotions:output_type -> mall.v1.PromotionReserveReply
-	0,   // 286: mall.v1.PromotionService.ConfirmPromotions:output_type -> mall.v1.Empty
-	0,   // 287: mall.v1.PromotionService.ReleasePromotions:output_type -> mall.v1.Empty
-	94,  // 288: mall.v1.PromotionService.CreateCampaign:output_type -> mall.v1.Campaign
-	97,  // 289: mall.v1.PromotionService.CreateCampaignWithRule:output_type -> mall.v1.CampaignWithRule
-	97,  // 290: mall.v1.PromotionService.GetCampaignWithRuleByCode:output_type -> mall.v1.CampaignWithRule
-	94,  // 291: mall.v1.PromotionService.UpdateCampaign:output_type -> mall.v1.Campaign
-	0,   // 292: mall.v1.PromotionService.SetCampaignStatus:output_type -> mall.v1.Empty
-	99,  // 293: mall.v1.PromotionService.ListCampaigns:output_type -> mall.v1.CampaignList
-	95,  // 294: mall.v1.PromotionService.CreatePromotion:output_type -> mall.v1.PromotionRule
-	95,  // 295: mall.v1.PromotionService.UpdatePromotion:output_type -> mall.v1.PromotionRule
-	0,   // 296: mall.v1.PromotionService.SetPromotionStatus:output_type -> mall.v1.Empty
-	101, // 297: mall.v1.PromotionService.ListPromotions:output_type -> mall.v1.PromotionRuleList
-	115, // 298: mall.v1.PromotionService.ListPromotionReservations:output_type -> mall.v1.PromotionReservationList
-	117, // 299: mall.v1.FulfillmentService.CreateShipment:output_type -> mall.v1.Shipment
-	117, // 300: mall.v1.FulfillmentService.Ship:output_type -> mall.v1.Shipment
-	117, // 301: mall.v1.FulfillmentService.Receive:output_type -> mall.v1.Shipment
-	117, // 302: mall.v1.FulfillmentService.GetShipment:output_type -> mall.v1.Shipment
-	117, // 303: mall.v1.FulfillmentService.GetShipmentByOrder:output_type -> mall.v1.Shipment
-	124, // 304: mall.v1.FulfillmentService.ListShipments:output_type -> mall.v1.ShipmentList
-	126, // 305: mall.v1.AfterSalesService.CreateAfterSale:output_type -> mall.v1.AfterSale
-	126, // 306: mall.v1.AfterSalesService.GetAfterSale:output_type -> mall.v1.AfterSale
-	126, // 307: mall.v1.AfterSalesService.Approve:output_type -> mall.v1.AfterSale
-	126, // 308: mall.v1.AfterSalesService.SubmitReturnTracking:output_type -> mall.v1.AfterSale
-	126, // 309: mall.v1.AfterSalesService.ReceiveReturn:output_type -> mall.v1.AfterSale
-	126, // 310: mall.v1.AfterSalesService.Refund:output_type -> mall.v1.AfterSale
-	127, // 311: mall.v1.AfterSalesService.ListAfterSales:output_type -> mall.v1.AfterSaleList
-	128, // 312: mall.v1.AfterSalesService.GetAfterSaleStats:output_type -> mall.v1.AfterSaleStats
-	136, // 313: mall.v1.SeckillService.CreateActivity:output_type -> mall.v1.SeckillActivity
-	136, // 314: mall.v1.SeckillService.UpdateActivity:output_type -> mall.v1.SeckillActivity
-	136, // 315: mall.v1.SeckillService.GetActivity:output_type -> mall.v1.SeckillActivity
-	141, // 316: mall.v1.SeckillService.ListActivities:output_type -> mall.v1.SeckillActivityList
-	136, // 317: mall.v1.SeckillService.PublishActivity:output_type -> mall.v1.SeckillActivity
-	136, // 318: mall.v1.SeckillService.PauseActivity:output_type -> mall.v1.SeckillActivity
-	136, // 319: mall.v1.SeckillService.WarmupActivity:output_type -> mall.v1.SeckillActivity
-	143, // 320: mall.v1.SeckillService.GetActivityStock:output_type -> mall.v1.SeckillStock
-	149, // 321: mall.v1.SeckillService.Reserve:output_type -> mall.v1.SeckillQualification
-	149, // 322: mall.v1.SeckillService.GetQualification:output_type -> mall.v1.SeckillQualification
-	136, // 323: mall.v1.SeckillService.GetPublicActivity:output_type -> mall.v1.SeckillActivity
-	141, // 324: mall.v1.SeckillService.ListPublicActivities:output_type -> mall.v1.SeckillActivityList
-	156, // 325: mall.v1.SeckillService.ReplayDLQ:output_type -> mall.v1.ReplaySeckillDLQReply
-	178, // 326: mall.v1.AIService.Chat:output_type -> mall.v1.AIChatEvent
-	0,   // 327: mall.v1.AIService.SubmitFeedback:output_type -> mall.v1.Empty
-	176, // 328: mall.v1.AIService.FeedbackSummary:output_type -> mall.v1.FeedbackSummaryReply
-	161, // 329: mall.v1.AIService.SearchKnowledge:output_type -> mall.v1.KnowledgeSearchReply
-	163, // 330: mall.v1.AIService.GetCartDraft:output_type -> mall.v1.CartDraftReply
-	0,   // 331: mall.v1.AIService.CompleteCartDraft:output_type -> mall.v1.Empty
-	165, // 332: mall.v1.AIService.GetPreferences:output_type -> mall.v1.AIPreferences
-	165, // 333: mall.v1.AIService.SetPreferences:output_type -> mall.v1.AIPreferences
-	0,   // 334: mall.v1.AIService.ClearPreferences:output_type -> mall.v1.Empty
-	170, // 335: mall.v1.AIService.OpsBrief:output_type -> mall.v1.OpsBriefReply
-	172, // 336: mall.v1.AIService.StartCampaignDraft:output_type -> mall.v1.CampaignDraftReply
-	0,   // 337: mall.v1.AIService.CheckCampaignDraft:output_type -> mall.v1.Empty
-	0,   // 338: mall.v1.AIService.ResumeCampaignDraft:output_type -> mall.v1.Empty
-	197, // [197:339] is the sub-list for method output_type
-	55,  // [55:197] is the sub-list for method input_type
+	0,   // 194: mall.v1.AIService.LatestOpsBrief:input_type -> mall.v1.Empty
+	170, // 195: mall.v1.AIService.OpsFeedback:input_type -> mall.v1.OpsFeedbackRequest
+	172, // 196: mall.v1.AIService.StartCampaignDraft:input_type -> mall.v1.StartCampaignDraftRequest
+	174, // 197: mall.v1.AIService.CheckCampaignDraft:input_type -> mall.v1.ResumeCampaignDraftRequest
+	174, // 198: mall.v1.AIService.ResumeCampaignDraft:input_type -> mall.v1.ResumeCampaignDraftRequest
+	6,   // 199: mall.v1.IdentityService.Register:output_type -> mall.v1.LoginReply
+	6,   // 200: mall.v1.IdentityService.Login:output_type -> mall.v1.LoginReply
+	6,   // 201: mall.v1.IdentityService.Refresh:output_type -> mall.v1.LoginReply
+	0,   // 202: mall.v1.IdentityService.Logout:output_type -> mall.v1.Empty
+	1,   // 203: mall.v1.IdentityService.GetUser:output_type -> mall.v1.User
+	11,  // 204: mall.v1.IdentityService.CreateAddress:output_type -> mall.v1.Address
+	11,  // 205: mall.v1.IdentityService.UpdateAddress:output_type -> mall.v1.Address
+	0,   // 206: mall.v1.IdentityService.DeleteAddress:output_type -> mall.v1.Empty
+	0,   // 207: mall.v1.IdentityService.SetDefaultAddress:output_type -> mall.v1.Empty
+	16,  // 208: mall.v1.IdentityService.ListAddresses:output_type -> mall.v1.AddressList
+	9,   // 209: mall.v1.IdentityService.ListUsers:output_type -> mall.v1.UserList
+	1,   // 210: mall.v1.IdentityService.SetUserStatus:output_type -> mall.v1.User
+	30,  // 211: mall.v1.CatalogService.GetProduct:output_type -> mall.v1.Product
+	34,  // 212: mall.v1.CatalogService.ListProducts:output_type -> mall.v1.ProductList
+	29,  // 213: mall.v1.CatalogService.GetSku:output_type -> mall.v1.Sku
+	17,  // 214: mall.v1.CatalogService.CreateCategory:output_type -> mall.v1.Category
+	17,  // 215: mall.v1.CatalogService.UpdateCategory:output_type -> mall.v1.Category
+	0,   // 216: mall.v1.CatalogService.DeleteCategory:output_type -> mall.v1.Empty
+	18,  // 217: mall.v1.CatalogService.ListCategories:output_type -> mall.v1.CategoryList
+	22,  // 218: mall.v1.CatalogService.CreateBrand:output_type -> mall.v1.Brand
+	22,  // 219: mall.v1.CatalogService.UpdateBrand:output_type -> mall.v1.Brand
+	0,   // 220: mall.v1.CatalogService.DeleteBrand:output_type -> mall.v1.Empty
+	23,  // 221: mall.v1.CatalogService.ListBrands:output_type -> mall.v1.BrandList
+	30,  // 222: mall.v1.CatalogService.CreateProduct:output_type -> mall.v1.Product
+	30,  // 223: mall.v1.CatalogService.UpdateProduct:output_type -> mall.v1.Product
+	0,   // 224: mall.v1.CatalogService.DeleteProduct:output_type -> mall.v1.Empty
+	0,   // 225: mall.v1.CatalogService.SetProductStatus:output_type -> mall.v1.Empty
+	34,  // 226: mall.v1.CatalogService.ListAdminProducts:output_type -> mall.v1.ProductList
+	30,  // 227: mall.v1.CatalogService.GetAdminProduct:output_type -> mall.v1.Product
+	29,  // 228: mall.v1.CatalogService.CreateSku:output_type -> mall.v1.Sku
+	29,  // 229: mall.v1.CatalogService.UpdateSku:output_type -> mall.v1.Sku
+	0,   // 230: mall.v1.CatalogService.DeleteSku:output_type -> mall.v1.Empty
+	29,  // 231: mall.v1.CatalogService.SetSkuStatus:output_type -> mall.v1.Sku
+	45,  // 232: mall.v1.InventoryService.GetStock:output_type -> mall.v1.Stock
+	48,  // 233: mall.v1.InventoryService.Reserve:output_type -> mall.v1.ReserveReply
+	0,   // 234: mall.v1.InventoryService.Confirm:output_type -> mall.v1.Empty
+	0,   // 235: mall.v1.InventoryService.Release:output_type -> mall.v1.Empty
+	45,  // 236: mall.v1.InventoryService.AdminAdjustStock:output_type -> mall.v1.Stock
+	51,  // 237: mall.v1.InventoryService.ListStocks:output_type -> mall.v1.StockList
+	51,  // 238: mall.v1.InventoryService.ListLowStock:output_type -> mall.v1.StockList
+	45,  // 239: mall.v1.InventoryService.Restock:output_type -> mall.v1.Stock
+	0,   // 240: mall.v1.InventoryService.TccTryConfirm:output_type -> mall.v1.Empty
+	0,   // 241: mall.v1.InventoryService.TccConfirm:output_type -> mall.v1.Empty
+	0,   // 242: mall.v1.InventoryService.TccCancelConfirm:output_type -> mall.v1.Empty
+	68,  // 243: mall.v1.InventoryService.TccQueryConfirm:output_type -> mall.v1.TccQueryReply
+	143, // 244: mall.v1.InventoryService.AllocateSeckillStock:output_type -> mall.v1.SeckillStock
+	143, // 245: mall.v1.InventoryService.ReleaseSeckillStock:output_type -> mall.v1.SeckillStock
+	143, // 246: mall.v1.InventoryService.GetSeckillStock:output_type -> mall.v1.SeckillStock
+	143, // 247: mall.v1.InventoryService.HoldSeckillStock:output_type -> mall.v1.SeckillStock
+	143, // 248: mall.v1.InventoryService.ReleaseSeckillHold:output_type -> mall.v1.SeckillStock
+	48,  // 249: mall.v1.InventoryService.CreateSeckillReservation:output_type -> mall.v1.ReserveReply
+	0,   // 250: mall.v1.InventoryService.ReleaseSeckillReservation:output_type -> mall.v1.Empty
+	55,  // 251: mall.v1.CartService.GetCart:output_type -> mall.v1.Cart
+	55,  // 252: mall.v1.CartService.AddItem:output_type -> mall.v1.Cart
+	55,  // 253: mall.v1.CartService.UpdateItem:output_type -> mall.v1.Cart
+	55,  // 254: mall.v1.CartService.RemoveItem:output_type -> mall.v1.Cart
+	0,   // 255: mall.v1.CartService.ClearSelected:output_type -> mall.v1.Empty
+	64,  // 256: mall.v1.PricingService.CreateQuote:output_type -> mall.v1.Quote
+	64,  // 257: mall.v1.PricingService.GetQuote:output_type -> mall.v1.Quote
+	0,   // 258: mall.v1.PricingService.LockCoupon:output_type -> mall.v1.Empty
+	0,   // 259: mall.v1.PricingService.UnlockCoupon:output_type -> mall.v1.Empty
+	0,   // 260: mall.v1.PricingService.ConsumeCoupon:output_type -> mall.v1.Empty
+	0,   // 261: mall.v1.PricingService.TccTryConsume:output_type -> mall.v1.Empty
+	0,   // 262: mall.v1.PricingService.TccConfirmConsume:output_type -> mall.v1.Empty
+	0,   // 263: mall.v1.PricingService.TccCancelConsume:output_type -> mall.v1.Empty
+	68,  // 264: mall.v1.PricingService.TccQueryConsume:output_type -> mall.v1.TccQueryReply
+	70,  // 265: mall.v1.OrderService.CreateOrder:output_type -> mall.v1.Order
+	70,  // 266: mall.v1.OrderService.CreateSeckillOrder:output_type -> mall.v1.Order
+	70,  // 267: mall.v1.OrderService.CreateOrderInner:output_type -> mall.v1.Order
+	70,  // 268: mall.v1.OrderService.CancelOrder:output_type -> mall.v1.Order
+	0,   // 269: mall.v1.OrderService.CancelOrderInner:output_type -> mall.v1.Empty
+	70,  // 270: mall.v1.OrderService.MarkPaid:output_type -> mall.v1.Order
+	70,  // 271: mall.v1.OrderService.GetOrder:output_type -> mall.v1.Order
+	78,  // 272: mall.v1.OrderService.ListOrders:output_type -> mall.v1.OrderList
+	80,  // 273: mall.v1.OrderService.GetOrderStats:output_type -> mall.v1.OrderStats
+	0,   // 274: mall.v1.OrderService.TccTryMarkPaid:output_type -> mall.v1.Empty
+	0,   // 275: mall.v1.OrderService.TccConfirmMarkPaid:output_type -> mall.v1.Empty
+	0,   // 276: mall.v1.OrderService.TccCancelMarkPaid:output_type -> mall.v1.Empty
+	68,  // 277: mall.v1.OrderService.TccQueryMarkPaid:output_type -> mall.v1.TccQueryReply
+	81,  // 278: mall.v1.PaymentService.CreateIntent:output_type -> mall.v1.Intent
+	81,  // 279: mall.v1.PaymentService.GetIntent:output_type -> mall.v1.Intent
+	85,  // 280: mall.v1.PaymentService.Callback:output_type -> mall.v1.CallbackReply
+	0,   // 281: mall.v1.PaymentService.Refund:output_type -> mall.v1.Empty
+	87,  // 282: mall.v1.PaymentService.RefundOrder:output_type -> mall.v1.RefundOrderReply
+	89,  // 283: mall.v1.PaymentService.VerifyPayment:output_type -> mall.v1.VerifyPaymentReply
+	93,  // 284: mall.v1.PaymentService.ListRefunds:output_type -> mall.v1.RefundList
+	109, // 285: mall.v1.PromotionService.EvaluatePromotions:output_type -> mall.v1.PromotionEvaluation
+	109, // 286: mall.v1.PromotionService.EvaluateDraft:output_type -> mall.v1.PromotionEvaluation
+	111, // 287: mall.v1.PromotionService.ReservePromotions:output_type -> mall.v1.PromotionReserveReply
+	0,   // 288: mall.v1.PromotionService.ConfirmPromotions:output_type -> mall.v1.Empty
+	0,   // 289: mall.v1.PromotionService.ReleasePromotions:output_type -> mall.v1.Empty
+	94,  // 290: mall.v1.PromotionService.CreateCampaign:output_type -> mall.v1.Campaign
+	97,  // 291: mall.v1.PromotionService.CreateCampaignWithRule:output_type -> mall.v1.CampaignWithRule
+	97,  // 292: mall.v1.PromotionService.GetCampaignWithRuleByCode:output_type -> mall.v1.CampaignWithRule
+	94,  // 293: mall.v1.PromotionService.UpdateCampaign:output_type -> mall.v1.Campaign
+	0,   // 294: mall.v1.PromotionService.SetCampaignStatus:output_type -> mall.v1.Empty
+	99,  // 295: mall.v1.PromotionService.ListCampaigns:output_type -> mall.v1.CampaignList
+	95,  // 296: mall.v1.PromotionService.CreatePromotion:output_type -> mall.v1.PromotionRule
+	95,  // 297: mall.v1.PromotionService.UpdatePromotion:output_type -> mall.v1.PromotionRule
+	0,   // 298: mall.v1.PromotionService.SetPromotionStatus:output_type -> mall.v1.Empty
+	101, // 299: mall.v1.PromotionService.ListPromotions:output_type -> mall.v1.PromotionRuleList
+	115, // 300: mall.v1.PromotionService.ListPromotionReservations:output_type -> mall.v1.PromotionReservationList
+	117, // 301: mall.v1.FulfillmentService.CreateShipment:output_type -> mall.v1.Shipment
+	117, // 302: mall.v1.FulfillmentService.Ship:output_type -> mall.v1.Shipment
+	117, // 303: mall.v1.FulfillmentService.Receive:output_type -> mall.v1.Shipment
+	117, // 304: mall.v1.FulfillmentService.GetShipment:output_type -> mall.v1.Shipment
+	117, // 305: mall.v1.FulfillmentService.GetShipmentByOrder:output_type -> mall.v1.Shipment
+	124, // 306: mall.v1.FulfillmentService.ListShipments:output_type -> mall.v1.ShipmentList
+	126, // 307: mall.v1.AfterSalesService.CreateAfterSale:output_type -> mall.v1.AfterSale
+	126, // 308: mall.v1.AfterSalesService.GetAfterSale:output_type -> mall.v1.AfterSale
+	126, // 309: mall.v1.AfterSalesService.Approve:output_type -> mall.v1.AfterSale
+	126, // 310: mall.v1.AfterSalesService.SubmitReturnTracking:output_type -> mall.v1.AfterSale
+	126, // 311: mall.v1.AfterSalesService.ReceiveReturn:output_type -> mall.v1.AfterSale
+	126, // 312: mall.v1.AfterSalesService.Refund:output_type -> mall.v1.AfterSale
+	127, // 313: mall.v1.AfterSalesService.ListAfterSales:output_type -> mall.v1.AfterSaleList
+	128, // 314: mall.v1.AfterSalesService.GetAfterSaleStats:output_type -> mall.v1.AfterSaleStats
+	136, // 315: mall.v1.SeckillService.CreateActivity:output_type -> mall.v1.SeckillActivity
+	136, // 316: mall.v1.SeckillService.UpdateActivity:output_type -> mall.v1.SeckillActivity
+	136, // 317: mall.v1.SeckillService.GetActivity:output_type -> mall.v1.SeckillActivity
+	141, // 318: mall.v1.SeckillService.ListActivities:output_type -> mall.v1.SeckillActivityList
+	136, // 319: mall.v1.SeckillService.PublishActivity:output_type -> mall.v1.SeckillActivity
+	136, // 320: mall.v1.SeckillService.PauseActivity:output_type -> mall.v1.SeckillActivity
+	136, // 321: mall.v1.SeckillService.WarmupActivity:output_type -> mall.v1.SeckillActivity
+	143, // 322: mall.v1.SeckillService.GetActivityStock:output_type -> mall.v1.SeckillStock
+	149, // 323: mall.v1.SeckillService.Reserve:output_type -> mall.v1.SeckillQualification
+	149, // 324: mall.v1.SeckillService.GetQualification:output_type -> mall.v1.SeckillQualification
+	136, // 325: mall.v1.SeckillService.GetPublicActivity:output_type -> mall.v1.SeckillActivity
+	141, // 326: mall.v1.SeckillService.ListPublicActivities:output_type -> mall.v1.SeckillActivityList
+	156, // 327: mall.v1.SeckillService.ReplayDLQ:output_type -> mall.v1.ReplaySeckillDLQReply
+	179, // 328: mall.v1.AIService.Chat:output_type -> mall.v1.AIChatEvent
+	0,   // 329: mall.v1.AIService.SubmitFeedback:output_type -> mall.v1.Empty
+	177, // 330: mall.v1.AIService.FeedbackSummary:output_type -> mall.v1.FeedbackSummaryReply
+	161, // 331: mall.v1.AIService.SearchKnowledge:output_type -> mall.v1.KnowledgeSearchReply
+	163, // 332: mall.v1.AIService.GetCartDraft:output_type -> mall.v1.CartDraftReply
+	0,   // 333: mall.v1.AIService.CompleteCartDraft:output_type -> mall.v1.Empty
+	165, // 334: mall.v1.AIService.GetPreferences:output_type -> mall.v1.AIPreferences
+	165, // 335: mall.v1.AIService.SetPreferences:output_type -> mall.v1.AIPreferences
+	0,   // 336: mall.v1.AIService.ClearPreferences:output_type -> mall.v1.Empty
+	171, // 337: mall.v1.AIService.OpsBrief:output_type -> mall.v1.OpsBriefReply
+	171, // 338: mall.v1.AIService.LatestOpsBrief:output_type -> mall.v1.OpsBriefReply
+	0,   // 339: mall.v1.AIService.OpsFeedback:output_type -> mall.v1.Empty
+	173, // 340: mall.v1.AIService.StartCampaignDraft:output_type -> mall.v1.CampaignDraftReply
+	0,   // 341: mall.v1.AIService.CheckCampaignDraft:output_type -> mall.v1.Empty
+	0,   // 342: mall.v1.AIService.ResumeCampaignDraft:output_type -> mall.v1.Empty
+	199, // [199:343] is the sub-list for method output_type
+	55,  // [55:199] is the sub-list for method input_type
 	55,  // [55:55] is the sub-list for extension type_name
 	55,  // [55:55] is the sub-list for extension extendee
 	0,   // [0:55] is the sub-list for field type_name
@@ -13951,7 +14031,7 @@ func file_mall_v1_mall_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mall_v1_mall_proto_rawDesc), len(file_mall_v1_mall_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   179,
+			NumMessages:   180,
 			NumExtensions: 0,
 			NumServices:   12,
 		},

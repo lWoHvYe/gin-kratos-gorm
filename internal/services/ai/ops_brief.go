@@ -2,11 +2,15 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // OpsBrief is deterministic: every number comes from an aggregate RPC. The
@@ -44,4 +48,43 @@ func (s *Service) OpsBrief(ctx context.Context, req *pb.OpsBriefRequest) (*pb.Op
 		days, reply.TotalOrders, reply.PaidOrders, float64(reply.PaidCent)/100,
 		reply.AfterSales, float64(reply.RefundedCent)/100, reply.LowStock)
 	return reply, nil
+}
+
+func (s *Service) LatestOpsBrief(ctx context.Context, _ *pb.Empty) (*pb.OpsBriefReply, error) {
+	raw, err := s.cache.Get(ctx, "ai:ops:latest").Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, apperr.NotFound("no scheduled ops brief yet")
+		}
+		return nil, apperr.Internal("load latest ops brief", err)
+	}
+	var reply pb.OpsBriefReply
+	if err := json.Unmarshal(raw, &reply); err != nil {
+		return nil, apperr.Internal("decode latest ops brief", err)
+	}
+	return &reply, nil
+}
+
+func (s *Service) OpsFeedback(ctx context.Context, req *pb.OpsFeedbackRequest) (*pb.Empty, error) {
+	if req.GetRating() != 1 && req.GetRating() != -1 {
+		return nil, apperr.Invalid("rating must be 1 or -1")
+	}
+	day := strings.TrimSpace(req.GetDay())
+	if day == "" {
+		day = time.Now().Format("2006-01-02")
+	}
+	if len([]rune(req.GetComment())) > 500 {
+		return nil, apperr.Invalid("comment must be at most 500 characters")
+	}
+	entry, _ := json.Marshal(map[string]any{
+		"day": day, "rating": req.GetRating(), "comment": strings.TrimSpace(req.GetComment()),
+		"admin_user_id": req.GetAdminUserId(), "created_at": time.Now().Unix(),
+	})
+	key := "ai:ops:feedback:" + day
+	if err := s.cache.LPush(ctx, key, entry).Err(); err != nil {
+		return nil, apperr.Internal("save ops feedback", err)
+	}
+	_ = s.cache.LTrim(ctx, key, 0, 999).Err()
+	_ = s.cache.Expire(ctx, key, 180*24*time.Hour).Err()
+	return &pb.Empty{}, nil
 }

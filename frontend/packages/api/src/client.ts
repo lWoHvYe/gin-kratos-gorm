@@ -4,6 +4,7 @@ import type {
   AfterSale,
   ApiErrorBody,
   FeedbackSummary,
+  OpsBrief,
   Brand,
   Campaign,
   Category,
@@ -235,9 +236,10 @@ export const adminApi = {
     feedbackSummary: (days = 7) =>
       adminGet<FeedbackSummary>('/ai/feedback/summary', { params: { days } }),
     opsBrief: (days = 1) =>
-      adminGet<{ summary: string; total_orders: number; paid_orders: number; paid_cent: number; after_sales: number; refunded_cent: number; low_stock: number; generated_at: number }>(
-        '/ai/ops/brief', { params: { days } },
-      ),
+      adminGet<OpsBrief>('/ai/ops/brief', { params: { days } }),
+    latestOpsBrief: () => adminGet<OpsBrief>('/ai/ops/latest'),
+    opsFeedback: (payload: { rating: 1 | -1; day?: string; comment?: string }) =>
+      adminPost<{ saved: boolean }>('/ai/ops/feedback', payload),
     startCampaignDraft: (payload: Record<string, unknown>) =>
       adminPost<{ checkpoint_id: string; draft_json: string }>('/ai/campaign-draft', payload),
     confirmCampaignDraft: (checkpoint: string, payload: { campaign: unknown; rule: unknown; confirm: boolean }) =>

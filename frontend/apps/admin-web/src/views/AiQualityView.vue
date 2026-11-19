@@ -8,6 +8,7 @@ const loading = ref(false)
 const error = ref('')
 const brief = ref<Awaited<ReturnType<typeof adminApi.ai.opsBrief>> | null>(null)
 const briefLoading = ref(false)
+const briefFeedback = ref(0)
 
 const helpfulRate = computed(() => {
   const total = summary.value?.total ?? 0
@@ -27,10 +28,20 @@ async function load(): Promise<void> {
   }
 }
 
-async function loadBrief(): Promise<void> {
+async function rateBrief(rating: 1 | -1): Promise<void> {
+  if (!brief.value || briefFeedback.value !== 0) return
+  try {
+    await adminApi.ai.opsFeedback({ rating, day: new Date(brief.value.generated_at * 1000).toISOString().slice(0, 10) })
+    briefFeedback.value = rating
+  } catch {
+    // Feedback is best-effort.
+  }
+}
+
+async function loadBrief(latest = false): Promise<void> {
   briefLoading.value = true
   try {
-    brief.value = await adminApi.ai.opsBrief(days.value)
+    brief.value = latest ? await adminApi.ai.latestOpsBrief() : await adminApi.ai.opsBrief(days.value)
   } catch (err) {
     error.value = err instanceof ApiError || err instanceof Error ? err.message : '简报加载失败'
   } finally {
@@ -52,7 +63,8 @@ onMounted(load)
           <el-option :value="30" label="近 30 天" />
         </el-select>
         <el-button :loading="loading" @click="load">刷新</el-button>
-        <el-button :loading="briefLoading" @click="loadBrief">运营简报</el-button>
+        <el-button :loading="briefLoading" @click="loadBrief()">运营简报</el-button>
+        <el-button :loading="briefLoading" @click="loadBrief(true)">最新简报</el-button>
       </div>
     </div>
     <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
@@ -66,6 +78,12 @@ onMounted(load)
       <h3>运营简报</h3>
       <p>{{ brief.summary }}</p>
       <p class="muted">订单 {{ brief.total_orders }} · 已支付 {{ brief.paid_orders }} · 售后 {{ brief.after_sales }} · 低库存 {{ brief.low_stock }}</p>
+      <div class="brief-feedback">
+        <span>这份简报有帮助吗？</span>
+        <el-button size="small" :disabled="briefFeedback !== 0" @click="rateBrief(1)">👍</el-button>
+        <el-button size="small" :disabled="briefFeedback !== 0" @click="rateBrief(-1)">👎</el-button>
+        <span v-if="briefFeedback !== 0">已记录</span>
+      </div>
     </div>
     <el-row :gutter="16" class="section">
       <el-col :xs="24" :lg="14">
@@ -98,6 +116,7 @@ onMounted(load)
 .metric span { color: var(--mall-muted); font-size: 13px; }
 .section { margin-top: 16px; }
 .muted { color: var(--mall-muted); font-size: 13px; }
+.brief-feedback { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
 h3 { margin: 0 0 12px; font-size: 16px; }
 .comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .comments li { border: 1px solid var(--mall-border); border-radius: 8px; padding: 10px; font-size: 14px; }

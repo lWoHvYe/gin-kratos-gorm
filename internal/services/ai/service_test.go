@@ -157,3 +157,24 @@ func TestChatRejectsExhaustedTokenBudget(t *testing.T) {
 		t.Fatalf("budget rejection must not stream: %+v", stream.events)
 	}
 }
+
+func TestChatEmitsDraftEventFromDraftCartTool(t *testing.T) {
+	draft := `{"type":"cart_draft","draft_id":"d1","items":[],"total_cent":0}`
+	svc := newTestService(t, fakeAgent{chunks: []*schema.Message{
+		schema.ToolMessage(draft, "", schema.WithToolName("draft_cart")),
+		{Role: schema.Assistant, Content: "请确认"},
+	}}, &fakeSessions{}, fakeLimiter{allowed: true})
+	stream := &fakeChatStream{ctx: context.Background()}
+	if err := svc.Chat(&pb.AIChatRequest{UserId: 7, SessionId: "s1", Message: "加入购物车"}, stream); err != nil {
+		t.Fatal(err)
+	}
+	var draftEvent *pb.AIChatEvent
+	for _, ev := range stream.events {
+		if ev.GetType() == "draft" {
+			draftEvent = ev
+		}
+	}
+	if draftEvent == nil || draftEvent.GetDraftJson() != draft {
+		t.Fatalf("draft event = %+v", stream.events)
+	}
+}

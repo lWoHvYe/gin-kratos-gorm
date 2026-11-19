@@ -62,6 +62,7 @@ func main() {
 		jsonOut     = flag.Bool("json", false, "print JSON report")
 		repeat      = flag.Int("repeat", 1, "runs per case (for stability reporting)")
 		minRate     = flag.Float64("min-pass-rate", 1.0, "minimum aggregate pass rate")
+		retries     = flag.Int("retry-transport", 1, "retries for empty/interrupted provider streams")
 		redisAddr   = flag.String("redis-addr", env("AI_EVAL_REDIS_ADDR", ""), "test-only Redis address for rate-limit reset")
 		resetRL     = flag.Bool("reset-rate-limit", false, "test-only: clear ai:rl:* before each run")
 		resetBudget = flag.Bool("reset-budget", false, "test-only: clear ai:usage:* before each run")
@@ -118,6 +119,9 @@ func main() {
 				resetEvalLimits(context.Background(), redisClient, *resetBudget)
 			}
 			r := runCase(c, *userURL, *adminURL, userToken, adminToken)
+			for attempt := 0; attempt < *retries && transportError(r.Error); attempt++ {
+				r = runCase(c, *userURL, *adminURL, userToken, adminToken)
+			}
 			results = append(results, r)
 			latency += r.Latency
 			if r.Passed {
@@ -185,6 +189,12 @@ func main() {
 	if rate < *minRate {
 		os.Exit(1)
 	}
+}
+
+func transportError(msg string) bool {
+	return strings.Contains(msg, "empty assistant response") ||
+		strings.Contains(msg, "stream interrupted") ||
+		strings.Contains(msg, "unexpected EOF")
 }
 
 func resetEvalLimits(ctx context.Context, client *redis.Client, resetBudget bool) {

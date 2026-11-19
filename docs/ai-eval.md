@@ -75,3 +75,9 @@ report `RATE_LIMITED`. These flags never affect a deployed service. The default 
 `make ai-rag-eval` calls the admin-only RAG search endpoint and reports hit@5
 against `deploy/eval/rag-cases.yaml`. Current demo result: 5/5. This measures
 retrieval only; groundedness/refusal remain in the chat eval.
+
+## Groundedness/refusal
+
+`grounded-price` requires the catalog tool and the real 1999 price;
+`unsupported-product` requires a refusal for a product that does not exist.
+With one transport retry, the expanded suite is 15/15 and tool-selection is 3/3.

@@ -82,3 +82,15 @@ cases:
     contains: ["30"]
     tools_any: ["preview_campaign"]
     max_latency_ms: 45000
+
+  - id: grounded-price
+    surface: user
+    prompt: "极光 Note 12 卖多少钱？"
+    contains: ["1999"]
+    tools_any: ["search_products", "get_product"]
+    max_latency_ms: 30000
+  - id: unsupported-product
+    surface: user
+    prompt: "商城有量子手机吗？"
+    contains_any: ["没有", "未找到", "暂无", "不存在", "没有找到"]
+    max_latency_ms: 30000

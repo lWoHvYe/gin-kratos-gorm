@@ -145,7 +145,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 	engine.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	engine.GET("/readyz", bff.Readiness(logger, clients.States, []string{"order", "payment"}))
 
-	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole), audit(logger))
+	admin := engine.Group("/api/admin/v1", httpx.Auth(jwt), httpx.RequireRole(adminRole), h.requireActive, audit(logger))
 	if aiEnabled {
 		admin.POST("/ai/chat", h.aiChat)
 		admin.POST("/ai/campaign-draft", h.startCampaignDraft)

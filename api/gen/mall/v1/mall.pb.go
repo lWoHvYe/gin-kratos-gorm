@@ -66,6 +66,7 @@ type User struct {
 	Roles         []string               `protobuf:"bytes,5,rep,name=roles,proto3" json:"roles,omitempty"`
 	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	CreatedAtUnix int64                  `protobuf:"varint,7,opt,name=created_at_unix,json=createdAtUnix,proto3" json:"created_at_unix,omitempty"`
+	TokenVersion  int64                  `protobuf:"varint,8,opt,name=token_version,json=tokenVersion,proto3" json:"token_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -145,6 +146,13 @@ func (x *User) GetStatus() string {
 func (x *User) GetCreatedAtUnix() int64 {
 	if x != nil {
 		return x.CreatedAtUnix
+	}
+	return 0
+}
+
+func (x *User) GetTokenVersion() int64 {
+	if x != nil {
+		return x.TokenVersion
 	}
 	return 0
 }
@@ -11399,7 +11407,7 @@ var File_mall_v1_mall_proto protoreflect.FileDescriptor
 const file_mall_v1_mall_proto_rawDesc = "" +
 	"\n" +
 	"\x12mall/v1/mall.proto\x12\amall.v1\"\a\n" +
-	"\x05Empty\"\xba\x01\n" +
+	"\x05Empty\"\xdf\x01\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
@@ -11407,7 +11415,8 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x05phone\x18\x04 \x01(\tR\x05phone\x12\x14\n" +
 	"\x05roles\x18\x05 \x03(\tR\x05roles\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12&\n" +
-	"\x0fcreated_at_unix\x18\a \x01(\x03R\rcreatedAtUnix\"e\n" +
+	"\x0fcreated_at_unix\x18\a \x01(\x03R\rcreatedAtUnix\x12#\n" +
+	"\rtoken_version\x18\b \x01(\x03R\ftokenVersion\"e\n" +
 	"\x0fRegisterRequest\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1a\n" +

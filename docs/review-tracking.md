@@ -26,12 +26,12 @@ remaining risk is documented.
 | 11 | Deep OFFSET pagination | done (page > 1000 rejected; keyset still future) |
 | 12 | LIKE '%x%' cannot use index | done | ngram fulltext index; >=2-rune keywords use MATCH, short keywords keep LIKE |
 | 13 | Per-SKU GetStock in checkout/cart | rejected | only cart add and admin product detail call GetStock; checkout uses quote lines, no per-SKU loop (rechecked 2026-11-19) |
-| 14 | AI frontend entry when disabled | done | public /ai/status drives the storefront entry |
+| 14 | AI frontend entry when disabled | done | entry defaults hidden and stays hidden on status failure |
 | 15 | Base chart mock payment defaults | done | base mock=false; single-node overlay mock=true; payment secret required when mock off |
 | 16 | P1 compensation/race tests | partial | seckill open/closed/cross-entry, partial-confirm compensation and stock ledger/outbox tests landed; no true concurrent race/chaos harness |
 | 17 | Demo seed inside production migration | rejected | catalog migrations contain no INSERT; demo data is deploy/seed/catalog-demo.sql, applied only by make seed-demo |
-| 18 | CORS reflects any origin when unset | done (fail closed; compose dev allowlist, chart value) |
-| 19 | Admin identity/ban surface | partial | ListUsers/SetUserStatus + UI, refresh-token revocation and guards; already-issued access tokens remain valid until their 15m TTL. |
+| 18 | CORS reflects any origin when unset | done (fail closed; chart Deployment env wired; compose dev allowlist) |
+| 19 | Admin identity/ban surface | done | token_version in JWT; status change bumps it; admin and high-risk checkout/payment BFFs revalidate, so old access tokens stop working immediately |
 
 ## P3
 
@@ -75,15 +75,12 @@ retrieval/rerank, Eino HITL, cart assistant, memory, multi-agent).
 The following previously-done items were downgraded after re-reading the code,
 not just the trackers:
 
-- `ReleaseSeckillHold` and `releaseSeckillMapping` closed-bucket branches update
-  `inventory_stocks.reserved` but never call `appendStockChanged`; the catalog
-  stock projection can diverge. The former also has no normal inventory ledger.
-- `refundCancelledAfterConfirm` restocks normal orders only; it skips
-  `quote_id` starting with `seckill:`, so the non-TCC MarkPaid cancellation race
-  is still uncompensated for seckill orders.
-- P1 #3's MySQL test is sequential, not a concurrent race.
-- Catalog SQL fallback has no integration test; it is code-complete only.
-- The ADK HITL pilot uses a deterministic `draftReviewAgent`, not a
-  `ChatModelAgent`; ADK full replacement applies to the chat runtime.
-- Hybrid RAG's rerank is a deterministic query-token rerank; semantic cache is
-  still deferred.
+Resolved in the follow-up commit: closed-bucket seckill releases now write
+normal ledger + `stock.changed`; seckill MarkPaid compensation is included;
+HITL checks draft binding before an atomic campaign/rule save; eval executes
+`contains_any` and rejects assertion-less cases; outbox prune uses one id batch;
+quote cleanup is transactional; CORS, token-version revocation, HA spread/PDBs
+and observability wiring are in place.
+
+Still open: true concurrent seckill race tests, catalog SQL-fallback integration
+test, semantic-cache/index-version work, and the larger AI Phase 7-10 roadmap.

@@ -71,8 +71,8 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 	authed.PATCH("/cart/items", h.updateCartItem)
 	authed.DELETE("/cart/items", h.removeCartItem)
 	authed.POST("/cart/merge", h.mergeCart)
-	authed.POST("/checkout/preview", h.previewCheckout)
-	authed.POST("/checkout/place", h.placeOrder)
+	authed.POST("/checkout/preview", h.requireActive, h.previewCheckout)
+	authed.POST("/checkout/place", h.requireActive, h.placeOrder)
 	authed.GET("/orders", h.listOrders)
 	authed.GET("/orders/:orderNo", h.getOrder)
 	authed.POST("/orders/:orderNo/cancel", h.cancelOrder)
@@ -82,7 +82,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 		authed.POST("/ai/feedback", h.aiFeedback)
 	}
 	if opts.PaymentMockEnabled {
-		authed.POST("/payments/:paymentNo/pay", h.pay)
+		authed.POST("/payments/:paymentNo/pay", h.requireActive, h.pay)
 	}
 	authed.POST("/after-sales", h.createAfterSale)
 	authed.GET("/after-sales", h.listAfterSales)

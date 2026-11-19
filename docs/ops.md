@@ -26,7 +26,7 @@ schema conventions live in [contracts.md](contracts.md); DTM design lives in
 | `deploy/compose/init/mysql/01-schemas.sh` | applies `/migrations/*/*.sql` to `mall_<service>` |
 | `deploy/compose/init/mysql/02-dtm.sql` | DTM store tables (`dtm.*`) and the shared branch barrier |
 | `deploy/compose/dtm/config.yml` | DTM MySQL store; direct branch DNS, no etcd registration |
-| `deploy/compose/observability/` | Prometheus scrape config, Grafana datasource, Tempo config |
+| `deploy/compose/observability/` | Prometheus scrape/alerts, Alertmanager, Grafana datasource, Tempo config |
 
 ## Compose model
 
@@ -199,19 +199,19 @@ curl 'http://localhost:36789/api/dtmsvr/query?gid=order-create:<order_no>'
 curl http://localhost:36789/api/metrics       # Prometheus exposition
 ```
 
-Order creation, cancellation, payment confirmation and refunds require DTM.
-If DTM is down, the services return `UNAVAILABLE`; they deliberately do not
-fall back to local transactions. DTM calls branches by direct service DNS.
+Order creation uses DTM saga; payment confirmation uses DTM TCC when enabled.
+Cancellation is a local status transition plus `shop.order.cancelled.v1`
+compensation, not a DTM gid; direct MarkPaid is only used when TCC is disabled or
+unconfigured. DTM calls branches by direct service DNS.
 
 ## Observability
 
 Core metrics are exposed by each service on `/metrics`; Prometheus scrapes:
 
-- all ten gRPC services on `9101`–`9110` (including seckill);
+- the gRPC services on `9101`–`9111` (including seckill and ai);
 - the gateway/admin BFFs on `8080`/`8081`;
 - DTM on `dtm:36789/api/metrics`;
 - NATS on `nats:8222/metrics`;
-- etcd on `etcd:2379/metrics`;
 - itself on `localhost:9090`.
 
 Gateway/admin expose `/metrics` on their HTTP port next to `/healthz`.
@@ -351,7 +351,7 @@ missing `SERVICE` build argument fails the build with a clear message.
 ## Security notes
 
 - `root`/`root` MySQL and the default `JWT_SECRET` are for local development
-  only. Never expose MySQL, Redis, NATS, etcd, DTM, Prometheus or Grafana
+  only. Never expose MySQL, Redis, NATS, DTM, Prometheus, Alertmanager or Grafana
   directly to the internet.
 - The gateway is the only public application surface; admin requires a JWT
   with the `admin` role.

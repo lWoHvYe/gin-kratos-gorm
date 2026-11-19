@@ -44,7 +44,7 @@ func (s *Service) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*pb.
 		return nil, apperr.Internal("count users", err)
 	}
 	args = append(args, size, (page-1)*size)
-	rows, err := s.db.QueryContext(ctx, `SELECT id, username, nickname, phone, status, created_at
+	rows, err := s.db.QueryContext(ctx, `SELECT id, username, nickname, phone, status, created_at, token_version
 		FROM users `+where+` ORDER BY id DESC LIMIT ? OFFSET ?`, args...)
 	if err != nil {
 		return nil, apperr.Internal("list users", err)
@@ -55,7 +55,7 @@ func (s *Service) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*pb.
 	for rows.Next() {
 		var user pb.User
 		var created sql.NullTime
-		if err := rows.Scan(&user.Id, &user.Username, &user.Nickname, &user.Phone, &user.Status, &created); err != nil {
+		if err := rows.Scan(&user.Id, &user.Username, &user.Nickname, &user.Phone, &user.Status, &created, &user.TokenVersion); err != nil {
 			return nil, apperr.Internal("scan user", err)
 		}
 		if created.Valid {
@@ -139,7 +139,7 @@ func (s *Service) SetUserStatus(ctx context.Context, req *pb.SetUserStatusReques
 			}
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE users SET status = ?, updated_at = NOW(3) WHERE id = ?`, status, req.GetUserId()); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET status = ?, token_version = token_version + 1, updated_at = NOW(3) WHERE id = ?`, status, req.GetUserId()); err != nil {
 		return nil, apperr.Internal("update user status", err)
 	}
 	if status == "DISABLED" {

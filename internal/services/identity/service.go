@@ -146,8 +146,8 @@ func (s *Service) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.Empty,
 func (s *Service) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.User, error) {
 	var user pb.User
 	var created sql.NullTime
-	err := s.db.QueryRowContext(ctx, `SELECT id, username, nickname, phone, status, created_at FROM users WHERE id = ?`, req.GetUserId()).
-		Scan(&user.Id, &user.Username, &user.Nickname, &user.Phone, &user.Status, &created)
+	err := s.db.QueryRowContext(ctx, `SELECT id, username, nickname, phone, status, created_at, token_version FROM users WHERE id = ?`, req.GetUserId()).
+		Scan(&user.Id, &user.Username, &user.Nickname, &user.Phone, &user.Status, &created, &user.TokenVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("user not found")
 	}
@@ -345,7 +345,9 @@ func (s *Service) roles(ctx context.Context, userID int64) ([]string, error) {
 
 func (s *Service) loginReply(ctx context.Context, id int64, username, nickname string, roles []string) (*pb.LoginReply, error) {
 	s.limiter.Reset(ctx, username)
-	access, refresh, err := s.jwt.Generate(uint64(id), roles)
+	var tokenVersion int64
+	_ = s.db.QueryRowContext(ctx, `SELECT token_version FROM users WHERE id = ?`, id).Scan(&tokenVersion)
+	access, refresh, err := s.jwt.Generate(uint64(id), roles, tokenVersion)
 	if err != nil {
 		return nil, err
 	}

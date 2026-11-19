@@ -18,9 +18,10 @@ import (
 )
 
 type Claims struct {
-	UserID uint64   `json:"uid"`
-	Roles  []string `json:"roles,omitempty"`
-	Type   string   `json:"typ"`
+	UserID       uint64   `json:"uid"`
+	TokenVersion int64    `json:"tv,omitempty"`
+	Roles        []string `json:"roles,omitempty"`
+	Type         string   `json:"typ"`
 	jwt.RegisteredClaims
 }
 
@@ -35,9 +36,13 @@ func NewManager(c *config.Config) *Manager {
 	return &Manager{secret: []byte(c.JWTSecret), issuer: c.JWTIssuer, accessTTL: c.AccessTTL, refreshTTL: c.RefreshTTL}
 }
 
-func (m *Manager) Generate(userID uint64, roles []string) (access, refresh string, err error) {
+func (m *Manager) Generate(userID uint64, roles []string, versions ...int64) (access, refresh string, err error) {
 	now := time.Now()
-	accessClaims := Claims{UserID: userID, Roles: roles, Type: "access", RegisteredClaims: jwt.RegisteredClaims{
+	tokenVersion := int64(0)
+	if len(versions) > 0 {
+		tokenVersion = versions[0]
+	}
+	accessClaims := Claims{UserID: userID, TokenVersion: tokenVersion, Roles: roles, Type: "access", RegisteredClaims: jwt.RegisteredClaims{
 		Issuer: m.issuer, Subject: fmt.Sprintf("%d", userID), IssuedAt: jwt.NewNumericDate(now),
 		NotBefore: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(m.accessTTL)),
 	}}

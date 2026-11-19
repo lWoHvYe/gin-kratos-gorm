@@ -144,3 +144,12 @@ func TestRerankLexicalBoostsExactCoverage(t *testing.T) {
 		t.Fatalf("rerank did not boost exact coverage: %+v", got)
 	}
 }
+
+func TestCosineSemanticCacheSimilarity(t *testing.T) {
+	if got := cosine([]float32{1, 0}, []float32{1, 0}); got < 0.999 {
+		t.Fatalf("identical cosine = %f", got)
+	}
+	if got := cosine([]float32{1, 0}, []float32{0, 1}); got > 0.001 {
+		t.Fatalf("orthogonal cosine = %f", got)
+	}
+}

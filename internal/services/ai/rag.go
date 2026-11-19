@@ -253,6 +253,10 @@ func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDo
 	if err != nil || len(vec) != 1 {
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
+	if docs, ok := r.semanticLookup(ctx, vec[0], limit); ok {
+		metrics.AIRAGSearch.WithLabelValues("semantic_cache").Inc()
+		return docs, nil
+	}
 	knnArgs := []interface{}{
 		"FT.SEARCH", r.index,
 		fmt.Sprintf("*=>[KNN %d @embedding $vec AS score]", fetch),
@@ -275,13 +279,79 @@ func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDo
 		}
 		docs := rerankLexical(query, knn[:min(len(knn), limit)])
 		r.cacheResults(ctx, cacheKey, docs)
+		r.semanticStore(ctx, vec[0], docs)
 		metrics.AIRAGSearch.WithLabelValues("knn_fallback").Inc()
 		return docs, nil
 	}
 	docs := rerankLexical(query, fuseRRF(knn, lexical, limit))
 	r.cacheResults(ctx, cacheKey, docs)
+	r.semanticStore(ctx, vec[0], docs)
 	metrics.AIRAGSearch.WithLabelValues("hybrid").Inc()
 	return docs, nil
+}
+
+type semanticEntry struct {
+	Vector []float32 `json:"v"`
+	Docs   []ragDoc  `json:"d"`
+}
+
+func (r *redisRAG) semanticKey() string {
+	return "ai:rag:sem:" + r.writeIndex()
+}
+
+func (r *redisRAG) semanticLookup(ctx context.Context, vec []float32, limit int) ([]ragDoc, bool) {
+	values, err := r.client.LRange(ctx, r.semanticKey(), 0, 99).Result()
+	if err != nil {
+		return nil, false
+	}
+	best := 0.0
+	var bestDocs []ragDoc
+	for _, raw := range values {
+		var entry semanticEntry
+		if json.Unmarshal([]byte(raw), &entry) != nil || len(entry.Docs) < limit {
+			continue
+		}
+		score := cosine(vec, entry.Vector)
+		if score > best {
+			best = score
+			bestDocs = entry.Docs[:limit]
+		}
+	}
+	if best >= 0.97 {
+		return bestDocs, true
+	}
+	return nil, false
+}
+
+func (r *redisRAG) semanticStore(ctx context.Context, vec []float32, docs []ragDoc) {
+	if len(docs) == 0 {
+		return
+	}
+	entry := semanticEntry{Vector: vec, Docs: docs}
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	key := r.semanticKey()
+	_ = r.client.LPush(ctx, key, payload).Err()
+	_ = r.client.LTrim(ctx, key, 0, 99).Err()
+	_ = r.client.Expire(ctx, key, 10*time.Minute).Err()
+}
+
+func cosine(a, b []float32) float64 {
+	if len(a) != len(b) {
+		return 0
+	}
+	var dot, na, nb float64
+	for i := range a {
+		dot += float64(a[i] * b[i])
+		na += float64(a[i] * a[i])
+		nb += float64(b[i] * b[i])
+	}
+	if na == 0 || nb == 0 {
+		return 0
+	}
+	return dot / math.Sqrt(na*nb)
 }
 
 func (r *redisRAG) queryCacheKey(query string, limit int) string {

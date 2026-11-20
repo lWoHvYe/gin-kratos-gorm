@@ -213,6 +213,7 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		if prefs, err := s.loadPreferences(ctx, req.GetUserId()); err == nil {
 			if prompt := preferencePrompt(prefs); prompt != "" {
 				turns = append([]*schema.Message{{Role: schema.System, Content: prompt}}, turns...)
+				s.recordPreferenceUse(ctx, req.GetUserId(), sessionID, prefs)
 			}
 		}
 	}

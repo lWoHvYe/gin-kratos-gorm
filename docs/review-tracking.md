@@ -49,7 +49,7 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 |---|---|---|
 | 5 correctness | identity, eval, HITL binding/atomic/idempotency, explicit CONFIRMING/SAVED | done for the gate; no FAILED/Abort state or UI state display |
 | 6 versioned RAG | versioned index/alias, dual-write, lease renewal, reconciliation, cache, metrics, hit@5 | partial: no Job, first-build follower window, thin cache/rerank comparison |
-| 7 cart assistant | draft tool, Redis draft, SSE draft, storefront confirm, Cart idempotent confirm | done for the implemented flow; no automated expired/price/stock-change rejection suite |
+| 7 cart assistant | draft tool, Redis draft, SSE draft, storefront confirm, Cart idempotent confirm | done: real-model E2E + expired/price/stock/unclosed Handler tests |
 | 8 preferences | Redis profile, 180d retention, API/UI, system-message injection, A/B 3/3, per-session attribution key, Redis isolation test | partial: no UI attribution view; one prompt family |
 | 9 ops copilot | deterministic daily brief, latest snapshot, optional webhook delivery, low-stock links, feedback | partial: no webhook auth/signature; no richer anomaly explanations |
 | 10 advanced | not adopted | deferred by evidence gate |

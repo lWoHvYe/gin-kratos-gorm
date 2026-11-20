@@ -55,3 +55,10 @@ Long-term choices for the Phase 5-10 implementation.
 - Strict revocation: warmed the 5s cache, disabled demo, checkout preview
   returned 401 immediately; re-enable returned 200.
 - BatchGetStock deduplicates IDs and omits missing rows (MySQL test).
+
+## P2#12 seed cleanup
+
+The broad cleanup files are retained only as `.sql.disabled` for history. New
+`0014` migrations match exact ids/codes/names/prices/status and inventory
+`version = 1`; a fresh-DB SQL check removed all seed rows, while an adapted
+price/version row survived.

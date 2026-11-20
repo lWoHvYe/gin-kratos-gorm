@@ -24,7 +24,7 @@ risk is explicit.
 | P2#9 | done | BFF/catalog page cap; public product list supports opaque keyset cursor (price/id), verified no overlap; admin lists keep page cap. |
 | P2#10 | rejected | Rechecked: only cart add and admin product detail call `GetStock`; checkout uses quote lines. No checkout/cart-merge per-SKU loop exists. |
 | P2#11 | done | AI entry defaults hidden and remains hidden on status failure/non-2xx. |
-| P2#12 | done | Forward cleanup migrations remove exact smoke seed; demo data remains an explicit `deploy/seed` script. Applied: smoke SPUs now 0. |
+| P2#12 | done | Old broad cleanup files are disabled; new 0014 migrations require exact id/code/name/price/status and inventory version=1. SQL smoke: exact seed deleted, adapted row preserved. |
 | P2#13 | done | `corsAllowedOrigins` is wired to gateway/admin Deployment env (verified in cluster). |
 | P2#14 | done | `users.token_version` in JWT; status changes bump it; admin + high-risk checkout/payment BFFs revalidate. Live old demo token -> 401 after disable. |
 | P2#15 | done | Concurrent seckill release, expired outbox lease, foreign relay owner, and durable compensation retry tests cover the targeted race/recovery paths; a full chaos suite remains future work. |

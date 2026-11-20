@@ -10,10 +10,10 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank + versioned semantic cache) |
 | 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
 | 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
-| 6 | Versioned RAG and measurable quality | done (hit@5 5/5, grounded/refusal cases, rollback drill) |
-| 7 | Customer task assistant: comparison, budget list, cart draft | done: real-model draft SSE -> confirm 200 |
-| 8 | Controlled personalization / preference profile | done (A/B benchmark 3/3 PASS) |
-| 9 | Proactive admin operations copilot | done: deterministic daily brief, latest snapshot, low-stock links, feedback |
+| 6 | Versioned RAG and measurable quality | partial: hit@5 5/5, grounded/refusal, lease/rollback done; no Job, thin cache/rerank comparison |
+| 7 | Customer task assistant: comparison, budget list, cart draft | partial: real-model draft SSE -> confirm 200; no expiry/price/stock-change suite |
+| 8 | Controlled personalization / preference profile | partial: A/B 3/3 PASS; no attribution/cross-user automation |
+| 9 | Proactive admin operations copilot | partial: Redis snapshot delivery/links/feedback; no external channel/rich anomaly explanations |
 | 10 | Evidence-triggered advanced capabilities | deferred by evidence gate (no adoption) |
 
 ## Audit note correction (2026-11-20)

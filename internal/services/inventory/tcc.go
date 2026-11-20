@@ -82,7 +82,7 @@ func (s *Service) TccCancelConfirm(ctx context.Context, req *pb.TccPaymentReques
 				case statusReleased:
 					// already compensated
 				case statusHeld:
-					if _, err := s.releaseSeckillMapping(ctx, tx, r); err != nil {
+					if _, _, err := s.releaseSeckillMapping(ctx, tx, r); err != nil {
 						return err
 					}
 				case statusConfirmed:

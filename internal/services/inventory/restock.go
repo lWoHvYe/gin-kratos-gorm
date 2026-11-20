@@ -37,7 +37,7 @@ func (s *Service) ListStocks(ctx context.Context, req *pb.ListStocksRequest) (*p
 		return nil, apperr.Internal("count stocks", err)
 	}
 	args = append(args, size, (page-1)*size)
-	rows, err := s.db.QueryContext(ctx, `SELECT sku_id, warehouse_id, on_hand, reserved FROM inventory_stocks `+where+` ORDER BY sku_id, warehouse_id LIMIT ? OFFSET ?`, args...)
+	rows, err := s.db.QueryContext(ctx, `SELECT sku_id, warehouse_id, on_hand, reserved, version FROM inventory_stocks `+where+` ORDER BY sku_id, warehouse_id LIMIT ? OFFSET ?`, args...)
 	if err != nil {
 		return nil, apperr.Internal("list stocks", err)
 	}
@@ -45,10 +45,10 @@ func (s *Service) ListStocks(ctx context.Context, req *pb.ListStocksRequest) (*p
 	reply := &pb.StockList{Total: total}
 	for rows.Next() {
 		var st stock
-		if err := rows.Scan(&st.skuID, &st.warehouseID, &st.onHand, &st.reserved); err != nil {
+		if err := rows.Scan(&st.skuID, &st.warehouseID, &st.onHand, &st.reserved, &st.version); err != nil {
 			return nil, apperr.Internal("scan stock", err)
 		}
-		reply.Stocks = append(reply.Stocks, &pb.Stock{SkuId: st.skuID, WarehouseId: st.warehouseID, OnHand: st.onHand, Reserved: st.reserved, Available: st.available()})
+		reply.Stocks = append(reply.Stocks, &pb.Stock{SkuId: st.skuID, WarehouseId: st.warehouseID, OnHand: st.onHand, Reserved: st.reserved, Available: st.available(), Version: st.version})
 	}
 	return reply, rows.Err()
 }
@@ -129,7 +129,7 @@ func (s *Service) Restock(ctx context.Context, req *pb.RestockRequest) (*pb.Stoc
 	if err != nil {
 		return nil, err
 	}
-	return &pb.Stock{SkuId: result.skuID, WarehouseId: result.warehouseID, OnHand: result.onHand, Reserved: result.reserved, Available: result.available()}, nil
+	return &pb.Stock{SkuId: result.skuID, WarehouseId: result.warehouseID, OnHand: result.onHand, Reserved: result.reserved, Available: result.available(), Version: result.version}, nil
 }
 
 func truncateString(s string, n int) string {

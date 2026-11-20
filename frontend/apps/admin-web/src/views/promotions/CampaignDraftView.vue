@@ -105,6 +105,12 @@ async function confirmHitl(): Promise<void> {
       campaign: hitlDraft.value.campaign, rule: hitlDraft.value.rule, confirm: true,
     })
     saved.value = { campaignId: result.campaign.id, ruleId: result.rule.id }
+    if (result.checkpoint_closed === false) {
+      // Business write succeeded but the checkpoint could not be closed; keep
+      // the draft/checkpoint so the admin can retry the close safely.
+      error.value = '草案已保存，但 checkpoint 未关闭；可保留草案后重试确认。'
+      return
+    }
     checkpoint.value = ''
     hitlDraft.value = null
     ElMessage.success('ADK 审核已确认，草案已保存为 DRAFT')

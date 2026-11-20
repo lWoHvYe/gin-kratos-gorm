@@ -154,7 +154,7 @@ func TestReleaseHeldAfterBucketClosedReturnsNormalReserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	released, err := svc.releaseSeckillMapping(context.Background(), tx, &reservation{orderNo: "ORD-LATE", skuID: 1, warehouseID: 1, quantity: 1})
+	released, _, err := svc.releaseSeckillMapping(context.Background(), tx, &reservation{orderNo: "ORD-LATE", skuID: 1, warehouseID: 1, quantity: 1})
 	if err != nil || !released {
 		_ = tx.Rollback()
 		t.Fatalf("released=%v err=%v", released, err)
@@ -205,7 +205,7 @@ func TestQualificationReleaseDoesNotDoubleCreditConvertedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.releaseSeckillMapping(context.Background(), tx, &reservation{orderNo: "ORD-DOUBLE", skuID: 1, warehouseID: 1, quantity: 1}); err != nil {
+	if _, _, err := svc.releaseSeckillMapping(context.Background(), tx, &reservation{orderNo: "ORD-DOUBLE", skuID: 1, warehouseID: 1, quantity: 1}); err != nil {
 		_ = tx.Rollback()
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestConcurrentReleaseDoesNotDoubleCredit(t *testing.T) {
 		defer wg.Done()
 		tx, err := db.BeginTx(context.Background(), nil)
 		if err == nil {
-			_, err = svc.releaseSeckillMapping(context.Background(), tx, &reservation{
+			_, _, err = svc.releaseSeckillMapping(context.Background(), tx, &reservation{
 				orderNo: "ORD-RACE", skuID: 1, warehouseID: 1, quantity: 1,
 			})
 			if err == nil {
@@ -263,5 +263,77 @@ func TestConcurrentReleaseDoesNotDoubleCredit(t *testing.T) {
 	}
 	if available != 1 || held != 0 {
 		t.Fatalf("double credit: available=%d held=%d, want 1/0", available, held)
+	}
+}
+
+func TestReleaseTxClosedSeckillWritesOneLedger(t *testing.T) {
+	db := seckillTestDB(t)
+	if _, err := db.Exec(`INSERT INTO inventory_stocks (sku_id, warehouse_id, on_hand, reserved, version) VALUES (1, 1, 10, 2, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO stock_reservations
+		(reservation_no, order_no, sku_id, warehouse_id, quantity, status, expires_at, created_at, updated_at)
+		VALUES ('RES-CLOSED','ORD-CLOSED',1,1,1,'HELD',DATE_ADD(NOW(3), INTERVAL 1 HOUR),NOW(3),NOW(3))`); err != nil {
+		t.Fatal(err)
+	}
+	seedBucket(t, db, 903, 0, 1, 0, seckillStatusReleased)
+	seedMapping(t, db, 903, "ORD-CLOSED", statusHeld)
+	svc := &Service{db: db}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.releaseTx(context.Background(), tx, reserveInput{orderNo: "ORD-CLOSED", skuID: 1, warehouseID: 1, quantity: 1}); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	var ledgers int64
+	if err := db.QueryRow(`SELECT COUNT(*) FROM inventory_ledger WHERE order_no = 'ORD-CLOSED'`).Scan(&ledgers); err != nil {
+		t.Fatal(err)
+	}
+	if ledgers != 1 {
+		t.Fatalf("ledger rows = %d, want exactly 1", ledgers)
+	}
+	var reserved int64
+	if err := db.QueryRow(`SELECT reserved FROM inventory_stocks WHERE sku_id=1`).Scan(&reserved); err != nil {
+		t.Fatal(err)
+	}
+	if reserved != 1 {
+		t.Fatalf("reserved = %d, want 1", reserved)
+	}
+}
+
+func TestTccCancelConfirmRestocksConfirmedReservation(t *testing.T) {
+	db := seckillTestDB(t)
+	if _, err := db.Exec(`INSERT INTO inventory_stocks (sku_id, warehouse_id, on_hand, reserved, version) VALUES (1, 1, 10, 0, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO stock_reservations
+		(reservation_no, order_no, sku_id, warehouse_id, quantity, status, expires_at, created_at, updated_at)
+		VALUES ('RES-CONF','ORD-CONF',1,1,1,'CONFIRMED',DATE_ADD(NOW(3), INTERVAL 1 HOUR),NOW(3),NOW(3))`); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{db: db}
+	if _, err := svc.TccCancelConfirm(context.Background(), &pb.TccPaymentRequest{
+		OrderNo: "ORD-CONF", Items: []*pb.OrderItem{{SkuId: 1, Quantity: 1}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var onHand, reserved int64
+	if err := db.QueryRow(`SELECT on_hand, reserved FROM inventory_stocks WHERE sku_id=1`).Scan(&onHand, &reserved); err != nil {
+		t.Fatal(err)
+	}
+	if onHand != 11 || reserved != 0 {
+		t.Fatalf("on_hand=%d reserved=%d, want 11/0", onHand, reserved)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM stock_reservations WHERE order_no='ORD-CONF'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusReleased {
+		t.Fatalf("status=%s", status)
 	}
 }

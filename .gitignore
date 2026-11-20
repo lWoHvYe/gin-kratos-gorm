@@ -99,4 +99,5 @@ frontend/**/vite.config.ts.timestamp-*
 /ai-eval
 /ai-pref-eval
 /ai-rag-eval
+/catalog-stock-rebuild
 /secret

@@ -530,26 +530,27 @@ func (s *Service) cancelSeckillConfirmed(ctx context.Context, tx *sql.Tx, r *res
 // called by the normal reservation Release path and reports whether the
 // reservation is a seckill reservation (so inventory_stocks.reserved must not
 // be decremented a second time).
-func (s *Service) releaseSeckillMapping(ctx context.Context, tx *sql.Tx, r *reservation) (bool, error) {
+func (s *Service) releaseSeckillMapping(ctx context.Context, tx *sql.Tx, r *reservation) (bool, bool, error) {
 	m, err := s.seckillOrderMapping(ctx, tx, r.orderNo, r.skuID, true)
 	if err != nil || m == nil {
-		return false, err
+		return false, false, err
 	}
 	switch m.status {
 	case statusReleased:
-		return true, nil
+		return true, false, nil
 	case statusConfirmed:
-		return true, apperr.Conflict("seckill order stock is already confirmed")
+		return true, false, apperr.Conflict("seckill order stock is already confirmed")
 	case statusHeld:
 	default:
-		return true, apperr.Conflict("unexpected seckill order stock status")
+		return true, false, apperr.Conflict("unexpected seckill order stock status")
 	}
+	normalWritten := false
 	st, err := s.getSeckillStock(ctx, tx, m.activityID, true)
 	if err != nil {
-		return true, err
+		return true, false, err
 	}
 	if st.held < m.quantity {
-		return true, apperr.Conflict("seckill held stock is insufficient")
+		return true, false, apperr.Conflict("seckill held stock is insufficient")
 	}
 	if st.status == seckillStatusReleased {
 		// Bucket already closed: the held unit belongs back in normal stock.
@@ -558,30 +559,30 @@ func (s *Service) releaseSeckillMapping(ctx context.Context, tx *sql.Tx, r *rese
 			WHERE sku_id = ? AND warehouse_id = ? AND reserved >= ?`,
 			m.quantity, st.skuID, st.warehouseID, m.quantity)
 		if rerr != nil {
-			return true, apperr.Internal("return closed seckill hold to inventory", rerr)
+			return true, false, apperr.Internal("return closed seckill hold to inventory", rerr)
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
-			return true, apperr.Conflict("seckill release would make normal reserved negative")
+			return true, false, apperr.Conflict("seckill release would make normal reserved negative")
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
 			SET held = held - ?, version = version + 1 WHERE activity_id = ? AND held >= ?`,
 			m.quantity, m.activityID, m.quantity); err != nil {
-			return true, apperr.Internal("release closed seckill order stock", err)
+			return true, false, apperr.Internal("release closed seckill order stock", err)
 		}
 	} else if _, err := tx.ExecContext(ctx, `UPDATE seckill_stocks
 		SET held = held - ?, available = available + ?, version = version + 1
 		WHERE activity_id = ? AND held >= ?`,
 		m.quantity, m.quantity, m.activityID, m.quantity); err != nil {
-		return true, apperr.Internal("release seckill order stock", err)
+		return true, false, apperr.Internal("release seckill order stock", err)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE seckill_order_stock SET status=? WHERE order_no=? AND sku_id=?`,
 		statusReleased, m.orderNo, m.skuID); err != nil {
-		return true, apperr.Internal("release seckill order mapping", err)
+		return true, false, apperr.Internal("release seckill order mapping", err)
 	}
 	if st.status == seckillStatusReleased {
 		inv, err := s.stock(ctx, tx, st.skuID, st.warehouseID)
 		if err != nil {
-			return true, err
+			return true, false, err
 		}
 		resNo := r.reservationNo
 		if resNo == "" {
@@ -592,18 +593,22 @@ func (s *Service) releaseSeckillMapping(ctx context.Context, tx *sql.Tx, r *rese
 			skuID: st.skuID, warehouseID: st.warehouseID, quantity: m.quantity,
 		}
 		if err := insertLedger(ctx, tx, ledger, entryRelease, inv); err != nil {
-			return true, err
+			return true, false, err
 		}
 		if err := appendStockChanged(ctx, tx, inv); err != nil {
-			return true, err
+			return true, false, err
 		}
+		if err := appendEvent(ctx, tx, r, topicReleased, eventReleased); err != nil {
+			return true, false, err
+		}
+		normalWritten = true
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO seckill_stock_ledger
 		(activity_id, delta, balance_after, reason, ref_no) VALUES (?, ?, ?, ?, ?)`,
 		m.activityID, m.quantity, st.available+m.quantity, seckillLedgerReleaseOrder, m.orderNo); err != nil {
-		return true, apperr.Internal("insert seckill order-release ledger", err)
+		return true, false, apperr.Internal("insert seckill order-release ledger", err)
 	}
-	return true, nil
+	return true, normalWritten, nil
 }
 
 // CreateSeckillReservation converts an existing qualification hold into an
@@ -706,7 +711,7 @@ func (s *Service) ReleaseSeckillReservation(ctx context.Context, req *pb.Release
 		if r.status != statusHeld {
 			return apperr.Conflict("seckill reservation is not held")
 		}
-		seckill, err := s.releaseSeckillMapping(ctx, tx, r)
+		seckill, _, err := s.releaseSeckillMapping(ctx, tx, r)
 		if err != nil {
 			return err
 		}

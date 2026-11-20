@@ -577,16 +577,15 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 				WarehouseId: defaultWarehouseID,
 				Quantity:    item.GetQuantity(),
 			}); err != nil {
-				// A multi-SKU confirm can fail after earlier SKUs succeeded. Roll
-				// back those confirmations; TccCancelConfirm is idempotent and
-				// handles normal and seckill reservations.
-				if len(confirmed) > 0 {
-					if _, cerr := s.inventory.TccCancelConfirm(ctx, &pb.TccPaymentRequest{
-						OrderNo: orderNo, Items: confirmed,
-					}); cerr != nil {
-						s.log.Error("compensate partially confirmed inventory", "order_no", orderNo, "error", cerr)
-						s.queueInventoryCompensation(ctx, orderNo, confirmed)
-					}
+				// Include the current SKU: Confirm may have committed remotely
+				// even though the RPC returned an error. TccCancelConfirm is
+				// idempotent and handles HELD, CONFIRMED and seckill.
+				attempted := append(append([]*pb.OrderItem{}, confirmed...), item)
+				if _, cerr := s.inventory.TccCancelConfirm(ctx, &pb.TccPaymentRequest{
+					OrderNo: orderNo, Items: attempted,
+				}); cerr != nil {
+					s.log.Error("compensate partially confirmed inventory", "order_no", orderNo, "error", cerr)
+					s.queueInventoryCompensation(ctx, orderNo, attempted)
 				}
 				return nil, apperr.Unavailable("confirm inventory before payment: "+err.Error(), err)
 			}
@@ -673,6 +672,25 @@ func (s *Service) queueInventoryCompensation(ctx context.Context, orderNo string
 	}
 }
 
+// queueInventoryConfirm emits a durable retry when an already-paid order still
+// has a HELD reservation. Inventory consumes it with TccConfirm, which is
+// idempotent; unlike compensation it must never release the reservation.
+func (s *Service) queueInventoryConfirm(ctx context.Context, orderNo string, items []*pb.OrderItem) {
+	payload := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		payload = append(payload, map[string]any{"sku_id": item.GetSkuId(), "quantity": item.GetQuantity()})
+	}
+	if err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		return outbox.Append(ctx, tx, outbox.Event{
+			Topic: "shop.inventory.confirm.requested.v1", AggregateType: "order",
+			AggregateID: orderNo, EventType: "inventory.confirm_requested",
+			Payload: map[string]any{"order_no": orderNo, "items": payload, "created_at": time.Now().Unix()},
+		})
+	}); err != nil {
+		s.log.Error("queue inventory confirm", "order_no", orderNo, "error", err)
+	}
+}
+
 // refundCancelledAfterConfirm asks the payment service to refund a capture whose
 // order was cancelled between the inventory confirm and the status CAS.
 func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *orderRecord, paidCent int64, paymentNo string) {
@@ -735,6 +753,8 @@ func (s *Service) afterPaid(ctx context.Context, record *orderRecord) {
 			}
 			if _, err := s.inventory.Confirm(ctx, req); err != nil {
 				s.log.Warn("confirm inventory", "order_no", record.OrderNo, "sku_id", item.GetSkuId(), "error", err)
+				s.queueInventoryConfirm(ctx, record.OrderNo, items)
+				return
 			}
 		}
 	}

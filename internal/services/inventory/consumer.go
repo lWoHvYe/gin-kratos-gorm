@@ -36,16 +36,22 @@ func RunOrderCancelledConsumer(ctx context.Context, client *mq.Client, svc *Serv
 		if event.OrderNo == "" || len(event.Items) == 0 {
 			return nil
 		}
+		items := make([]*pb.OrderItem, 0, len(event.Items))
 		for _, item := range event.Items {
-			if item.SkuID <= 0 || item.Quantity <= 0 {
-				continue
+			if item.SkuID > 0 && item.Quantity > 0 {
+				items = append(items, &pb.OrderItem{SkuId: item.SkuID, Quantity: item.Quantity})
 			}
-			if _, err := svc.Release(hctx, &pb.ReserveRequest{OrderNo: event.OrderNo, SkuId: item.SkuID, Quantity: item.Quantity}); err != nil {
-				if apperr.IsCode(err, apperr.CodeNotFound) {
-					continue
-				}
-				return err
+		}
+		if len(items) == 0 {
+			return nil
+		}
+		// Use the same HELD/CONFIRMED/seckill compensation path as TCC cancel;
+		// plain Release rejects a CONFIRMED reservation.
+		if _, err := svc.TccCancelConfirm(hctx, &pb.TccPaymentRequest{OrderNo: event.OrderNo, Items: items}); err != nil {
+			if apperr.IsCode(err, apperr.CodeNotFound) {
+				return nil
 			}
+			return err
 		}
 		return nil
 	})

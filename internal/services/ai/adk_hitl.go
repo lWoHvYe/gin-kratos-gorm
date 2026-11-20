@@ -2,6 +2,8 @@ package ai
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -125,6 +127,7 @@ func (s *Service) StartCampaignDraft(ctx context.Context, req *pb.StartCampaignD
 	}
 	meta, _ := json.Marshal(map[string]string{
 		"campaign_code": out.Campaign.Code, "rule_code": out.Rule.Code, "state": "INTERRUPTED",
+		"draft_hash": draftOutputHash(&out),
 	})
 	if err := s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, meta, hitlTTL).Err(); err != nil {
 		return nil, apperr.Internal("store hitl draft binding", err)
@@ -132,7 +135,35 @@ func (s *Service) StartCampaignDraft(ctx context.Context, req *pb.StartCampaignD
 	return &pb.CampaignDraftReply{CheckpointId: checkpointID, DraftJson: string(payload)}, nil
 }
 
-func (s *Service) validateDraftCheckpoint(ctx context.Context, uid int64, checkpointID, campaignCode, ruleCode string) error {
+func draftOutputHash(out *campaignDraftOutput) string {
+	return hashDraftBinding(out.Campaign, out.Rule)
+}
+
+func requestDraftHash(c *pb.Campaign, r *pb.PromotionRule) string {
+	return hashDraftBinding(campaignDraft{
+		Code: c.GetCode(), Name: c.GetName(), Type: c.GetType(), Status: c.GetStatus(),
+		StartAtUnix: c.GetStartAtUnix(), EndAtUnix: c.GetEndAtUnix(), Priority: c.GetPriority(),
+		BudgetCent: c.GetBudgetCent(), PerUserLimit: c.GetPerUserLimit(), StackMode: c.GetStackMode(),
+	}, promotionRuleDraft{
+		Code: r.GetCode(), Name: r.GetName(), Type: r.GetType(), Status: r.GetStatus(),
+		Priority: r.GetPriority(), Exclusive: r.GetExclusive(), StackGroup: r.GetStackGroup(),
+		ScopeJSON: r.GetScopeJson(), ConditionExpr: r.GetConditionExpr(), EffectJSON: r.GetEffectJson(),
+		MaxDiscountCent: r.GetMaxDiscountCent(), BudgetCent: r.GetBudgetCent(),
+		PerUserLimit: r.GetPerUserLimit(), AllowWithCoupon: r.GetAllowWithCoupon(),
+		StartAtUnix: r.GetStartAtUnix(), EndAtUnix: r.GetEndAtUnix(),
+	})
+}
+
+func hashDraftBinding(c campaignDraft, r promotionRuleDraft) string {
+	raw, _ := json.Marshal(struct {
+		Campaign campaignDraft      `json:"campaign"`
+		Rule     promotionRuleDraft `json:"rule"`
+	}{c, r})
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func (s *Service) validateDraftCheckpoint(ctx context.Context, uid int64, checkpointID, campaignCode, ruleCode string, draftHash string) error {
 	if !strings.HasPrefix(checkpointID, strconv.FormatInt(uid, 10)+"-") {
 		return apperr.Forbidden("checkpoint belongs to another admin")
 	}
@@ -146,14 +177,21 @@ func (s *Service) validateDraftCheckpoint(ctx context.Context, uid int64, checkp
 	if owner != uid {
 		return apperr.Forbidden("checkpoint belongs to another admin")
 	}
-	var binding map[string]string
-	if raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes(); err == nil {
-		_ = json.Unmarshal(raw, &binding)
+	raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return apperr.NotFound("reviewed draft binding not found or expired")
 	}
-	if binding != nil && (campaignCode != binding["campaign_code"] || ruleCode != binding["rule_code"]) {
+	if err != nil {
+		return apperr.Internal("read hitl draft binding", err)
+	}
+	var binding map[string]string
+	if err := json.Unmarshal(raw, &binding); err != nil || binding["draft_hash"] == "" || binding["campaign_code"] == "" || binding["rule_code"] == "" {
+		return apperr.Conflict("reviewed draft binding is invalid; restart the draft")
+	}
+	if campaignCode != binding["campaign_code"] || ruleCode != binding["rule_code"] || draftHash != binding["draft_hash"] {
 		return apperr.Conflict("confirm payload does not match the reviewed draft")
 	}
-	if binding != nil && binding["state"] == "SAVED" {
+	if binding["state"] == "SAVED" {
 		return nil
 	}
 	if exists, err := s.cache.Exists(ctx, "ai:hitl:cp:"+checkpointID).Result(); err != nil {
@@ -175,7 +213,7 @@ func (s *Service) CheckCampaignDraft(ctx context.Context, req *pb.ResumeCampaign
 	if uid <= 0 || checkpointID == "" {
 		return nil, apperr.Invalid("user_id and checkpoint_id are required")
 	}
-	if err := s.validateDraftCheckpoint(ctx, uid, checkpointID, req.GetCampaignCode(), req.GetRuleCode()); err != nil {
+	if err := s.validateDraftCheckpoint(ctx, uid, checkpointID, req.GetCampaignCode(), req.GetRuleCode(), requestDraftHash(req.GetCampaign(), req.GetRule())); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil
@@ -192,15 +230,20 @@ func (s *Service) ResumeCampaignDraft(ctx context.Context, req *pb.ResumeCampaig
 	if uid <= 0 || checkpointID == "" {
 		return nil, apperr.Invalid("user_id and checkpoint_id are required")
 	}
-	if err := s.validateDraftCheckpoint(ctx, uid, checkpointID, req.GetCampaignCode(), req.GetRuleCode()); err != nil {
+	if err := s.validateDraftCheckpoint(ctx, uid, checkpointID, req.GetCampaignCode(), req.GetRuleCode(), requestDraftHash(req.GetCampaign(), req.GetRule())); err != nil {
 		return nil, err
 	}
 	// A repeated confirm after SAVED is a no-op; the BFF returns the existing
 	// campaign/rule via its code lookup.
 	if raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes(); err == nil {
 		var meta map[string]string
-		_ = json.Unmarshal(raw, &meta)
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			return nil, apperr.Internal("decode hitl draft binding", err)
+		}
 		if meta["state"] == "SAVED" {
+			if err := s.cache.Del(ctx, "ai:hitl:cp:"+checkpointID).Err(); err != nil {
+				return nil, apperr.Internal("close hitl checkpoint", err)
+			}
 			return &pb.Empty{}, nil
 		}
 	}
@@ -221,16 +264,30 @@ func (s *Service) ResumeCampaignDraft(ctx context.Context, req *pb.ResumeCampaig
 			return nil, apperr.Internal("resume campaign draft", event.Err)
 		}
 	}
-	if raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes(); err == nil {
-		var meta map[string]string
-		if json.Unmarshal(raw, &meta) == nil {
-			meta["state"] = "SAVED"
-			encoded, _ := json.Marshal(meta)
-			_ = s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, encoded, hitlTTL).Err()
+	raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+	if err != nil {
+		return nil, apperr.Internal("read hitl draft binding before close", err)
+	}
+	var meta map[string]string
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return nil, apperr.Internal("decode hitl draft binding", err)
+	}
+	if meta["state"] == "SAVED" {
+		if err := s.cache.Del(ctx, "ai:hitl:cp:"+checkpointID).Err(); err != nil {
+			return nil, apperr.Internal("close hitl checkpoint", err)
 		}
+		return &pb.Empty{}, nil
+	}
+	meta["state"] = "SAVED"
+	encoded, err := json.Marshal(meta)
+	if err != nil {
+		return nil, apperr.Internal("encode hitl draft binding", err)
+	}
+	if err := s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, encoded, hitlTTL).Err(); err != nil {
+		return nil, apperr.Internal("mark hitl draft saved", err)
 	}
 	if err := s.cache.Del(ctx, "ai:hitl:cp:"+checkpointID).Err(); err != nil {
-		s.log.Warn("delete hitl checkpoint", "checkpoint", checkpointID, "error", err)
+		return nil, apperr.Internal("close hitl checkpoint", err)
 	}
 	return &pb.Empty{}, nil
 }

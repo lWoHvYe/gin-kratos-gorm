@@ -257,7 +257,7 @@ func (s *Service) releaseTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 		return nil, apperr.Internal("unexpected reservation status", fmt.Errorf("status %q", r.status))
 	}
 
-	seckill, err := s.releaseSeckillMapping(ctx, tx, r)
+	seckill, normalWritten, err := s.releaseSeckillMapping(ctx, tx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -294,14 +294,16 @@ func (s *Service) releaseTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 		return nil, err
 	}
 	r.status = statusReleased
-	if err := insertLedger(ctx, tx, r, entryRelease, st); err != nil {
-		return nil, err
-	}
-	if err := appendEvent(ctx, tx, r, topicReleased, eventReleased); err != nil {
-		return nil, err
-	}
-	if err := appendStockChanged(ctx, tx, st); err != nil {
-		return nil, err
+	if !normalWritten {
+		if err := insertLedger(ctx, tx, r, entryRelease, st); err != nil {
+			return nil, err
+		}
+		if err := appendEvent(ctx, tx, r, topicReleased, eventReleased); err != nil {
+			return nil, err
+		}
+		if err := appendStockChanged(ctx, tx, st); err != nil {
+			return nil, err
+		}
 	}
 	return r, nil
 }

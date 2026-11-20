@@ -70,6 +70,7 @@ func (s *Service) GetStock(ctx context.Context, req *pb.GetStockRequest) (*pb.St
 		OnHand:      st.onHand,
 		Reserved:    st.reserved,
 		Available:   st.available(),
+		Version:     st.version,
 	}, nil
 }
 

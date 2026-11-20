@@ -263,6 +263,7 @@ message Stock {
   int64 on_hand = 3;
   int64 reserved = 4;
   int64 available = 5;
+  int64 version = 6;
 }
 message GetStockRequest { int64 sku_id = 1; int64 warehouse_id = 2; }
 message ReserveRequest {
@@ -996,6 +997,8 @@ message ResumeCampaignDraftRequest {
   string checkpoint_id = 2;
   string campaign_code = 3;
   string rule_code = 4;
+  Campaign campaign = 5;
+  PromotionRule rule = 6;
 }
 message FeedbackDaySummary {
   string day = 1;

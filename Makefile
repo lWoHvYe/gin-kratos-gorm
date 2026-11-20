@@ -172,6 +172,9 @@ chaos:
 	./scripts/chaos-nats.sh
 	./scripts/chaos-redis.sh
 
+catalog-stock-rebuild:
+	$(GO) run ./cmd/catalog-stock-rebuild -dsn "$$CATALOG_MYSQL_DSN" -inventory "$${INVENTORY_ADDR:-inventory:9003}"
+
 ai-pref-eval:
 	$(GO) run ./cmd/ai-pref-eval
 

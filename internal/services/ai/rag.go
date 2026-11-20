@@ -82,7 +82,6 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	// this avoids every Pod embedding the catalog on startup.
 	lockOwner := id.Event()
 	lockKey := index + ":build:lock"
-	const ragLockTTL = 3 * time.Minute
 	locked, err := client.SetNX(ctx, lockKey, lockOwner, ragLockTTL).Result()
 	if err != nil {
 		return nil, fmt.Errorf("rag build lock: %w", err)
@@ -116,7 +115,7 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	}
 	renewCtx, stopRenew := context.WithCancel(ctx)
 	defer stopRenew()
-	go renewRAGLock(renewCtx, client, lockKey, lockOwner)
+	go renewRAGLock(renewCtx, client, lockKey, lockOwner, ragLockTTL, time.Minute)
 	defer releaseRAGLock(client, lockKey, lockOwner)
 
 	buildStart := time.Now()
@@ -185,16 +184,18 @@ func mustJSON(v any) []byte {
 	return data
 }
 
-func renewRAGLock(ctx context.Context, client redis.UniversalClient, key, owner string) {
+const ragLockTTL = 3 * time.Minute
+
+func renewRAGLock(ctx context.Context, client redis.UniversalClient, key, owner string, ttl, interval time.Duration) {
 	script := redis.NewScript(`if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("pexpire", KEYS[1], ARGV[2]) else return 0 end`)
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_ = script.Run(ctx, client, []string{key}, owner, int64(3*time.Minute/time.Millisecond)).Err()
+			_ = script.Run(ctx, client, []string{key}, owner, int64(ttl/time.Millisecond)).Err()
 		}
 	}
 }

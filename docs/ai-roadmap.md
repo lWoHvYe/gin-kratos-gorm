@@ -11,8 +11,8 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
 | 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
 | 6 | Versioned RAG and measurable quality | partial: hit@5 5/5, grounded/refusal, lease/rollback done; no Job, thin cache/rerank comparison |
-| 7 | Customer task assistant: comparison, budget list, cart draft | partial: real-model draft SSE -> confirm 200; no expiry/price/stock-change suite |
-| 8 | Controlled personalization / preference profile | partial: A/B 3/3, attribution key and Redis user-isolation test; no UI attribution/regression suite |
+| 7 | Customer task assistant: comparison, budget list, cart draft | done: real-model E2E + expired/price/stock/unclosed tests |
+| 8 | Controlled personalization / preference profile | partial: A/B 3/3, attribution key/isolation test; no UI attribution/regression suite |
 | 9 | Proactive admin operations copilot | partial: Redis snapshot + optional webhook/links/feedback; no webhook auth/rich anomaly explanations |
 | 10 | Evidence-triggered advanced capabilities | deferred by evidence gate (no adoption) |
 

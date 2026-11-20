@@ -36,8 +36,13 @@ func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc 
 			return
 		}
 		raw, _ := json.Marshal(brief)
-		_ = cache.Set(ctx, "ai:ops:latest", raw, 48*time.Hour).Err()
-		_ = cache.Set(ctx, doneKey, "1", 48*time.Hour).Err()
+		pipe := cache.TxPipeline()
+		pipe.Set(ctx, "ai:ops:latest", raw, 48*time.Hour)
+		pipe.Set(ctx, doneKey, "1", 48*time.Hour)
+		if _, err := pipe.Exec(ctx); err != nil {
+			logger.Warn("publish ops brief failed", "day", day, "error", err)
+			return
+		}
 		logger.Info("ops brief generated", "day", day, "orders", brief.GetTotalOrders(), "low_stock", brief.GetLowStock())
 	}
 	run()

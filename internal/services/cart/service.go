@@ -330,6 +330,19 @@ func totalCent(items []*pb.CartItem) int64 {
 	return total
 }
 
+func (s *Service) confirmedDraftCart(ctx context.Context, userID int64, draftID string) (*pb.Cart, error) {
+	var cartID int64
+	err := s.db.QueryRowContext(ctx, `SELECT cart_id FROM cart_draft_confirmations
+		WHERE user_id = ? AND draft_id = ?`, userID, draftID).Scan(&cartID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, apperr.Internal("load confirmed cart draft", err)
+	}
+	return s.cartFrom(ctx, s.db, userID, cartID)
+}
+
 // ConfirmCartDraft applies a user-confirmed AI draft atomically and exactly
 // once. The (user_id, draft_id) unique key is the idempotency boundary; a retry
 // returns the already-updated cart without adding items again.
@@ -337,6 +350,13 @@ func (s *Service) ConfirmCartDraft(ctx context.Context, req *pb.ConfirmCartDraft
 	userID, draftID := req.GetUserId(), strings.TrimSpace(req.GetDraftId())
 	if userID <= 0 || draftID == "" || len(draftID) > 64 {
 		return nil, apperr.Invalid("user_id and draft_id are required")
+	}
+	// The persistent confirmation is checked before any catalog call: a retry
+	// after a successful commit must remain recoverable even if catalog is down.
+	if cart, err := s.confirmedDraftCart(ctx, userID, draftID); err != nil {
+		return nil, err
+	} else if cart != nil {
+		return cart, nil
 	}
 	if len(req.GetItems()) == 0 || len(req.GetItems()) > 10 {
 		return nil, apperr.Invalid("items must contain 1-10 lines")

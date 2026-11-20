@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import { adminApi, ApiError, type Stock } from '@mall/api'
 
 const qc = useQueryClient()
-const skuId = ref<number | undefined>()
+const route = useRoute()
+const initialSku = Number(route.query.sku_id)
+const skuId = ref<number | undefined>(initialSku > 0 ? initialSku : undefined)
 const page = ref(1)
 const query = useQuery({
   queryKey: ['stocks', page, skuId],

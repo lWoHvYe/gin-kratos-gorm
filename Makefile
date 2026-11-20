@@ -200,14 +200,14 @@ test-integration:
 		$(GO) test ./internal/platform/consumer -run TestConsumerDeadLetters -count=1
 	@echo ">> AI RAG (Redis Search)"
 	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
-		$(GO) test ./internal/services/ai -run TestRAGRedis -count=1
+		$(GO) test ./internal/services/ai -run 'TestRAGRedis|TestRenewRAGLock|TestPreferencesAreUserScoped' -count=1
 	@echo ">> seckill admission Lua (Redis)"
 	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
 		$(GO) test ./internal/services/seckill -run TestReserveScript -count=1
 	@echo ">> inventory seckill/compensation/ledger (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/inventory -run 'TestCancelConfirmed|TestReleaseHeld|TestQualificationRelease|TestConcurrentRelease|TestReleaseTxClosed|TestTccCancelConfirm|TestCompensationHandler|TestConfirmConsumerNATS|TestOrderCancelledConsumerNATS|TestArchiveLedger' -count=1
 	@echo ">> catalog stock projection (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/catalog -run TestStockProjectionRejectsOlderVersion -count=1
+	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/catalog -run 'TestStockProjectionRejectsOlderVersion|TestKeysetPaginationBothReaders' -count=1
 	@echo ">> pricing quote cleanup (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/pricing -run TestCleanupQuotesRemovesOnlyExpiredRetention -count=1
 

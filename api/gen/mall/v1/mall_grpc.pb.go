@@ -5762,6 +5762,7 @@ const (
 	AIService_StartCampaignDraft_FullMethodName  = "/mall.v1.AIService/StartCampaignDraft"
 	AIService_CheckCampaignDraft_FullMethodName  = "/mall.v1.AIService/CheckCampaignDraft"
 	AIService_ResumeCampaignDraft_FullMethodName = "/mall.v1.AIService/ResumeCampaignDraft"
+	AIService_AbortCampaignDraft_FullMethodName  = "/mall.v1.AIService/AbortCampaignDraft"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -5790,6 +5791,7 @@ type AIServiceClient interface {
 	StartCampaignDraft(ctx context.Context, in *StartCampaignDraftRequest, opts ...grpc.CallOption) (*CampaignDraftReply, error)
 	CheckCampaignDraft(ctx context.Context, in *ResumeCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error)
 	ResumeCampaignDraft(ctx context.Context, in *ResumeCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error)
+	AbortCampaignDraft(ctx context.Context, in *AbortCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type aIServiceClient struct {
@@ -5959,6 +5961,16 @@ func (c *aIServiceClient) ResumeCampaignDraft(ctx context.Context, in *ResumeCam
 	return out, nil
 }
 
+func (c *aIServiceClient) AbortCampaignDraft(ctx context.Context, in *AbortCampaignDraftRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AIService_AbortCampaignDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -5985,6 +5997,7 @@ type AIServiceServer interface {
 	StartCampaignDraft(context.Context, *StartCampaignDraftRequest) (*CampaignDraftReply, error)
 	CheckCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error)
 	ResumeCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error)
+	AbortCampaignDraft(context.Context, *AbortCampaignDraftRequest) (*Empty, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -6039,6 +6052,9 @@ func (UnimplementedAIServiceServer) CheckCampaignDraft(context.Context, *ResumeC
 }
 func (UnimplementedAIServiceServer) ResumeCampaignDraft(context.Context, *ResumeCampaignDraftRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResumeCampaignDraft not implemented")
+}
+func (UnimplementedAIServiceServer) AbortCampaignDraft(context.Context, *AbortCampaignDraftRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AbortCampaignDraft not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -6324,6 +6340,24 @@ func _AIService_ResumeCampaignDraft_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_AbortCampaignDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AbortCampaignDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).AbortCampaignDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_AbortCampaignDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).AbortCampaignDraft(ctx, req.(*AbortCampaignDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -6386,6 +6420,10 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResumeCampaignDraft",
 			Handler:    _AIService_ResumeCampaignDraft_Handler,
+		},
+		{
+			MethodName: "AbortCampaignDraft",
+			Handler:    _AIService_AbortCampaignDraft_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

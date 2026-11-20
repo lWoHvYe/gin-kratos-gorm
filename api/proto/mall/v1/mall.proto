@@ -931,6 +931,7 @@ service AIService {
   rpc StartCampaignDraft (StartCampaignDraftRequest) returns (CampaignDraftReply);
   rpc CheckCampaignDraft (ResumeCampaignDraftRequest) returns (Empty);
   rpc ResumeCampaignDraft (ResumeCampaignDraftRequest) returns (Empty);
+  rpc AbortCampaignDraft (AbortCampaignDraftRequest) returns (Empty);
 }
 
 message AIChatRequest {
@@ -993,6 +994,11 @@ message StartCampaignDraftRequest {
 message CampaignDraftReply {
   string checkpoint_id = 1;
   string draft_json = 2;
+}
+message AbortCampaignDraftRequest {
+  int64 user_id = 1;
+  string checkpoint_id = 2;
+  string reason = 3;
 }
 message ResumeCampaignDraftRequest {
   int64 user_id = 1;

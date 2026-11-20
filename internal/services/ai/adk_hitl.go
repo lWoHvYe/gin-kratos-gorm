@@ -327,3 +327,43 @@ func (s *Service) ResumeCampaignDraft(ctx context.Context, req *pb.ResumeCampaig
 	}
 	return &pb.Empty{}, nil
 }
+
+// AbortCampaignDraft records a failed confirmation without deleting the
+// review checkpoint. A later Check can move FAILED -> CONFIRMING and retry.
+func (s *Service) AbortCampaignDraft(ctx context.Context, req *pb.AbortCampaignDraftRequest) (*pb.Empty, error) {
+	if s.cache == nil {
+		return nil, apperr.Unavailable("hitl checkpoint storage is not configured", nil)
+	}
+	uid, checkpointID := req.GetUserId(), strings.TrimSpace(req.GetCheckpointId())
+	if uid <= 0 || checkpointID == "" {
+		return nil, apperr.Invalid("user_id and checkpoint_id are required")
+	}
+	owner, err := s.cache.Get(ctx, "ai:hitl:owner:"+checkpointID).Int64()
+	if errors.Is(err, redis.Nil) {
+		return nil, apperr.NotFound("checkpoint not found or expired")
+	}
+	if err != nil {
+		return nil, apperr.Internal("read hitl owner", err)
+	}
+	if owner != uid {
+		return nil, apperr.Forbidden("checkpoint belongs to another admin")
+	}
+	raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+	if err != nil {
+		return nil, apperr.Internal("read hitl state", err)
+	}
+	var meta map[string]string
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return nil, apperr.Internal("decode hitl state", err)
+	}
+	if meta["state"] == "SAVED" {
+		return &pb.Empty{}, nil
+	}
+	meta["state"] = "FAILED"
+	meta["failure_reason"] = strings.TrimSpace(req.GetReason())
+	encoded, _ := json.Marshal(meta)
+	if err := s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, encoded, hitlTTL).Err(); err != nil {
+		return nil, apperr.Internal("persist hitl failure", err)
+	}
+	return &pb.Empty{}, nil
+}

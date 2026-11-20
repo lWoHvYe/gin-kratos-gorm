@@ -78,6 +78,9 @@ func (h *handlers) confirmCampaignDraft(c *gin.Context) {
 	}
 	created, saved, err := h.saveDraft(c.Request.Context(), in.Campaign, in.Rule)
 	if err != nil {
+		_, _ = h.clients.AI.AbortCampaignDraft(c.Request.Context(), &pb.AbortCampaignDraftRequest{
+			UserId: uid, CheckpointId: checkpoint, Reason: "draft save failed",
+		})
 		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
@@ -91,5 +94,9 @@ func (h *handlers) confirmCampaignDraft(c *gin.Context) {
 		// remains open so an operator can inspect/close it separately.
 		closed = false
 	}
-	httpx.OK(c, map[string]any{"campaign": created, "rule": saved, "checkpoint_closed": closed})
+	state := "SAVED"
+	if !closed {
+		state = "CONFIRMING"
+	}
+	httpx.OK(c, map[string]any{"campaign": created, "rule": saved, "checkpoint_closed": closed, "checkpoint_state": state})
 }

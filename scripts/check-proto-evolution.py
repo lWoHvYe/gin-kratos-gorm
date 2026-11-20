@@ -10,7 +10,8 @@ PROTO = ROOT / "api/proto/mall/v1/mall.proto"
 BASELINE = ROOT / "api/proto/mall/v1/mall.proto.baseline.json"
 
 MSG = re.compile(r"^message\s+(\w+)\s*\{")
-RPC = re.compile(r"^\s*rpc\s+(\w+)\s*\(")
+RPC = re.compile(r"^\s*rpc\s+(\w+)\s*\(([^)]*)\)\s*returns\s*\(([^)]*)\)")
+RESERVED = re.compile(r"^\s*reserved\s+(.+);")
 FIELD = re.compile(r"^\s+(?:repeated\s+|optional\s+)?[\w.<>]+\s+(\w+)\s*=\s*(\d+)\s*;")
 
 
@@ -24,9 +25,21 @@ def snapshot() -> dict:
             continue
         r = RPC.match(line)
         if r:
-            out["rpc." + r.group(1)] = 0
+            out["rpc." + r.group(1)] = r.group(2).strip() + " -> " + r.group(3).strip()
             continue
         if message:
+            reserved = RESERVED.match(line)
+            if reserved:
+                numbers = []
+                for part in reserved.group(1).split(","):
+                    part = part.strip()
+                    if " to " in part:
+                        lo, hi = part.split(" to ", 1)
+                        numbers.extend(range(int(lo), int(hi) + 1))
+                    elif part:
+                        numbers.append(int(part))
+                out["reserved." + message] = sorted(numbers)
+                continue
             f = FIELD.match(line)
             if f and not line.strip().startswith("reserved"):
                 out[message + "." + f.group(1)] = int(f.group(2))
@@ -51,6 +64,11 @@ def main() -> int:
         by_msg.setdefault(message, {}).setdefault(number, []).append(key)
     failed = False
     for key, number in base.items():
+        if isinstance(number, list):
+            if sorted(current.get(key, [])) != sorted(number):
+                print(f"[proto-guard] reserved changed: {key} = {number}", file=sys.stderr)
+                failed = True
+            continue
         if current.get(key) != number:
             print(f"[proto-guard] removed/changed: {key} = {number}", file=sys.stderr)
             failed = True

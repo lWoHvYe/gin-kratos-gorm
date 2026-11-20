@@ -93,11 +93,13 @@ func (h *handlers) confirmCartDraft(c *gin.Context) {
 		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
+	draftClosed := true
 	if _, err := h.clients.AI.CompleteCartDraft(c.Request.Context(), &pb.CompleteCartDraftRequest{
 		DraftId: body.DraftID, UserId: uid,
 	}); err != nil {
-		// Cart is already updated and idempotent; retrying is safe.
+		// Cart is already updated and idempotent; keep the button retryable.
+		draftClosed = false
 		h.log.Warn("complete cart draft after cart update", "draft_id", body.DraftID, "error", err)
 	}
-	httpx.OK(c, gin.H{"confirmed": true, "cart": cart, "total_cent": draft.TotalCent, "message": fmt.Sprintf("已加入 %d 件商品", len(draft.Items))})
+	httpx.OK(c, gin.H{"confirmed": true, "draft_closed": draftClosed, "cart": cart, "total_cent": draft.TotalCent, "message": fmt.Sprintf("已加入 %d 件商品", len(draft.Items))})
 }

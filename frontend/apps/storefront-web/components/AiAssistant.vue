@@ -40,10 +40,10 @@
             <p>合计 {{ (m.draft.total_cent / 100).toFixed(2) }}</p>
             <button
               type="button"
-              :disabled="m.draftConfirmed || m.draftSaving"
+              :disabled="(m.draftConfirmed && m.draftClosed) || m.draftSaving"
               @click="confirmDraft(m)"
             >
-              {{ m.draftConfirmed ? '已加入购物车' : (m.draftSaving ? '确认中…' : '确认加入购物车') }}
+              {{ m.draftSaving ? '确认中…' : (m.draftConfirmed ? (m.draftClosed ? '已加入购物车' : '重试完成确认') : '确认加入购物车') }}
             </button>
           </div>
         </div>
@@ -95,6 +95,7 @@ interface Message {
   draft?: CartDraft
   draftSaving?: boolean
   draftConfirmed?: boolean
+  draftClosed?: boolean
 }
 
 const { token } = useApi()
@@ -249,7 +250,8 @@ function applyEvent(index: number, ev: SSEEvent) {
 }
 
 async function confirmDraft(message: Message): Promise<void> {
-  if (!message.draft || !token.value || message.draftSaving || message.draftConfirmed) return
+  if (!message.draft || !token.value || message.draftSaving) return
+  if (message.draftConfirmed && message.draftClosed !== false) return
   message.draftSaving = true
   try {
     const response = await fetch('/api/v1/ai/cart-drafts/confirm', {
@@ -257,13 +259,14 @@ async function confirmDraft(message: Message): Promise<void> {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.value}` },
       body: JSON.stringify({ draft_id: message.draft.draft_id }),
     })
-    const body = await response.json().catch(() => null) as { message?: string } | null
+    const body = await response.json().catch(() => null) as { message?: string; draft_closed?: boolean } | null
     if (!response.ok) {
       message.text += `\n${body?.message || '草案已失效，请重新生成。'}`
       return
     }
     message.draftConfirmed = true
-    message.text += '\n已确认加入购物车。'
+    message.draftClosed = body?.draft_closed !== false
+    message.text += message.draftClosed ? '\n已确认加入购物车。' : '\n购物车已更新，但草案关闭失败；可点击“重试完成确认”。'
   } catch {
     message.text += '\n确认失败，请稍后重试。'
   } finally {

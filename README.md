@@ -49,8 +49,8 @@ exposes `/healthz`, `/readyz` and `/metrics` on its health port.
 | aftersales | 9009 | 9109 | `mall_aftersales` |
 
 Infrastructure: MySQL 8.4 `:3306`, Redis 8.10 `:6379`, NATS 2.10 + JetStream
-`:4222` (`:8222` monitoring), etcd 3.5 `:2379`, DTM `:36789` (HTTP) /
-`:36790` (gRPC). Optional Prometheus `:9090`, Grafana `:3000`, Tempo `:3200`.
+`:4222` (`:8222` monitoring), DTM `:36789` (HTTP) / `:36790` (gRPC). etcd is
+optional and disabled by default. Optional Prometheus `:9090`, Grafana `:3000`, Tempo `:3200`.
 
 ## Quick start (Docker Compose)
 
@@ -59,7 +59,7 @@ Requirements: Docker with Compose v2.20+ (BuildKit).
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
 
-make run-infra            # MySQL (databases + migrations), Redis, NATS, etcd, DTM
+make run-infra            # MySQL (databases + migrations), Redis, NATS, DTM
 make run-all              # build and start gateway, admin and all 9 services
 
 # or start pieces individually:
@@ -77,7 +77,7 @@ curl http://localhost:8080/api/v1/products
 ```
 
 The gateway/admin are the only application containers with host ports.
-Everything else talks over Docker DNS (`mysql`, `nats`, `etcd`, `dtm`,
+Everything else talks over Docker DNS (`mysql`, `nats`, `dtm`,
 `identity`, `catalog`, …).
 
 Optional profiles:

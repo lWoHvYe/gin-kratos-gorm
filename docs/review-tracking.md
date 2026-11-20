@@ -1,70 +1,73 @@
 # Architecture review tracking
 
-Source: 2026-11-19 review (supersedes the earlier tracking table). `done` means
-code + verification; `partial` means a safe subset shipped and the remaining
-risk is explicit.
+Source: 2026-11-20 handoff plus follow-up implementation. `done` means the code
+and the stated verification exist; `partial` means a safe subset shipped and a
+named gap remains. This file was rewritten after a 2026-11-21 audit because the
+old table still described P2#10 as rejected and Phase 7 as not started.
 
 ## P1
 
-| ID | Status | Notes |
+| ID | Status | Evidence / remaining gap |
 |---|---|---|
-| P1#1 | done | Seckill allocate/release/hold/TCC-cancel paths that change normal reserved now write inventory ledger + `stock.changed`; closed-bucket HELD covered by MySQL test. |
-| P1#2 | done | Multi-SKU partial Confirm is rolled back; cancel compensation includes seckill; failed direct restock emits a durable retry event; consumer handler re-restocks once (MySQL test, repeated delivery is idempotent). |
-| P1#3 | done | Stock events carry inventory `version`; catalog projects conditionally via `skus.stock_version`; MySQL test proves an older event cannot overwrite a newer projection. |
-| P1#4 | done | HITL checks draft binding before save; campaign+rule are one pricing transaction; checkpoint closes only after the business write. Live wrong-payload 409, correct 200, replay 404. |
-| P1#5 | done | Eval executes `contains_any` and rejects assertion-less cases; real eval 13/13. |
+| P1#1 | done | Closed-bucket release writes one ledger/event; `TestReleaseTxClosedSeckillWritesOneLedger` (MySQL) proves exactly one row. |
+| P1#2 | done | `order.cancelled` uses `TccCancelConfirm`; partial MarkPaid compensation includes the failing SKU; `afterPaid` failure emits a durable confirm event consumed by `RunConfirmConsumer`; NATS confirm/order.cancelled tests pass. |
+| P1#3 | done | `Stock.version`; `cmd/catalog-stock-rebuild` dry-run found 3 mismatches and repaired 3. |
+| P1#4 | done | Full draft SHA binding, fail-closed meta, close errors surfaced; live tamper 409, correct/duplicate 200. |
+| P1#5 | done | `contains_any` executes; eval 15/15. |
 
-## P2
+## P2 (current handoff IDs)
 
-| ID | Status | Notes |
+| ID | Status | Evidence / remaining gap |
 |---|---|---|
-| P2#6 | done | Outbox prune selects one ID batch and archives/deletes those IDs in one transaction; MySQL test passes. |
-| P2#7 | done | Quote cleanup is one transaction; inventory_ledger has a 180-day archive table/worker with MySQL test; growth metrics retained. |
-| P2#8 | done | SQL fallback SKU predicate now includes `price_cent > 0`, matching GORM. |
-| P2#9 | done | BFF/catalog page cap; public product list supports opaque keyset cursor (price/id), verified no overlap; admin lists keep page cap. |
-| P2#10 | rejected | Rechecked: only cart add and admin product detail call `GetStock`; checkout uses quote lines. No checkout/cart-merge per-SKU loop exists. |
-| P2#11 | done | AI entry defaults hidden and remains hidden on status failure/non-2xx. |
-| P2#12 | done | Old broad cleanup files are disabled; new 0014 migrations require exact id/code/name/price/status and inventory version=1. SQL smoke: exact seed deleted, adapted row preserved. |
-| P2#13 | done | `corsAllowedOrigins` is wired to gateway/admin Deployment env (verified in cluster). |
-| P2#14 | done | `users.token_version` in JWT; status changes bump it; admin + high-risk checkout/payment BFFs revalidate. Live old demo token -> 401 after disable. |
-| P2#15 | done | Concurrent seckill release, expired outbox lease, foreign relay owner, and durable compensation retry tests cover the targeted race/recovery paths; a full chaos suite remains future work. |
-| P2#16 | done | Preview uses the same `userIDFromContext` as tools and errors when identity is missing; no fixed user 1. |
-| P2#17 | partial | Versioned index/alias, dual-write, leader lock, post-build/15m reconciliation, exact/semantic cache and metrics are done. Still open: consumer lag/truncation/rebuild-failure metrics, retrieval-quality eval and a tested rollback runbook. |
-| P2#18 | done | topologySpreadConstraints added; PDBs cover gateway/seckill/order/inventory/identity/catalog/pricing/payment; HA template renders. |
-| P2#19 | done | Alertmanager added to observability target; Prometheus scrapes ai:9111; compose config valid. |
+| P2#8 | done | Public GetProduct/GetSku require ENABLED + price>0. |
+| P2#9 | done | page>1000 INVALID; cursor errors unified; GORM/SQL keyset walk to last page tested. |
+| P2#10 | done | `BatchGetStock`; checkout/cart-merge/AI confirm batch prefetch + local totals; dedupe/missing test. The older “rejected” note is obsolete. |
+| P2#11 | done | Assistant root is hidden until `available=true`. |
+| P2#12 | done | Old broad cleanup disabled; `0014` requires exact seed fields/version; SQL positive/negative checks. |
+| P2#13 | done | Strict identity for checkout/payment/admin; normal routes keep 5s cache; live warmed-cache disable→401. |
+| P2#14 | done | `make test-integration` covers inventory/catalog/pricing and CI invokes it; local run passed. Real GitHub CI not run. |
+| P2#17 | partial | Versioned index, dual-write, lease renewal, alias/cache invalidation, metrics, hit@5 5/5 done. No independent Job/elected leader; first build >3m can leave followers without alias; quality comparison cache/rerank still thin. |
 
 ## P3
 
-- Version increments: done for catalog category/brand/SKU, identity address and
-  seckill qualification updates.
-- CampaignSpec unification: pending (draft/preview/HITL still assemble rule JSON
-  independently).
-- Compose etcd: removed from `INFRA_SERVICES` and default docs; optional overlay
-  remains for external etcd.
-- Admin router size/client init duplication: not adopted.
-- Ops DTM description: corrected (cancel is local + outbox; direct MarkPaid only
-  when TCC disabled/unconfigured).
-- Frontend lint placeholder, hand-written/generated type duplication, proto
-  evolution guard, k8s observability addon: not adopted.
-- Single proto regeneration and two migration runners: accepted tradeoffs.
+- Version increments: done for catalog category/brand/SKU, identity address,
+  seckill qualification.
+- CampaignSpec: done.
+- etcd: optional/disabled by default in chart, README corrected.
+- Frontend ESLint: done; admin 0 error/11 warning, storefront 0 error.
+- Admin router: split to 263 lines; promotion/catalog/orders/seckill/catalog-write
+  handlers moved. Further business-boundary split remains optional.
+- Generated types: read models Sku/Product/Order/AfterSale/Campaign/PromotionRule/
+  Stock/Category/Brand derive from generated schemas; Shipment/Refund/ListReply
+  still hand-written because no generated schema exists.
+- proto guard: RPC signatures + reserved; baseline 680; CI invokes guard.
+- K8s observability: OTLP collector egress added.
 
-## AI roadmap
+## AI roadmap truth table
 
-| Phase | Status |
-|---|---|
-| 5 Correctness foundation | done: identity test, repeated eval 26/26 with test resets, HITL binding/atomic/idempotent duplicate/save-failure recovery, CampaignSpec |
-| 6 Versioned RAG | done: versioned index/alias + dual-write + leader lock + reconciliation + cache + metrics + hit@5 5/5 + grounded/refusal cases + tested alias rollback (cache flush) |
-| 7 Cart assistant | not started |
-| 8 Personalization | not started |
-| 9 Proactive ops | not started |
-| 10 Advanced (multi-agent/multimodal/routing) | not started |
+| Phase | Code status | Honest status / gap |
+|---|---|---|
+| 5 correctness | identity, eval, HITL binding/atomic/idempotency, explicit CONFIRMING/SAVED | done for the gate; no FAILED/Abort state or UI state display |
+| 6 versioned RAG | versioned index/alias, dual-write, lease renewal, reconciliation, cache, metrics, hit@5 | partial: no Job, first-build follower window, thin cache/rerank comparison |
+| 7 cart assistant | draft tool, Redis draft, SSE draft, storefront confirm, Cart idempotent confirm | done for the implemented flow; no automated expired/price/stock-change rejection suite |
+| 8 preferences | Redis profile, 180d retention, API/UI, system-message injection, A/B 3/3 | partial: no per-recommendation attribution record; benchmark is one prompt family |
+| 9 ops copilot | deterministic daily brief, latest snapshot, atomic publication, low-stock links, feedback | partial: delivery is Redis snapshot/admin UI only; no richer anomaly explanations |
+| 10 advanced | not adopted | deferred by evidence gate |
 
-## Verification run
+## Verification evidence
 
-- `make verify`
-- `make ai-eval`: 13/13 with real assertions
-- MySQL: outbox archive/lease, quote cleanup transaction, seckill
-  open/closed/cross-entry/concurrent release
-- HITL live: binding 409, confirm 200, replay 404
-- Token revocation live: old access token 401 on checkout after disable
-- `helm template` HA and `docker compose config` exit 0
+- `make verify` passes (proto guard included).
+- `make test-integration` passed locally with MySQL/NATS/Redis across outbox,
+  consumer, AI RAG, seckill, inventory, catalog and pricing.
+- `ai-eval` 15/15; `ai-rag-eval` hit@5 5/5; `ai-pref-eval` 3/3.
+- Phase 7 real-model draft SSE → confirm 200; normal answer emitted 246 SSE deltas.
+- RAG lease renewal Redis test; HITL live meta state SAVED; strict revocation 401.
+
+## Explicit unverified / drift
+
+- Real GitHub Actions was not executed.
+- RAG Job/elected-leader and crash/restart live drill are not done.
+- HITL has no FAILED/Abort state or admin UI state display; CONFIRMING transition
+  is not an atomic CAS.
+- Phase 8 has no automated cross-user test or per-recommendation attribution.
+- Phase 9 has no external delivery channel or rich anomaly explanations.

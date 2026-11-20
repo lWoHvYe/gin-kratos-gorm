@@ -1,69 +1,22 @@
-# AI hardening review (2026-11-20)
+# AI hardening review (2026-11-21)
 
-Long-term choices for the Phase 5-10 implementation.
+This supersedes the earlier “done” wording where it overstated coverage.
 
-| Topic | Better long-term choice | Current state |
+| Area | What is actually implemented | Status / gap |
 |---|---|---|
-| Phase 10 | Keep the evidence gate; defer multi-agent/multimodal/routing | deferred |
-| ADK streaming | Tool-aware streaming adapter that normalizes cumulative DeepSeek chunks and merges tool-call fragments | done: eval 15/15 and 246 SSE deltas for a plain answer |
-| HITL recovery | Explicit `INTERRUPTED -> CONFIRMING -> SAVED/FAILED` record plus business idempotency key | unique draft-code idempotency; duplicate/save-failure tests pass |
-| Cart confirm | Atomic/bulk Cart RPC or a per-draft idempotency key in the Cart service | done: `Cart.ConfirmCartDraft` transaction + `(user_id,draft_id)` unique key |
-| RAG rebuild | Dedicated Job or elected leader with lease renewal | Redis leader lock; non-leader loads `ai:rag:current` |
-| RAG failure | Keep the last good alias serving and retry the build with backoff | startup reports RAG disabled if embedding fails |
-| Ops delivery | Outbox/durable delivery with retry | Redis date lock + `ai:ops:latest` snapshot |
-| CoreDNS | Keep the host's original forwarder when it works | restored `forward . /etc/resolv.conf`; DNS verified |
+| RAG rebuild | Redis lock with 3m TTL, 1m renewal, alias fallback, current pointer without TTL | lease works; no independent Job; first build >3m can still leave followers without alias |
+| RAG cache | version-bound exact/semantic cache; increment/delete invalidates version cache; rollback runbook flushes cache | implemented; cache/rerank A/B quality not measured |
+| HITL | `INTERRUPTED -> CONFIRMING -> SAVED`; full draft hash; fail-closed meta; close failures surfaced; unique draft code idempotency | no `FAILED`/Abort, no UI state display, CONFIRMING transition is not atomic CAS |
+| ADK chat | non-streaming was replaced by a cumulative-chunk normalizer; tool-call fragments merge by Index; SSE deltas restored | eval 15/15 and 246 deltas; no multi-replica/provider-failure live soak |
+| Cart assistant | draft tool, Redis draft, SSE draft, storefront confirm card, Cart transactional idempotent confirmation | expiry/price/stock-change rejection is not covered by an automated suite |
+| Preferences | 180-day Redis profile, API/UI, system injection, A/B benchmark 3/3 | no attribution record; one prompt family |
+| Ops brief | deterministic daily Redis snapshot, atomic latest/done, low-stock links, feedback | no external delivery; anomaly explanations limited |
+| Types/admin | generated-schema derivation for major read models; admin router 263 lines; ESLint real | Shipment/Refund/ListReply remain hand-written; further split optional |
 
-## Fixed in this pass
+## Remaining concrete work
 
-- `ai:rag:current` had a 24h TTL and would silently disappear; now persistent.
-- Cart done markers were user-agnostic; now store the owner id and reject other
-  users.
-- Preference values reject line breaks and are framed as data, not instructions.
-- Rollback runbook requires a non-empty target index and cache invalidation
-  (`ai:rag:q:*`, `ai:rag:sem:*`).
-
-## Remaining known risks
-
-1. Cart confirmation is now atomic and idempotent in the Cart service. The AI
-   `CompleteCartDraft` call after the Cart update is best-effort; if it fails, a
-   retry is safe because Cart returns the existing confirmed cart.
-2. The RAG lock has a 10-minute TTL without renewal. A crashed builder blocks
-   rebuilds until expiry. Followers now fall back to a valid alias if the
-   `ai:rag:current` pointer is missing, but a first build longer than the 60s
-   follower wait can still leave followers without an alias. A Job/lease renewal
-   remains the long-term fix.
-3. `RunOpsBriefScheduler` sets the date key before generating. A crash in that
-   window skips the day; the outbox/job design is stronger.
-4. Admin low-stock links point at `/admin/inventory?sku_id=...`; confirm that
-   route exists in the admin SPA before relying on the link.
-5. Phase 8's benchmark passed 3/3 repeated A/B runs.
-6. ADK streaming now normalizes cumulative chunks and merges tool-call fragments by Index; eval 15/15 and normal answers emit incremental deltas.
-
-## Verification at the time of this review
-
-- `make verify`
-- `ai-eval`: 15/15; tool-selection 3/3
-- `ai-rag-eval`: hit@5 5/5
-- `ai-pref-eval`: PASS
-- Phase 7 real-model draft SSE -> confirm 200
-- RAG alias rollback 64 docs and restore
-- CoreDNS original forward: `api.deepseek.com` resolves
-
-## Additional verification (follow-up)
-
-- Phase 8 benchmark rerun after the discriminating-baseline change: 3/3 PASS.
-- Strict revocation: warmed the 5s cache, disabled demo, checkout preview
-  returned 401 immediately; re-enable returned 200.
-- BatchGetStock deduplicates IDs and omits missing rows (MySQL test).
-
-## P2#12 seed cleanup
-
-The broad cleanup files are retained only as `.sql.disabled` for history. New
-`0014` migrations match exact ids/codes/names/prices/status and inventory
-`version = 1`; a fresh-DB SQL check removed all seed rows, while an adapted
-price/version row survived.
-
-## Unified integration entry verified
-
-`make test-integration` with local MySQL/NATS/Redis passed outbox/consumer/AI
-RAG/seckill/inventory/catalog/pricing, including the newly added P1 tests.
+1. RAG Job/elected-leader + crash/restart drill; remove the 3m follower window.
+2. HITL `FAILED`/Abort + admin state display; atomic state transition.
+3. Cart draft expiry/price/stock-change test suite and explicit UI recovery cases.
+4. Phase 8 cross-user/attribution eval; Phase 9 external delivery/anomaly links.
+5. Real GitHub CI run.

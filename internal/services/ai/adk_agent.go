@@ -25,8 +25,9 @@ func newADKStreamRunner(agent adk.Agent) *adkStreamRunner {
 
 func (r *adkStreamRunner) Stream(ctx context.Context, input []*schema.Message) (*schema.StreamReader[*schema.Message], error) {
 	// DeepSeek's streamed preamble can end a turn before tool_calls are
-	// dispatched. Run the ADK agent non-streaming for correct tool routing; the
-	// gRPC SSE layer still emits the final answer and tool events.
+	// dispatched. The tool-aware buffered model was evaluated and regressed
+	// tool routing, so ADK stays non-streaming for correctness. SSE still sends
+	// tool events and the final answer.
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: r.agent, EnableStreaming: false})
 	iter := runner.Run(ctx, input)
 	out, writer := schema.Pipe[*schema.Message](8)

@@ -266,7 +266,7 @@ func (s *Service) DeleteAddress(ctx context.Context, req *pb.DeleteAddressReques
 			return apperr.Internal("delete address", err)
 		}
 		if wasDefault == 1 {
-			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 1
+			if _, err := tx.ExecContext(ctx, `UPDATE user_addresses SET is_default = 1, version = version + 1
 				WHERE user_id = ? ORDER BY id LIMIT 1`, req.GetUserId()); err != nil {
 				return apperr.Internal("promote default address", err)
 			}

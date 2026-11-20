@@ -208,10 +208,11 @@ async function clearPrefs() {
   if (!token.value || prefsSaving.value) return
   prefsSaving.value = true
   try {
-    await fetch('/api/v1/ai/preferences', {
+    const response = await fetch('/api/v1/ai/preferences', {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token.value}` },
     })
+    if (!response.ok) return
     prefsForm.value = { categories: '', brands: '', minYuan: 0, maxYuan: 0, sizes: '' }
   } finally {
     prefsSaving.value = false

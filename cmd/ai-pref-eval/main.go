@@ -49,7 +49,8 @@ func main() {
 		os.Exit(1)
 	}
 	if okn && fn == "云舟 M3" {
-		fmt.Println("WARN: baseline also starts with 云舟 M3; benchmark not discriminating")
+		fmt.Println("FAIL: baseline also starts with 云舟 M3; benchmark is not discriminating")
+		os.Exit(1)
 	}
 	fmt.Println("PASS: preference changed the leading recommendation")
 }
@@ -143,6 +144,9 @@ func clearPrefs(base, token string) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("clear prefs http %d", resp.StatusCode)
+	}
 	return nil
 }
 

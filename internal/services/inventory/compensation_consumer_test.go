@@ -49,3 +49,9 @@ func TestCompensationHandlerRetriesAndSkipsInvalidItems(t *testing.T) {
 }
 
 var _ = consumer.Permanent
+
+func TestBatchGetStockRejectsEmptyList(t *testing.T) {
+	if _, err := (&Service{}).BatchGetStock(context.Background(), &pb.BatchGetStockRequest{}); err == nil {
+		t.Fatal("empty batch must be rejected")
+	}
+}

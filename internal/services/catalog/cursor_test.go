@@ -1,6 +1,11 @@
 package catalog
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	pb "gin-kratos-gorm/api/gen/mall/v1"
+)
 
 func TestProductCursorRoundTrip(t *testing.T) {
 	raw := encodeProductCursor("price_asc", 29900, 42)
@@ -13,5 +18,12 @@ func TestProductCursorRoundTrip(t *testing.T) {
 	}
 	if _, err := decodeProductCursor("not-a-cursor"); err == nil {
 		t.Fatal("invalid cursor accepted")
+	}
+}
+
+func TestListProductsRejectsPageOverLimit(t *testing.T) {
+	s := &Service{}
+	if _, err := s.ListProducts(context.Background(), &pb.ListProductsRequest{Page: 1001}); err == nil {
+		t.Fatal("page > 1000 must be rejected")
 	}
 }

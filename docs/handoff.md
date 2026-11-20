@@ -15,11 +15,14 @@ Repository:
 /Users/lWoHvYe/IdeaProjects/gin-kratos-gorm
 ```
 
-Current HEAD at handoff:
+Latest feature commit at handoff:
 
 ```text
 0201db7 feat: expose HITL state and abort in admin UI
 ```
+
+This handoff file itself is committed immediately after that feature commit. See
+`git log -1` for the exact HEAD.
 
 Local `main` is ahead of `origin/main`. History was rewritten once to remove an
 accidentally committed `ai-pref-eval` binary, so a force push is required when

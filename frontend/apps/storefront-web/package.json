@@ -8,7 +8,7 @@
     "build": "nuxt build",
     "typecheck": "nuxt typecheck",
     "test": "vitest run --passWithNoTests",
-    "lint": "echo 'lint placeholder; add eslint config'"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@mall/api": "workspace:*",

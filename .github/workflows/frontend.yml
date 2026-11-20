@@ -33,6 +33,8 @@ jobs:
         run: |
           pnpm generate:api
           git diff --exit-code -- packages/api/src/generated
+      - name: Lint
+        run: pnpm lint
       - name: Typecheck
         run: pnpm typecheck
       - name: Unit tests

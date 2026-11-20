@@ -127,6 +127,27 @@ ai:
   # provider=openai at a real embedding model (BGE/Qwen/OpenAI-compatible) for
   # semantic retrieval.
   ragEnabled: true
+  # The index is built by the dedicated `ai-rag-build` Job (the same image with
+  # args ["rag-build"]); AI Pods only load the published alias. The Job is a
+  # post-install/post-upgrade hook and also runs as a daily CronJob for drift
+  # repair. A fresh current version (age < maxAge) is reused, so hook retries
+  # and repeated upgrades are cheap.
+  ragBuild:
+    enabled: true
+    # Rebuild only when the published version is older than this. "0" always
+    # rebuilds; an invalid/empty value is rejected by the Job.
+    maxAge: 24h
+    # CronJob schedule for retries and drift repair; empty disables it. A
+    # failed hook build exits 0 (AI is optional) and this retries within 6h.
+    schedule: "0 */6 * * *"
+    activeDeadlineSeconds: 1800
+    backoffLimit: 6
+  # Optional Redis index base; empty means ai_kb. The pointer key is namespaced
+  # by this value (the default keeps ai:rag:current).
+  ragIndex: ""
+  # How often AI Pods re-read the published alias. Builds are picked up within
+  # this window; it does not trigger builds.
+  aliasRefresh: 1m
   embeddingProvider: hash
   embeddingBaseURL: https://api.openai.com/v1
   embeddingModel: text-embedding-3-small
@@ -141,6 +162,13 @@ ai:
   circuitCooldown: 60s
   pricePromptPer1K: 0
   priceCompletionPer1K: 0
+  # Optional ops-brief webhook. The secret is mandatory when the URL is set:
+  # delivery is refused rather than downgraded to an unsigned POST. Payloads
+  # carry X-Mall-Timestamp / X-Mall-Signature (HMAC-SHA256 over
+  # "<timestamp>.<body>") and X-Mall-Delivery for idempotency.
+  opsBriefWebhookURL: ""
+  opsBriefWebhookSecretName: ""
+  opsBriefWebhookSecretKey: webhook-secret
 
 services:
   gateway:

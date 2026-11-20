@@ -1,4 +1,5 @@
 {
+  "AIChatEvent.attribution_json": 6,
   "AIChatEvent.delta": 2,
   "AIChatEvent.draft_json": 5,
   "AIChatEvent.error": 4,
@@ -18,6 +19,9 @@
   "AIPreferences.preferred_categories": 1,
   "AIPreferences.sizes": 5,
   "AIPreferences.updated_at": 6,
+  "AbortCampaignDraftRequest.checkpoint_id": 2,
+  "AbortCampaignDraftRequest.reason": 3,
+  "AbortCampaignDraftRequest.user_id": 1,
   "Address.city": 6,
   "Address.detail": 8,
   "Address.district": 7,
@@ -535,6 +539,7 @@
   "VerifyPaymentReply.inventory_prepared": 2,
   "VerifyPaymentReply.order_prepared": 1,
   "VerifyPaymentReply.pricing_prepared": 3,
+  "rpc.AbortCampaignDraft": "AbortCampaignDraftRequest -> Empty",
   "rpc.AddItem": "AddItemRequest -> Cart",
   "rpc.AdminAdjustStock": "AdminAdjustStockRequest -> Stock",
   "rpc.AllocateSeckillStock": "AllocateSeckillStockRequest -> SeckillStock",

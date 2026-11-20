@@ -156,8 +156,10 @@ metadata:
     {{- include "mall.labels" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels:
-      app.kubernetes.io/name: ai
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [ai, ai-rag-build]
   policyTypes: [Egress]
   egress:
     - to:

@@ -209,10 +209,14 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 		return status.Error(codes.Unavailable, "assistant is temporarily unavailable")
 	}
 	turns := append(history, &schema.Message{Role: schema.User, Content: message})
+	var attribution []byte
 	if !req.GetAdmin() {
 		if prefs, err := s.loadPreferences(ctx, req.GetUserId()); err == nil {
 			if prompt := preferencePrompt(prefs); prompt != "" {
 				turns = append([]*schema.Message{{Role: schema.System, Content: prompt}}, turns...)
+				if applied, ok := preferenceAttributionOf(prefs); ok {
+					attribution = applied.JSON()
+				}
 				s.recordPreferenceUse(ctx, req.GetUserId(), sessionID, prefs)
 			}
 		}
@@ -295,6 +299,12 @@ func (s *Service) Chat(req *pb.AIChatRequest, stream pb.AIService_ChatServer) er
 	s.log.Info("ai chat", "user_id", req.GetUserId(), "session_id", sessionID, "admin", req.GetAdmin(),
 		"provider", s.cfg.Provider, "model", s.cfg.Model, "prompt_version", promptVersion,
 		"latency_ms", time.Since(start).Milliseconds(), "chars", answer.Len())
+	if len(attribution) > 0 {
+		// Attribution is sent with the completed answer so the storefront can
+		// show which explicit preferences were applied; it is omitted when the
+		// profile is empty or the user is an admin.
+		_ = stream.Send(&pb.AIChatEvent{Type: "attribution", AttributionJson: string(attribution)})
+	}
 	raw := draftSink.take()
 	if len(raw) == 0 && s.drafts != nil {
 		raw, _ = s.drafts.PopRecent(ctx, req.GetUserId())

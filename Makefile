@@ -200,7 +200,7 @@ test-integration:
 		$(GO) test ./internal/platform/consumer -run TestConsumerDeadLetters -count=1
 	@echo ">> AI RAG (Redis Search)"
 	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
-		$(GO) test ./internal/services/ai -run 'TestRAGRedis|TestRenewRAGLock|TestPreferencesAreUserScoped' -count=1
+		$(GO) test ./internal/services/ai -run 'TestRAGRedis|TestRenewRAGLock|TestPreferencesAreUserScoped|TestOpenRAGFollower|TestRunRAGFollower|TestRAGBuildDue|TestChatEmitsOwnerScopedPreferenceAttribution|TestHitl' -count=1
 	@echo ">> seckill admission Lua (Redis)"
 	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
 		$(GO) test ./internal/services/seckill -run TestReserveScript -count=1

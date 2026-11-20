@@ -29,6 +29,10 @@
         </p>
         <div v-for="(m, i) in messages" :key="i" :class="['ai-msg', m.role]">
           <span>{{ m.text }}</span>
+          <div v-if="m.attribution && attributionText(m.attribution)" class="ai-attribution">
+            <span>{{ attributionText(m.attribution) }}</span>
+            <button type="button" class="ai-link" @click="togglePrefs">调整偏好</button>
+          </div>
           <div v-if="m.draft" class="ai-draft">
             <strong>购物车草案</strong>
             <ul>
@@ -89,9 +93,19 @@ interface CartDraft {
   expires_at: number
 }
 
+interface PreferenceAttribution {
+  brands?: string[]
+  categories?: string[]
+  budget_min_cent?: number
+  budget_max_cent?: number
+  sizes?: string[]
+  source?: string
+}
+
 interface Message {
   role: 'user' | 'assistant'
   text: string
+  attribution?: PreferenceAttribution
   draft?: CartDraft
   draftSaving?: boolean
   draftConfirmed?: boolean
@@ -182,6 +196,22 @@ function split(value: string): string[] {
   return value.split(/[,，]/).map(v => v.trim()).filter(Boolean)
 }
 
+// attributionText renders only the server-provided, user-scoped fields. The
+// server omits empty profiles, so there is no placeholder when no preference
+// was applied.
+function attributionText(attribution: PreferenceAttribution): string {
+  const parts: string[] = []
+  if (attribution.brands?.length) parts.push(`品牌 ${attribution.brands.join('、')}`)
+  if (attribution.categories?.length) parts.push(`品类 ${attribution.categories.join('、')}`)
+  if (attribution.budget_min_cent || attribution.budget_max_cent) {
+    const min = attribution.budget_min_cent ? (attribution.budget_min_cent / 100).toFixed(0) : '不限'
+    const max = attribution.budget_max_cent ? (attribution.budget_max_cent / 100).toFixed(0) : '不限'
+    parts.push(`预算 ¥${min}–${max}`)
+  }
+  if (attribution.sizes?.length) parts.push(`尺码 ${attribution.sizes.join('、')}`)
+  return parts.length ? `本次回答参考了你的偏好：${parts.join(' · ')}` : ''
+}
+
 async function savePrefs() {
   if (!token.value || prefsSaving.value) return
   prefsSaving.value = true
@@ -244,6 +274,13 @@ function applyEvent(index: number, ev: SSEEvent) {
       message.draft = JSON.parse(ev.draft_json) as CartDraft
     } catch {
       // Ignore malformed drafts; the assistant text remains the fallback.
+    }
+  }
+  if (ev.type === 'attribution' && ev.attribution_json) {
+    try {
+      message.attribution = JSON.parse(ev.attribution_json) as PreferenceAttribution
+    } catch {
+      // Attribution is informational; never break the answer on a bad frame.
     }
   }
   if (ev.type === 'error') message.text = ev.error || '助手暂时不可用，请稍后再试。'
@@ -372,6 +409,12 @@ async function send() {
   border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 9px;
   background: #fff; cursor: pointer;
 }
+.ai-attribution {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 6px; padding: 5px 7px; border-radius: 6px;
+  background: #f1f5f9; color: #475569; font-size: 12px;
+}
+.ai-attribution button { border: 0; background: transparent; padding: 0; font-size: 12px; }
 .ai-draft {
   margin-top: 8px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px;
   background: #f8fbff; font-size: 13px;

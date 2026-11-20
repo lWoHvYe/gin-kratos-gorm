@@ -4,6 +4,7 @@ export interface SSEEvent {
   tool?: string
   error?: string
   draft_json?: string
+  attribution_json?: string
 }
 
 // parseSSEChunk consumes one buffer of an SSE byte stream. It returns complete

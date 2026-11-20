@@ -1,0 +1,142 @@
+{{- define "mall.aiRagBuildPodSpec" -}}
+restartPolicy: OnFailure
+serviceAccountName: ai-sa
+automountServiceAccountToken: false
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+containers:
+  - name: rag-build
+    image: "{{ .Values.image.registry }}/ai:{{ .Values.image.tag }}"
+    imagePullPolicy: {{ .Values.image.pullPolicy }}
+    # Same image as the AI service, one-shot build entrypoint.
+    args: ["rag-build"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { cpu: 500m, memory: 512Mi }
+    env:
+      - name: APP_ENV
+        value: {{ .Values.appEnv | quote }}
+      - name: LOG_LEVEL
+        value: {{ .Values.logLevel | quote }}
+      # config.Load validates these even for the one-shot job.
+      - name: GRPC_ADDR
+        value: ":9011"
+      - name: HTTP_ADDR
+        value: ":9111"
+      # The job only builds embeddings; it must not require the chat provider.
+      - name: AI_ENABLED
+        value: "false"
+      - name: JWT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.jwt.secretName }}
+            key: {{ .Values.jwt.secretKey }}
+      {{- if not .Values.redis.mode }}
+      - name: REDIS_ADDR
+        value: {{ .Values.redis.addr | quote }}
+      {{- end }}
+      {{- if .Values.redis.passwordSecret }}
+      - name: REDIS_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.redis.passwordSecret }}
+            key: {{ .Values.redis.passwordSecretKey | default "password" }}
+      {{- else }}
+      - name: REDIS_PASSWORD
+        value: {{ .Values.redis.password | quote }}
+      {{- end }}
+      {{- with .Values.redis.mode }}
+      - name: REDIS_MODE
+        value: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.redis.addrs }}
+      - name: REDIS_ADDRS
+        value: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.redis.masterName }}
+      - name: REDIS_MASTER_NAME
+        value: {{ . | quote }}
+      {{- end }}
+      - name: CATALOG_ADDR
+        value: "catalog:9002"
+      - name: EMBEDDING_PROVIDER
+        value: {{ .Values.ai.embeddingProvider | quote }}
+      - name: EMBEDDING_BASE_URL
+        value: {{ .Values.ai.embeddingBaseURL | quote }}
+      - name: EMBEDDING_MODEL
+        value: {{ .Values.ai.embeddingModel | quote }}
+      - name: EMBEDDING_DIM
+        value: {{ .Values.ai.embeddingDim | quote }}
+      - name: RAG_INDEX
+        value: {{ .Values.ai.ragIndex | quote }}
+      - name: RAG_BUILD_MAX_AGE
+        value: {{ .Values.ai.ragBuild.maxAge | quote }}
+      - name: RAG_BUILD_FORCE
+        value: "false"
+      {{- if .Values.ai.embeddingAPIKeySecret }}
+      - name: EMBEDDING_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.ai.embeddingAPIKeySecret }}
+            key: {{ .Values.ai.embeddingAPIKeySecretKey | default "embedding-api-key" }}
+      {{- end }}
+{{- end }}
+{{- if and .Values.ai.enabled .Values.ai.ragEnabled .Values.ai.ragBuild.enabled }}
+# The build Job owns the embedding work; AI Pods never take the build lease.
+# It is a hook so an install/upgrade publishes an index before rollout health
+# checks depend on it, and it is cheap when the current version is fresh.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ai-rag-build
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mall.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.ai.ragBuild.backoffLimit | default 6 }}
+  activeDeadlineSeconds: {{ .Values.ai.ragBuild.activeDeadlineSeconds | default 1800 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-rag-build
+        {{- include "mall.labels" . | nindent 8 }}
+    spec:
+{{ include "mall.aiRagBuildPodSpec" . | indent 6 }}
+{{- if .Values.ai.ragBuild.schedule }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ai-rag-build-scheduled
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mall.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.ai.ragBuild.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.ai.ragBuild.backoffLimit | default 6 }}
+      activeDeadlineSeconds: {{ .Values.ai.ragBuild.activeDeadlineSeconds | default 1800 }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: ai-rag-build
+            {{- include "mall.labels" . | nindent 12 }}
+        spec:
+{{ include "mall.aiRagBuildPodSpec" . | indent 10 }}
+{{- end }}
+{{- end }}

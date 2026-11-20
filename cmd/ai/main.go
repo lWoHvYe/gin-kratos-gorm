@@ -2,15 +2,17 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/config"
 	"gin-kratos-gorm/internal/platform/grpcx"
 	"gin-kratos-gorm/internal/platform/log"
-	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/redis"
 	"gin-kratos-gorm/internal/platform/runtime"
@@ -26,6 +28,84 @@ func main() {
 		panic(err)
 	}
 	logger := log.New(cfg.Service, cfg.Env)
+	// The same image runs the one-shot RAG build Job with `args: ["rag-build"]`.
+	// AI Pods never build the index; they only follow the published alias.
+	if len(os.Args) > 1 && os.Args[1] == "rag-build" {
+		runRAGBuild(cfg, logger)
+		return
+	}
+	runService(cfg, logger)
+}
+
+func runRAGBuild(cfg *config.Config, logger *slog.Logger) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cache, err := redis.Open(redis.Config{
+		Mode: cfg.RedisMode, Addrs: cfg.RedisAddrs, Password: cfg.RedisPassword, MasterName: cfg.RedisMasterName,
+	})
+	if err != nil {
+		logger.Error("connect redis", "error", err)
+		os.Exit(1)
+	}
+	defer cache.Close()
+
+	catalogAddr := strings.TrimSpace(os.Getenv("CATALOG_ADDR"))
+	if catalogAddr == "" {
+		catalogAddr = "catalog:9002"
+	}
+	catalogConn, err := grpcx.Dial(ctx, catalogAddr)
+	if err != nil {
+		logger.Error("dial catalog", "error", err)
+		os.Exit(1)
+	}
+	defer catalogConn.Close()
+
+	maxAge := 24 * time.Hour
+	if raw := strings.TrimSpace(os.Getenv("RAG_BUILD_MAX_AGE")); raw != "" {
+		parsed, parseErr := time.ParseDuration(raw)
+		if parseErr != nil || parsed < 0 {
+			logger.Error("invalid RAG_BUILD_MAX_AGE (use 0 to always rebuild)", "value", raw, "error", parseErr)
+			os.Exit(1)
+		}
+		maxAge = parsed
+	}
+	force := strings.EqualFold(strings.TrimSpace(os.Getenv("RAG_BUILD_FORCE")), "true")
+	ragIndex := strings.TrimSpace(os.Getenv("RAG_INDEX"))
+	due, current, err := ai.RAGBuildDue(ctx, cache, ragIndex, maxAge, force)
+	if err != nil {
+		logger.Error("read rag current", "error", err)
+		os.Exit(1)
+	}
+	if !due {
+		logger.Info("rag build skipped: current index is fresh",
+			"index", current.Index, "prefix", current.Prefix, "max_age", maxAge.String())
+		return
+	}
+
+	buildCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
+	built, err := ai.OpenRAG(buildCtx, ai.RAGConfig{
+		Index:    ragIndex,
+		Provider: cfg.EmbeddingProvider,
+		BaseURL:  cfg.EmbeddingBaseURL,
+		APIKey:   cfg.EmbeddingAPIKey,
+		Model:    cfg.EmbeddingModel,
+		Dim:      cfg.EmbeddingDim,
+	}, pb.NewCatalogServiceClient(catalogConn), cache, logger)
+	if err != nil {
+		// AI is optional: a failed build must not block the mall release. The
+		// previous `_current` alias keeps serving, the scheduled Job retries,
+		// and the error is visible in this Job's log. Redis/config errors above
+		// still fail fast because they indicate a broken deployment.
+		logger.Error("rag build failed; leaving the previous alias serving", "error", err)
+		return
+	}
+	index, prefix := built.ServingVersion()
+	logger.Info("rag build complete", "index", index, "prefix", prefix, "max_age", maxAge.String())
+}
+
+func runService(cfg *config.Config, logger *slog.Logger) {
 	shutdownTracing, err := tracing.Init(context.Background(), cfg.Service)
 	if err != nil {
 		logger.Error("init tracing", "error", err)
@@ -82,34 +162,29 @@ func main() {
 	defer pricingConn.Close()
 
 	rag := ai.NewLazyRAG()
-	if cfg.RAGEnabled {
-		// The real build runs in a worker below; startup is not blocked by DNS or
-		// an unreachable embedding provider.
-	}
 	workers := runtime.NewWorkers()
 	defer workers.Stop()
 	if cfg.RAGEnabled {
-		workers.Go(func(ctx context.Context) {
-			for {
-				built, err := ai.OpenRAG(ctx, ai.RAGConfig{
-					Provider: cfg.EmbeddingProvider,
-					BaseURL:  cfg.EmbeddingBaseURL,
-					APIKey:   cfg.EmbeddingAPIKey,
-					Model:    cfg.EmbeddingModel,
-					Dim:      cfg.EmbeddingDim,
-				}, catalog, cache, logger)
-				if err == nil {
-					rag.Set(built)
-					return
-				}
-				metrics.AIRAGRebuildFailures.Inc()
-				logger.Warn("rag build failed; retrying", "error", err)
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(2 * time.Minute):
-				}
+		refresh := time.Minute
+		if raw := strings.TrimSpace(os.Getenv("RAG_ALIAS_REFRESH")); raw != "" {
+			parsed, parseErr := time.ParseDuration(raw)
+			if parseErr != nil || parsed <= 0 {
+				logger.Warn("invalid RAG_ALIAS_REFRESH; using default", "value", raw, "error", parseErr)
+			} else {
+				refresh = parsed
 			}
+		}
+		// Load only the version published by the build Job. The embedding
+		// provider being unreachable no longer turns a Pod into a builder.
+		workers.Go(func(ctx context.Context) {
+			ai.RunRAGFollower(ctx, ai.RAGConfig{
+				Index:    strings.TrimSpace(os.Getenv("RAG_INDEX")),
+				Provider: cfg.EmbeddingProvider,
+				BaseURL:  cfg.EmbeddingBaseURL,
+				APIKey:   cfg.EmbeddingAPIKey,
+				Model:    cfg.EmbeddingModel,
+				Dim:      cfg.EmbeddingDim,
+			}, cache, logger, refresh, rag.Set)
 		})
 	}
 	if cfg.RAGEnabled {
@@ -169,7 +244,8 @@ func main() {
 
 	if cfg.AIEnabled {
 		workers.Go(func(ctx context.Context) {
-			ai.RunOpsBriefScheduler(ctx, cache, svc, logger, time.Hour, os.Getenv("OPS_BRIEF_WEBHOOK_URL"))
+			ai.RunOpsBriefScheduler(ctx, cache, svc, logger, time.Hour,
+				os.Getenv("OPS_BRIEF_WEBHOOK_URL"), os.Getenv("OPS_BRIEF_WEBHOOK_SECRET"))
 		})
 	}
 	gs := grpcx.NewServer(cfg, logger)

@@ -216,35 +216,75 @@ func (s *Service) CheckCampaignDraft(ctx context.Context, req *pb.ResumeCampaign
 	if err := s.validateDraftCheckpoint(ctx, uid, checkpointID, req.GetCampaignCode(), req.GetRuleCode(), requestDraftHash(req.GetCampaign(), req.GetRule())); err != nil {
 		return nil, err
 	}
-	if err := s.markDraftState(ctx, checkpointID, "CONFIRMING"); err != nil {
+	if err := s.transitionDraftState(ctx, checkpointID, "INTERRUPTED,FAILED", "CONFIRMING", ""); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil
 }
 
-// markDraftState advances the audit state without clearing the binding. A
-// SAVED checkpoint is terminal and is never moved backwards.
-func (s *Service) markDraftState(ctx context.Context, checkpointID, state string) error {
-	raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+// hitlStateTransitionCAS moves the audit state in one Redis script. A plain
+// read/modify/write lets two concurrent confirms lose an update, resurrect a
+// SAVED checkpoint, or overwrite a FAILED reason; the script compares the
+// current state and writes atomically. Return codes:
+//
+//	1  transitioned (or already in the target state)
+//	0  already SAVED; terminal no-op
+//	-1 checkpoint meta is gone
+//	-2 meta is corrupt
+//	-3 current state is not an allowed source
+var hitlStateTransitionCAS = redis.NewScript(`
+local raw = redis.call('get', KEYS[1])
+if not raw then return -1 end
+local decoded, meta = pcall(cjson.decode, raw)
+if not decoded or type(meta) ~= 'table' then return -2 end
+local from = {}
+for state in string.gmatch(ARGV[1], '[^,]+') do from[state] = true end
+local to = ARGV[2]
+local current = meta['state'] or ''
+if current == 'SAVED' then return 0 end
+if current == to then return 1 end
+if not from[current] then return -3 end
+meta['state'] = to
+if to == 'FAILED' then
+  meta['failure_reason'] = ARGV[3]
+else
+  meta['failure_reason'] = ''
+end
+redis.call('set', KEYS[1], cjson.encode(meta), 'keepttl')
+return 1
+`)
+
+func (s *Service) transitionDraftState(ctx context.Context, checkpointID, from, to, reason string) error {
+	result, err := hitlStateTransitionCAS.Run(ctx, s.cache,
+		[]string{"ai:hitl:meta:" + checkpointID}, from, to, reason).Int64()
 	if err != nil {
-		return apperr.Internal("read hitl state", err)
+		return apperr.Internal("transition hitl state", err)
+	}
+	switch result {
+	case 0, 1:
+		return nil
+	case -1:
+		return apperr.NotFound("reviewed draft binding not found or expired")
+	case -2:
+		return apperr.Conflict("reviewed draft binding is invalid; restart the draft")
+	default:
+		return apperr.Conflict("checkpoint is not awaiting confirmation")
+	}
+}
+
+func (s *Service) readDraftState(ctx context.Context, checkpointID string) (map[string]string, error) {
+	raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return nil, apperr.NotFound("reviewed draft binding not found or expired")
+	}
+	if err != nil {
+		return nil, apperr.Internal("read hitl state", err)
 	}
 	var meta map[string]string
 	if err := json.Unmarshal(raw, &meta); err != nil {
-		return apperr.Internal("decode hitl state", err)
+		return nil, apperr.Conflict("reviewed draft binding is invalid; restart the draft")
 	}
-	if meta["state"] == "SAVED" {
-		return nil
-	}
-	meta["state"] = state
-	encoded, err := json.Marshal(meta)
-	if err != nil {
-		return apperr.Internal("encode hitl state", err)
-	}
-	if err := s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, encoded, hitlTTL).Err(); err != nil {
-		return apperr.Internal("persist hitl state", err)
-	}
-	return nil
+	return meta, nil
 }
 
 // ResumeCampaignDraft closes a checkpoint after the BFF saved the draft. It
@@ -263,69 +303,58 @@ func (s *Service) ResumeCampaignDraft(ctx context.Context, req *pb.ResumeCampaig
 	}
 	// A repeated confirm after SAVED is a no-op; the BFF returns the existing
 	// campaign/rule via its code lookup.
-	if raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes(); err == nil {
-		var meta map[string]string
-		if err := json.Unmarshal(raw, &meta); err != nil {
-			return nil, apperr.Internal("decode hitl draft binding", err)
-		}
-		if meta["state"] == "SAVED" {
-			if err := s.cache.Del(ctx, "ai:hitl:cp:"+checkpointID).Err(); err != nil {
-				return nil, apperr.Internal("close hitl checkpoint", err)
-			}
-			return &pb.Empty{}, nil
-		}
-	}
-	rawState, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+	meta, err := s.readDraftState(ctx, checkpointID)
 	if err != nil {
-		return nil, apperr.Internal("read hitl state before resume", err)
+		return nil, err
 	}
-	var stateMeta map[string]string
-	if err := json.Unmarshal(rawState, &stateMeta); err != nil || stateMeta["state"] != "CONFIRMING" {
-		return nil, apperr.Conflict("checkpoint is not awaiting confirmation")
+	if meta["state"] == "SAVED" {
+		return &pb.Empty{}, s.closeDraftCheckpoint(ctx, checkpointID)
+	}
+	// CAS guard: FAILED must go through Check (FAILED -> CONFIRMING) before a
+	// retry can resume. Duplicate concurrent confirms that both observe
+	// CONFIRMING are allowed and converge on SAVED.
+	if err := s.transitionDraftState(ctx, checkpointID, "CONFIRMING", "CONFIRMING", ""); err != nil {
+		return nil, err
 	}
 	store := &redisCheckpointStore{cache: s.cache}
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent: &draftReviewAgent{}, CheckPointStore: store,
 	})
 	iter, err := runner.Resume(ctx, checkpointID)
+	if err == nil {
+		for {
+			event, ok := iter.Next()
+			if !ok {
+				break
+			}
+			if event.Err != nil {
+				err = event.Err
+				break
+			}
+		}
+	}
 	if err != nil {
+		// A concurrent confirm may have closed the checkpoint first; if the
+		// state is already SAVED the business write is committed, so report
+		// success instead of a misleading resume failure.
+		if current, readErr := s.readDraftState(ctx, checkpointID); readErr == nil && current["state"] == "SAVED" {
+			return &pb.Empty{}, s.closeDraftCheckpoint(ctx, checkpointID)
+		}
 		return nil, apperr.Internal("resume campaign draft", err)
 	}
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if event.Err != nil {
-			return nil, apperr.Internal("resume campaign draft", event.Err)
-		}
+	// CAS CONFIRMING -> SAVED. A concurrent request that already saved returns
+	// the terminal no-op (0); either way the checkpoint is then closed.
+	if err := s.transitionDraftState(ctx, checkpointID, "CONFIRMING", "SAVED", ""); err != nil {
+		return nil, err
 	}
-	raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
-	if err != nil {
-		return nil, apperr.Internal("read hitl draft binding before close", err)
-	}
-	var meta map[string]string
-	if err := json.Unmarshal(raw, &meta); err != nil {
-		return nil, apperr.Internal("decode hitl draft binding", err)
-	}
-	if meta["state"] == "SAVED" {
-		if err := s.cache.Del(ctx, "ai:hitl:cp:"+checkpointID).Err(); err != nil {
-			return nil, apperr.Internal("close hitl checkpoint", err)
-		}
-		return &pb.Empty{}, nil
-	}
-	meta["state"] = "SAVED"
-	encoded, err := json.Marshal(meta)
-	if err != nil {
-		return nil, apperr.Internal("encode hitl draft binding", err)
-	}
-	if err := s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, encoded, hitlTTL).Err(); err != nil {
-		return nil, apperr.Internal("mark hitl draft saved", err)
-	}
+	return &pb.Empty{}, s.closeDraftCheckpoint(ctx, checkpointID)
+}
+
+func (s *Service) closeDraftCheckpoint(ctx context.Context, checkpointID string) error {
 	if err := s.cache.Del(ctx, "ai:hitl:cp:"+checkpointID).Err(); err != nil {
-		return nil, apperr.Internal("close hitl checkpoint", err)
+		return apperr.Internal("close hitl checkpoint", err)
 	}
-	return &pb.Empty{}, nil
+	return nil
 }
 
 // AbortCampaignDraft records a failed confirmation without deleting the
@@ -348,22 +377,10 @@ func (s *Service) AbortCampaignDraft(ctx context.Context, req *pb.AbortCampaignD
 	if owner != uid {
 		return nil, apperr.Forbidden("checkpoint belongs to another admin")
 	}
-	raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
-	if err != nil {
-		return nil, apperr.Internal("read hitl state", err)
-	}
-	var meta map[string]string
-	if err := json.Unmarshal(raw, &meta); err != nil {
-		return nil, apperr.Internal("decode hitl state", err)
-	}
-	if meta["state"] == "SAVED" {
-		return &pb.Empty{}, nil
-	}
-	meta["state"] = "FAILED"
-	meta["failure_reason"] = strings.TrimSpace(req.GetReason())
-	encoded, _ := json.Marshal(meta)
-	if err := s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, encoded, hitlTTL).Err(); err != nil {
-		return nil, apperr.Internal("persist hitl failure", err)
+	// CAS to FAILED keeps the reason atomic with the state change and refuses
+	// to regress a checkpoint that a concurrent confirm already saved.
+	if err := s.transitionDraftState(ctx, checkpointID, "INTERRUPTED,CONFIRMING", "FAILED", strings.TrimSpace(req.GetReason())); err != nil {
+		return nil, err
 	}
 	return &pb.Empty{}, nil
 }

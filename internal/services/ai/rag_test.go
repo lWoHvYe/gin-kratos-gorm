@@ -97,8 +97,19 @@ func TestRAGRedisIndexAndSearch(t *testing.T) {
 		t.Skipf("Redis Search unavailable: %v", err)
 	}
 	defer func() {
-		_ = client.Do(context.Background(), "FT.ALIASDEL", index+"_current").Err()
-		_ = client.Do(context.Background(), "FT.DROPINDEX", rag.writeIndex(), "DD").Err()
+		bg := context.Background()
+		// The pointer and dual-write registry must be cleaned too; a leftover
+		// pointer used to make production followers load a dropped test index.
+		_ = client.Del(bg, ragCurrentKey(index)).Err()
+		values, _ := client.SMembers(bg, "ai:rag:versions").Result()
+		for _, raw := range values {
+			var version ragVersion
+			if json.Unmarshal([]byte(raw), &version) == nil && version.Prefix == rag.prefix {
+				_ = client.SRem(bg, "ai:rag:versions", raw).Err()
+			}
+		}
+		_ = client.Do(bg, "FT.ALIASDEL", index+"_current").Err()
+		_ = client.Do(bg, "FT.DROPINDEX", rag.writeIndex(), "DD").Err()
 	}()
 
 	docs, err := rag.Search(ctx, "键盘", 3)

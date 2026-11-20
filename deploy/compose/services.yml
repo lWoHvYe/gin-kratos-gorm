@@ -399,6 +399,8 @@ services:
       CATALOG_ADDR: catalog:9002
       PRICING_ADDR: pricing:9005
       AI_RAG_ENABLED: "${AI_RAG_ENABLED:-true}"
+      RAG_INDEX: "${RAG_INDEX:-}"
+      RAG_ALIAS_REFRESH: "${RAG_ALIAS_REFRESH:-1m}"
       EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-hash}"
       EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-https://api.openai.com/v1}"
       EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-3-small}"
@@ -408,9 +410,42 @@ services:
       AI_GLOBAL_DAILY_TOKEN_BUDGET: "${AI_GLOBAL_DAILY_TOKEN_BUDGET:-0}"
       AI_CIRCUIT_FAILURES: "${AI_CIRCUIT_FAILURES:-5}"
       AI_CIRCUIT_COOLDOWN: "${AI_CIRCUIT_COOLDOWN:-60s}"
+      OPS_BRIEF_WEBHOOK_URL: "${OPS_BRIEF_WEBHOOK_URL:-}"
+      OPS_BRIEF_WEBHOOK_SECRET: "${OPS_BRIEF_WEBHOOK_SECRET:-}"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9111/healthz"]
+    depends_on:
+      catalog:
+        condition: service_healthy
+
+  # One-shot RAG build. AI Pods only load the published alias, so the catalog
+  # must be embedded by this job (and by the scheduled Job in k8s). Run it
+  # again with `docker compose ... run --rm ai-rag-build` after catalog changes
+  # if you do not want to wait for the 15m reconciliation.
+  ai-rag-build:
+    <<: *service-base
+    build:
+      <<: *build
+      args:
+        SERVICE: ai
+    image: mall/ai:${IMAGE_TAG:-dev}
+    command: ["rag-build"]
+    restart: "no"
+    environment:
+      <<: *service-env
+      GRPC_ADDR: ":9011"
+      HTTP_ADDR: ":9111"
+      AI_ENABLED: "false"
+      CATALOG_ADDR: catalog:9002
+      RAG_INDEX: "${RAG_INDEX:-}"
+      RAG_BUILD_MAX_AGE: "${RAG_BUILD_MAX_AGE:-24h}"
+      RAG_BUILD_FORCE: "${RAG_BUILD_FORCE:-false}"
+      EMBEDDING_PROVIDER: "${EMBEDDING_PROVIDER:-hash}"
+      EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-https://api.openai.com/v1}"
+      EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-3-small}"
+      EMBEDDING_DIM: "${EMBEDDING_DIM:-256}"
+      EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-}"
     depends_on:
       catalog:
         condition: service_healthy

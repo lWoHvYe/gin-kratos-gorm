@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
@@ -63,8 +64,28 @@ type RAGConfig struct {
 	Dim      int
 }
 
-// OpenRAG builds the embedding provider, indexes the current catalog and the
-// curated policy entries into Redis Search, and returns the searcher.
+const defaultRAGIndex = "ai_kb"
+
+// ragCurrentKey is namespaced by index base so tests and secondary indexes do
+// not overwrite the production pointer. The default base keeps the original
+// key name that existing deployments and runbooks refer to.
+func ragCurrentKey(base string) string {
+	if base == "" || base == defaultRAGIndex {
+		return "ai:rag:current"
+	}
+	return base + ":current"
+}
+
+func ragIndexBase(cfg RAGConfig) string {
+	if index := strings.TrimSpace(cfg.Index); index != "" {
+		return index
+	}
+	return defaultRAGIndex
+}
+
+// OpenRAG builds a new versioned index and publishes it. Only the dedicated
+// build Job calls this; AI pods call OpenRAGFollower/RunRAGFollower so a slow
+// first build can never turn a follower Pod into a second builder.
 func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client redis.UniversalClient, logger *slog.Logger) (*redisRAG, error) {
 	if client == nil {
 		return nil, fmt.Errorf("redis is required for rag")
@@ -73,13 +94,11 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	if err != nil {
 		return nil, err
 	}
-	index := strings.TrimSpace(cfg.Index)
-	if index == "" {
-		index = "ai_kb"
-	}
+	index := ragIndexBase(cfg)
 	r := &redisRAG{client: client, embedder: emb, base: index, log: logger}
-	// Only one replica builds a new version. Others load the current alias;
-	// this avoids every Pod embedding the catalog on startup.
+	// The build Job takes a short lease. A retried/concurrent Job waits for the
+	// live builder (or its published version) instead of embedding the catalog
+	// twice; AI Pods never reach this path.
 	lockOwner := id.Event()
 	lockKey := index + ":build:lock"
 	locked, err := client.SetNX(ctx, lockKey, lockOwner, ragLockTTL).Result()
@@ -130,7 +149,7 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	metrics.AIRAGBuildSeconds.Set(time.Since(buildStart).Seconds())
 	// No TTL: this pointer outlives any single build and must remain readable by
 	// non-leader replicas across restarts.
-	if err := client.Set(ctx, "ai:rag:current", mustJSON(ragVersion{Index: r.index, Prefix: r.prefix, CreatedAt: time.Now().Unix()}), 0).Err(); err != nil {
+	if err := client.Set(ctx, ragCurrentKey(index), mustJSON(ragVersion{Index: r.index, Prefix: r.prefix, CreatedAt: time.Now().Unix()}), 0).Err(); err != nil {
 		return nil, fmt.Errorf("publish rag current: %w", err)
 	}
 	// Catch changes that landed while the snapshot was being embedded.
@@ -145,10 +164,124 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	return r, nil
 }
 
+// OpenRAGFollower loads the version currently published by the build Job. It
+// never embeds the catalog or takes the build lease, so an unreachable
+// embedding provider cannot make an AI Pod a builder.
+func OpenRAGFollower(ctx context.Context, cfg RAGConfig, client redis.UniversalClient, logger *slog.Logger) (*redisRAG, error) {
+	if client == nil {
+		return nil, fmt.Errorf("redis is required for rag")
+	}
+	emb, err := newEmbedder(cfg)
+	if err != nil {
+		return nil, err
+	}
+	r := &redisRAG{client: client, embedder: emb, base: ragIndexBase(cfg), log: logger}
+	if err := r.loadCurrent(ctx); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// loadCurrent pins the searcher to the published alias. A missing pointer is
+// only fatal when the alias is also absent: alias-only is the documented
+// fallback while an older deployment is still serving.
+func (r *redisRAG) loadCurrent(ctx context.Context) error {
+	current, ok := readCurrentVersion(ctx, r.client, r.base)
+	if !ok {
+		return fmt.Errorf("rag index is not ready: no published version")
+	}
+	r.index, r.prefix = current.Index, current.Prefix
+	return nil
+}
+
+func readCurrentVersion(ctx context.Context, client redis.UniversalClient, base string) (ragVersion, bool) {
+	if raw, err := client.Get(ctx, ragCurrentKey(base)).Bytes(); err == nil {
+		var current ragVersion
+		if json.Unmarshal(raw, &current) == nil && current.Index != "" && current.Prefix != "" {
+			return current, true
+		}
+	}
+	return loadAliasVersion(ctx, client, base+"_current")
+}
+
+// RunRAGFollower keeps the process pinned to the published alias. It retries
+// until the build Job publishes its first version and swaps to a later pointer
+// without rebuilding. apply is called only when the version changes.
+func RunRAGFollower(ctx context.Context, cfg RAGConfig, client redis.UniversalClient, logger *slog.Logger, interval time.Duration, apply func(RAGIndex)) {
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	if apply == nil {
+		return
+	}
+	emb, err := newEmbedder(cfg)
+	if err != nil {
+		logger.Error("ai rag follower disabled", "error", err)
+		return
+	}
+	base := ragIndexBase(cfg)
+	prefix := ""
+	waiting := false
+	for {
+		if current, ok := readCurrentVersion(ctx, client, base); ok {
+			if current.Prefix != prefix {
+				apply(&redisRAG{
+					client: client, embedder: emb, base: base,
+					index: current.Index, prefix: current.Prefix, log: logger,
+				})
+				prefix = current.Prefix
+				waiting = false
+				logger.Info("ai rag follower loaded current version", "index", current.Index, "prefix", current.Prefix)
+			}
+		} else if !waiting {
+			waiting = true
+			logger.Warn("ai rag follower waiting for the build job to publish a version")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+		}
+	}
+}
+
+// RAGBuildDue reports whether the build Job should rebuild. Fresh versions are
+// reused so Helm-hook retries and the scheduled Job do not embed the catalog
+// repeatedly; force overrides the freshness check.
+func RAGBuildDue(ctx context.Context, client redis.UniversalClient, index string, maxAge time.Duration, force bool) (bool, ragVersion, error) {
+	if force {
+		return true, ragVersion{}, nil
+	}
+	raw, err := client.Get(ctx, ragCurrentKey(ragIndexBase(RAGConfig{Index: index}))).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return true, ragVersion{}, nil
+	}
+	if err != nil {
+		return false, ragVersion{}, err
+	}
+	var current ragVersion
+	if json.Unmarshal(raw, &current) != nil || current.Index == "" || current.Prefix == "" {
+		return true, ragVersion{}, nil
+	}
+	// A fresh pointer whose index was dropped (or points at a test index) must
+	// rebuild instead of skipping forever. This self-heals pointer drift.
+	if err := client.Do(ctx, "FT.INFO", current.Index).Err(); err != nil {
+		return true, current, nil
+	}
+	return ragVersionStale(current, time.Now(), maxAge), current, nil
+}
+
+func ragVersionStale(current ragVersion, now time.Time, maxAge time.Duration) bool {
+	if maxAge <= 0 || current.CreatedAt <= 0 {
+		return true
+	}
+	return now.Sub(time.Unix(current.CreatedAt, 0)) >= maxAge
+}
+
 func waitForCurrent(ctx context.Context, client redis.UniversalClient, base string, timeout time.Duration) (ragVersion, bool) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if raw, err := client.Get(ctx, "ai:rag:current").Bytes(); err == nil {
+		if raw, err := client.Get(ctx, ragCurrentKey(base)).Bytes(); err == nil {
 			var current ragVersion
 			if json.Unmarshal(raw, &current) == nil && current.Prefix != "" {
 				return current, true
@@ -347,6 +480,10 @@ func (r *redisRAG) pruneVersions(ctx context.Context) {
 // writeIndex returns the concrete index currently receiving writes; used by
 // tests/ops that need to drop a versioned index rather than the alias.
 func (r *redisRAG) writeIndex() string { return strings.TrimSuffix(r.prefix, ":") }
+
+// ServingVersion exposes the alias and version prefix this searcher serves; the
+// build Job logs it after a successful publish.
+func (r *redisRAG) ServingVersion() (string, string) { return r.index, r.prefix }
 
 func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDoc, error) {
 	if strings.TrimSpace(query) == "" {

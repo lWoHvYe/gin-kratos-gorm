@@ -1035,11 +1035,15 @@ message AIFeedbackRequest {
 }
 
 message AIChatEvent {
-  // type is one of: delta, tool, done, error.
+  // type is one of: delta, tool, done, error, attribution.
   string type = 1;
   string delta = 2;
   string tool = 3;
   string error = 4;
   // draft_json is set when type=draft (currently a cart draft).
   string draft_json = 5;
+  // attribution_json is set when type=attribution. It lists the explicit,
+  // user-scoped preference fields that shaped this answer; it never contains
+  // another user's data or raw prompt text.
+  string attribution_json = 6;
 }

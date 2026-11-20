@@ -176,6 +176,10 @@ spec:
               value: "catalog:9002"
             - name: AI_RAG_ENABLED
               value: {{ $.Values.ai.ragEnabled | quote }}
+            - name: RAG_INDEX
+              value: {{ $.Values.ai.ragIndex | quote }}
+            - name: RAG_ALIAS_REFRESH
+              value: {{ $.Values.ai.aliasRefresh | quote }}
             - name: EMBEDDING_PROVIDER
               value: {{ $.Values.ai.embeddingProvider | quote }}
             - name: EMBEDDING_BASE_URL
@@ -209,6 +213,18 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.ai.apiKeySecret }}
                   key: {{ $.Values.ai.apiKeySecretKey | default "deepseek-api-key" }}
+            {{- end }}
+            {{- if $.Values.ai.opsBriefWebhookURL }}
+            {{- if not $.Values.ai.opsBriefWebhookSecretName }}
+            {{- fail "ai.opsBriefWebhookSecretName is required when ai.opsBriefWebhookURL is set" }}
+            {{- end }}
+            - name: OPS_BRIEF_WEBHOOK_URL
+              value: {{ $.Values.ai.opsBriefWebhookURL | quote }}
+            - name: OPS_BRIEF_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.ai.opsBriefWebhookSecretName }}
+                  key: {{ $.Values.ai.opsBriefWebhookSecretKey | default "webhook-secret" }}
             {{- end }}
             {{- end }}
             {{- if eq $name "payment" }}

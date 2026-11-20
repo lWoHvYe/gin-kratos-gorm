@@ -3,10 +3,18 @@ package ai
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
+
+	"gin-kratos-gorm/internal/platform/id"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -14,7 +22,7 @@ import (
 // RunOpsBriefScheduler generates the deterministic daily brief once per day.
 // Delivery is outside business transactions; a failure only skips the brief and
 // the date key is released for a retry.
-func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc *Service, logger *slog.Logger, interval time.Duration, webhookURL string) {
+func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc *Service, logger *slog.Logger, interval time.Duration, webhookURL, webhookSecret string) {
 	if interval <= 0 {
 		interval = time.Hour
 	}
@@ -39,20 +47,8 @@ func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc 
 		}
 		raw, _ := json.Marshal(brief)
 		if webhookURL != "" {
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(raw))
-			if err != nil {
-				logger.Warn("ops brief webhook request invalid", "error", err)
-				return
-			}
-			req.Header.Set("Content-Type", "application/json")
-			resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
-			if err != nil {
+			if err := postOpsBriefWebhook(ctx, &http.Client{Timeout: 10 * time.Second}, webhookURL, webhookSecret, raw); err != nil {
 				logger.Warn("ops brief webhook failed", "error", err)
-				return
-			}
-			_ = resp.Body.Close()
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				logger.Warn("ops brief webhook rejected", "status", resp.StatusCode)
 				return
 			}
 		}
@@ -76,4 +72,52 @@ func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc 
 			run()
 		}
 	}
+}
+
+// webhookTimestampHeader and webhookSignatureHeader authenticate the optional
+// ops-brief delivery. The signature covers "<timestamp>.<body>" so a captured
+// payload cannot be replayed with a fresh timestamp, and the timestamp lets the
+// receiver reject stale deliveries. The secret is required: an unsigned
+// webhook is refused instead of silently downgrading to unauthenticated POSTs.
+const (
+	webhookTimestampHeader = "X-Mall-Timestamp"
+	webhookSignatureHeader = "X-Mall-Signature"
+	webhookDeliveryHeader  = "X-Mall-Delivery"
+	webhookEventHeader     = "X-Mall-Event"
+)
+
+func webhookSignature(secret, timestamp string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte("."))
+	mac.Write(body)
+	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
+}
+
+func postOpsBriefWebhook(ctx context.Context, client *http.Client, url, secret string, body []byte) error {
+	secret = strings.TrimSpace(secret)
+	if len(secret) < 16 {
+		return fmt.Errorf("OPS_BRIEF_WEBHOOK_SECRET must be at least 16 characters when the webhook URL is set")
+	}
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	delivery := id.Event()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("build webhook request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "mall-ai-ops-brief/1")
+	req.Header.Set(webhookEventHeader, "ops.brief")
+	req.Header.Set(webhookDeliveryHeader, delivery)
+	req.Header.Set(webhookTimestampHeader, timestamp)
+	req.Header.Set(webhookSignatureHeader, webhookSignature(secret, timestamp, body))
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("deliver webhook: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("webhook rejected with status %d", resp.StatusCode)
+	}
+	return nil
 }

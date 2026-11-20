@@ -26,7 +26,7 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 | P2#12 | done | Old broad cleanup disabled; `0014` requires exact seed fields/version; SQL positive/negative checks. |
 | P2#13 | done | Strict identity for checkout/payment/admin; normal routes keep 5s cache; live warmed-cache disable→401. |
 | P2#14 | done | `make test-integration` covers inventory/catalog/pricing and CI invokes it; local run passed. Real GitHub CI not run. |
-| P2#17 | partial | Versioned index, dual-write, lease renewal, alias/cache invalidation, metrics, hit@5 5/5 done. No independent Job/elected leader; first build >3m can leave followers without alias; quality comparison cache/rerank still thin. |
+| P2#17 | partial | Versioned index, dual-write, lease renewal, lazy background rebuild/retry, alias/cache invalidation, metrics, hit@5 5/5 done. No independent Job; first build >3m can leave followers without alias; quality comparison cache/rerank still thin. |
 
 ## P3
 

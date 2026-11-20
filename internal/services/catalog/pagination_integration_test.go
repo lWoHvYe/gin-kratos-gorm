@@ -98,6 +98,31 @@ func TestKeysetPaginationBothReaders(t *testing.T) {
 			if _, err := svc.ListProducts(context.Background(), &pb.ListProductsRequest{Page: 1001, PageSize: 2}); err == nil {
 				t.Fatal("page>1000 accepted")
 			}
+
+			// Walk to the last page: all six rows exactly once, then no cursor.
+			all := map[int64]bool{}
+			cursor := ""
+			for page := 0; page < 10; page++ {
+				got, err := svc.ListProducts(context.Background(), &pb.ListProductsRequest{
+					Page: 1, PageSize: 2, Sort: "price_asc", Cursor: cursor,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, p := range got.GetProducts() {
+					if all[p.GetId()] {
+						t.Fatalf("duplicate id %d while walking pages", p.GetId())
+					}
+					all[p.GetId()] = true
+				}
+				cursor = got.GetNextCursor()
+				if cursor == "" {
+					break
+				}
+			}
+			if len(all) != 6 || cursor != "" {
+				t.Fatalf("walked %d rows, cursor=%q, want 6 and empty", len(all), cursor)
+			}
 		})
 	}
 }

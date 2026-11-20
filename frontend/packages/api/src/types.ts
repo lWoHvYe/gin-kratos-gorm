@@ -1,3 +1,5 @@
+import type { components } from './generated/gateway'
+
 export type ID = number | string
 
 export interface ApiErrorBody {
@@ -41,14 +43,9 @@ export interface Brand {
   status: string
 }
 
-export interface Sku {
-  id: number
-  spu_id: number
-  sku_code: string
-  specs_json: string
-  price_cent: number
-  stock: number
-  status: string
+type GeneratedSku = components['schemas']['Sku']
+
+export interface Sku extends Required<GeneratedSku> {
   image_url?: string
 }
 
@@ -65,16 +62,9 @@ export interface ProductAttribute {
   sort?: number
 }
 
-export interface Product {
-  id: number
-  category_id: number
-  brand_id: number
-  name: string
-  subtitle: string
-  description: string
-  main_image: string
-  status: string
-  min_price_cent: number
+type GeneratedProduct = components['schemas']['Product']
+
+export interface Product extends Required<Omit<GeneratedProduct, 'skus'>> {
   skus: Sku[]
   images?: ProductImage[]
   attributes?: ProductAttribute[]
@@ -104,25 +94,10 @@ export interface OrderItem {
   discount_cent: number
 }
 
-export interface Order {
-  order_no: string
-  user_id: number
-  status: string
-  total_cent: number
-  discount_cent: number
-  promotion_discount_cent: number
-  applied_promotions_json: string
-  freight_cent: number
-  pay_cent: number
-  paid_cent: number
-  refunded_cent: number
-  refund_status: string
-  receiver_name: string
-  receiver_phone: string
-  receiver_address: string
+type GeneratedOrder = components['schemas']['Order']
+
+export interface Order extends Required<Omit<GeneratedOrder, 'items'>> {
   items: OrderItem[]
-  created_at_unix: number
-  expire_at_unix: number
   quote_id: string
 }
 

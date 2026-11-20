@@ -1,9 +1,11 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -12,7 +14,7 @@ import (
 // RunOpsBriefScheduler generates the deterministic daily brief once per day.
 // Delivery is outside business transactions; a failure only skips the brief and
 // the date key is released for a retry.
-func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc *Service, logger *slog.Logger, interval time.Duration) {
+func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc *Service, logger *slog.Logger, interval time.Duration, webhookURL string) {
 	if interval <= 0 {
 		interval = time.Hour
 	}
@@ -36,6 +38,24 @@ func RunOpsBriefScheduler(ctx context.Context, cache redis.UniversalClient, svc 
 			return
 		}
 		raw, _ := json.Marshal(brief)
+		if webhookURL != "" {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(raw))
+			if err != nil {
+				logger.Warn("ops brief webhook request invalid", "error", err)
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+			if err != nil {
+				logger.Warn("ops brief webhook failed", "error", err)
+				return
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				logger.Warn("ops brief webhook rejected", "status", resp.StatusCode)
+				return
+			}
+		}
 		pipe := cache.TxPipeline()
 		pipe.Set(ctx, "ai:ops:latest", raw, 48*time.Hour)
 		pipe.Set(ctx, doneKey, "1", 48*time.Hour)

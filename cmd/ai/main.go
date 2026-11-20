@@ -169,7 +169,7 @@ func main() {
 
 	if cfg.AIEnabled {
 		workers.Go(func(ctx context.Context) {
-			ai.RunOpsBriefScheduler(ctx, cache, svc, logger, time.Hour)
+			ai.RunOpsBriefScheduler(ctx, cache, svc, logger, time.Hour, os.Getenv("OPS_BRIEF_WEBHOOK_URL"))
 		})
 	}
 	gs := grpcx.NewServer(cfg, logger)

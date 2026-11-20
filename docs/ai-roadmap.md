@@ -13,7 +13,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 6 | Versioned RAG and measurable quality | partial: hit@5 5/5, grounded/refusal, lease/rollback done; no Job, thin cache/rerank comparison |
 | 7 | Customer task assistant: comparison, budget list, cart draft | partial: real-model draft SSE -> confirm 200; no expiry/price/stock-change suite |
 | 8 | Controlled personalization / preference profile | partial: A/B 3/3, attribution key and Redis user-isolation test; no UI attribution/regression suite |
-| 9 | Proactive admin operations copilot | partial: Redis snapshot delivery/links/feedback; no external channel/rich anomaly explanations |
+| 9 | Proactive admin operations copilot | partial: Redis snapshot + optional webhook/links/feedback; no webhook auth/rich anomaly explanations |
 | 10 | Evidence-triggered advanced capabilities | deferred by evidence gate (no adoption) |
 
 ## Audit note correction (2026-11-20)

@@ -10,7 +10,7 @@ This supersedes the earlier “done” wording where it overstated coverage.
 | ADK chat | non-streaming was replaced by a cumulative-chunk normalizer; tool-call fragments merge by Index; SSE deltas restored | eval 15/15 and 246 deltas; no multi-replica/provider-failure live soak |
 | Cart assistant | draft tool, Redis draft, SSE draft, storefront confirm card, Cart transactional idempotent confirmation | expiry/price/stock-change rejection is not covered by an automated suite |
 | Preferences | 180-day Redis profile, API/UI, system injection, A/B 3/3, per-session attribution record and Redis user-isolation test | attribution is Redis/log only; one prompt family |
-| Ops brief | deterministic daily Redis snapshot, atomic latest/done, low-stock links, feedback | no external delivery; anomaly explanations limited |
+| Ops brief | deterministic daily Redis snapshot, atomic latest/done, optional webhook delivery (only marked done on 2xx), low-stock links, feedback | no webhook auth/signature; anomaly explanations limited |
 | Types/admin | generated-schema derivation for major read models; admin router 263 lines; ESLint real | Shipment/Refund/ListReply remain hand-written; further split optional |
 
 ## Remaining concrete work

@@ -4,7 +4,7 @@ This supersedes the earlier “done” wording where it overstated coverage.
 
 | Area | What is actually implemented | Status / gap |
 |---|---|---|
-| RAG rebuild | Redis lock with 3m TTL, 1m renewal, alias fallback, current pointer without TTL | lease works; no independent Job; first build >3m can still leave followers without alias |
+| RAG rebuild | Redis lock with 3m TTL, 1m renewal, alias fallback, current pointer without TTL, lazy proxy + 2m background retry | AI starts before embedding is ready; still no independent Job; first build >3m can leave followers without alias |
 | RAG cache | version-bound exact/semantic cache; increment/delete invalidates version cache; rollback runbook flushes cache | implemented; cache/rerank A/B quality not measured |
 | HITL | `INTERRUPTED -> CONFIRMING -> SAVED`; full draft hash; fail-closed meta; close failures surfaced; unique draft code idempotency | no `FAILED`/Abort, no UI state display, CONFIRMING transition is not atomic CAS |
 | ADK chat | non-streaming was replaced by a cumulative-chunk normalizer; tool-call fragments merge by Index; SSE deltas restored | eval 15/15 and 246 deltas; no multi-replica/provider-failure live soak |
@@ -15,7 +15,7 @@ This supersedes the earlier “done” wording where it overstated coverage.
 
 ## Remaining concrete work
 
-1. RAG Job/elected-leader + crash/restart drill; remove the 3m follower window.
+1. RAG Job/elected-leader + crash/restart drill; remove the 3m follower window (lazy retry already removes permanent RAG-disabled startup).
 2. HITL `FAILED`/Abort + admin state display; atomic state transition.
 3. Cart draft expiry/price/stock-change test suite and explicit UI recovery cases.
 4. Phase 8 cross-user/attribution eval; Phase 9 external delivery/anomaly links.

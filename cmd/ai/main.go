@@ -81,26 +81,38 @@ func main() {
 	}
 	defer pricingConn.Close()
 
-	var rag ai.RAGIndex
+	rag := ai.NewLazyRAG()
 	if cfg.RAGEnabled {
-		built, err := ai.OpenRAG(context.Background(), ai.RAGConfig{
-			Provider: cfg.EmbeddingProvider,
-			BaseURL:  cfg.EmbeddingBaseURL,
-			APIKey:   cfg.EmbeddingAPIKey,
-			Model:    cfg.EmbeddingModel,
-			Dim:      cfg.EmbeddingDim,
-		}, catalog, cache, logger)
-		if err != nil {
-			metrics.AIRAGRebuildFailures.Inc()
-			logger.Warn("rag disabled", "error", err)
-		} else {
-			rag = built
-		}
+		// The real build runs in a worker below; startup is not blocked by DNS or
+		// an unreachable embedding provider.
 	}
-
 	workers := runtime.NewWorkers()
 	defer workers.Stop()
-	if rag != nil {
+	if cfg.RAGEnabled {
+		workers.Go(func(ctx context.Context) {
+			for {
+				built, err := ai.OpenRAG(ctx, ai.RAGConfig{
+					Provider: cfg.EmbeddingProvider,
+					BaseURL:  cfg.EmbeddingBaseURL,
+					APIKey:   cfg.EmbeddingAPIKey,
+					Model:    cfg.EmbeddingModel,
+					Dim:      cfg.EmbeddingDim,
+				}, catalog, cache, logger)
+				if err == nil {
+					rag.Set(built)
+					return
+				}
+				metrics.AIRAGRebuildFailures.Inc()
+				logger.Warn("rag build failed; retrying", "error", err)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(2 * time.Minute):
+				}
+			}
+		})
+	}
+	if cfg.RAGEnabled {
 		natsClient, err := mq.Connect(cfg.NATSURL)
 		if err != nil {
 			logger.Warn("ai catalog index consumer disabled", "error", err)
@@ -115,6 +127,10 @@ func main() {
 		}
 	}
 
+	var ragDep ai.RAGSearcher
+	if cfg.RAGEnabled {
+		ragDep = rag
+	}
 	svc, err := ai.NewService(context.Background(), ai.Config{
 		Enabled:    cfg.AIEnabled,
 		Timeout:    cfg.AITimeout,
@@ -140,7 +156,7 @@ func main() {
 		AfterSales: pb.NewAfterSalesServiceClient(afterSalesConn),
 		Inventory:  pb.NewInventoryServiceClient(inventoryConn),
 		Promotion:  pb.NewPromotionServiceClient(pricingConn),
-		RAG:        rag,
+		RAG:        ragDep,
 		Drafts:     ai.NewCartDraftWriter(cache),
 	}, cache, logger)
 	if err != nil {

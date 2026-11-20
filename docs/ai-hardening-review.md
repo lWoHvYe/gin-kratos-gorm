@@ -62,3 +62,8 @@ The broad cleanup files are retained only as `.sql.disabled` for history. New
 `0014` migrations match exact ids/codes/names/prices/status and inventory
 `version = 1`; a fresh-DB SQL check removed all seed rows, while an adapted
 price/version row survived.
+
+## Unified integration entry verified
+
+`make test-integration` with local MySQL/NATS/Redis passed outbox/consumer/AI
+RAG/seckill/inventory/catalog/pricing, including the newly added P1 tests.

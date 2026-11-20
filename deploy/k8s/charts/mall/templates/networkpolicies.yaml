@@ -163,3 +163,27 @@ spec:
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
+
+---
+{{- if and .Values.tracing.endpoint .Values.tracing.namespace }}
+# Allow OTLP gRPC to the collector namespace when tracing is enabled. This is
+# additive to the default-deny policies above and only opens the collector port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-otlp-collector
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "mall.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.tracing.namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.tracing.port }}
+{{- end }}

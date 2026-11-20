@@ -103,6 +103,10 @@ resources:
 tracing:
   # OTLP gRPC endpoint (e.g. an in-cluster collector). Empty disables tracing.
   endpoint: ""
+  # When the collector is in a namespace covered by a default-deny egress
+  # policy, set this namespace (and optional port) to add an explicit allow.
+  namespace: ""
+  port: 4317
   samplerArg: "1"
 
 seckill:

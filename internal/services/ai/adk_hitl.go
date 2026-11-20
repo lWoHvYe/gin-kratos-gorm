@@ -100,6 +100,14 @@ func (s *Service) StartCampaignDraft(ctx context.Context, req *pb.StartCampaignD
 		return nil, apperr.Internal("encode draft", err)
 	}
 	checkpointID := fmt.Sprintf("%d-%s", uid, id.Event())
+	rawState, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+	if err != nil {
+		return nil, apperr.Internal("read hitl state before resume", err)
+	}
+	var stateMeta map[string]string
+	if err := json.Unmarshal(rawState, &stateMeta); err != nil || stateMeta["state"] != "CONFIRMING" {
+		return nil, apperr.Conflict("checkpoint is not awaiting confirmation")
+	}
 	store := &redisCheckpointStore{cache: s.cache}
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent: &draftReviewAgent{payload: payload}, CheckPointStore: store,
@@ -216,7 +224,35 @@ func (s *Service) CheckCampaignDraft(ctx context.Context, req *pb.ResumeCampaign
 	if err := s.validateDraftCheckpoint(ctx, uid, checkpointID, req.GetCampaignCode(), req.GetRuleCode(), requestDraftHash(req.GetCampaign(), req.GetRule())); err != nil {
 		return nil, err
 	}
+	if err := s.markDraftState(ctx, checkpointID, "CONFIRMING"); err != nil {
+		return nil, err
+	}
 	return &pb.Empty{}, nil
+}
+
+// markDraftState advances the audit state without clearing the binding. A
+// SAVED checkpoint is terminal and is never moved backwards.
+func (s *Service) markDraftState(ctx context.Context, checkpointID, state string) error {
+	raw, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+	if err != nil {
+		return apperr.Internal("read hitl state", err)
+	}
+	var meta map[string]string
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return apperr.Internal("decode hitl state", err)
+	}
+	if meta["state"] == "SAVED" {
+		return nil
+	}
+	meta["state"] = state
+	encoded, err := json.Marshal(meta)
+	if err != nil {
+		return apperr.Internal("encode hitl state", err)
+	}
+	if err := s.cache.Set(ctx, "ai:hitl:meta:"+checkpointID, encoded, hitlTTL).Err(); err != nil {
+		return apperr.Internal("persist hitl state", err)
+	}
+	return nil
 }
 
 // ResumeCampaignDraft closes a checkpoint after the BFF saved the draft. It
@@ -246,6 +282,14 @@ func (s *Service) ResumeCampaignDraft(ctx context.Context, req *pb.ResumeCampaig
 			}
 			return &pb.Empty{}, nil
 		}
+	}
+	rawState, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
+	if err != nil {
+		return nil, apperr.Internal("read hitl state before resume", err)
+	}
+	var stateMeta map[string]string
+	if err := json.Unmarshal(rawState, &stateMeta); err != nil || stateMeta["state"] != "CONFIRMING" {
+		return nil, apperr.Conflict("checkpoint is not awaiting confirmation")
 	}
 	store := &redisCheckpointStore{cache: s.cache}
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{

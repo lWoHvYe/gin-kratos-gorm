@@ -1,3 +1,4 @@
+import type { components as adminComponents } from './generated/admin'
 import type { components } from './generated/gateway'
 
 export type ID = number | string
@@ -78,13 +79,8 @@ export interface ListReply<T> {
   [key: string]: unknown
 }
 
-export interface Stock {
-  sku_id: number
-  warehouse_id: number
-  on_hand: number
-  reserved: number
-  available?: number
-}
+type GeneratedStock = adminComponents['schemas']['Stock']
+export type Stock = Omit<Required<GeneratedStock>, 'available'> & { available?: number }
 
 export interface OrderItem {
   sku_id: number
@@ -127,46 +123,11 @@ export interface Refund {
   created_at_unix: number
 }
 
-export interface Campaign {
-  id: number
-  code: string
-  name: string
-  type: string
-  status: string
-  start_at_unix: number
-  end_at_unix: number
-  priority: number
-  budget_cent: number
-  reserved_cent: number
-  consumed_cent: number
-  per_user_limit: number
-  stack_mode: string
-  version: number
-}
+type GeneratedCampaign = adminComponents['schemas']['Campaign']
+export type Campaign = Required<GeneratedCampaign>
 
-export interface PromotionRule {
-  id: number
-  campaign_id: number
-  code: string
-  name: string
-  type: string
-  status: string
-  priority: number
-  exclusive: boolean
-  stack_group: string
-  scope_json: string
-  condition_expr: string
-  effect_json: string
-  max_discount_cent: number
-  budget_cent: number
-  reserved_cent: number
-  consumed_cent: number
-  per_user_limit: number
-  allow_with_coupon: boolean
-  start_at_unix: number
-  end_at_unix: number
-  version: number
-}
+type GeneratedPromotionRule = adminComponents['schemas']['PromotionRule']
+export type PromotionRule = Required<GeneratedPromotionRule>
 
 export interface AppliedPromotion {
   rule_id: number

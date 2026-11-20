@@ -82,7 +82,8 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 	// this avoids every Pod embedding the catalog on startup.
 	lockOwner := id.Event()
 	lockKey := index + ":build:lock"
-	locked, err := client.SetNX(ctx, lockKey, lockOwner, 10*time.Minute).Result()
+	const ragLockTTL = 3 * time.Minute
+	locked, err := client.SetNX(ctx, lockKey, lockOwner, ragLockTTL).Result()
 	if err != nil {
 		return nil, fmt.Errorf("rag build lock: %w", err)
 	}
@@ -98,12 +99,24 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 			logger.Warn("ai rag loaded alias without current pointer", "index", current.Index, "prefix", current.Prefix)
 			return r, nil
 		}
-		// The lock holder did not publish a version in time; try once to take
-		// over (a crashed builder's lock may have expired).
-		if locked, err = client.SetNX(ctx, lockKey, lockOwner, 10*time.Minute).Result(); err != nil || !locked {
+		// Wait up to the remaining lease once, rather than failing while a slow
+		// builder is still alive; renewal keeps an active builder's lease fresh.
+		if ttl, err := client.PTTL(ctx, lockKey).Result(); err == nil && ttl > 0 {
+			if current, ok := waitForCurrent(ctx, client, index, ttl+5*time.Second); ok {
+				r.index, r.prefix = current.Index, current.Prefix
+				logger.Info("ai rag loaded current version after lease wait", "index", current.Index, "prefix", current.Prefix)
+				return r, nil
+			}
+		}
+		// The lock holder died without publishing a version; take over after the
+		// short lease expires.
+		if locked, err = client.SetNX(ctx, lockKey, lockOwner, ragLockTTL).Result(); err != nil || !locked {
 			return nil, fmt.Errorf("rag build lock is held and no current version is available")
 		}
 	}
+	renewCtx, stopRenew := context.WithCancel(ctx)
+	defer stopRenew()
+	go renewRAGLock(renewCtx, client, lockKey, lockOwner)
 	defer releaseRAGLock(client, lockKey, lockOwner)
 
 	buildStart := time.Now()
@@ -170,6 +183,20 @@ func loadAliasVersion(ctx context.Context, client redis.UniversalClient, alias s
 func mustJSON(v any) []byte {
 	data, _ := json.Marshal(v)
 	return data
+}
+
+func renewRAGLock(ctx context.Context, client redis.UniversalClient, key, owner string) {
+	script := redis.NewScript(`if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("pexpire", KEYS[1], ARGV[2]) else return 0 end`)
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_ = script.Run(ctx, client, []string{key}, owner, int64(3*time.Minute/time.Millisecond)).Err()
+		}
+	}
 }
 
 var releaseRAGLock = func(client redis.UniversalClient, key, owner string) {

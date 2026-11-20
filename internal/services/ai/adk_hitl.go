@@ -100,14 +100,6 @@ func (s *Service) StartCampaignDraft(ctx context.Context, req *pb.StartCampaignD
 		return nil, apperr.Internal("encode draft", err)
 	}
 	checkpointID := fmt.Sprintf("%d-%s", uid, id.Event())
-	rawState, err := s.cache.Get(ctx, "ai:hitl:meta:"+checkpointID).Bytes()
-	if err != nil {
-		return nil, apperr.Internal("read hitl state before resume", err)
-	}
-	var stateMeta map[string]string
-	if err := json.Unmarshal(rawState, &stateMeta); err != nil || stateMeta["state"] != "CONFIRMING" {
-		return nil, apperr.Conflict("checkpoint is not awaiting confirmation")
-	}
 	store := &redisCheckpointStore{cache: s.cache}
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent: &draftReviewAgent{payload: payload}, CheckPointStore: store,

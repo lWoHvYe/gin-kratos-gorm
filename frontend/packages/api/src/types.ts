@@ -111,20 +111,10 @@ export interface Shipment {
   created_at_unix: number
 }
 
-export interface AfterSale {
-  after_sale_no: string
-  order_no: string
-  user_id: number
-  type: string
-  status: string
-  amount_cent: number
-  reason: string
-  return_carrier: string
-  return_tracking_no: string
-  refund_no: string
-  refunded_cent: number
+type GeneratedAfterSale = components['schemas']['AfterSale']
+
+export interface AfterSale extends Required<GeneratedAfterSale> {
   items: Array<{ sku_id: number; quantity: number }>
-  created_at_unix: number
 }
 
 export interface Refund {

@@ -28,21 +28,11 @@ export interface LoginReply {
   user: LoginUser
 }
 
-export interface Category {
-  id: number
-  parent_id: number
-  name: string
-  level: number
-  sort: number
-  status: string
-}
+type GeneratedCategory = adminComponents['schemas']['Category']
+export type Category = Required<GeneratedCategory>
 
-export interface Brand {
-  id: number
-  name: string
-  logo: string
-  status: string
-}
+type GeneratedBrand = adminComponents['schemas']['Brand']
+export type Brand = Required<GeneratedBrand>
 
 type GeneratedSku = components['schemas']['Sku']
 

@@ -16,10 +16,12 @@ dual-write registry while retained.
    otherwise a rollback can still serve cached documents from the old target.
 5. Publish the matching current pointer:
    `SET ai:rag:current '{"index":"ai_kb_current","prefix":"ai_kb_v<timestamp>:","created_at":...}'`
-6. Restart AI replicas so they load the pointer (non-leaders do not rebuild).
+6. AI Pods reload the pointer within `RAG_ALIAS_REFRESH` (default 1m); no
+   restart is needed. They only load the alias and never rebuild it.
 7. Verify: search "耳机" returns documents, `mall_ai_rag_search_total` grows, and
-   the eval set still passes. If the old version is stale, run reconciliation
-   by restarting one leader Pod or wait for the 15-minute worker.
+   the eval set still passes. If the old version is stale, force a rebuild with
+   the `ai-rag-build` Job (`RAG_BUILD_FORCE=true`) or wait for the 15-minute
+   reconciliation worker.
 
 Only switch back to a version that was built from the same catalog schema. Do
 not delete a version while a rollback is active.

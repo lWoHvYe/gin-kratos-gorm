@@ -130,6 +130,15 @@ SQL.
 | `AI_GLOBAL_DAILY_TOKEN_BUDGET` | `0` (disabled) | daily tokens across all users |
 | `AI_CIRCUIT_FAILURES` / `AI_CIRCUIT_COOLDOWN` | `5` / `60s` | open the provider circuit after consecutive failures |
 | `AI_PRICE_*_CENTS_PER_1K` | `0` | optional list prices for cost metrics, not billing |
+| `AI_RAG_ENABLED` | `true` | enable Redis Search retrieval |
+| `EMBEDDING_PROVIDER` | `hash` | `hash` (dev fallback) or `openai`-compatible |
+| `EMBEDDING_BASE_URL` / `EMBEDDING_MODEL` / `EMBEDDING_DIM` | see values | embedding endpoint, model and dimension |
+| `RAG_INDEX` | empty (`ai_kb`) | index base; the pointer key is namespaced for non-default bases |
+| `RAG_ALIAS_REFRESH` | `1m` | how often AI Pods re-read the published alias |
+| `RAG_BUILD_MAX_AGE` | `24h` | build Job skips a fresh current version; `0` always rebuilds |
+| `RAG_BUILD_FORCE` | `false` | force the build Job to ignore freshness |
+| `OPS_BRIEF_WEBHOOK_URL` | empty | optional ops-brief delivery endpoint |
+| `OPS_BRIEF_WEBHOOK_SECRET` | empty | required (>=16 chars) when the URL is set; HMAC-SHA256 key |
 
 `AI_PROVIDER=mock` is deterministic: it calls `search_products` and then answers
 from the tool result, so local development and CI need no API key.
@@ -153,9 +162,14 @@ callbacks (Phase 0.1).
 
 ## Deployment
 
-- `cmd/ai` service, gRPC 9011, health 9111; image `mall/ai:dev`.
+- `cmd/ai` service, gRPC 9011, health 9111; image `mall/ai:dev`. The same image
+  runs the one-shot `rag-build` entrypoint (`args: ["rag-build"]`).
+- RAG builds are owned by the `ai-rag-build` Job/CronJob; AI Pods only load the
+  published `_current` alias and follow it every `RAG_ALIAS_REFRESH`. A slow
+  first build therefore cannot leave followers without an index or turn them
+  into builders.
 - Compose: `ai` depends on Redis and catalog; default `AI_ENABLED=true`,
-  `AI_PROVIDER=mock`.
+  `AI_PROVIDER=mock`; the one-shot `ai-rag-build` service performs the build.
 - K8s: deployment/service/PDB via the existing chart values; AuthorizationPolicy
   allows only `gateway` and `admin` service accounts to call the AI service
   port; NetworkPolicy mirrors that.
@@ -230,7 +244,9 @@ Still demo-grade:
 - Request quota, per-user/global daily token budgets and a provider circuit
   breaker are implemented; prices are optional and cost is not billed. There is
   no semantic cache or per-tool budget yet.
-- SSE emits `delta`/`tool`/`done`/`error`; tool events come from Eino callbacks.
+- SSE emits `delta`/`tool`/`draft`/`attribution`/`done`/`error`; tool events
+  come from Eino callbacks. `attribution` carries the user-scoped explicit
+  preference fields applied to that answer and is rendered by the storefront.
   Client cancellation is detected only when a write fails.
 - Sessions store user text in Redis for 30 minutes in plaintext.
 - `admin=true` is trusted from the admin BFF under the mesh trust ADR.
@@ -238,8 +254,9 @@ Still demo-grade:
 - The k3s NetworkPolicy workaround allows AI pods all public egress (port-
   qualified ipBlock rules did not take effect); production needs an egress
   gateway with domain allow-listing.
-- RAG seeds on startup and updates from catalog events; if the consumer is
-  down, the index can lag until the next pod restart.
+- RAG is built by the `ai-rag-build` Job/CronJob and updated from catalog
+  events; if the consumer is down, the index can lag until reconciliation.
+  AI Pods only load the published alias.
 
 Hardening order: real-model evaluation harness, token/cost budgets, tool events
 and cancellation, feedback capture, event-driven indexing, then Phase 2B writes.

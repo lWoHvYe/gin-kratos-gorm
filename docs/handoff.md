@@ -18,7 +18,7 @@ Repository:
 Latest feature commit at handoff:
 
 ```text
-0201db7 feat: expose HITL state and abort in admin UI
+1be3371 feat(ai): job-owned RAG builds, HITL CAS, attribution, signed webhooks
 ```
 
 This handoff file itself is committed immediately after that feature commit. See
@@ -54,7 +54,8 @@ git push --force origin main
   and SQL; P2#10 `BatchGetStock`; P2#11 hidden AI entry; P2#12 exact seed
   cleanup migrations; P2#13 strict identity on high-risk routes; P2#14 unified
   integration target; P2#17 RAG versioning/lease/cache/metrics.
-- P2#17 is still **partial**: no independent RAG Job/elected leader.
+- P2#17 is still **partial** only for cache/rerank quality comparison: the
+  independent build Job/CronJob and load-only follower Pods now exist.
 
 ### AI
 
@@ -62,46 +63,50 @@ git push --force origin main
   normalized and tool-call fragments merge by `ToolCall.Index`. Real eval
   15/15, tool-selection 3/3, normal answer emitted 246 SSE deltas.
 - RAG: versioned index/alias, dual-write, post-build/15m reconciliation,
-  exact/semantic cache, rollback runbook, 3m lease with 1m renewal, lazy proxy
-  with 2m background retry.
+  exact/semantic cache, rollback runbook, 3m lease with 1m renewal. Builds are
+  owned by the `ai-rag-build` Job (Helm hook) and `ai-rag-build-scheduled`
+  CronJob; AI Pods are load-only followers of `ai:rag:current`
+  (`RAG_ALIAS_REFRESH`, default 1m). The build Job skips a fresh version
+  (`RAG_BUILD_MAX_AGE`, default 24h; `RAG_BUILD_FORCE` overrides); a fresh
+  pointer whose index is missing is treated as stale. Compose has a one-shot
+  `ai-rag-build` service.
 - HITL: `INTERRUPTED -> CONFIRMING -> SAVED`, `FAILED` via Abort, admin UI state
-  display, abort button.
+  display, abort button. State changes use one Redis Lua CAS
+  (`hitlStateTransitionCAS`), so concurrent confirms cannot regress SAVED or
+  lose a FAILED reason.
 - Cart: draft tool -> Redis draft -> SSE draft -> storefront card -> Cart
   `ConfirmCartDraft` transaction + `(user_id,draft_id)` idempotency. Handler
   tests cover expired/price/stock/Complete-failure.
 - Preferences: user-scoped Redis profile, 180d retention, UI, system injection,
-  per-session attribution key, Redis user-isolation test, A/B 3/3.
+  per-session attribution key, Redis user-isolation test, A/B 3/3. Chat emits an
+  `attribution` SSE event with the explicit profile fields applied to that
+  answer; the storefront renders it with an "调整偏好" link. Only the owner's
+  profile is attributed (cross-user test).
 - Ops: deterministic daily brief, atomic latest/done, low-stock links, feedback,
-  optional webhook (only 2xx marks done).
+  optional webhook. Delivery requires `OPS_BRIEF_WEBHOOK_SECRET` (>=16 chars),
+  signs `timestamp.body` with HMAC-SHA256 (`X-Mall-Signature`), sends
+  `X-Mall-Timestamp`/`X-Mall-Delivery`/`X-Mall-Event`, and only marks done on
+  2xx. Unsigned configuration is refused, not downgraded.
 
 ## Remaining work, in priority order
 
-1. **RAG Job / elected leader**
-   - Current lazy proxy removes permanent startup disable, but there is still no
-     independent Job and a first build >3m can leave followers without alias.
-   - Goal: a dedicated build Job or leader with lease renewal; AI pods only load
-     the current alias.
-
-2. **HITL atomic CAS + save-failure live**
-   - `FAILED`/Abort/UI exist, but `CONFIRMING` transition is read/modify/write,
-     not atomic CAS.
-   - Add a Lua/CAS transition and a live save-failure -> FAILED -> retry test.
-
-3. **Phase 8 UI attribution / regression suite**
-   - Redis/log attribution and isolation test exist; no UI to show which
-     preferences influenced a recommendation, and the benchmark uses one prompt
-     family.
-
-4. **Phase 9 webhook auth / richer anomalies**
-   - Optional webhook exists with no signature/auth.
-   - Exception explanation is mostly low-stock links; cancellation/refund
-     anomaly explanations are not built.
-
-5. **Real GitHub CI** — local `make test-integration` has passed; Actions was
+1. **Real GitHub CI** — local `make test-integration` has passed; Actions was
    not actually run.
 
-6. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
-   split can continue; RAG Job remains the main operational gap.
+2. **Phase 8 benchmark breadth** — attribution UI and the owner-scoped event are
+   implemented, but the A/B benchmark still uses one prompt family; add a
+   cross-user/no-memory regression set.
+
+3. **Phase 9 richer anomaly explanations** — the signed webhook is implemented;
+   exception explanations are still mostly low-stock links, not
+   cancellation/refund anomalies.
+
+4. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
+   split can continue.
+
+5. **Live deployment check for this batch** — `make verify`, frontend
+   typecheck/build and Redis-backed tests passed locally; the new image/Job was
+   not rolled out to the dev cluster in this session.
 
 ## Verification commands
 
@@ -121,8 +126,19 @@ Targeted tests:
 ```bash
 go test ./internal/services/ai ./internal/services/gateway \
   ./internal/services/admin ./internal/services/inventory \
-  ./internal/services/catalog ./internal/services/order -count=1
+  ./internal/services/catalog ./internal/services/order \
+  ./internal/platform/bff -count=1
 ```
+
+The HITL CAS, RAG follower/build-due and attribution tests run only with a
+Redis 8 (with Search) address:
+
+```bash
+TEST_REDIS_ADDR=127.0.0.1:16379 go test ./internal/services/ai \
+  ./internal/services/admin ./internal/platform/bff -count=1
+```
+
+Frontend changes need `pnpm -C frontend typecheck && pnpm -C frontend build`.
 
 Integration needs port-forwards to MySQL/NATS/Redis and `TEST_*` envs:
 
@@ -133,8 +149,9 @@ TEST_REDIS_ADDR='127.0.0.1:16379' make test-integration
 ```
 
 The Makefile target includes outbox/consumer, AI RAG + lease + preference
-isolation, seckill, inventory seckill/compensation/ledger/NATS, catalog
-projection + keyset, and pricing cleanup.
+isolation + RAG follower + HITL CAS + attribution, seckill, inventory
+seckill/compensation/ledger/NATS, catalog projection + keyset, and pricing
+cleanup.
 
 Live AI:
 
@@ -144,6 +161,18 @@ make ai-rag-eval   # hit@5 5/5 expected
 make ai-pref-eval  # A/B 3/3 expected
 ```
 
+## Live checks this session (2026-11-21)
+
+- `bin/ai rag-build` against the dev catalog and Redis built 64 documents into a
+  throwaway `ai_kb_livecheck` index; a second run skipped on freshness
+  (`RAG_BUILD_MAX_AGE=24h`) and `RAG_BUILD_FORCE=true` built v2. The throwaway
+  index, pointer and registry entries were removed afterwards.
+- `ai:rag:current` had drifted to a dropped `ai_kb_test_...` index, written by an
+  older RAG test before pointer keys were namespaced. It was restored to
+  `ai_kb_current` (`ai_kb_v1795208929702651081`, 64 docs). The RAG test now
+  deletes its pointer and dual-write registry entry, and non-default index bases
+  use `<base>:current`.
+
 ## Environment caveats
 
 - Cluster is single-node dev only. Do not run 100k/1M RPS.
@@ -151,8 +180,9 @@ make ai-pref-eval  # A/B 3/3 expected
   ingress/waypoint returns 503.
 - CoreDNS was restored to `forward . /etc/resolv.conf`; host resolver has been
   flaky. If DNS fails, check CoreDNS upstream before changing config.
-- The embedding/provider endpoint is flaky; AI now starts before RAG and retries
-  in the background. `rag disabled` at startup is not automatically fatal.
+- The embedding/provider endpoint is flaky; AI Pods now start without RAG and
+  wait for the build Job to publish `ai:rag:current`. `rag disabled` at startup
+  is not fatal, and a failed build leaves the previous alias serving.
 - Port-forwards die on restarts; recreate before live tests.
 - Cluster contains accumulated E2E data; do not treat dashboards/stock as clean.
 - Demo credentials are dev-only and must be rotated for real deployments.
@@ -181,9 +211,9 @@ Then read:
 ```text
 继续 gin-kratos-gorm。先读 docs/handoff.md、docs/review-tracking.md 和
 docs/ai-hardening-review.md，运行 ./scripts/bootstrap-context.sh 与 git status。
-不要重做已完成的主链路。按 handoff 的 Remaining work 顺序，先做 RAG Job/elected
-leader，再做 HITL 原子 CAS + save-failure live，然后 Phase8 UI 归因和 Phase9
-webhook 鉴权。每个改动报告文件、检查、未验证项；不要在没有证据时标 done。
+不要重做已完成的主链路。按 handoff 的 Remaining work 顺序，先做真实 GitHub CI，
+再做 Phase8 跨用户/多变体回归、Phase9 退款/取消异常解释和 P3 清理。每个改动报告
+文件、检查、未验证项；不要在没有证据时标 done。
 ```
 
 The durable files are the context; keep the new session small.

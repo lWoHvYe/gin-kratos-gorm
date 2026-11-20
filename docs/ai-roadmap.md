@@ -10,10 +10,10 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank + versioned semantic cache) |
 | 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
 | 5 | Correctness and recovery gate | done (identity/eval 15/15, HITL FAILED/Abort/state UI) |
-| 6 | Versioned RAG and measurable quality | partial: hit@5 5/5, grounded/refusal, lease/rollback done; no Job, thin cache/rerank comparison |
+| 6 | Versioned RAG and measurable quality | partial: build Job/CronJob + load-only followers, hit@5 5/5, grounded/refusal, lease/rollback done; cache/rerank quality comparison still thin |
 | 7 | Customer task assistant: comparison, budget list, cart draft | done: real-model E2E + expired/price/stock/unclosed tests |
-| 8 | Controlled personalization / preference profile | partial: A/B 3/3, attribution key/isolation test; no UI attribution/regression suite |
-| 9 | Proactive admin operations copilot | partial: Redis snapshot + optional webhook/links/feedback; no webhook auth/rich anomaly explanations |
+| 8 | Controlled personalization / preference profile | partial: A/B 3/3, attribution event + storefront UI + owner-scoped test; benchmark still one prompt family |
+| 9 | Proactive admin operations copilot | partial: Redis snapshot + signed (HMAC, fail-closed) webhook + links/feedback; richer anomaly explanations remain |
 | 10 | Evidence-triggered advanced capabilities | deferred by evidence gate (no adoption) |
 
 ## Audit note correction (2026-11-20)
@@ -64,9 +64,9 @@ Done:
 
 Remaining:
 1. ~~Move the full rebuild out of every Pod startup into an elected leader or a
-   Job~~ (Redis leader lock + non-leader loads `ai:rag:current`; a dedicated Job
-   remains optional). Quality eval, consumer lag/truncation/rebuild-failure
-   metrics and a tested rollback runbook remain.
+   Job~~: the `ai-rag-build` Job/CronJob owns builds and AI Pods are load-only
+   followers. Quality eval, consumer lag/truncation/rebuild-failure metrics and
+   a tested rollback runbook remain.
 2. Metrics: expected vs indexed document count, truncation/empty-page signal,
    consumer lag, rebuild failures and version age.
 3. Quality eval beyond string matching: retrieval hit@5 is 5/5 via
@@ -105,7 +105,8 @@ GET/PUT/DELETE BFF endpoints, storefront edit/clear panel, and a system-message
 injection for customer chat. Live isolation check: demo preferences are empty
 for the admin user. A/B benchmark passes: without preferences the first recommendation is 极光
 Note 12; with `云舟` saved it becomes 云舟 M3. The profile is user-scoped,
-180-day retained and clearable.
+180-day retained and clearable. Chat emits an owner-scoped `attribution` SSE
+event and the storefront shows which explicit fields shaped the answer.
 
 Start with a small server-side preference profile (brands/categories, budget
 range, size where relevant), not unrestricted transcript memory. Preferences are
@@ -119,8 +120,9 @@ and prove no cross-user leakage.
 Current slice: admin-only deterministic brief from order/after-sale/low-stock
 aggregates, with source window and generated_at, plus an admin UI button. An AI
 scheduler writes one brief per day under a Redis date lock and stores
-`ai:ops:latest`; failures release the date for retry. Exception explanation
-links remain; latest-brief read and admin feedback are implemented.
+`ai:ops:latest`; failures release the date for retry. Delivery is optionally
+signed (HMAC-SHA256 over `timestamp.body` with a mandatory secret); exception
+explanation links, latest-brief read and admin feedback are implemented.
 
 Use a scheduled, controlled workflow rather than free-running multi-agent
 loops. Daily brief and exception explanations come only from existing aggregate

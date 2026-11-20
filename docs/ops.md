@@ -440,6 +440,30 @@ port-qualified ipBlock rules in this environment, so it has no port restriction.
 Production should use a dedicated egress gateway with domain allow-listing
 instead. Model keys live in the `mall-ai-secrets` Secret.
 
+### AI RAG build and ops webhook
+
+AI Pods are load-only: they re-read `ai:rag:current` every `RAG_ALIAS_REFRESH`
+(default `1m`) and never embed the catalog. The `ai-rag-build` Job (Helm
+`post-install,post-upgrade` hook) and `ai-rag-build-scheduled` CronJob own the
+build; both run the same `mall/ai` image with `args: ["rag-build"]`. A current
+version newer than `RAG_BUILD_MAX_AGE` (default `24h`) is reused, so hook
+retries and repeated upgrades are cheap; `RAG_BUILD_FORCE=true` overrides the
+check. A fresh pointer whose index was dropped is treated as stale, so the Job
+rebuilds and self-heals pointer drift. Compose runs the one-shot
+`ai-rag-build` service. A failed build logs the
+error and exits 0 so the optional AI build cannot block a mall release; the
+previous `_current` alias keeps serving and the 6-hour CronJob retries. Redis or
+configuration errors still fail fast, and a failed build is visible in the Job
+log.
+
+The optional ops-brief webhook is authenticated: when
+`OPS_BRIEF_WEBHOOK_URL` is set, `OPS_BRIEF_WEBHOOK_SECRET` is mandatory
+(>=16 characters) and an unsigned request is refused rather than sent. Each
+POST carries `X-Mall-Timestamp`, `X-Mall-Delivery`, `X-Mall-Event: ops.brief`
+and `X-Mall-Signature: sha256=<hex HMAC-SHA256(secret, timestamp + "." + body)>`.
+Receivers should reject timestamps outside their replay window. A non-2xx
+response leaves the day pending so the scheduler retries.
+
 ### After draining the namespace
 
 `kubectl -n mall scale deployment --all --replicas=0` also scales the Ambient

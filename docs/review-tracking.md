@@ -12,7 +12,7 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 | P1#1 | done | Closed-bucket release writes one ledger/event; `TestReleaseTxClosedSeckillWritesOneLedger` (MySQL) proves exactly one row. |
 | P1#2 | done | `order.cancelled` uses `TccCancelConfirm`; partial MarkPaid compensation includes the failing SKU; `afterPaid` failure emits a durable confirm event consumed by `RunConfirmConsumer`; NATS confirm/order.cancelled tests pass. |
 | P1#3 | done | `Stock.version`; `cmd/catalog-stock-rebuild` dry-run found 3 mismatches and repaired 3. |
-| P1#4 | done | Full draft SHA binding, fail-closed meta, close errors surfaced; live tamper 409, correct/duplicate 200. |
+| P1#4 | done | Full draft SHA binding, fail-closed meta, close errors surfaced, Lua CAS state transitions; live tamper 409, correct/duplicate 200, save-failure -> FAILED -> retry test. |
 | P1#5 | done | `contains_any` executes; eval 15/15. |
 
 ## P2 (current handoff IDs)
@@ -26,7 +26,7 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 | P2#12 | done | Old broad cleanup disabled; `0014` requires exact seed fields/version; SQL positive/negative checks. |
 | P2#13 | done | Strict identity for checkout/payment/admin; normal routes keep 5s cache; live warmed-cache disable→401. |
 | P2#14 | done | `make test-integration` covers inventory/catalog/pricing and CI invokes it; local run passed. Real GitHub CI not run. |
-| P2#17 | partial | Versioned index, dual-write, lease renewal, lazy background rebuild/retry, alias/cache invalidation, metrics, hit@5 5/5 done. No independent Job; first build >3m can leave followers without alias; quality comparison cache/rerank still thin. |
+| P2#17 | partial | Versioned index, dual-write, lease renewal, alias/cache invalidation, metrics, hit@5 5/5 done. Independent `ai-rag-build` Job/CronJob + load-only follower Pods remove the first-build/follower window. Remaining gap: cache/rerank quality comparison still thin. |
 
 ## P3
 
@@ -40,18 +40,18 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 - Generated types: read models Sku/Product/Order/AfterSale/Campaign/PromotionRule/
   Stock/Category/Brand derive from generated schemas; Shipment/Refund/ListReply
   still hand-written because no generated schema exists.
-- proto guard: RPC signatures + reserved; baseline 680; CI invokes guard.
+- proto guard: RPC signatures + reserved; baseline 685; CI invokes guard.
 - K8s observability: OTLP collector egress added.
 
 ## AI roadmap truth table
 
 | Phase | Code status | Honest status / gap |
 |---|---|---|
-| 5 correctness | identity, eval, HITL binding/atomic/idempotency, explicit CONFIRMING/SAVED | done for the gate; no FAILED/Abort state or UI state display |
-| 6 versioned RAG | versioned index/alias, dual-write, lease renewal, reconciliation, cache, metrics, hit@5 | partial: no Job, first-build follower window, thin cache/rerank comparison |
+| 5 correctness | identity, eval, HITL binding/idempotency, explicit CONFIRMING/SAVED, FAILED via Abort, admin state UI, Lua CAS | done for the gate |
+| 6 versioned RAG | versioned index/alias, dual-write, lease renewal, reconciliation, cache, metrics, hit@5, build Job/CronJob + load-only followers | partial: cache/rerank quality comparison thin |
 | 7 cart assistant | draft tool, Redis draft, SSE draft, storefront confirm, Cart idempotent confirm | done: real-model E2E + expired/price/stock/unclosed Handler tests |
-| 8 preferences | Redis profile, 180d retention, API/UI, system-message injection, A/B 3/3, per-session attribution key, Redis isolation test | partial: no UI attribution view; one prompt family |
-| 9 ops copilot | deterministic daily brief, latest snapshot, optional webhook delivery, low-stock links, feedback | partial: no webhook auth/signature; no richer anomaly explanations |
+| 8 preferences | Redis profile, 180d retention, API/UI, system-message injection, A/B 3/3, per-session attribution key, Redis isolation test, attribution SSE event + storefront UI | partial: benchmark still one prompt family; add a cross-user/no-memory regression set |
+| 9 ops copilot | deterministic daily brief, latest snapshot, signed webhook (HMAC, fail-closed, delivery id), low-stock links, feedback | partial: cancellation/refund anomaly explanations not built |
 | 10 advanced | not adopted | deferred by evidence gate |
 
 ## Verification evidence
@@ -61,13 +61,21 @@ old table still described P2#10 as rejected and Phase 7 as not started.
   consumer, AI RAG, seckill, inventory, catalog and pricing.
 - `ai-eval` 15/15; `ai-rag-eval` hit@5 5/5; `ai-pref-eval` 3/3.
 - Phase 7 real-model draft SSE → confirm 200; normal answer emitted 246 SSE deltas.
-- RAG lease renewal Redis test; HITL live meta state SAVED; strict revocation 401.
+- RAG lease renewal + follower pointer swap + build-due Redis tests.
+- HITL Redis CAS tests: save-failure -> FAILED -> retry, SAVED terminal, illegal
+  transition, missing/corrupt meta; admin BFF save-failure retry test.
+- Attribution: owner-scoped SSE event (cross-user has none) and BFF proxy test.
+- Webhook: signature/timestamp/delivery headers, fail-closed without secret,
+  non-2xx rejection; frontend typecheck + build pass. `make verify` passes with
+  proto guard at 685 baseline entries (the refresh also added previously missing
+  HITL abort fields).
 
 ## Explicit unverified / drift
 
 - Real GitHub Actions was not executed.
-- RAG Job/elected-leader and crash/restart live drill are not done.
-- HITL has no FAILED/Abort state or admin UI state display; CONFIRMING transition
-  is not an atomic CAS.
-- Phase 8 has no automated cross-user test or per-recommendation attribution.
-- Phase 9 has no external delivery channel or rich anomaly explanations.
+- The new AI image/Job/CronJob was not rolled out to the dev cluster in this
+  session; the RAG crash/restart live drill is still pending.
+- Phase 8 has owner-scoped attribution, but no automated cross-user/no-memory
+  benchmark beyond the one prompt family.
+- Phase 9 has a signed external webhook, but no rich cancellation/refund anomaly
+  explanations.

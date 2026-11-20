@@ -337,3 +337,21 @@ func TestTccCancelConfirmRestocksConfirmedReservation(t *testing.T) {
 		t.Fatalf("status=%s", status)
 	}
 }
+
+func TestBatchGetStockDeduplicatesAndOmitsMissing(t *testing.T) {
+	db := seckillTestDB(t)
+	for _, row := range []struct{ sku, onHand, reserved int64 }{{1, 10, 2}, {2, 5, 0}} {
+		if _, err := db.Exec(`INSERT INTO inventory_stocks (sku_id, warehouse_id, on_hand, reserved, version) VALUES (?, 1, ?, ?, 3)`,
+			row.sku, row.onHand, row.reserved); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := &Service{db: db}
+	reply, err := svc.BatchGetStock(context.Background(), &pb.BatchGetStockRequest{SkuIds: []int64{1, 2, 1, 999}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reply.GetStocks()) != 2 || reply.GetStocks()[0].GetAvailable() != 8 {
+		t.Fatalf("stocks = %+v", reply.GetStocks())
+	}
+}

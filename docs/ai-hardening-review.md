@@ -48,3 +48,10 @@ Long-term choices for the Phase 5-10 implementation.
 - Phase 7 real-model draft SSE -> confirm 200
 - RAG alias rollback 64 docs and restore
 - CoreDNS original forward: `api.deepseek.com` resolves
+
+## Additional verification (follow-up)
+
+- Phase 8 benchmark rerun after the discriminating-baseline change: 3/3 PASS.
+- Strict revocation: warmed the 5s cache, disabled demo, checkout preview
+  returned 401 immediately; re-enable returned 200.
+- BatchGetStock deduplicates IDs and omits missing rows (MySQL test).

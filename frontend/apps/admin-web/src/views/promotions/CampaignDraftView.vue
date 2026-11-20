@@ -17,6 +17,7 @@ const form = reactive({
 const preview = ref<PromotionEvaluation | null>(null)
 const saved = ref<{ campaignId: number; ruleId: number } | null>(null)
 const checkpoint = ref('')
+const checkpointState = ref('')
 const hitlDraft = ref<{ campaign: Record<string, unknown>; rule: Record<string, unknown> } | null>(null)
 const hitlLoading = ref(false)
 const confirmed = ref(false)
@@ -87,6 +88,7 @@ async function startHitl(): Promise<void> {
       per_user_limit: form.perUser,
     })
     checkpoint.value = reply.checkpoint_id
+    checkpointState.value = 'INTERRUPTED' 
     hitlDraft.value = JSON.parse(reply.draft_json) as { campaign: Record<string, unknown>; rule: Record<string, unknown> }
     ElMessage.success('已生成 ADK 审核 checkpoint，可预览后确认')
   } catch (err) {
@@ -105,6 +107,7 @@ async function confirmHitl(): Promise<void> {
       campaign: hitlDraft.value.campaign, rule: hitlDraft.value.rule, confirm: true,
     })
     saved.value = { campaignId: result.campaign.id, ruleId: result.rule.id }
+    checkpointState.value = result.checkpoint_state ?? (result.checkpoint_closed ? 'SAVED' : 'CONFIRMING')
     if (result.checkpoint_closed === false) {
       // Business write succeeded but the checkpoint could not be closed; keep
       // the draft/checkpoint so the admin can retry the close safely.
@@ -118,6 +121,17 @@ async function confirmHitl(): Promise<void> {
     error.value = err instanceof ApiError || err instanceof Error ? err.message : '确认失败'
   } finally {
     hitlLoading.value = false
+  }
+}
+
+async function abortHitl(): Promise<void> {
+  if (!checkpoint.value) return
+  try {
+    await adminApi.ai.abortCampaignDraft(checkpoint.value)
+    checkpointState.value = 'FAILED'
+    error.value = '草案已标记 FAILED，checkpoint 保留，可修正后重试确认。'
+  } catch (err) {
+    error.value = err instanceof ApiError || err instanceof Error ? err.message : '放弃草案失败'
   }
 }
 
@@ -167,6 +181,8 @@ async function save(): Promise<void> {
               <el-button type="success" :loading="loading" :disabled="!preview || !confirmed" @click="save">直接保存 DRAFT</el-button>
               <el-button type="warning" :loading="hitlLoading" @click="startHitl">ADK 生成草案</el-button>
               <el-button type="success" :loading="hitlLoading" :disabled="!hitlDraft || !confirmed" @click="confirmHitl">ADK 确认保存</el-button>
+              <el-button :disabled="!checkpoint" @click="abortHitl">标记 FAILED</el-button>
+              <span v-if="checkpointState" class="state">state: {{ checkpointState }}</span>
             </div>
             <el-checkbox v-model="confirmed" class="confirm">我已核对并确认保存（不会立即生效）</el-checkbox>
           </el-form>
@@ -198,6 +214,7 @@ async function save(): Promise<void> {
 
 <style scoped>
 .actions { display: flex; gap: 10px; margin-top: 12px; }
+.state { color: var(--mall-muted); font-size: 12px; }
 .confirm { margin-top: 12px; }
 .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
 .summary div { border: 1px solid var(--mall-border); border-radius: 8px; padding: 12px; display: grid; gap: 6px; }

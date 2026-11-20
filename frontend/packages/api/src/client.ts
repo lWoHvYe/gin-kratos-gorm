@@ -243,9 +243,11 @@ export const adminApi = {
     startCampaignDraft: (payload: Record<string, unknown>) =>
       adminPost<{ checkpoint_id: string; draft_json: string }>('/ai/campaign-draft', payload),
     confirmCampaignDraft: (checkpoint: string, payload: { campaign: unknown; rule: unknown; confirm: boolean }) =>
-      adminPost<{ campaign: { id: number }; rule: { id: number }; checkpoint_closed: boolean }>(
+      adminPost<{ campaign: { id: number }; rule: { id: number }; checkpoint_closed: boolean; checkpoint_state?: string }>(
         `/ai/campaign-draft/${encodeURIComponent(checkpoint)}/confirm`, payload,
       ),
+    abortCampaignDraft: (checkpoint: string, reason = 'admin aborted draft') =>
+      adminPost<{ state: string }>(`/ai/campaign-draft/${encodeURIComponent(checkpoint)}/abort?reason=${encodeURIComponent(reason)}`, {}),
   },
   users: {
     list: (query: PageQuery & { keyword?: string; status?: string } = {}) =>

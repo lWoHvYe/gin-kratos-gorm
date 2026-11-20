@@ -100,3 +100,19 @@ func (h *handlers) confirmCampaignDraft(c *gin.Context) {
 	}
 	httpx.OK(c, map[string]any{"campaign": created, "rule": saved, "checkpoint_closed": closed, "checkpoint_state": state})
 }
+
+func (h *handlers) abortCampaignDraft(c *gin.Context) {
+	uid, err := adminUserID(c)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	checkpoint := c.Param("checkpoint")
+	if _, err := h.clients.AI.AbortCampaignDraft(c.Request.Context(), &pb.AbortCampaignDraftRequest{
+		UserId: uid, CheckpointId: checkpoint, Reason: c.Query("reason"),
+	}); err != nil {
+		httpx.Error(c, bff.RemoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"state": "FAILED"})
+}

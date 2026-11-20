@@ -1406,3 +1406,13 @@ paths:
                 comment: { type: string, maxLength: 500 }
       responses:
         '200': { description: Saved }
+
+  /api/admin/v1/ai/campaign-draft/{checkpoint}/abort:
+    post:
+      summary: Mark a HITL draft checkpoint FAILED while keeping it retryable
+      tags: [ai]
+      parameters:
+        - { name: checkpoint, in: path, required: true, schema: { type: string } }
+        - { name: reason, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Aborted }

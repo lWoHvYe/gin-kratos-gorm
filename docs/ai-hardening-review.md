@@ -6,7 +6,7 @@ This supersedes the earlier “done” wording where it overstated coverage.
 |---|---|---|
 | RAG rebuild | Redis lock with 3m TTL, 1m renewal, alias fallback, current pointer without TTL, lazy proxy + 2m background retry | AI starts before embedding is ready; still no independent Job; first build >3m can leave followers without alias |
 | RAG cache | version-bound exact/semantic cache; increment/delete invalidates version cache; rollback runbook flushes cache | implemented; cache/rerank A/B quality not measured |
-| HITL | `INTERRUPTED -> CONFIRMING -> SAVED`; `FAILED` via Abort; full draft hash; fail-closed meta; close failures surfaced; save failure marks FAILED and can retry | no admin UI for FAILED/state display; CONFIRMING declaration is not atomic CAS |
+| HITL | `INTERRUPTED -> CONFIRMING -> SAVED`; `FAILED` via Abort; admin UI shows checkpoint state and exposes abort; full draft hash; fail-closed meta | CONFIRMING declaration is not atomic CAS |
 | ADK chat | non-streaming was replaced by a cumulative-chunk normalizer; tool-call fragments merge by Index; SSE deltas restored | eval 15/15 and 246 deltas; no multi-replica/provider-failure live soak |
 | Cart assistant | draft tool, Redis draft, SSE draft, storefront confirm card, Cart transactional idempotent confirmation | expired/price/stock/unclosed handler tests added; no browser E2E for each branch |
 | Preferences | 180-day Redis profile, API/UI, system injection, A/B 3/3, per-session attribution record and Redis user-isolation test | attribution is Redis/log only; one prompt family |

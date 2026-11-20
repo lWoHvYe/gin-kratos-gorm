@@ -151,6 +151,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 		admin.POST("/ai/chat", h.aiChat)
 		admin.POST("/ai/campaign-draft", h.startCampaignDraft)
 		admin.POST("/ai/campaign-draft/:checkpoint/confirm", h.confirmCampaignDraft)
+		admin.POST("/ai/campaign-draft/:checkpoint/abort", h.abortCampaignDraft)
 	}
 	admin.GET("/users", h.listUsers)
 	admin.PUT("/users/:id/status", h.setUserStatus)

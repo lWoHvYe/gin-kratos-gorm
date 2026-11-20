@@ -9,7 +9,7 @@ and keep the assistant optional (failures must not affect browse/checkout).
 | 2 | ADK HITL pilot for admin campaign drafts | done (deterministic review agent; bound + atomic save) |
 | 3 | Redis hybrid retrieval (BM25 + KNN + RRF), rerank, semantic cache | done (hybrid + rerank + versioned semantic cache) |
 | 4 | Replace customer/admin ReAct with ADK; keep SSE, tool events, budgets, breaker, eval | done for chat; HITL remains deterministic |
-| 5 | Correctness and recovery gate | done (identity/eval 26/26 with resets/HITL idempotency) |
+| 5 | Correctness and recovery gate | done (identity/eval 15/15, HITL FAILED/Abort/state UI) |
 | 6 | Versioned RAG and measurable quality | partial: hit@5 5/5, grounded/refusal, lease/rollback done; no Job, thin cache/rerank comparison |
 | 7 | Customer task assistant: comparison, budget list, cart draft | done: real-model E2E + expired/price/stock/unclosed tests |
 | 8 | Controlled personalization / preference profile | partial: A/B 3/3, attribution key/isolation test; no UI attribution/regression suite |

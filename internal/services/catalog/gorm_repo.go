@@ -89,7 +89,7 @@ func (g *gormReader) GetProduct(ctx context.Context, id int64, activeOnly bool) 
 	q := g.db.WithContext(ctx).
 		Preload("Skus", func(db *gorm.DB) *gorm.DB {
 			if activeOnly {
-				return db.Where("status = ?", "ENABLED").Order("id")
+				return db.Where("status = ? AND price_cent > 0", "ENABLED").Order("id")
 			}
 			return db.Order("id")
 		}).

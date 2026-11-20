@@ -62,11 +62,9 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 	for _, item := range items {
 		totals[item.GetSkuId()] += item.GetQuantity()
 	}
-	for skuID, quantity := range totals {
-		if err := h.ensureStock(c.Request.Context(), skuID, quantity); err != nil {
-			httpx.Error(c, err)
-			return
-		}
+	if err := h.ensureStocks(c.Request.Context(), totals); err != nil {
+		httpx.Error(c, err)
+		return
 	}
 	quote, err := h.clients.Pricing.CreateQuote(c.Request.Context(), &pb.QuoteRequest{
 		UserId:    uid,

@@ -61,7 +61,9 @@ func (h *handlers) confirmCartDraft(c *gin.Context) {
 		httpx.Error(c, apperr.Invalid("invalid cart draft"))
 		return
 	}
-	// Validate every line before mutating the cart.
+	// Validate every line before mutating the cart; one batch stock read keeps
+	// request cost proportional to distinct SKUs.
+	totals := make(map[int64]int32)
 	for _, item := range draft.Items {
 		sku, err := h.clients.Catalog.GetSku(c.Request.Context(), &pb.GetSkuRequest{SkuId: item.SkuID})
 		if err != nil {
@@ -72,15 +74,11 @@ func (h *handlers) confirmCartDraft(c *gin.Context) {
 			httpx.Error(c, apperr.Conflict("price or status changed; generate a new draft"))
 			return
 		}
-		stock, err := h.clients.Inventory.GetStock(c.Request.Context(), &pb.GetStockRequest{SkuId: item.SkuID})
-		if err != nil {
-			httpx.Error(c, bff.RemoteError(err))
-			return
-		}
-		if stock.GetAvailable() < int64(item.Quantity) {
-			httpx.Error(c, apperr.Conflict("stock changed; generate a new draft"))
-			return
-		}
+		totals[item.SkuID] += item.Quantity
+	}
+	if err := h.ensureStocks(c.Request.Context(), totals); err != nil {
+		httpx.Error(c, apperr.Conflict("stock changed; generate a new draft"))
+		return
 	}
 	// Cart owns the atomic/idempotent boundary; a retry after a partial
 	// BFF failure cannot add the draft twice.

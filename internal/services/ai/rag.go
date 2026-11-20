@@ -93,7 +93,7 @@ func OpenRAG(ctx context.Context, cfg RAGConfig, catalog catalogClient, client r
 			return r, nil
 		}
 		// The pointer may be missing while a valid alias still serves traffic.
-		if current, ok := loadAliasVersion(ctx, client, index); ok {
+		if current, ok := loadAliasVersion(ctx, client, index+"_current"); ok {
 			r.index, r.prefix = current.Index, current.Prefix
 			logger.Warn("ai rag loaded alias without current pointer", "index", current.Index, "prefix", current.Prefix)
 			return r, nil
@@ -332,7 +332,6 @@ func (r *redisRAG) Search(ctx context.Context, query string, limit int) ([]ragDo
 	}
 	cacheKey := r.queryCacheKey(query, limit)
 	if cached, err := r.client.Get(ctx, cacheKey).Bytes(); err == nil {
-		metrics.AIRAGTruncated.Set(0)
 		var docs []ragDoc
 		if json.Unmarshal(cached, &docs) == nil {
 			metrics.AIRAGSearch.WithLabelValues("cache").Inc()
@@ -863,8 +862,20 @@ func (r *redisRAG) UpsertProduct(ctx context.Context, p *pb.Product) error {
 			"terms", lexicalTerms(doc.Title+"\n"+doc.Content),
 			"product_id", doc.ProductID, "content_hash", hash, "embedding", encodeVector(vec[0]))
 	}
-	_, err = pipe.Exec(ctx)
-	return err
+	if _, err = pipe.Exec(ctx); err != nil {
+		return err
+	}
+	r.invalidateSearchCache(ctx)
+	return nil
+}
+
+func (r *redisRAG) invalidateSearchCache(ctx context.Context) {
+	_ = r.client.Del(ctx, r.semanticKey()).Err()
+	pattern := "ai:rag:q:" + r.writeIndex() + ":*"
+	iter := r.client.Scan(ctx, 0, pattern, 200).Iterator()
+	for iter.Next(ctx) {
+		_ = r.client.Del(ctx, iter.Val()).Err()
+	}
 }
 
 func (r *redisRAG) activeVersions(ctx context.Context) []ragVersion {
@@ -892,7 +903,11 @@ func (r *redisRAG) DeleteProduct(ctx context.Context, id int64) error {
 	for _, version := range versions {
 		keys = append(keys, version.Prefix+fmt.Sprintf("product:%d", id))
 	}
-	return r.client.Del(ctx, keys...).Err()
+	if err := r.client.Del(ctx, keys...).Err(); err != nil {
+		return err
+	}
+	r.invalidateSearchCache(ctx)
+	return nil
 }
 
 // ReconcileProducts catches events missed during an index build or consumed by

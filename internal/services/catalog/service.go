@@ -120,6 +120,9 @@ func (s *Service) GetAdminProduct(ctx context.Context, req *pb.GetProductRequest
 }
 
 func (s *Service) ListProducts(ctx context.Context, req *pb.ListProductsRequest) (*pb.ProductList, error) {
+	if req.GetPage() > 1000 {
+		return nil, apperr.Invalid("page must not exceed 1000")
+	}
 	normalizePage(&req.Page, &req.PageSize)
 	ids, err := s.categoryIDs(ctx, req.GetCategoryId())
 	if err != nil {
@@ -131,6 +134,9 @@ func (s *Service) ListProducts(ctx context.Context, req *pb.ListProductsRequest)
 	if s.gorm != nil {
 		list, err := s.gorm.ListProducts(ctx, req, ids)
 		if err != nil {
+			if errors.Is(err, errInvalidCursor) {
+				return nil, apperr.Invalid("invalid cursor")
+			}
 			return nil, apperr.Internal("list products", err)
 		}
 		return list, nil
@@ -172,7 +178,7 @@ func (s *Service) loadSku(ctx context.Context, id int64, activeOnly bool) (*pb.S
 		p.category_id, p.brand_id
 		FROM skus k JOIN spus p ON p.id = k.spu_id WHERE k.id = ?`
 	if activeOnly {
-		query += " AND k.status = 'ENABLED' AND p.status = 'ON_SALE'"
+		query += " AND k.status = 'ENABLED' AND k.price_cent > 0 AND p.status = 'ON_SALE'"
 	}
 	var sku pb.Sku
 	err := s.db.QueryRowContext(ctx, query, id).

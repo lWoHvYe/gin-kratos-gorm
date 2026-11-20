@@ -1,6 +1,6 @@
 <template>
-  <div class="ai-assistant">
-    <button v-if="!open && available" class="ai-fab" type="button" aria-label="打开购物助手" @click="toggle">AI</button>
+  <div v-if="available" class="ai-assistant">
+    <button v-if="!open" class="ai-fab" type="button" aria-label="打开购物助手" @click="toggle">AI</button>
     <section v-else class="ai-panel" aria-label="购物助手">
       <header class="ai-head">
         <strong>购物助手</strong>

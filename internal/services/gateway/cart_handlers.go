@@ -11,27 +11,41 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ensureStock checks the default warehouse before adding to cart or quoting.
-// The final authority remains DTM Reserve during order creation.
-func (h *handlers) ensureStock(ctx context.Context, skuID int64, quantity int32) error {
-	if skuID <= 0 || quantity <= 0 {
-		return apperr.Invalid("sku_id and quantity must be positive")
+// ensureStocks checks a request's total quantity per SKU with one inventory
+// RPC. Totals are accumulated locally so duplicate lines keep the sum semantics.
+func (h *handlers) ensureStocks(ctx context.Context, totals map[int64]int32) error {
+	if len(totals) == 0 {
+		return nil
 	}
 	if h.clients.Inventory == nil {
 		return apperr.Unavailable("inventory client is not configured", nil)
 	}
-	stock, err := h.clients.Inventory.GetStock(ctx, &pb.GetStockRequest{SkuId: skuID, WarehouseId: 1})
+	ids := make([]int64, 0, len(totals))
+	for skuID, quantity := range totals {
+		if skuID <= 0 || quantity <= 0 {
+			return apperr.Invalid("sku_id and quantity must be positive")
+		}
+		ids = append(ids, skuID)
+	}
+	stock, err := h.clients.Inventory.BatchGetStock(ctx, &pb.BatchGetStockRequest{SkuIds: ids, WarehouseId: 1})
 	if err != nil {
 		return bff.RemoteError(err)
 	}
-	if stock.GetAvailable() < int64(quantity) {
-		return apperr.Failed(fmt.Sprintf("insufficient stock for sku %d: available %d", skuID, stock.GetAvailable()))
+	available := make(map[int64]int64, len(stock.GetStocks()))
+	for _, row := range stock.GetStocks() {
+		available[row.GetSkuId()] = row.GetAvailable()
+	}
+	for skuID, quantity := range totals {
+		if avail, ok := available[skuID]; !ok || avail < int64(quantity) {
+			return apperr.Failed(fmt.Sprintf("insufficient stock for sku %d: available %d", skuID, avail))
+		}
 	}
 	return nil
 }
 
-// ensureCartStock accounts for the quantity already accumulated in the cart;
-// AddItem is an upsert, so checking only the incoming delta is insufficient.
+func (h *handlers) ensureStock(ctx context.Context, skuID int64, quantity int32) error {
+	return h.ensureStocks(ctx, map[int64]int32{skuID: quantity})
+}
 
 // ensureCartStock accounts for the quantity already accumulated in the cart;
 // AddItem is an upsert, so checking only the incoming delta is insufficient.
@@ -177,16 +191,26 @@ func (h *handlers) mergeCart(c *gin.Context) {
 			return
 		}
 	}
+	current, err := h.clients.Cart.GetCart(c.Request.Context(), &pb.GetCartRequest{UserId: uid})
+	if err != nil {
+		httpx.Error(c, bff.RemoteError(err))
+		return
+	}
+	totals := make(map[int64]int32)
+	for _, item := range current.GetItems() {
+		totals[item.GetSkuId()] += item.GetQuantity()
+	}
+	for _, item := range in.Items {
+		totals[item.SkuID] += item.Quantity
+	}
+	if err := h.ensureStocks(c.Request.Context(), totals); err != nil {
+		httpx.Error(c, err)
+		return
+	}
 	var cart *pb.Cart
 	for _, item := range in.Items {
-		if err := h.ensureCartStock(c.Request.Context(), uid, item.SkuID, item.Quantity); err != nil {
-			httpx.Error(c, err)
-			return
-		}
 		cart, err = h.clients.Cart.AddItem(c.Request.Context(), &pb.AddItemRequest{
-			UserId:   uid,
-			SkuId:    item.SkuID,
-			Quantity: item.Quantity,
+			UserId: uid, SkuId: item.SkuID, Quantity: item.Quantity,
 		})
 		if err != nil {
 			httpx.Error(c, bff.RemoteError(err))

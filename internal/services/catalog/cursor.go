@@ -3,7 +3,7 @@ package catalog
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"strings"
 )
 
@@ -18,6 +18,8 @@ func encodeProductCursor(sort string, price, id int64) string {
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
+var errInvalidCursor = errors.New("invalid cursor")
+
 func decodeProductCursor(raw string) (*productCursor, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -25,11 +27,11 @@ func decodeProductCursor(raw string) (*productCursor, error) {
 	}
 	data, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {
-		return nil, fmt.Errorf("invalid cursor")
+		return nil, errInvalidCursor
 	}
 	var c productCursor
 	if err := json.Unmarshal(data, &c); err != nil || c.ID <= 0 {
-		return nil, fmt.Errorf("invalid cursor")
+		return nil, errInvalidCursor
 	}
 	return &c, nil
 }

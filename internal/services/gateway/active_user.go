@@ -11,7 +11,11 @@ import (
 
 // requireActive revalidates status/token_version at high-risk write entry
 // points, so a disabled user's already-issued access token stops working.
-func (h *handlers) requireActive(c *gin.Context) {
+func (h *handlers) requireActive(c *gin.Context) { h.activeCheck(c, false) }
+
+func (h *handlers) requireActiveStrict(c *gin.Context) { h.activeCheck(c, true) }
+
+func (h *handlers) activeCheck(c *gin.Context, strict bool) {
 	if h.clients.Identity == nil {
 		c.Next()
 		return
@@ -22,7 +26,7 @@ func (h *handlers) requireActive(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	if status, cached := h.active.Lookup(int64(claims.UserID), claims.TokenVersion); cached {
+	if status, cached := h.active.Lookup(int64(claims.UserID), claims.TokenVersion); cached && !strict {
 		if status == "ACTIVE" {
 			c.Next()
 			return

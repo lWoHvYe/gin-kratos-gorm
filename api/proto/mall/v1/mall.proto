@@ -236,6 +236,7 @@ message SetProductStatusRequest { int64 id = 1; string status = 2; }
 // ---------------------------------------------------------------- inventory
 service InventoryService {
   rpc GetStock (GetStockRequest) returns (Stock);
+  rpc BatchGetStock (BatchGetStockRequest) returns (StockList);
   rpc Reserve (ReserveRequest) returns (ReserveReply);
   rpc Confirm (ReserveRequest) returns (Empty);
   rpc Release (ReserveRequest) returns (Empty);
@@ -266,6 +267,7 @@ message Stock {
   int64 version = 6;
 }
 message GetStockRequest { int64 sku_id = 1; int64 warehouse_id = 2; }
+message BatchGetStockRequest { repeated int64 sku_ids = 1; int64 warehouse_id = 2; }
 message ReserveRequest {
   string order_no = 1;
   int64 sku_id = 2;

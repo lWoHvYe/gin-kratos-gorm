@@ -5,7 +5,7 @@ Long-term choices for the Phase 5-10 implementation.
 | Topic | Better long-term choice | Current state |
 |---|---|---|
 | Phase 10 | Keep the evidence gate; defer multi-agent/multimodal/routing | deferred |
-| ADK streaming | Tool-aware streaming adapter that buffers until tool_calls are known, then streams the final answer | non-streaming; stable tools, no token deltas |
+| ADK streaming | Tool-aware streaming adapter that normalizes cumulative DeepSeek chunks and merges tool-call fragments | done: eval 15/15 and 246 SSE deltas for a plain answer |
 | HITL recovery | Explicit `INTERRUPTED -> CONFIRMING -> SAVED/FAILED` record plus business idempotency key | unique draft-code idempotency; duplicate/save-failure tests pass |
 | Cart confirm | Atomic/bulk Cart RPC or a per-draft idempotency key in the Cart service | done: `Cart.ConfirmCartDraft` transaction + `(user_id,draft_id)` unique key |
 | RAG rebuild | Dedicated Job or elected leader with lease renewal | Redis leader lock; non-leader loads `ai:rag:current` |
@@ -37,7 +37,7 @@ Long-term choices for the Phase 5-10 implementation.
 4. Admin low-stock links point at `/admin/inventory?sku_id=...`; confirm that
    route exists in the admin SPA before relying on the link.
 5. Phase 8's benchmark passed 3/3 repeated A/B runs.
-6. Non-streaming ADK is a deliberate correctness tradeoff, not the final UX.
+6. ADK streaming now normalizes cumulative chunks and merges tool-call fragments by Index; eval 15/15 and normal answers emit incremental deltas.
 
 ## Verification at the time of this review
 

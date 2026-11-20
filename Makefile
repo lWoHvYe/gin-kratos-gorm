@@ -205,7 +205,7 @@ test-integration:
 	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
 		$(GO) test ./internal/services/seckill -run TestReserveScript -count=1
 	@echo ">> inventory seckill/compensation/ledger (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/inventory -run 'TestCancelConfirmed|TestReleaseHeld|TestQualificationRelease|TestConcurrentRelease|TestReleaseTxClosed|TestTccCancelConfirm|TestCompensationHandler|TestArchiveLedger' -count=1
+	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/inventory -run 'TestCancelConfirmed|TestReleaseHeld|TestQualificationRelease|TestConcurrentRelease|TestReleaseTxClosed|TestTccCancelConfirm|TestCompensationHandler|TestConfirmConsumerNATS|TestArchiveLedger' -count=1
 	@echo ">> catalog stock projection (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/catalog -run TestStockProjectionRejectsOlderVersion -count=1
 	@echo ">> pricing quote cleanup (MySQL)"

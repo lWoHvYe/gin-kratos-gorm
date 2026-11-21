@@ -5,6 +5,9 @@
 .vscode
 .claude
 
+# Frontend has its own Docker contexts; the Go/migrate images do not need it.
+frontend
+
 # Local caches and build output
 .tmp
 bin
@@ -14,6 +17,10 @@ data
 *.sqlite3
 *.log
 coverage.out
+
+# Documentation is not copied by the Go/migrate images.
+docs
+*.md
 
 # Local secrets
 .env

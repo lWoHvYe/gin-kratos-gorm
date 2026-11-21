@@ -23,13 +23,19 @@ WORKDIR /src
 
 # Keep module downloads in their own layer: source edits do not invalidate it.
 COPY go.mod go.sum ./
-RUN go mod download
+# The cache mounts survive layer invalidation. Without them every service build
+# recompiles all modules from an empty Go build cache.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
 
 COPY . .
 
 # No cgo is required: the MySQL driver, JWT, bcrypt and the DTM client are all
 # pure Go. The resulting binary runs on the minimal Alpine runtime below.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/app "./cmd/${SERVICE}"
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/app "./cmd/${SERVICE}"
 
 FROM alpine:3.20 AS runtime
 

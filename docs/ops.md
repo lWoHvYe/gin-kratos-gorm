@@ -343,10 +343,28 @@ make fmt-check    # gofmt gate
 make vet          # go vet ./...
 ```
 
-The Dockerfile is cache-friendly (module layer before source) and builds a
-static binary (`CGO_ENABLED=0`) on `golang:1.27-alpine`, running as UID 10001 on
-`alpine:3.20` with `ca-certificates`, `tzdata` and `wget` for healthchecks. A
-missing `SERVICE` build argument fails the build with a clear message.
+The Dockerfile builds a static binary (`CGO_ENABLED=0`) on
+`golang:1.27-alpine`, running as UID 10001 on `alpine:3.20` with
+`ca-certificates`, `tzdata` and `wget` for healthchecks. A missing `SERVICE`
+build argument fails the build with a clear message.
+
+Docker's build does **not** inherit the host `GOPROXY` or HTTP proxy. The
+Makefile passes the host `go env GOPROXY` into `k8s-images`; in China the host
+usually resolves to `https://goproxy.cn,direct`. Override explicitly if needed:
+
+```bash
+GOPROXY=https://goproxy.cn,direct make k8s-images
+```
+
+Module and Go-build cache mounts persist across source edits, so an incremental
+service rebuild normally reuses dependencies (module download is sub-second;
+the changed package and link step remain). `.dockerignore` excludes `.tmp` and
+`frontend`, keeping the Go/migrate context small. `docker builder prune` can
+reclaim old BuildKit layers if Docker reports a large reclaimable cache.
+
+Building all 14 images in `make k8s-images` is intentionally not the fast path;
+rebuild only the services you changed. A first-ever build (or after pruning)
+must still download modules and populate the Go build cache.
 
 ## Security notes
 

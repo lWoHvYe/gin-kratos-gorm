@@ -4,7 +4,10 @@ GO ?= go
 IMAGE_REGISTRY ?= mall
 IMAGE_TAG ?= dev
 K8S_REMOTE ?= root@10.211.55.29
-GOPROXY ?= https://proxy.golang.org,direct
+# Follow the host Go configuration (e.g. https://goproxy.cn,direct in China).
+# Docker does not inherit the host GOPROXY or HTTP proxy automatically; it is
+# passed explicitly to the image build below.
+GOPROXY ?= $(shell go env GOPROXY)
 
 COMPOSE_DIR := deploy/compose
 COMPOSE_ENV_ARG := $(if $(wildcard $(COMPOSE_DIR)/.env),--env-file $(COMPOSE_DIR)/.env,)

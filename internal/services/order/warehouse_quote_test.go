@@ -69,3 +69,25 @@ func TestBuildCreateOrderInnerCarriesGroups(t *testing.T) {
 		t.Fatalf("item = %+v", inner.GetItems()[1])
 	}
 }
+
+func TestMultiGroupActionsExposeGroupSuffix(t *testing.T) {
+	o := &orderRecord{Status: statusAllocated, RefundState: refundStateNone}
+	groups := []*fulfillmentGroup{
+		{GroupNo: "G1", Status: "SHIPPED"}, {GroupNo: "G2", Status: statusAllocated},
+	}
+	actions := multiGroupActions(o, groups)
+	want := map[string]bool{
+		"receive_group:G1": true, "apply_after_sale_group:G1": true, "ship_group:G2": true,
+	}
+	for _, action := range actions {
+		delete(want, action)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing actions %v in %v", want, actions)
+	}
+	for _, action := range actions {
+		if action == "ship" || action == "receive" || action == "apply_after_sale" {
+			t.Fatalf("order-level action leaked for split order: %v", actions)
+		}
+	}
+}

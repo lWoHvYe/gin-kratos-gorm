@@ -8,15 +8,21 @@ import (
 )
 
 func TestValidateShipmentOrderUsesServerActions(t *testing.T) {
-	if err := validateShipmentOrder(&pb.Order{AvailableActions: []string{"apply_after_sale", "ship"}}); err != nil {
+	if err := validateShipmentOrder(&pb.Order{AvailableActions: []string{"apply_after_sale", "ship"}}, ""); err != nil {
 		t.Fatalf("ship action rejected: %v", err)
+	}
+	if err := validateShipmentOrder(&pb.Order{AvailableActions: []string{"ship_group:G2"}}, "G2"); err != nil {
+		t.Fatalf("group ship action rejected: %v", err)
+	}
+	if err := validateShipmentOrder(&pb.Order{AvailableActions: []string{"ship_group:G2"}}, "G1"); err == nil {
+		t.Fatal("wrong group was accepted")
 	}
 	for _, order := range []*pb.Order{
 		{Status: "PAID", RefundState: "REFUNDING", AvailableActions: []string{"apply_after_sale"}},
 		{Status: "SHIPPED", RefundState: "FULL", AvailableActions: []string{"receive"}},
 		{},
 	} {
-		if err := validateShipmentOrder(order); !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		if err := validateShipmentOrder(order, ""); !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
 			t.Fatalf("order %+v err = %v", order, err)
 		}
 	}

@@ -22,6 +22,10 @@ const receive = useMutation({
   onSuccess: async () => { ElMessage.success('已登记收货'); await qc.invalidateQueries({ queryKey: ['after-sales'] }) },
   onError: (error) => ElMessage.error(error instanceof ApiError || error instanceof Error ? error.message : '操作失败'),
 })
+function groupLabel(row: AfterSale): string {
+  const item = row.items?.[0]
+  return item ? `${item.group_no || 'G1'} / 仓 ${item.warehouse_id || 1}` : 'G1 / 仓 1'
+}
 const refund = useMutation({
   mutationFn: (no: string) => adminApi.afterSales.refund(no),
   onSuccess: async () => { ElMessage.success('退款已完成'); await qc.invalidateQueries({ queryKey: ['after-sales'] }) },
@@ -40,6 +44,8 @@ const refund = useMutation({
         <el-table-column prop="type" label="类型" width="140" />
         <el-table-column prop="status" label="状态" width="130" />
         <el-table-column label="金额" width="110"><template #default="{ row }">{{ formatMoney(row.amount_cent) }}</template></el-table-column>
+        <el-table-column label="分组 / 仓" width="120"><template #default="{ row }">{{ groupLabel(row) }}</template></el-table-column>
+        <el-table-column prop="restock_state" label="回库" width="130" />
         <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
         <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">

@@ -22,5 +22,5 @@ payment:
   mockEnabled: "true"
 
 warehouseAllocationShadow: true
-# Split checkout stays off until phase 5 makes after-sales/returns group-aware.
-warehouseSplitEnabled: false
+# Phase 6 group-aware UI is in place; dev single-node enables split checkout.
+warehouseSplitEnabled: true

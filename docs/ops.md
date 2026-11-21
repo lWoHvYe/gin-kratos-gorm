@@ -569,10 +569,10 @@ Production order:
    rollback is restore-from-backup or roll forward; do not invent a down SQL.
 
 `WAREHOUSE_SPLIT_ENABLED` stays `false` in both the dev and production values.
-Phase 4/5 now have per-group shipments, permits and returns/refunds and were
-live-validated with a temporary flag. Phase 6 still must expose per-group action
-selection in the storefront/admin UI before the flag is enabled; the API already
-accepts `warehouse_id/group_no` on after-sale items.
+Phase 4/5/6 now have per-group shipments, permits, returns/refunds and
+group-aware storefront/admin UI. The dev single-node values enable split; the
+production defaults keep `WAREHOUSE_SPLIT_ENABLED=false` until a production
+rollout/rollback rehearsal.
 
 The AI RAG build is not a release gate by default. `ai-rag-build-scheduled`
 runs as a CronJob; `ai.ragBuild.hook=true` opts into the old blocking

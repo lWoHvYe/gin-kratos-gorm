@@ -166,12 +166,14 @@ func (h *handlers) getOrderShipment(c *gin.Context) {
 		httpx.Error(c, apperr.NotFound("order not found"))
 		return
 	}
-	shipment, err := h.clients.Fulfillment.GetShipmentByOrder(c.Request.Context(), &pb.GetShipmentByOrderRequest{OrderNo: orderNo})
+	list, err := h.clients.Fulfillment.ListShipments(c.Request.Context(), &pb.ListShipmentsRequest{
+		OrderNo: orderNo, Page: 1, PageSize: 100,
+	})
 	if err != nil {
 		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
-	httpx.OK(c, shipment)
+	httpx.OK(c, list)
 }
 
 // ---------------------------------------------------------------- seckill

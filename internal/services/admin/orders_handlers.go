@@ -91,7 +91,8 @@ func (h *handlers) createShipment(c *gin.Context) {
 		httpx.Error(c, bff.RemoteError(err))
 		return
 	}
-	if err := validateShipmentOrder(order); err != nil {
+	groupNo := strings.TrimSpace(in.FulfillmentGroupNo)
+	if err := validateShipmentOrder(order, groupNo); err != nil {
 		httpx.Error(c, err)
 		return
 	}
@@ -100,9 +101,17 @@ func (h *handlers) createShipment(c *gin.Context) {
 		items = append(items, &pb.ShipmentItem{SkuId: item.SkuID, Quantity: item.Quantity})
 	}
 	if len(items) == 0 {
-		// Default to a full shipment: copy the order lines through.
+		// Default to a full shipment for the selected group (or the whole order
+		// for legacy single-group callers).
 		for _, line := range order.GetItems() {
+			if groupNo != "" && line.GetGroupNo() != groupNo {
+				continue
+			}
 			items = append(items, &pb.ShipmentItem{SkuId: line.GetSkuId(), Quantity: line.GetQuantity()})
+		}
+		if len(items) == 0 {
+			httpx.Error(c, apperr.Failed("no order items belong to the selected fulfillment group"))
+			return
 		}
 	}
 	shipment, err := h.clients.Fulfillment.CreateShipment(c.Request.Context(), &pb.CreateShipmentRequest{
@@ -131,13 +140,16 @@ func (h *handlers) createShipment(c *gin.Context) {
 // re-deriving the lifecycle/refund state in the BFF. A refunding/full-refunded
 // order has no "ship" action, so no draft shipment is created before the
 // fulfillment permit would reject it.
-func validateShipmentOrder(order *pb.Order) error {
+func validateShipmentOrder(order *pb.Order, groupNo string) error {
 	for _, action := range order.GetAvailableActions() {
-		if action == "ship" {
+		if groupNo == "" && action == "ship" {
+			return nil
+		}
+		if groupNo != "" && action == "ship_group:"+groupNo {
 			return nil
 		}
 	}
-	return apperr.Failed("shipping is not available for this order")
+	return apperr.Failed("shipping is not available for this order/group")
 }
 
 // approveRequest is the body of POST /after-sales/:no/approve. approved defaults

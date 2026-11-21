@@ -78,18 +78,30 @@ export interface OrderItem {
   price_cent: number
   quantity: number
   discount_cent: number
+  warehouse_id?: number
+  group_no?: string
+}
+
+export interface FulfillmentGroup {
+  group_no: string
+  warehouse_id: number
+  freight_cent: number
+  status: string
 }
 
 type GeneratedOrder = components['schemas']['Order']
 
-export interface Order extends Required<Omit<GeneratedOrder, 'items'>> {
+export interface Order extends Required<Omit<GeneratedOrder, 'items' | 'fulfillment_groups'>> {
   items: OrderItem[]
+  fulfillment_groups?: FulfillmentGroup[]
   quote_id: string
 }
 
 export interface Shipment {
   shipment_no: string
   order_no: string
+  fulfillment_group_no?: string
+  warehouse_id?: number
   status: string
   carrier: string
   tracking_no: string
@@ -100,7 +112,7 @@ export interface Shipment {
 type GeneratedAfterSale = components['schemas']['AfterSale']
 
 export interface AfterSale extends Required<GeneratedAfterSale> {
-  items: Array<{ sku_id: number; quantity: number }>
+  items: Array<{ sku_id: number; quantity: number; warehouse_id?: number; group_no?: string }>
 }
 
 export interface Refund {

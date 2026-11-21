@@ -175,7 +175,7 @@ etcd service health or the HTTP probe in `deploy/`.
 | `<SERVICE>_ADDR` | port table | direct target override |
 | `LOG_LEVEL` | `info` | `debug`, `warn`, `error` |
 | `WAREHOUSE_ALLOCATION_SHADOW` | `false` | phase-2a dual-read: call Inventory `AllocateOrder` during preview, log mismatches, never change the quote |
-| `WAREHOUSE_SPLIT_ENABLED` | `false` | phase-3b/4: allow multi-warehouse allocations through Pricing/Order and per-group shipments; dev single-node sets `true`, production stays `false` until phase 5/6 |
+| `WAREHOUSE_SPLIT_ENABLED` | `false` | allow multi-warehouse allocations through Pricing/Order and per-group shipments/actions; dev single-node sets `true`, production stays `false` until rollout rehearsal |
 | `GIN_MODE` | `debug` | set `release` in production |
 
 `config.Load("gateway")` still parses `MySQL_DSN`, `NATS_URL`, `DTM_ADDRESS`,

@@ -15,7 +15,7 @@ const shipment = useQuery({
   queryFn: () => adminApi.shipments.list({ order_no: orderNo.value, page: 1, page_size: 10 }),
 })
 const shipDialog = ref(false)
-const shipForm = reactive({ carrier: 'SF', tracking_no: '' })
+const shipForm = reactive({ carrier: 'SF', tracking_no: '', groupNo: '', warehouseId: 0 })
 const cancelReason = ref('operator cancelled')
 
 const cancel = useMutation({
@@ -24,11 +24,22 @@ const cancel = useMutation({
   onError: (error) => ElMessage.error(error instanceof Error ? error.message : '取消失败'),
 })
 const createShipment = useMutation({
-  mutationFn: () => adminApi.shipments.create(orderNo.value, shipForm.carrier, shipForm.tracking_no, true),
+  mutationFn: () => adminApi.shipments.create(orderNo.value, shipForm.carrier, shipForm.tracking_no, true, shipForm.groupNo),
   onSuccess: async () => { shipDialog.value = false; ElMessage.success('已创建并发货'); await qc.invalidateQueries({ queryKey: ['shipment', orderNo.value] }); await qc.invalidateQueries({ queryKey: ['order', orderNo.value] }) },
   onError: (error) => ElMessage.error(error instanceof ApiError || error instanceof Error ? error.message : '发货失败'),
 })
-const currentShipment = computed<Shipment | undefined>(() => shipment.data.value?.shipments?.[0])
+const shipments = computed<Shipment[]>(() => shipment.data.value?.shipments ?? [])
+function openShip(groupNo = '', warehouseId = 0): void {
+  shipForm.groupNo = groupNo
+  shipForm.warehouseId = warehouseId
+  shipDialog.value = true
+}
+function canShipGroup(groupNo: string): boolean {
+  return order.data.value?.available_actions?.includes(`ship_group:${groupNo}`) ?? false
+}
+function shipmentFor(groupNo: string): Shipment | undefined {
+  return shipments.value.find((item) => item.fulfillment_group_no === groupNo)
+}
 </script>
 
 <template>
@@ -38,7 +49,7 @@ const currentShipment = computed<Shipment | undefined>(() => shipment.data.value
       <div class="toolbar" style="margin:0">
         <router-link to="/orders"><el-button>返回</el-button></router-link>
         <el-button v-if="order.data.value?.available_actions?.includes('cancel')" type="danger" @click="cancel.mutate()">取消订单</el-button>
-        <el-button v-if="order.data.value?.available_actions?.includes('ship')" type="primary" @click="shipDialog = true">创建发货</el-button>
+        <el-button v-if="order.data.value?.available_actions?.includes('ship')" type="primary" @click="openShip()">创建发货</el-button>
       </div>
     </div>
     <el-row :gutter="16" v-if="order.data.value">
@@ -74,18 +85,27 @@ const currentShipment = computed<Shipment | undefined>(() => shipment.data.value
           <h3>收货信息</h3>
           <p>{{ order.data.value.receiver_name }} {{ order.data.value.receiver_phone }}</p>
           <p class="muted">{{ order.data.value.receiver_address }}</p>
-          <h3>发货</h3>
-          <template v-if="currentShipment">
-            <p>状态：{{ currentShipment.status }}</p>
-            <p>{{ currentShipment.carrier }} {{ currentShipment.tracking_no }}</p>
+          <h3>履约分组</h3>
+          <template v-if="order.data.value.fulfillment_groups?.length">
+            <div v-for="group in order.data.value.fulfillment_groups" :key="group.group_no" class="group">
+              <div class="group-head"><strong>{{ group.group_no }}</strong><span>仓库 {{ group.warehouse_id }}</span><el-tag size="small">{{ group.status }}</el-tag></div>
+              <div class="muted">运费 {{ formatMoney(group.freight_cent) }}</div>
+              <div v-if="shipmentFor(group.group_no)" class="muted">{{ shipmentFor(group.group_no)?.carrier }} {{ shipmentFor(group.group_no)?.tracking_no }} · {{ shipmentFor(group.group_no)?.status }}</div>
+              <el-button v-if="canShipGroup(group.group_no)" size="small" type="primary" @click="openShip(group.group_no, group.warehouse_id)">发货</el-button>
+            </div>
           </template>
-          <p v-else class="muted">尚未发货</p>
+          <h3>发货单</h3>
+          <div v-for="item in shipments" :key="item.shipment_no" class="muted">
+            {{ item.fulfillment_group_no || 'G1' }} · {{ item.status }} · {{ item.carrier }} {{ item.tracking_no }}
+          </div>
+          <p v-if="!shipments.length" class="muted">尚未发货</p>
           <el-input v-model="cancelReason" placeholder="取消原因" />
         </div>
       </el-col>
     </el-row>
     <el-dialog v-model="shipDialog" title="创建发货" width="480px">
       <el-form label-position="top">
+        <el-form-item v-if="shipForm.groupNo" label="履约分组"><el-input v-model="shipForm.groupNo" disabled /></el-form-item>
         <el-form-item label="承运商"><el-input v-model="shipForm.carrier" /></el-form-item>
         <el-form-item label="物流单号"><el-input v-model="shipForm.tracking_no" /></el-form-item>
       </el-form>
@@ -100,6 +120,8 @@ const currentShipment = computed<Shipment | undefined>(() => shipment.data.value
 .summary span { color:var(--mall-muted); font-size:12px; }
 .summary strong { font-size:20px; }
 h3 { font-size:15px; margin:20px 0 10px; }
+.group { border:1px solid var(--mall-border); border-radius:8px; padding:10px; margin-bottom:8px; display:grid; gap:6px; }
+.group-head { display:flex; gap:8px; align-items:center; }
 .totals { display:grid; gap:6px; margin-top:16px; max-width:320px; margin-left:auto; }
 .totals div { display:flex; justify-content:space-between; }
 .totals .grand { border-top:1px solid var(--mall-border); padding-top:8px; font-size:18px; }

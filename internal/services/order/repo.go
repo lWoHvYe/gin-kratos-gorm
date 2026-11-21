@@ -109,6 +109,9 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 				FreightCent: group.FreightCent, Status: group.Status,
 			})
 		}
+		if len(groups) > 1 {
+			out.AvailableActions = multiGroupActions(o, groups)
+		}
 	}
 	return out
 }

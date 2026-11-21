@@ -25,11 +25,14 @@ const (
 	permitConsumed = "CONSUMED"
 	permitRevoked  = "REVOKED"
 
-	actionPay            = "pay"
-	actionCancel         = "cancel"
-	actionShip           = "ship"
-	actionReceive        = "receive"
-	actionApplyAfterSale = "apply_after_sale"
+	actionPay                 = "pay"
+	actionCancel              = "cancel"
+	actionShip                = "ship"
+	actionReceive             = "receive"
+	actionApplyAfterSale      = "apply_after_sale"
+	actionShipGroup           = "ship_group"
+	actionReceiveGroup        = "receive_group"
+	actionApplyAfterSaleGroup = "apply_after_sale_group"
 )
 
 func refundStateFor(refundedCent, paidCent int64) string {
@@ -90,6 +93,40 @@ func shipmentStatusForGroups(orderStatus string, groups []*fulfillmentGroup) str
 	default:
 		return ""
 	}
+}
+
+// multiGroupActions exposes per-group shipping/receiving/after-sale actions.
+// The UI parses the suffix after the first ':' as the group number.
+func multiGroupActions(o *orderRecord, groups []*fulfillmentGroup) []string {
+	if o == nil {
+		return nil
+	}
+	actions := make([]string, 0, len(groups)*2+2)
+	if o.Status == statusPendingPayment {
+		if o.RefundState != refundStateRefunding && o.RefundState != refundStateFull {
+			actions = append(actions, actionPay, actionCancel)
+		}
+		return actions
+	}
+	refunding := o.RefundState == refundStateRefunding || o.RefundState == refundStateFull
+	for _, group := range groups {
+		switch group.Status {
+		case "PENDING", statusAllocated:
+			if !refunding && (o.Status == statusPaid || o.Status == statusAllocated) {
+				actions = append(actions, actionShipGroup+":"+group.GroupNo)
+			}
+		case "SHIPPED":
+			actions = append(actions, actionReceiveGroup+":"+group.GroupNo)
+			if !refunding {
+				actions = append(actions, actionApplyAfterSaleGroup+":"+group.GroupNo)
+			}
+		case "RECEIVED":
+			if !refunding {
+				actions = append(actions, actionApplyAfterSaleGroup+":"+group.GroupNo)
+			}
+		}
+	}
+	return actions
 }
 
 // availableActions is the single server-owned action list consumed by both BFFs

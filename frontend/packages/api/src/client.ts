@@ -228,8 +228,11 @@ export const adminApi = {
   shipments: {
     list: (query: PageQuery & { order_no?: string } = {}) =>
       adminGet<{ shipments: Shipment[]; total: number }>('/shipments', { params: query }),
-    create: (orderNo: string, carrier: string, trackingNo: string, ship = true) =>
-      adminPost<Shipment>('/shipments', { order_no: orderNo, carrier, tracking_no: trackingNo, ship }),
+    create: (orderNo: string, carrier: string, trackingNo: string, ship = true, groupNo = '', warehouseId = 0) =>
+      adminPost<Shipment>('/shipments', {
+        order_no: orderNo, carrier, tracking_no: trackingNo, ship,
+        fulfillment_group_no: groupNo, warehouse_id: warehouseId,
+      }),
     ship: (shipmentNo: string) => adminPost<Shipment>(`/shipments/${shipmentNo}/ship`, {}),
   },
   ai: {

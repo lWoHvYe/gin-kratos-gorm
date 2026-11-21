@@ -45,7 +45,9 @@ DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
 - `order_items` – item snapshot taken from the quote (line_no/name/price/quantity/
   discount); phase 1 adds `warehouse_id`/`fulfillment_group_no`, and
   `pb.OrderItem` carries them so inventory Confirm/Cancel can address the right
-  reservation. Phase 3a supports per-warehouse reservation identity; phase 3b
+  reservation. `pb.Order.fulfillment_groups` includes each group's status so
+  after-sales can validate a return against the shipped group, not only the
+  aggregate order status. Phase 3a supports per-warehouse reservation identity; phase 3b
   can persist multiple `fulfillment_groups` from the quote, but
   `WAREHOUSE_SPLIT_ENABLED` defaults false until split shipments/permits exist.
 - `order_fulfillment_groups` – phase 1 allocation snapshot. Every existing/new

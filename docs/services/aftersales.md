@@ -105,8 +105,11 @@ amount_cent, effective_amount_cent, amount_state, restock_state, reason`.
 - `after_sales(after_sale_no, order_no, user_id, type, status, amount_cent,
   effective_amount_cent, amount_state, restock_state, reason, return_*,
   refund_no, refunded_cent, version, client_request_id, ...)`.
-- `after_sale_items(after_sale_id, sku_id, quantity, received_quantity,
-  condition_code)`.
+- `after_sale_items(after_sale_id, sku_id, quantity, warehouse_id, group_no,
+  received_quantity, condition_code)`; one after-sale request must belong to a
+  single fulfillment group.
+- `after_sale_restock_tasks` is keyed by `(after_sale_no, sku_id, warehouse_id,
+  group_no)` and restocks to its origin warehouse.
 - `after_sale_logs` — audit trail.
 - `after_sale_amount_versions(after_sale_id, version, effective_amount_cent,
   reason)` — immutable amount history.

@@ -110,7 +110,12 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 	if order.GetRefundState() == "FULL" {
 		return nil, apperr.Failed("order is already fully refunded")
 	}
-	if typ == typeReturnRefund && order.GetStatus() != "SHIPPED" && order.GetStatus() != "COMPLETED" {
+	groupStatuses := make(map[string]string, len(order.GetFulfillmentGroups()))
+	for _, group := range order.GetFulfillmentGroups() {
+		groupStatuses[group.GetGroupNo()] = group.GetStatus()
+	}
+	if typ == typeReturnRefund && len(groupStatuses) == 0 &&
+		order.GetStatus() != "SHIPPED" && order.GetStatus() != "COMPLETED" {
 		return nil, apperr.Failed("return refund requires a shipped or completed order")
 	}
 	if len(items) == 0 {
@@ -119,22 +124,52 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 		}
 		return order, nil
 	}
-	ordered := make(map[int64]int64, len(order.GetItems()))
-	for _, item := range order.GetItems() {
-		ordered[item.GetSkuId()] += int64(item.GetQuantity())
+	type lineKey struct {
+		skuID       int64
+		warehouseID int64
+		groupNo     string
 	}
+	ordered := make(map[lineKey]int64, len(order.GetItems()))
+	for _, item := range order.GetItems() {
+		warehouseID := item.GetWarehouseId()
+		if warehouseID <= 0 {
+			warehouseID = 1
+		}
+		groupNo := item.GetGroupNo()
+		if groupNo == "" {
+			groupNo = "G1"
+		}
+		ordered[lineKey{skuID: item.GetSkuId(), warehouseID: warehouseID, groupNo: groupNo}] += int64(item.GetQuantity())
+	}
+	var groupNo string
 	for _, item := range items {
-		if ordered[item.SkuID] == 0 {
-			return nil, apperr.Invalid("sku %d is not part of order %s", item.SkuID, orderNo)
+		key := lineKey{skuID: item.SkuID, warehouseID: item.WarehouseID, groupNo: item.GroupNo}
+		if ordered[key] == 0 {
+			return nil, apperr.Invalid("sku %d in warehouse %d group %s is not part of order %s",
+				item.SkuID, item.WarehouseID, item.GroupNo, orderNo)
+		}
+		if len(groupStatuses) > 0 {
+			status, ok := groupStatuses[item.GroupNo]
+			if !ok || (status != "SHIPPED" && status != "RECEIVED") {
+				return nil, apperr.Failed(fmt.Sprintf("return refund requires group %s to be shipped or received", item.GroupNo))
+			}
+		}
+		if groupNo == "" {
+			groupNo = item.GroupNo
+		} else if groupNo != item.GroupNo {
+			return nil, apperr.Invalid("one after-sale must belong to a single fulfillment group")
 		}
 		var existing int64
 		if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(i.quantity), 0)
 			FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id
-			WHERE a.order_no = ? AND a.status <> 'REJECTED' AND i.sku_id = ?`, orderNo, item.SkuID).Scan(&existing); err != nil {
+			WHERE a.order_no = ? AND a.status <> 'REJECTED'
+			  AND i.sku_id = ? AND i.warehouse_id = ? AND i.group_no = ?`,
+			orderNo, item.SkuID, item.WarehouseID, item.GroupNo).Scan(&existing); err != nil {
 			return nil, apperr.Internal("sum after-sale item quantity", err)
 		}
-		if existing+int64(item.Quantity) > ordered[item.SkuID] {
-			return nil, apperr.Invalid("return quantity for sku %d exceeds ordered quantity", item.SkuID)
+		if existing+int64(item.Quantity) > ordered[key] {
+			return nil, apperr.Invalid("return quantity for sku %d in group %s exceeds ordered quantity",
+				item.SkuID, item.GroupNo)
 		}
 	}
 	return order, nil
@@ -207,8 +242,9 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 		return nil, err
 	}
 	for _, it := range items {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_items (after_sale_id, sku_id, quantity) VALUES (?, ?, ?)`,
-			afterSaleID, it.SkuID, it.Quantity); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_items
+			(after_sale_id, sku_id, quantity, warehouse_id, group_no) VALUES (?, ?, ?, ?, ?)`,
+			afterSaleID, it.SkuID, it.Quantity, it.WarehouseID, it.GroupNo); err != nil {
 			return nil, apperr.Internal("create after sale item", err)
 		}
 	}
@@ -373,6 +409,34 @@ func refundableStatus(row *afterSaleRow) error {
 	return nil
 }
 
+// groupForAfterSale resolves the single fulfillment group of the request.
+// Phase 5 deliberately requires one group per after-sale so a refund cannot
+// silently revoke a permit for another group.
+func (s *Service) groupForAfterSale(ctx context.Context, afterSaleNo string) (string, error) {
+	items, err := s.loadItems(ctx, afterSaleNo)
+	if err != nil {
+		return "", err
+	}
+	groupNo := ""
+	for _, item := range items {
+		current := strings.TrimSpace(item.GetGroupNo())
+		if current == "" {
+			current = "G1"
+		}
+		if groupNo == "" {
+			groupNo = current
+			continue
+		}
+		if groupNo != current {
+			return "", apperr.Failed("one after-sale must belong to a single fulfillment group")
+		}
+	}
+	if groupNo == "" {
+		groupNo = "G1"
+	}
+	return groupNo, nil
+}
+
 // Refund first blocks new shipments in Order, then persists REFUNDING plus a
 // durable refund task. Payment is idempotent by after_sale_no; a failed inline
 // attempt is retried by the refund worker, never by a status scanner.
@@ -397,8 +461,12 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*
 	if s.orders == nil {
 		return nil, apperr.Unavailable("order client is not configured", nil)
 	}
+	groupNo, err := s.groupForAfterSale(ctx, afterSaleNo)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := s.orders.BlockShipmentForRefund(ctx, &pb.ShipmentPermitRequest{
-		OrderNo: pre.orderNo, AfterSaleNo: afterSaleNo,
+		OrderNo: pre.orderNo, AfterSaleNo: afterSaleNo, FulfillmentGroupNo: groupNo,
 	}); err != nil {
 		return nil, apperr.Unavailable("block shipping for refund", err)
 	}
@@ -581,11 +649,19 @@ func (s *Service) ReceiveReturn(ctx context.Context, req *pb.ReceiveReturnReques
 		if item.GetQuantity() <= 0 {
 			continue
 		}
+		warehouseID := item.GetWarehouseId()
+		if warehouseID <= 0 {
+			warehouseID = 1
+		}
+		groupNo := item.GetGroupNo()
+		if groupNo == "" {
+			groupNo = "G1"
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_restock_tasks
-			(after_sale_no, sku_id, quantity, `+"`condition`"+`, status, attempts, last_error, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, 0, '', NOW(3), NOW(3))
+			(after_sale_no, sku_id, warehouse_id, group_no, quantity, `+"`condition`"+`, status, attempts, last_error, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, 0, '', NOW(3), NOW(3))
 			ON DUPLICATE KEY UPDATE after_sale_no = after_sale_no`,
-			afterSaleNo, item.GetSkuId(), item.GetQuantity(), condition, taskPending); err != nil {
+			afterSaleNo, item.GetSkuId(), warehouseID, groupNo, item.GetQuantity(), condition, taskPending); err != nil {
 			return nil, apperr.Internal("queue restock task", err)
 		}
 	}
@@ -722,7 +798,9 @@ func (s *Service) loadAfterSale(ctx context.Context, afterSaleNo string) (*pb.Af
 }
 
 func (s *Service) loadItems(ctx context.Context, afterSaleNo string) ([]*pb.AfterSaleItem, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT i.sku_id, i.quantity FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id WHERE a.after_sale_no = ? ORDER BY i.id`, afterSaleNo)
+	rows, err := s.db.QueryContext(ctx, `SELECT i.sku_id, i.quantity, i.warehouse_id, i.group_no
+		FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id
+		WHERE a.after_sale_no = ? ORDER BY i.id`, afterSaleNo)
 	if err != nil {
 		return nil, apperr.Internal("load after sale items", err)
 	}
@@ -730,7 +808,7 @@ func (s *Service) loadItems(ctx context.Context, afterSaleNo string) ([]*pb.Afte
 	var items []*pb.AfterSaleItem
 	for rows.Next() {
 		var item pb.AfterSaleItem
-		if err := rows.Scan(&item.SkuId, &item.Quantity); err != nil {
+		if err := rows.Scan(&item.SkuId, &item.Quantity, &item.WarehouseId, &item.GroupNo); err != nil {
 			return nil, apperr.Internal("scan after sale item", err)
 		}
 		items = append(items, &item)
@@ -758,8 +836,10 @@ type afterSaleInput struct {
 
 // afterSaleItem is the persisted view of an after-sale line.
 type afterSaleItem struct {
-	SkuID    int64 `json:"sku_id"`
-	Quantity int32 `json:"quantity"`
+	SkuID       int64  `json:"sku_id"`
+	Quantity    int32  `json:"quantity"`
+	WarehouseID int64  `json:"warehouse_id,omitempty"`
+	GroupNo     string `json:"group_no,omitempty"`
 }
 
 // afterSaleEvent is the outbox payload for shop.aftersale.* events.
@@ -800,7 +880,12 @@ func validateCreate(orderNo string, userID int64, typ, reason string, amountCent
 	in.reason = cutRunes(strings.TrimSpace(reason), 512)
 
 	merged := make([]afterSaleItem, 0, len(items))
-	index := make(map[int64]int, len(items))
+	type itemKey struct {
+		skuID       int64
+		warehouseID int64
+		groupNo     string
+	}
+	index := make(map[itemKey]int, len(items))
 	for _, item := range items {
 		if item == nil {
 			return afterSaleInput{}, nil, apperr.Invalid("after sale item must not be nil")
@@ -812,7 +897,16 @@ func validateCreate(orderNo string, userID int64, typ, reason string, amountCent
 		if item.GetQuantity() <= 0 {
 			return afterSaleInput{}, nil, apperr.Invalid("quantity must be positive for sku %d", skuID)
 		}
-		if pos, ok := index[skuID]; ok {
+		warehouseID := item.GetWarehouseId()
+		if warehouseID <= 0 {
+			warehouseID = 1
+		}
+		groupNo := strings.TrimSpace(item.GetGroupNo())
+		if groupNo == "" {
+			groupNo = "G1"
+		}
+		key := itemKey{skuID: skuID, warehouseID: warehouseID, groupNo: groupNo}
+		if pos, ok := index[key]; ok {
 			sum := int64(merged[pos].Quantity) + int64(item.GetQuantity())
 			if sum > math.MaxInt32 {
 				return afterSaleInput{}, nil, apperr.Invalid("quantity overflow for sku %d", skuID)
@@ -820,8 +914,8 @@ func validateCreate(orderNo string, userID int64, typ, reason string, amountCent
 			merged[pos].Quantity = int32(sum)
 			continue
 		}
-		index[skuID] = len(merged)
-		merged = append(merged, afterSaleItem{SkuID: skuID, Quantity: item.GetQuantity()})
+		index[key] = len(merged)
+		merged = append(merged, afterSaleItem{SkuID: skuID, Quantity: item.GetQuantity(), WarehouseID: warehouseID, GroupNo: groupNo})
 	}
 	return in, merged, nil
 }

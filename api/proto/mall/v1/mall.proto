@@ -492,6 +492,7 @@ message OrderFulfillmentGroup {
   string group_no = 1;
   int64 warehouse_id = 2;
   int64 freight_cent = 3;
+  string status = 4;
 }
 message CreateOrderInnerRequest {
   int64 user_id = 1;
@@ -796,7 +797,12 @@ service AfterSalesService {
   rpc ListAfterSales (ListAfterSalesRequest) returns (AfterSaleList);
   rpc GetAfterSaleStats (StatsRequest) returns (AfterSaleStats);
 }
-message AfterSaleItem { int64 sku_id = 1; int32 quantity = 2; }
+message AfterSaleItem {
+  int64 sku_id = 1;
+  int32 quantity = 2;
+  int64 warehouse_id = 3;
+  string group_no = 4;
+}
 message AfterSale {
   string after_sale_no = 1;
   string order_no = 2;

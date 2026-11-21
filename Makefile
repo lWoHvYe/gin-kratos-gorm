@@ -211,7 +211,7 @@ test-integration:
 	@echo ">> payment settlement read (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/payment -run 'TestGetPaymentByOrder' -count=1
 	@echo ">> after-sales amount/restock/refund protocol (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/aftersales -run 'TestAfterSaleAmount|TestPartialApproval|TestReturnRefund|TestRestockFailure|TestRestockPermanentFailureEmitsEvent|TestRefundTaskRetries|TestConcurrentAfterSale' -count=1
+	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/aftersales -run 'TestAfterSaleAmount|TestPartialApproval|TestReturnRefund|TestRestockFailure|TestRestockPermanentFailureEmitsEvent|TestAfterSaleGroupRefundAndRestock|TestRefundTaskRetries|TestConcurrentAfterSale' -count=1
 	@echo ">> fulfillment shipping permit (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/fulfillment -run 'TestShipRequiresOrderPermit|TestShipUsesShipmentGroup' -count=1
 	@echo ">> catalog stock projection (MySQL)"

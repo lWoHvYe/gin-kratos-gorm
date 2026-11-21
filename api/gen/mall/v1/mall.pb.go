@@ -5290,6 +5290,7 @@ type OrderFulfillmentGroup struct {
 	GroupNo       string                 `protobuf:"bytes,1,opt,name=group_no,json=groupNo,proto3" json:"group_no,omitempty"`
 	WarehouseId   int64                  `protobuf:"varint,2,opt,name=warehouse_id,json=warehouseId,proto3" json:"warehouse_id,omitempty"`
 	FreightCent   int64                  `protobuf:"varint,3,opt,name=freight_cent,json=freightCent,proto3" json:"freight_cent,omitempty"`
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5343,6 +5344,13 @@ func (x *OrderFulfillmentGroup) GetFreightCent() int64 {
 		return x.FreightCent
 	}
 	return 0
+}
+
+func (x *OrderFulfillmentGroup) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
 }
 
 type CreateOrderInnerRequest struct {
@@ -9194,6 +9202,8 @@ type AfterSaleItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SkuId         int64                  `protobuf:"varint,1,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
 	Quantity      int32                  `protobuf:"varint,2,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	WarehouseId   int64                  `protobuf:"varint,3,opt,name=warehouse_id,json=warehouseId,proto3" json:"warehouse_id,omitempty"`
+	GroupNo       string                 `protobuf:"bytes,4,opt,name=group_no,json=groupNo,proto3" json:"group_no,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9240,6 +9250,20 @@ func (x *AfterSaleItem) GetQuantity() int32 {
 		return x.Quantity
 	}
 	return 0
+}
+
+func (x *AfterSaleItem) GetWarehouseId() int64 {
+	if x != nil {
+		return x.WarehouseId
+	}
+	return 0
+}
+
+func (x *AfterSaleItem) GetGroupNo() string {
+	if x != nil {
+		return x.GroupNo
+	}
+	return ""
 }
 
 type AfterSale struct {
@@ -13573,11 +13597,12 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x11client_request_id\x18\x04 \x01(\tR\x0fclientRequestId\x12#\n" +
 	"\rreceiver_name\x18\x05 \x01(\tR\freceiverName\x12%\n" +
 	"\x0ereceiver_phone\x18\x06 \x01(\tR\rreceiverPhone\x12)\n" +
-	"\x10receiver_address\x18\a \x01(\tR\x0freceiverAddress\"x\n" +
+	"\x10receiver_address\x18\a \x01(\tR\x0freceiverAddress\"\x90\x01\n" +
 	"\x15OrderFulfillmentGroup\x12\x19\n" +
 	"\bgroup_no\x18\x01 \x01(\tR\agroupNo\x12!\n" +
 	"\fwarehouse_id\x18\x02 \x01(\x03R\vwarehouseId\x12!\n" +
-	"\ffreight_cent\x18\x03 \x01(\x03R\vfreightCent\"\x8f\x05\n" +
+	"\ffreight_cent\x18\x03 \x01(\x03R\vfreightCent\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\"\x8f\x05\n" +
 	"\x17CreateOrderInnerRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x19\n" +
 	"\border_no\x18\x02 \x01(\tR\aorderNo\x12\x19\n" +
@@ -13916,10 +13941,12 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\border_no\x18\x04 \x01(\tR\aorderNo\"U\n" +
 	"\fShipmentList\x12/\n" +
 	"\tshipments\x18\x01 \x03(\v2\x11.mall.v1.ShipmentR\tshipments\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x03R\x05total\"B\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\"\x80\x01\n" +
 	"\rAfterSaleItem\x12\x15\n" +
 	"\x06sku_id\x18\x01 \x01(\x03R\x05skuId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x05R\bquantity\"\xb1\x04\n" +
+	"\bquantity\x18\x02 \x01(\x05R\bquantity\x12!\n" +
+	"\fwarehouse_id\x18\x03 \x01(\x03R\vwarehouseId\x12\x19\n" +
+	"\bgroup_no\x18\x04 \x01(\tR\agroupNo\"\xb1\x04\n" +
 	"\tAfterSale\x12\"\n" +
 	"\rafter_sale_no\x18\x01 \x01(\tR\vafterSaleNo\x12\x19\n" +
 	"\border_no\x18\x02 \x01(\tR\aorderNo\x12\x17\n" +

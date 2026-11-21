@@ -187,6 +187,15 @@ components:
         effective_amount_cent: { type: integer, format: int64 }
         amount_state: { type: string }
         restock_state: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              sku_id: { type: integer, format: int64 }
+              quantity: { type: integer }
+              warehouse_id: { type: integer, format: int64 }
+              group_no: { type: string }
         created_at_unix: { type: integer, format: int64 }
     Address:
       type: object

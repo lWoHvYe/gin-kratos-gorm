@@ -2226,6 +2226,14 @@ export interface components {
             effective_amount_cent?: number;
             amount_state?: string;
             restock_state?: string;
+            items?: {
+                /** Format: int64 */
+                sku_id?: number;
+                quantity?: number;
+                /** Format: int64 */
+                warehouse_id?: number;
+                group_no?: string;
+            }[];
             /** Format: int64 */
             created_at_unix?: number;
         };

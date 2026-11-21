@@ -22,6 +22,8 @@ const taskLease = time.Minute
 type restockTask struct {
 	afterSaleNo string
 	skuID       int64
+	warehouseID int64
+	groupNo     string
 	quantity    int64
 	condition   string
 	attempts    int
@@ -49,11 +51,11 @@ func RunRestockWorker(ctx context.Context, database *sql.DB, svc *Service, logge
 }
 
 func runRestockBatch(ctx context.Context, database *sql.DB, svc *Service, logger *slog.Logger) {
-	rows, err := database.QueryContext(ctx, `SELECT after_sale_no, sku_id
+	rows, err := database.QueryContext(ctx, `SELECT after_sale_no, sku_id, warehouse_id, group_no
 		FROM after_sale_restock_tasks
 		WHERE status IN ('PENDING', 'PROCESSING')
 		  AND (status = 'PENDING' OR lease_until IS NULL OR lease_until < NOW(3))
-		ORDER BY updated_at, after_sale_no, sku_id LIMIT 50`)
+		ORDER BY updated_at, after_sale_no, sku_id, warehouse_id LIMIT 50`)
 	if err != nil {
 		logger.Warn("scan restock tasks", "error", err)
 		return
@@ -61,49 +63,54 @@ func runRestockBatch(ctx context.Context, database *sql.DB, svc *Service, logger
 	var tasks []restockTask
 	for rows.Next() {
 		var t restockTask
-		if err := rows.Scan(&t.afterSaleNo, &t.skuID); err == nil {
+		if err := rows.Scan(&t.afterSaleNo, &t.skuID, &t.warehouseID, &t.groupNo); err == nil {
 			tasks = append(tasks, t)
 		}
 	}
 	_ = rows.Close()
 	for _, task := range tasks {
-		if err := svc.processRestockTask(ctx, task.afterSaleNo, task.skuID); err != nil {
-			logger.Warn("restock task failed", "after_sale_no", task.afterSaleNo, "sku_id", task.skuID, "error", err)
+		if err := svc.processRestockTaskForGroup(ctx, task.afterSaleNo, task.skuID, task.warehouseID, task.groupNo); err != nil {
+			logger.Warn("restock task failed", "after_sale_no", task.afterSaleNo, "sku_id", task.skuID,
+				"warehouse_id", task.warehouseID, "group_no", task.groupNo, "error", err)
 		}
 	}
 }
 
 func (s *Service) processRestockTask(ctx context.Context, afterSaleNo string, skuID int64) error {
-	task, owner, ok, err := s.claimRestockTask(ctx, afterSaleNo, skuID)
+	return s.processRestockTaskForGroup(ctx, afterSaleNo, skuID, 1, "G1")
+}
+
+func (s *Service) processRestockTaskForGroup(ctx context.Context, afterSaleNo string, skuID, warehouseID int64, groupNo string) error {
+	task, owner, ok, err := s.claimRestockTask(ctx, afterSaleNo, skuID, warehouseID, groupNo)
 	if err != nil || !ok {
 		return err
 	}
 	row, err := s.getAfterSaleRow(ctx, afterSaleNo)
 	if err != nil {
-		s.releaseRestockTask(ctx, afterSaleNo, skuID, owner, err)
+		s.releaseRestockTask(ctx, afterSaleNo, skuID, warehouseID, groupNo, owner, err)
 		return err
 	}
 	if row.restockState == restockDone {
-		return s.completeRestockTask(ctx, afterSaleNo, skuID, owner, row)
+		return s.completeRestockTask(ctx, afterSaleNo, skuID, warehouseID, groupNo, owner, row)
 	}
 	if s.inventory == nil {
 		err := apperr.Unavailable("inventory client is not configured", nil)
-		s.releaseRestockTask(ctx, afterSaleNo, skuID, owner, err)
+		s.releaseRestockTask(ctx, afterSaleNo, skuID, warehouseID, groupNo, owner, err)
 		return err
 	}
 	_, err = s.inventory.Restock(ctx, &pb.RestockRequest{
-		OrderNo: row.orderNo, SkuId: skuID, WarehouseId: 1,
+		OrderNo: row.orderNo, SkuId: skuID, WarehouseId: task.warehouseID,
 		Quantity: task.quantity, Condition: task.condition,
-		Reason: "after-sale " + afterSaleNo, RestockNo: afterSaleNo,
+		Reason: "after-sale " + afterSaleNo + " " + task.groupNo, RestockNo: afterSaleNo,
 	})
 	if err != nil {
-		s.releaseRestockTask(ctx, afterSaleNo, skuID, owner, err)
+		s.releaseRestockTask(ctx, afterSaleNo, skuID, warehouseID, groupNo, owner, err)
 		return apperr.Unavailable("restock returned goods", err)
 	}
-	return s.completeRestockTask(ctx, afterSaleNo, skuID, owner, row)
+	return s.completeRestockTask(ctx, afterSaleNo, skuID, warehouseID, groupNo, owner, row)
 }
 
-func (s *Service) claimRestockTask(ctx context.Context, afterSaleNo string, skuID int64) (restockTask, string, bool, error) {
+func (s *Service) claimRestockTask(ctx context.Context, afterSaleNo string, skuID, warehouseID int64, groupNo string) (restockTask, string, bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return restockTask{}, "", false, apperr.Internal("begin restock claim", err)
@@ -114,9 +121,11 @@ func (s *Service) claimRestockTask(ctx context.Context, afterSaleNo string, skuI
 	var lease sql.NullTime
 	task.afterSaleNo = afterSaleNo
 	task.skuID = skuID
+	task.warehouseID = warehouseID
+	task.groupNo = groupNo
 	if err := tx.QueryRowContext(ctx, `SELECT quantity, `+"`condition`"+`, status, attempts, lease_owner, lease_until
-		FROM after_sale_restock_tasks WHERE after_sale_no = ? AND sku_id = ? FOR UPDATE`,
-		afterSaleNo, skuID).Scan(&task.quantity, &task.condition, &status, &task.attempts, &owner, &lease); err != nil {
+		FROM after_sale_restock_tasks WHERE after_sale_no = ? AND sku_id = ? AND warehouse_id = ? AND group_no = ? FOR UPDATE`,
+		afterSaleNo, skuID, warehouseID, groupNo).Scan(&task.quantity, &task.condition, &status, &task.attempts, &owner, &lease); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return restockTask{}, "", false, nil
 		}
@@ -131,7 +140,8 @@ func (s *Service) claimRestockTask(ctx context.Context, afterSaleNo string, skuI
 	owner = id.Event()
 	if _, err := tx.ExecContext(ctx, `UPDATE after_sale_restock_tasks
 		SET status = ?, attempts = attempts + 1, lease_owner = ?, lease_until = DATE_ADD(NOW(3), INTERVAL 1 MINUTE), updated_at = NOW(3)
-		WHERE after_sale_no = ? AND sku_id = ?`, taskProcessing, owner, afterSaleNo, skuID); err != nil {
+		WHERE after_sale_no = ? AND sku_id = ? AND warehouse_id = ? AND group_no = ?`,
+		taskProcessing, owner, afterSaleNo, skuID, warehouseID, groupNo); err != nil {
 		return restockTask{}, "", false, apperr.Internal("claim restock task", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -141,7 +151,7 @@ func (s *Service) claimRestockTask(ctx context.Context, afterSaleNo string, skuI
 	return task, owner, true, nil
 }
 
-func (s *Service) completeRestockTask(ctx context.Context, afterSaleNo string, skuID int64, owner string, row *afterSaleRow) error {
+func (s *Service) completeRestockTask(ctx context.Context, afterSaleNo string, skuID, warehouseID int64, groupNo, owner string, row *afterSaleRow) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return apperr.Internal("begin complete restock", err)
@@ -149,7 +159,8 @@ func (s *Service) completeRestockTask(ctx context.Context, afterSaleNo string, s
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `UPDATE after_sale_restock_tasks
 		SET status = ?, last_error = '', lease_owner = '', lease_until = NULL, updated_at = NOW(3)
-		WHERE after_sale_no = ? AND sku_id = ? AND status = ?`, taskDone, afterSaleNo, skuID, taskProcessing); err != nil {
+		WHERE after_sale_no = ? AND sku_id = ? AND warehouse_id = ? AND group_no = ? AND status = ?`,
+		taskDone, afterSaleNo, skuID, warehouseID, groupNo, taskProcessing); err != nil {
 		return apperr.Internal("complete restock task", err)
 	}
 	var remaining int
@@ -188,7 +199,7 @@ func (s *Service) completeRestockTask(ctx context.Context, afterSaleNo string, s
 	return tx.Commit()
 }
 
-func (s *Service) releaseRestockTask(ctx context.Context, afterSaleNo string, skuID int64, owner string, cause error) {
+func (s *Service) releaseRestockTask(ctx context.Context, afterSaleNo string, skuID, warehouseID int64, groupNo, owner string, cause error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return
@@ -197,7 +208,8 @@ func (s *Service) releaseRestockTask(ctx context.Context, afterSaleNo string, sk
 	var attempts int
 	var status string
 	if err := tx.QueryRowContext(ctx, `SELECT attempts, status FROM after_sale_restock_tasks
-		WHERE after_sale_no = ? AND sku_id = ? FOR UPDATE`, afterSaleNo, skuID).Scan(&attempts, &status); err != nil {
+		WHERE after_sale_no = ? AND sku_id = ? AND warehouse_id = ? AND group_no = ? FOR UPDATE`,
+		afterSaleNo, skuID, warehouseID, groupNo).Scan(&attempts, &status); err != nil {
 		return
 	}
 	if status != taskProcessing {
@@ -214,7 +226,8 @@ func (s *Service) releaseRestockTask(ctx context.Context, afterSaleNo string, sk
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE after_sale_restock_tasks
 		SET status = ?, last_error = ?, lease_owner = '', lease_until = NULL, updated_at = NOW(3)
-		WHERE after_sale_no = ? AND sku_id = ?`, next, cutRunes(cause.Error(), 512), afterSaleNo, skuID); err != nil {
+		WHERE after_sale_no = ? AND sku_id = ? AND warehouse_id = ? AND group_no = ?`,
+		next, cutRunes(cause.Error(), 512), afterSaleNo, skuID, warehouseID, groupNo); err != nil {
 		return
 	}
 	if permanent {

@@ -41,6 +41,11 @@ func afterSaleTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	for _, table := range []string{"after_sale_items", "after_sale_restock_tasks"} {
+		if _, err := db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, stmt := range []string{
 		`CREATE TABLE IF NOT EXISTS after_sales (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, after_sale_no VARCHAR(64) NOT NULL,
@@ -56,9 +61,10 @@ func afterSaleTestDB(t *testing.T) *sql.DB {
 			UNIQUE KEY uk_after_sales_no (after_sale_no))`,
 		`CREATE TABLE IF NOT EXISTS after_sale_items (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, after_sale_id BIGINT NOT NULL,
-			sku_id BIGINT NOT NULL, quantity INT NOT NULL, received_quantity INT NOT NULL DEFAULT 0,
+			sku_id BIGINT NOT NULL, quantity INT NOT NULL, warehouse_id BIGINT NOT NULL DEFAULT 1,
+			group_no VARCHAR(64) NOT NULL DEFAULT 'G1', received_quantity INT NOT NULL DEFAULT 0,
 			condition_code VARCHAR(16) NOT NULL DEFAULT 'SELLABLE', created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-			UNIQUE KEY uk_after_sale_items_sku (after_sale_id, sku_id))`,
+			UNIQUE KEY uk_after_sale_items_group (after_sale_id, sku_id, warehouse_id, group_no))`,
 		`CREATE TABLE IF NOT EXISTS after_sale_logs (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, after_sale_id BIGINT NOT NULL,
 			action VARCHAR(32) NOT NULL, from_status VARCHAR(24) NOT NULL DEFAULT '',
@@ -76,13 +82,15 @@ func afterSaleTestDB(t *testing.T) *sql.DB {
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))`,
 		`CREATE TABLE IF NOT EXISTS after_sale_restock_tasks (
-			after_sale_no VARCHAR(64) NOT NULL, sku_id BIGINT NOT NULL, quantity BIGINT NOT NULL,
+			after_sale_no VARCHAR(64) NOT NULL, sku_id BIGINT NOT NULL,
+			warehouse_id BIGINT NOT NULL DEFAULT 1, group_no VARCHAR(64) NOT NULL DEFAULT 'G1',
+			quantity BIGINT NOT NULL,
 			` + "`condition`" + ` VARCHAR(16) NOT NULL DEFAULT 'SELLABLE', status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
 			attempts INT NOT NULL DEFAULT 0, last_error VARCHAR(512) NOT NULL DEFAULT '',
 			lease_owner VARCHAR(128) NOT NULL DEFAULT '', lease_until DATETIME(3) NULL,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-			PRIMARY KEY (after_sale_no, sku_id))`,
+			PRIMARY KEY (after_sale_no, sku_id, warehouse_id, group_no))`,
 		`CREATE TABLE IF NOT EXISTS after_sale_refund_tasks (
 			after_sale_no VARCHAR(64) NOT NULL PRIMARY KEY, status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
 			attempts INT NOT NULL DEFAULT 0, last_error VARCHAR(512) NOT NULL DEFAULT '',
@@ -115,10 +123,11 @@ func afterSaleTestDB(t *testing.T) *sql.DB {
 
 type fakeOrderService struct {
 	pb.OrderServiceClient
-	order      *pb.Order
-	blocked    []string
-	blockErr   error
-	blockCalls int
+	order         *pb.Order
+	blocked       []string
+	blockedGroups []string
+	blockErr      error
+	blockCalls    int
 }
 
 func (f *fakeOrderService) GetOrder(context.Context, *pb.GetOrderRequest, ...grpc.CallOption) (*pb.Order, error) {
@@ -128,6 +137,7 @@ func (f *fakeOrderService) GetOrder(context.Context, *pb.GetOrderRequest, ...grp
 func (f *fakeOrderService) BlockShipmentForRefund(_ context.Context, in *pb.ShipmentPermitRequest, _ ...grpc.CallOption) (*pb.Empty, error) {
 	f.blockCalls++
 	f.blocked = append(f.blocked, in.GetAfterSaleNo())
+	f.blockedGroups = append(f.blockedGroups, in.GetFulfillmentGroupNo())
 	return &pb.Empty{}, f.blockErr
 }
 
@@ -157,11 +167,13 @@ type fakeInventoryService struct {
 	restockErr   error
 	restockCalls int
 	restocked    []int64
+	warehouses   []int64
 }
 
 func (f *fakeInventoryService) Restock(_ context.Context, in *pb.RestockRequest, _ ...grpc.CallOption) (*pb.Stock, error) {
 	f.restockCalls++
 	f.restocked = append(f.restocked, in.GetSkuId())
+	f.warehouses = append(f.warehouses, in.GetWarehouseId())
 	if f.restockErr != nil {
 		return nil, f.restockErr
 	}
@@ -475,5 +487,65 @@ func TestRestockPermanentFailureEmitsEvent(t *testing.T) {
 	}
 	if events != 1 {
 		t.Fatalf("restock_failed events = %d", events)
+	}
+}
+
+func TestAfterSaleGroupRefundAndRestock(t *testing.T) {
+	db := afterSaleTestDB(t)
+	order := &fakeOrderService{order: &pb.Order{
+		OrderNo: "ORD-AS", UserId: 1, Status: "SHIPPED", PaidCent: 2000, RefundState: "NONE",
+		Items: []*pb.OrderItem{
+			{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1"},
+			{SkuId: 2, Quantity: 1, WarehouseId: 2, GroupNo: "G2"},
+		},
+		FulfillmentGroups: []*pb.OrderFulfillmentGroup{
+			{GroupNo: "G1", WarehouseId: 1, Status: "SHIPPED"},
+			{GroupNo: "G2", WarehouseId: 2, Status: "SHIPPED"},
+		},
+	}}
+	payment := &fakePaymentService{captured: 2000}
+	inventory := &fakeInventoryService{}
+	svc := New(db, nil, payment, inventory, order, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	as, err := svc.CreateAfterSale(context.Background(), &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-AS", UserId: 1, Type: typeReturnRefund, AmountCent: 1000, Reason: "group 2",
+		Items: []*pb.AfterSaleItem{{SkuId: 2, Quantity: 1, WarehouseId: 2, GroupNo: "G2"}},
+	})
+	if err != nil {
+		t.Fatalf("create group 2 after-sale: %v", err)
+	}
+	if _, err := svc.Approve(context.Background(), &pb.ApproveRequest{AfterSaleNo: as.GetAfterSaleNo(), Approved: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SubmitReturnTracking(context.Background(), &pb.SubmitReturnTrackingRequest{
+		AfterSaleNo: as.GetAfterSaleNo(), Carrier: "SF", TrackingNo: "SF2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ReceiveReturn(context.Background(), &pb.ReceiveReturnRequest{AfterSaleNo: as.GetAfterSaleNo()}); err != nil {
+		t.Fatal(err)
+	}
+	var warehouseID int64
+	var groupNo string
+	if err := db.QueryRow(`SELECT warehouse_id, group_no FROM after_sale_restock_tasks WHERE after_sale_no = ? AND sku_id = 2`,
+		as.GetAfterSaleNo()).Scan(&warehouseID, &groupNo); err != nil {
+		t.Fatal(err)
+	}
+	if warehouseID != 2 || groupNo != "G2" {
+		t.Fatalf("restock task = %d/%s", warehouseID, groupNo)
+	}
+	if err := svc.processRestockTaskForGroup(context.Background(), as.GetAfterSaleNo(), 2, 2, "G2"); err != nil {
+		t.Fatal(err)
+	}
+	if len(inventory.warehouses) != 1 || inventory.warehouses[0] != 2 {
+		t.Fatalf("restock warehouses = %v", inventory.warehouses)
+	}
+	if _, err := svc.Refund(context.Background(), &pb.RefundAfterSaleRequest{AfterSaleNo: as.GetAfterSaleNo()}); err != nil {
+		t.Fatalf("refund group 2: %v", err)
+	}
+	if len(order.blocked) != 1 || order.blocked[0] != as.GetAfterSaleNo() {
+		t.Fatalf("blocked = %v", order.blocked)
+	}
+	if len(order.blockedGroups) != 1 || order.blockedGroups[0] != "G2" {
+		t.Fatalf("blocked groups = %v", order.blockedGroups)
 	}
 }

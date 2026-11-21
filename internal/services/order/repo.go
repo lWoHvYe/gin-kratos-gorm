@@ -105,7 +105,8 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 		out.FulfillmentGroups = make([]*pb.OrderFulfillmentGroup, 0, len(groups))
 		for _, group := range groups {
 			out.FulfillmentGroups = append(out.FulfillmentGroups, &pb.OrderFulfillmentGroup{
-				GroupNo: group.GroupNo, WarehouseId: group.WarehouseID, FreightCent: group.FreightCent,
+				GroupNo: group.GroupNo, WarehouseId: group.WarehouseID,
+				FreightCent: group.FreightCent, Status: group.Status,
 			})
 		}
 	}

@@ -23,8 +23,10 @@ type createAfterSaleRequest struct {
 }
 
 type afterSaleItem struct {
-	SkuID    int64 `json:"sku_id"`
-	Quantity int32 `json:"quantity"`
+	SkuID       int64  `json:"sku_id"`
+	Quantity    int32  `json:"quantity"`
+	WarehouseID int64  `json:"warehouse_id"`
+	GroupNo     string `json:"group_no"`
 }
 
 func (h *handlers) createAfterSale(c *gin.Context) {
@@ -40,7 +42,10 @@ func (h *handlers) createAfterSale(c *gin.Context) {
 	}
 	items := make([]*pb.AfterSaleItem, 0, len(in.Items))
 	for _, item := range in.Items {
-		items = append(items, &pb.AfterSaleItem{SkuId: item.SkuID, Quantity: item.Quantity})
+		items = append(items, &pb.AfterSaleItem{
+			SkuId: item.SkuID, Quantity: item.Quantity,
+			WarehouseId: item.WarehouseID, GroupNo: strings.TrimSpace(item.GroupNo),
+		})
 	}
 	orderNo := strings.TrimSpace(in.OrderNo)
 	if orderNo == "" {

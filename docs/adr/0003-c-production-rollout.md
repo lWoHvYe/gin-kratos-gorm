@@ -1,6 +1,6 @@
 # ADR 0003: Production rollout and rollback for cross-warehouse orders
 
-- Status: accepted; migration-runner hardening pending
+- Status: accepted; migration-runner hardening implemented
 - Date: 2026-11-22
 - Related: [ADR 0002](0002-cross-warehouse-split-orders.md),
   [C review](../c-warehouse-review.md)
@@ -35,7 +35,11 @@ migration.
    run the same `mall-migrate` image, and verify backfills/invariants and the
    restore path.
 3. **Harden the migration runner before production:**
-   - acquire `GET_LOCK('mall_migrate', 300)` and release it in a trap;
+   - acquire an exclusive lease row in `mall_migrate.schema_migration_lock`
+     (a connection-local `GET_LOCK` cannot survive the runner's per-statement
+     CLI invocations), renew it before each file and release it in a trap;
+     the owner token includes kernel randomness because Alpine has no
+     `hostname` and two containers can share `$$`/epoch;
    - persist an attempt row (`filename`, checksum, `RUNNING/APPLIED/FAILED`);
    - mark `RUNNING` before executing, `APPLIED` after, `FAILED` on error;
    - a `FAILED` attempt fails closed and requires operator inspection/restore;
@@ -75,8 +79,12 @@ Dev rehearsal on 2026-11-22 used pre-C dumps in `/tmp/mall-predeploy`, the
 current `mall/migrate:dev` image and disposable MySQL 8.4 containers. All six
 C ledger entries and invariants passed; a second clone restored to the pre-C
 schema (no `order_items.fulfillment_group_no`, no `order_fulfillment_groups`,
-no C ledger rows). This is fixture-level evidence, not a production-volume
-backup or an old-image smoke test.
+no C ledger rows). `scripts/test-migrate-runner.sh` also proves FAILED attempt
+refusal, operator repair, idempotent replay, stale-lease takeover and two
+concurrent runners sharing one lease. The hardened image ran in the dev cluster
+through Helm: all applied files were skipped and the lease was released. This
+is fixture/dev evidence, not a production-volume backup or an old-image smoke
+test.
 
 ## Consequences
 

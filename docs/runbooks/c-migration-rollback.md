@@ -68,8 +68,11 @@ SELECT COUNT(*) FROM (
 
 ## 4. Production apply
 
-1. Run the hardened `mall-migrate` job with the advisory lock and attempt
-   ledger.
+1. Run the hardened `mall-migrate` job. It acquires the
+   `mall_migrate.schema_migration_lock` lease, records
+   `schema_migration_attempts` as `RUNNING`, and only then executes SQL.
+   Test the runner with `make test-migrate-runner`; it covers failed-attempt
+   refusal, operator repair, replay and concurrent runners.
 2. Verify the job is complete and every C file is `APPLIED`.
 3. Roll services in the ADR order; keep split false.
 4. Wait for outbox lag and error rate to return to baseline.
@@ -89,7 +92,19 @@ SELECT COUNT(*) FROM (
 - If the restore point is after `RETURN_RECEIVED`, keep the forward code and
   roll forward instead of forcing old code.
 
-## 6. Evidence to record
+## 6. Failed attempt recovery
+
+If `schema_migration_attempts.status = FAILED` or `RUNNING` without a matching
+`schema_migrations` row:
+
+1. Do not rerun the job blindly.
+2. Inspect the exact DDL that ran (`information_schema` columns/indexes/tables)
+   and the job log.
+3. If the schema is unchanged, after operator sign-off delete the attempt row
+   and rerun. If any DDL landed, restore the backup or write a reviewed repair
+   migration; never replay a non-idempotent file over a partial schema.
+
+## 7. Evidence to record
 
 - Backup paths and SHA256.
 - Clone migration log and ledger count.
@@ -98,7 +113,7 @@ SELECT COUNT(*) FROM (
 - Image digests before/after.
 - Any manual data repair, with order/group IDs.
 
-## 7. Dev fixture rehearsal result
+## 8. Dev fixture rehearsal result
 
 The first rehearsal (2026-11-22) used `/tmp/mall-predeploy` pre-C dumps, the
 current `mall/migrate:dev` image and disposable MySQL 8.4 containers:
@@ -116,6 +131,8 @@ Results:
 - inventory reservation and fulfillment shipment unique indexes present;
 - a second clone restored to the pre-C schema and had zero C ledger rows.
 
-This proves the SQL/backfill and restore path on fixture data. It does **not**
+This proves the SQL/backfill and restore path on fixture data. The hardened
+runner also ran through the dev Helm migration job: applied files were skipped,
+the lease was released and no attempt rows were left behind. This does **not**
 prove production-volume timing, a production backup, or an old-image smoke run;
 those remain required before production split is enabled.

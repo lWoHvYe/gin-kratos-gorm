@@ -15,6 +15,8 @@ CREATE DATABASE IF NOT EXISTS mall_fulfillment CHARACTER SET utf8mb4 COLLATE utf
 CREATE DATABASE IF NOT EXISTS mall_aftersales  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mall_seckill     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mall_admin       CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- Control-plane database for the migration runner lease (not a service DB).
+CREATE DATABASE IF NOT EXISTS mall_migrate     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- DTM server storage (trans_global / trans_branch_op, created by DTM itself).
 CREATE DATABASE IF NOT EXISTS dtm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

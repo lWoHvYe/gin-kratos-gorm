@@ -340,6 +340,7 @@ make test         # unit tests only; no MySQL/NATS/DTM required
 make e2e-phase15  # opt-in B-end/C-end/return E2E; running stack required
 make e2e-warehouse-split # opt-in split E2E; two SKUs stocked in two warehouses
 make rehearse-c-migration # disposable MySQL: pre-C dumps -> migrate -> restore
+make test-migrate-runner # disposable MySQL: FAILED refusal + concurrent lease
 make concurrency-phase15 # opt-in one-unit oversell race check
 make fmt-check    # gofmt gate
 make vet          # go vet ./...

@@ -2179,6 +2179,13 @@ export interface components {
             refund_state?: string;
             available_actions?: string[];
             shipment_status?: string;
+            fulfillment_groups?: {
+                group_no?: string;
+                /** Format: int64 */
+                warehouse_id?: number;
+                /** Format: int64 */
+                freight_cent?: number;
+            }[];
             receiver_name?: string;
             receiver_phone?: string;
             receiver_address?: string;

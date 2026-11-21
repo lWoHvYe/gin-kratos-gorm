@@ -57,6 +57,10 @@ func New(db *sql.DB, client *mq.Client, logger *slog.Logger, orders pb.OrderServ
 // unique, so a retried request can never book the same parcel twice.
 func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequest) (*pb.Shipment, error) {
 	orderNo := strings.TrimSpace(req.GetOrderNo())
+	groupNo := strings.TrimSpace(req.GetFulfillmentGroupNo())
+	if groupNo == "" {
+		groupNo = "G1"
+	}
 	items, err := validateCreateShipment(orderNo, req.GetItems())
 	if err != nil {
 		return nil, err
@@ -68,7 +72,7 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 		warehouseID = 1
 	}
 
-	existing, err := s.shipmentNoByOrderNo(ctx, orderNo)
+	existing, err := s.shipmentNoByOrderGroup(ctx, orderNo, groupNo)
 	if err != nil {
 		return nil, err
 	}
@@ -96,22 +100,23 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.ExecContext(ctx, `INSERT INTO shipments (shipment_no, order_no, warehouse_id, carrier, tracking_no, status)
-		VALUES (?, ?, ?, ?, ?, ?)`, shipmentNo, orderNo, warehouseID, carrier, trackingNo, statusCreated)
+	res, err := tx.ExecContext(ctx, `INSERT INTO shipments
+		(shipment_no, order_no, fulfillment_group_no, warehouse_id, carrier, tracking_no, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, shipmentNo, orderNo, groupNo, warehouseID, carrier, trackingNo, statusCreated)
 	if err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
 			// Concurrent create for the same order: release our transaction and
 			// return the shipment that won the race.
 			_ = tx.Rollback()
-			winner, lookupErr := s.shipmentNoByOrderNo(ctx, orderNo)
+			winner, lookupErr := s.shipmentNoByOrderGroup(ctx, orderNo, groupNo)
 			if lookupErr != nil {
 				return nil, lookupErr
 			}
 			if winner != "" {
 				return s.loadShipment(ctx, winner)
 			}
-			return nil, apperr.Conflict("shipment already exists for order " + orderNo)
+			return nil, apperr.Conflict("shipment already exists for order " + orderNo + " group " + groupNo)
 		}
 		return nil, apperr.Internal("create shipment", err)
 	}
@@ -126,7 +131,7 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 		}
 	}
 	payload, err := json.Marshal(shipmentEvent{
-		ShipmentNo: shipmentNo, OrderNo: orderNo, WarehouseID: warehouseID,
+		ShipmentNo: shipmentNo, OrderNo: orderNo, FulfillmentGroupNo: groupNo, WarehouseID: warehouseID,
 		Carrier: carrier, TrackingNo: trackingNo, Status: statusCreated, Items: items,
 	})
 	if err != nil {
@@ -152,7 +157,7 @@ func (s *Service) Ship(ctx context.Context, req *pb.ShipRequest) (*pb.Shipment, 
 	if shipmentNo == "" {
 		return nil, apperr.Invalid("shipment_no is required")
 	}
-	orderNo, shipmentStatus, err := s.shipmentOrder(ctx, shipmentNo)
+	orderNo, shipmentStatus, groupNo, err := s.shipmentOrder(ctx, shipmentNo)
 	if err != nil {
 		return nil, err
 	}
@@ -165,23 +170,24 @@ func (s *Service) Ship(ctx context.Context, req *pb.ShipRequest) (*pb.Shipment, 
 		return nil, apperr.Unavailable("order client is not configured for shipping permits", nil)
 	}
 	if _, err := s.orders.AuthorizeShipment(ctx, &pb.ShipmentPermitRequest{
-		OrderNo: orderNo, ShipmentNo: shipmentNo,
+		OrderNo: orderNo, ShipmentNo: shipmentNo, FulfillmentGroupNo: groupNo,
 	}); err != nil {
 		return nil, apperr.Failed("shipping permit denied: " + err.Error())
 	}
 	return s.advance(ctx, shipmentNo, topicShipmentShipped, "shipment.shipped", shipOutcome)
 }
 
-func (s *Service) shipmentOrder(ctx context.Context, shipmentNo string) (string, string, error) {
-	var orderNo, status string
-	err := s.db.QueryRowContext(ctx, `SELECT order_no, status FROM shipments WHERE shipment_no = ?`, shipmentNo).Scan(&orderNo, &status)
+func (s *Service) shipmentOrder(ctx context.Context, shipmentNo string) (string, string, string, error) {
+	var orderNo, status, groupNo string
+	err := s.db.QueryRowContext(ctx, `SELECT order_no, status, fulfillment_group_no FROM shipments WHERE shipment_no = ?`, shipmentNo).
+		Scan(&orderNo, &status, &groupNo)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", apperr.NotFound("shipment not found")
+		return "", "", "", apperr.NotFound("shipment not found")
 	}
 	if err != nil {
-		return "", "", apperr.Internal("load shipment order", err)
+		return "", "", "", apperr.Internal("load shipment order", err)
 	}
-	return orderNo, status, nil
+	return orderNo, status, groupNo, nil
 }
 
 // Receive moves a shipment from SHIPPED to RECEIVED and emits
@@ -206,9 +212,16 @@ func (s *Service) GetShipmentByOrder(ctx context.Context, req *pb.GetShipmentByO
 	if orderNo == "" {
 		return nil, apperr.Invalid("order_no is required")
 	}
-	shipmentNo, err := s.shipmentNoByOrderNo(ctx, orderNo)
+	shipmentNo, err := s.shipmentNoByOrderGroup(ctx, orderNo, "G1")
 	if err != nil {
 		return nil, err
+	}
+	if shipmentNo == "" {
+		// Fall back to the first shipment for legacy/non-G1 callers.
+		shipmentNo, err = s.shipmentNoByOrderNo(ctx, orderNo)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if shipmentNo == "" {
 		return nil, apperr.NotFound("shipment not found for order")
@@ -237,13 +250,14 @@ func (s *Service) advance(
 		shipmentID  int64
 		status      string
 		orderNo     string
+		groupNo     string
 		warehouseID int64
 		carrier     string
 		trackingNo  string
 	)
-	err = tx.QueryRowContext(ctx, `SELECT id, status, order_no, warehouse_id, carrier, tracking_no
+	err = tx.QueryRowContext(ctx, `SELECT id, status, order_no, fulfillment_group_no, warehouse_id, carrier, tracking_no
 		FROM shipments WHERE shipment_no = ? FOR UPDATE`, shipmentNo).
-		Scan(&shipmentID, &status, &orderNo, &warehouseID, &carrier, &trackingNo)
+		Scan(&shipmentID, &status, &orderNo, &groupNo, &warehouseID, &carrier, &trackingNo)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("shipment not found")
 	}
@@ -265,7 +279,7 @@ func (s *Service) advance(
 			return nil, apperr.Internal("update shipment status", err)
 		}
 		payload, err := json.Marshal(shipmentEvent{
-			ShipmentNo: shipmentNo, OrderNo: orderNo, WarehouseID: warehouseID,
+			ShipmentNo: shipmentNo, OrderNo: orderNo, FulfillmentGroupNo: groupNo, WarehouseID: warehouseID,
 			Carrier: carrier, TrackingNo: trackingNo, Status: next, Items: items,
 		})
 		if err != nil {
@@ -282,6 +296,18 @@ func (s *Service) advance(
 		return nil, apperr.Internal("commit shipment transition", err)
 	}
 	return s.loadShipment(ctx, shipmentNo)
+}
+
+func (s *Service) shipmentNoByOrderGroup(ctx context.Context, orderNo, groupNo string) (string, error) {
+	var shipmentNo string
+	err := s.db.QueryRowContext(ctx, `SELECT shipment_no FROM shipments WHERE order_no = ? AND fulfillment_group_no = ?`, orderNo, groupNo).Scan(&shipmentNo)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", apperr.Internal("lookup shipment by order/group", err)
+	}
+	return shipmentNo, nil
 }
 
 func (s *Service) shipmentNoByOrderNo(ctx context.Context, orderNo string) (string, error) {
@@ -301,9 +327,9 @@ func (s *Service) loadShipment(ctx context.Context, shipmentNo string) (*pb.Ship
 		sh        pb.Shipment
 		createdAt time.Time
 	)
-	err := s.db.QueryRowContext(ctx, `SELECT shipment_no, order_no, status, carrier, tracking_no, created_at
+	err := s.db.QueryRowContext(ctx, `SELECT shipment_no, order_no, fulfillment_group_no, warehouse_id, status, carrier, tracking_no, created_at
 		FROM shipments WHERE shipment_no = ?`, shipmentNo).
-		Scan(&sh.ShipmentNo, &sh.OrderNo, &sh.Status, &sh.Carrier, &sh.TrackingNo, &createdAt)
+		Scan(&sh.ShipmentNo, &sh.OrderNo, &sh.FulfillmentGroupNo, &sh.WarehouseId, &sh.Status, &sh.Carrier, &sh.TrackingNo, &createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("shipment not found")
 	}
@@ -387,13 +413,14 @@ type shipmentItem struct {
 
 // shipmentEvent is the outbox payload for shop.shipment.* events.
 type shipmentEvent struct {
-	ShipmentNo  string         `json:"shipment_no"`
-	OrderNo     string         `json:"order_no"`
-	WarehouseID int64          `json:"warehouse_id"`
-	Carrier     string         `json:"carrier"`
-	TrackingNo  string         `json:"tracking_no"`
-	Status      string         `json:"status"`
-	Items       []shipmentItem `json:"items"`
+	ShipmentNo         string         `json:"shipment_no"`
+	OrderNo            string         `json:"order_no"`
+	FulfillmentGroupNo string         `json:"fulfillment_group_no"`
+	WarehouseID        int64          `json:"warehouse_id"`
+	Carrier            string         `json:"carrier"`
+	TrackingNo         string         `json:"tracking_no"`
+	Status             string         `json:"status"`
+	Items              []shipmentItem `json:"items"`
 }
 
 // validateCreateShipment validates the request and merges duplicate SKU lines so

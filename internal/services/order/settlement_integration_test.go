@@ -40,6 +40,11 @@ func orderTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	for _, table := range []string{"order_shipping_permits", "order_fulfillment_groups", "order_items"} {
+		if _, err := db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, stmt := range []string{
 		`CREATE TABLE IF NOT EXISTS orders (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -80,11 +85,13 @@ func orderTestDB(t *testing.T) *sql.DB {
 			reason VARCHAR(255) NOT NULL DEFAULT '', operator VARCHAR(64) NOT NULL DEFAULT '',
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))`,
 		`CREATE TABLE IF NOT EXISTS order_shipping_permits (
-			order_no VARCHAR(64) NOT NULL PRIMARY KEY, state VARCHAR(16) NOT NULL DEFAULT 'NONE',
+			order_no VARCHAR(64) NOT NULL, fulfillment_group_no VARCHAR(64) NOT NULL DEFAULT 'G1',
+			state VARCHAR(16) NOT NULL DEFAULT 'NONE',
 			shipment_no VARCHAR(64) NOT NULL DEFAULT '', after_sale_no VARCHAR(64) NOT NULL DEFAULT '',
 			version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))`,
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+			PRIMARY KEY (order_no, fulfillment_group_no))`,
 		`CREATE TABLE IF NOT EXISTS outbox_events (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, event_id VARCHAR(64) NOT NULL,
 			topic VARCHAR(128) NOT NULL, aggregate_type VARCHAR(64) NOT NULL,
@@ -415,6 +422,76 @@ func TestMultiGroupShadowAllocatedTogether(t *testing.T) {
 	}
 	for _, group := range groups {
 		if group.Status != statusAllocated {
+			t.Fatalf("group %s = %s", group.GroupNo, group.Status)
+		}
+	}
+}
+
+func TestGroupShipmentProjectionIsPartialUntilAllGroups(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	ctx := context.Background()
+	seedSettlementOrder(t, db, "ORD-PARTIAL", statusAllocated, 1000, 0, refundStateNone)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := insertFulfillmentGroups(ctx, tx, "ORD-PARTIAL", []*pb.OrderFulfillmentGroup{
+		{GroupNo: "G1", WarehouseId: 1, FreightCent: 500},
+		{GroupNo: "G2", WarehouseId: 2, FreightCent: 500},
+	}, 1000); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	tx, err = db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := setFulfillmentGroupStatus(ctx, tx, "ORD-PARTIAL", statusAllocated); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	orderStatus := func() string {
+		record, err := findOrder(ctx, db, "ORD-PARTIAL")
+		if err != nil || record == nil {
+			t.Fatalf("load order: %v", err)
+		}
+		return record.Status
+	}
+	if err := svc.applyShipmentStatusGroup(ctx, "ORD-PARTIAL", "G1", statusShipped, statusAllocated); err != nil {
+		t.Fatal(err)
+	}
+	if got := orderStatus(); got != statusAllocated {
+		t.Fatalf("after G1 shipped order = %s, want ALLOCATED", got)
+	}
+	if err := svc.applyShipmentStatusGroup(ctx, "ORD-PARTIAL", "G2", statusShipped, statusAllocated); err != nil {
+		t.Fatal(err)
+	}
+	if got := orderStatus(); got != statusShipped {
+		t.Fatalf("after both shipped order = %s, want SHIPPED", got)
+	}
+	if err := svc.applyShipmentStatusGroup(ctx, "ORD-PARTIAL", "G1", statusCompleted, statusShipped); err != nil {
+		t.Fatal(err)
+	}
+	if got := orderStatus(); got != statusShipped {
+		t.Fatalf("after G1 received order = %s, want SHIPPED", got)
+	}
+	if err := svc.applyShipmentStatusGroup(ctx, "ORD-PARTIAL", "G2", statusCompleted, statusShipped); err != nil {
+		t.Fatal(err)
+	}
+	if got := orderStatus(); got != statusCompleted {
+		t.Fatalf("after both received order = %s, want COMPLETED", got)
+	}
+	groups, err := loadFulfillmentGroups(ctx, db, "ORD-PARTIAL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, group := range groups {
+		if group.Status != "RECEIVED" {
 			t.Fatalf("group %s = %s", group.GroupNo, group.Status)
 		}
 	}

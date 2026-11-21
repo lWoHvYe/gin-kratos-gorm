@@ -39,15 +39,20 @@ func fulfillmentTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`DROP TABLE IF EXISTS shipments`); err != nil {
+		t.Fatal(err)
+	}
 	for _, stmt := range []string{
 		`CREATE TABLE IF NOT EXISTS shipments (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_no VARCHAR(64) NOT NULL,
-			order_no VARCHAR(64) NOT NULL, warehouse_id BIGINT NOT NULL DEFAULT 0,
+			order_no VARCHAR(64) NOT NULL, fulfillment_group_no VARCHAR(64) NOT NULL DEFAULT 'G1',
+			warehouse_id BIGINT NOT NULL DEFAULT 0,
 			carrier VARCHAR(64) NOT NULL DEFAULT '', tracking_no VARCHAR(128) NOT NULL DEFAULT '',
 			status VARCHAR(16) NOT NULL DEFAULT 'CREATED', version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-			UNIQUE KEY uk_shipments_no (shipment_no), UNIQUE KEY uk_shipments_order (order_no))`,
+			UNIQUE KEY uk_shipments_no (shipment_no),
+			UNIQUE KEY uk_shipments_order_group (order_no, fulfillment_group_no))`,
 		`CREATE TABLE IF NOT EXISTS shipment_items (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_id BIGINT NOT NULL,
 			sku_id BIGINT NOT NULL, quantity INT NOT NULL,
@@ -78,12 +83,14 @@ func fulfillmentTestDB(t *testing.T) *sql.DB {
 
 type fakePermitOrder struct {
 	pb.OrderServiceClient
-	err   error
-	calls int
+	err    error
+	calls  int
+	groups []string
 }
 
-func (f *fakePermitOrder) AuthorizeShipment(context.Context, *pb.ShipmentPermitRequest, ...grpc.CallOption) (*pb.Empty, error) {
+func (f *fakePermitOrder) AuthorizeShipment(_ context.Context, in *pb.ShipmentPermitRequest, _ ...grpc.CallOption) (*pb.Empty, error) {
 	f.calls++
+	f.groups = append(f.groups, in.GetFulfillmentGroupNo())
 	return &pb.Empty{}, f.err
 }
 
@@ -115,5 +122,34 @@ func TestShipRequiresOrderPermit(t *testing.T) {
 	}
 	if status != statusShipped || permit.calls != 2 {
 		t.Fatalf("status=%s permit calls=%d", status, permit.calls)
+	}
+}
+
+func TestShipUsesShipmentGroup(t *testing.T) {
+	db := fulfillmentTestDB(t)
+	if _, err := db.Exec(`INSERT INTO shipments
+		(shipment_no, order_no, fulfillment_group_no, warehouse_id, carrier, tracking_no, status, version)
+		VALUES ('SHIP-G1', 'ORD-GROUPS', 'G1', 1, 'SF', 'SF1', 'CREATED', 1),
+		       ('SHIP-G2', 'ORD-GROUPS', 'G2', 2, 'SF', 'SF2', 'CREATED', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	permit := &fakePermitOrder{}
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), permit)
+	for _, shipmentNo := range []string{"SHIP-G1", "SHIP-G2"} {
+		if _, err := svc.Ship(context.Background(), &pb.ShipRequest{ShipmentNo: shipmentNo}); err != nil {
+			t.Fatalf("ship %s: %v", shipmentNo, err)
+		}
+	}
+	if len(permit.groups) != 2 || permit.groups[0] != "G1" || permit.groups[1] != "G2" {
+		t.Fatalf("permit groups = %v", permit.groups)
+	}
+	for _, shipmentNo := range []string{"SHIP-G1", "SHIP-G2"} {
+		var status string
+		if err := db.QueryRow(`SELECT status FROM shipments WHERE shipment_no = ?`, shipmentNo).Scan(&status); err != nil {
+			t.Fatal(err)
+		}
+		if status != statusShipped {
+			t.Fatalf("%s = %s", shipmentNo, status)
+		}
 	}
 }

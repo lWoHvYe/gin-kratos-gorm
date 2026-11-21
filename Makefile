@@ -207,13 +207,13 @@ test-integration:
 	@echo ">> inventory seckill/compensation/ledger (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/inventory -run 'TestCancelConfirmed|TestReleaseHeld|TestQualificationRelease|TestConcurrentRelease|TestReleaseTxClosed|TestTccCancelConfirm|TestCompensationHandler|TestConfirmConsumerNATS|TestConfirmConsumerMultiSKUOperation|TestOrderCancelledConsumerNATS|TestArchiveLedger|TestConfirmOperation|TestCancelOperation|TestOperationTx|TestReplayMissing|TestOperationRetry|TestConcurrentConfirm|TestOperationScope|TestAllocateOrder|TestReservationAndOperationKeysIncludeWarehouse' -count=1
 	@echo ">> order settlement + shipping permits (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/order -run 'TestShippingPermit|TestBlockShipment|TestAuthorizeShipment|TestRefundProjection|TestAvailableActions|TestTccCancelKeepsLifecycle|TestFulfillmentGroupShadow|TestMultiGroupShadow' -count=1
+	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/order -run 'TestShippingPermit|TestBlockShipment|TestAuthorizeShipment|TestRefundProjection|TestAvailableActions|TestTccCancelKeepsLifecycle|TestFulfillmentGroupShadow|TestMultiGroupShadow|TestGroupShipmentProjection' -count=1
 	@echo ">> payment settlement read (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/payment -run 'TestGetPaymentByOrder' -count=1
 	@echo ">> after-sales amount/restock/refund protocol (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/aftersales -run 'TestAfterSaleAmount|TestPartialApproval|TestReturnRefund|TestRestockFailure|TestRestockPermanentFailureEmitsEvent|TestRefundTaskRetries|TestConcurrentAfterSale' -count=1
 	@echo ">> fulfillment shipping permit (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/fulfillment -run 'TestShipRequiresOrderPermit' -count=1
+	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/fulfillment -run 'TestShipRequiresOrderPermit|TestShipUsesShipmentGroup' -count=1
 	@echo ">> catalog stock projection (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/catalog -run 'TestStockProjectionRejectsOlderVersion|TestKeysetPaginationBothReaders' -count=1
 	@echo ">> pricing quote cleanup (MySQL)"

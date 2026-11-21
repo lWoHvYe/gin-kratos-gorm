@@ -550,11 +550,10 @@ Production order:
    AfterSales code cannot resume new requests after a rollback. The supported
    rollback is restore-from-backup or roll forward; do not invent a down SQL.
 
-`WAREHOUSE_SPLIT_ENABLED` and `WAREHOUSE_ALLOCATION_SHADOW` are dev-only until
-phase 4 (per-group shipments/permits). With split disabled, the gateway falls
-back to a single warehouse-1 quote; with it enabled, Order accepts multiple
-`fulfillment_groups`, but the current Fulfillment service still has one shipment
-per order. Do not enable split in a customer environment before phase 4.
+`WAREHOUSE_SPLIT_ENABLED` is enabled in the dev single-node values and remains
+`false` in the production defaults. Phase 4 now has per-group shipments and
+permits; phase 5 must make returns/refunds group-aware and phase 6 must expose
+per-group actions in the UI before a customer environment enables it.
 
 The AI RAG build is not a release gate by default. `ai-rag-build-scheduled`
 runs as a CronJob; `ai.ragBuild.hook=true` opts into the old blocking

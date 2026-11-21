@@ -71,6 +71,10 @@ func setFulfillmentGroupStatus(ctx context.Context, tx *sql.Tx, orderNo, status 
 	return err
 }
 
+func loadFulfillmentGroupsTx(ctx context.Context, tx *sql.Tx, orderNo string) ([]*fulfillmentGroup, error) {
+	return loadFulfillmentGroups(ctx, tx, orderNo)
+}
+
 func loadFulfillmentGroups(ctx context.Context, q querier, orderNo string) ([]*fulfillmentGroup, error) {
 	rows, err := q.QueryContext(ctx, `SELECT group_no, order_no, seq, warehouse_id, status,
 		reservation_state, freight_cent FROM order_fulfillment_groups

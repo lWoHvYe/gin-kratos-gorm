@@ -58,6 +58,40 @@ func shipmentStatus(status string) string {
 	}
 }
 
+func shipmentStatusForGroups(orderStatus string, groups []*fulfillmentGroup) string {
+	if len(groups) == 0 {
+		return shipmentStatus(orderStatus)
+	}
+	shipped, received, cancelled := 0, 0, 0
+	for _, group := range groups {
+		switch group.Status {
+		case "SHIPPED":
+			shipped++
+		case "RECEIVED":
+			shipped++
+			received++
+		case "CANCELLED":
+			cancelled++
+		}
+	}
+	switch {
+	case cancelled == len(groups):
+		return "CANCELLED"
+	case received == len(groups):
+		return "RECEIVED"
+	case received > 0:
+		return "PARTIALLY_RECEIVED"
+	case shipped == len(groups):
+		return "SHIPPED"
+	case shipped > 0:
+		return "PARTIALLY_SHIPPED"
+	case orderStatus == statusPaid || orderStatus == statusAllocated:
+		return "CREATED"
+	default:
+		return ""
+	}
+}
+
 // availableActions is the single server-owned action list consumed by both BFFs
 // and the storefront/admin UIs. It must not be re-derived from status in a UI.
 func availableActions(o *orderRecord) []string {
@@ -88,25 +122,36 @@ func availableActions(o *orderRecord) []string {
 }
 
 type shippingPermit struct {
+	groupNo     string
 	state       string
 	shipmentNo  string
 	afterSaleNo string
 	version     int64
 }
 
+func permitGroup(groupNo string) string {
+	groupNo = strings.TrimSpace(groupNo)
+	if groupNo == "" {
+		return defaultGroupNo
+	}
+	return groupNo
+}
+
 func findOrderForUpdate(ctx context.Context, tx *sql.Tx, orderNo string) (*orderRecord, error) {
 	return scanOrder(tx.QueryRowContext(ctx, `SELECT `+orderColumns+` FROM orders WHERE order_no = ? FOR UPDATE`, orderNo))
 }
 
-func ensurePermitTx(ctx context.Context, tx *sql.Tx, orderNo string) (*shippingPermit, error) {
+func ensurePermitTx(ctx context.Context, tx *sql.Tx, orderNo, groupNo string) (*shippingPermit, error) {
+	groupNo = permitGroup(groupNo)
 	var permit shippingPermit
+	permit.groupNo = groupNo
 	err := tx.QueryRowContext(ctx, `SELECT state, shipment_no, after_sale_no, version
-		FROM order_shipping_permits WHERE order_no = ? FOR UPDATE`, orderNo).
+		FROM order_shipping_permits WHERE order_no = ? AND fulfillment_group_no = ? FOR UPDATE`, orderNo, groupNo).
 		Scan(&permit.state, &permit.shipmentNo, &permit.afterSaleNo, &permit.version)
 	if errors.Is(err, sql.ErrNoRows) {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO order_shipping_permits
-			(order_no, state, shipment_no, after_sale_no, version, created_at, updated_at)
-			VALUES (?, ?, '', '', 1, NOW(3), NOW(3))`, orderNo, permitNone); err != nil {
+			(order_no, fulfillment_group_no, state, shipment_no, after_sale_no, version, created_at, updated_at)
+			VALUES (?, ?, ?, '', '', 1, NOW(3), NOW(3))`, orderNo, groupNo, permitNone); err != nil {
 			return nil, apperr.Internal("create shipping permit", err)
 		}
 		permit.state = permitNone
@@ -136,7 +181,8 @@ func (s *Service) AuthorizeShipment(ctx context.Context, req *pb.ShipmentPermitR
 		if record == nil {
 			return apperr.NotFound("order not found")
 		}
-		permit, err := ensurePermitTx(ctx, tx, orderNo)
+		groupNo := permitGroup(req.GetFulfillmentGroupNo())
+		permit, err := ensurePermitTx(ctx, tx, orderNo, groupNo)
 		if err != nil {
 			return err
 		}
@@ -159,7 +205,7 @@ func (s *Service) AuthorizeShipment(ctx context.Context, req *pb.ShipmentPermitR
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE order_shipping_permits
 			SET state = ?, shipment_no = ?, version = version + 1, updated_at = NOW(3)
-			WHERE order_no = ?`, permitConsumed, shipmentNo, orderNo); err != nil {
+			WHERE order_no = ? AND fulfillment_group_no = ?`, permitConsumed, shipmentNo, orderNo, groupNo); err != nil {
 			return apperr.Internal("consume shipping permit", err)
 		}
 		return nil
@@ -190,7 +236,8 @@ func (s *Service) BlockShipmentForRefund(ctx context.Context, req *pb.ShipmentPe
 		case statusPendingPayment, statusCancelled, statusClosed:
 			return apperr.Failed(fmt.Sprintf("order cannot refund in status %s", record.Status))
 		}
-		permit, err := ensurePermitTx(ctx, tx, orderNo)
+		groupNo := permitGroup(req.GetFulfillmentGroupNo())
+		permit, err := ensurePermitTx(ctx, tx, orderNo, groupNo)
 		if err != nil {
 			return err
 		}
@@ -200,7 +247,7 @@ func (s *Service) BlockShipmentForRefund(ctx context.Context, req *pb.ShipmentPe
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE order_shipping_permits
 			SET state = ?, after_sale_no = ?, version = version + 1, updated_at = NOW(3)
-			WHERE order_no = ?`, nextState, afterSaleNo, orderNo); err != nil {
+			WHERE order_no = ? AND fulfillment_group_no = ?`, nextState, afterSaleNo, orderNo, groupNo); err != nil {
 			return apperr.Internal("block shipping permit", err)
 		}
 		if record.RefundState != refundStateFull {

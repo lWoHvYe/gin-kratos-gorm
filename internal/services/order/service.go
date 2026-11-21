@@ -373,7 +373,7 @@ func (s *Service) ListOrders(ctx context.Context, req *pb.ListOrdersRequest) (*p
 	}
 	reply := &pb.OrderList{Total: total, Orders: make([]*pb.Order, 0, len(records))}
 	for _, record := range records {
-		reply.Orders = append(reply.Orders, record.toProto(grouped[record.OrderNo]))
+		reply.Orders = append(reply.Orders, record.toProto(grouped[record.OrderNo], nil))
 	}
 	return reply, nil
 }
@@ -903,7 +903,11 @@ func (s *Service) replyFor(ctx context.Context, q querier, record *orderRecord) 
 	if err != nil {
 		return nil, apperr.Internal("load order items", err)
 	}
-	return record.toProto(items), nil
+	groups, err := loadFulfillmentGroups(ctx, q, record.OrderNo)
+	if err != nil {
+		return nil, apperr.Internal("load fulfillment groups", err)
+	}
+	return record.toProto(items, groups), nil
 }
 
 // createOrderInput is the validated CreateOrder request.

@@ -61,12 +61,13 @@ func (h *handlers) getOrder(c *gin.Context) {
 // the parcel is built from every line of the order. "ship" additionally moves
 // the new shipment from CREATED to SHIPPED (fulfillment.Ship).
 type createShipmentRequest struct {
-	OrderNo     string         `json:"order_no"`
-	WarehouseID int64          `json:"warehouse_id"`
-	Carrier     string         `json:"carrier"`
-	TrackingNo  string         `json:"tracking_no"`
-	Items       []shipmentItem `json:"items"`
-	Ship        bool           `json:"ship"`
+	OrderNo            string         `json:"order_no"`
+	WarehouseID        int64          `json:"warehouse_id"`
+	FulfillmentGroupNo string         `json:"fulfillment_group_no"`
+	Carrier            string         `json:"carrier"`
+	TrackingNo         string         `json:"tracking_no"`
+	Items              []shipmentItem `json:"items"`
+	Ship               bool           `json:"ship"`
 }
 
 type shipmentItem struct {
@@ -105,11 +106,12 @@ func (h *handlers) createShipment(c *gin.Context) {
 		}
 	}
 	shipment, err := h.clients.Fulfillment.CreateShipment(c.Request.Context(), &pb.CreateShipmentRequest{
-		OrderNo:     orderNo,
-		WarehouseId: in.WarehouseID,
-		Carrier:     strings.TrimSpace(in.Carrier),
-		TrackingNo:  strings.TrimSpace(in.TrackingNo),
-		Items:       items,
+		OrderNo:            orderNo,
+		WarehouseId:        in.WarehouseID,
+		FulfillmentGroupNo: strings.TrimSpace(in.FulfillmentGroupNo),
+		Carrier:            strings.TrimSpace(in.Carrier),
+		TrackingNo:         strings.TrimSpace(in.TrackingNo),
+		Items:              items,
 	})
 	if err != nil {
 		httpx.Error(c, bff.RemoteError(err))

@@ -20,6 +20,22 @@ func (h *handlers) ensureStocks(ctx context.Context, totals map[int64]int32) err
 	if h.clients.Inventory == nil {
 		return apperr.Unavailable("inventory client is not configured", nil)
 	}
+	if h.warehouseShadow {
+		// The allocator is the warehouse-aware stock authority. The legacy
+		// check below only sees warehouse 1 and would reject a SKU that is
+		// available solely in another warehouse.
+		lines := make([]*pb.AllocateOrderLine, 0, len(totals))
+		for skuID, quantity := range totals {
+			if skuID <= 0 || quantity <= 0 {
+				return apperr.Invalid("sku_id and quantity must be positive")
+			}
+			lines = append(lines, &pb.AllocateOrderLine{SkuId: skuID, Quantity: quantity})
+		}
+		if _, err := h.clients.Inventory.AllocateOrder(ctx, &pb.AllocateOrderRequest{Lines: lines}); err != nil {
+			return err
+		}
+		return nil
+	}
 	ids := make([]int64, 0, len(totals))
 	for skuID, quantity := range totals {
 		if skuID <= 0 || quantity <= 0 {

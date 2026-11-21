@@ -475,6 +475,9 @@ message Order {
   repeated string available_actions = 21;
   // shipment_status is derived from the lifecycle (CREATED/SHIPPED/RECEIVED).
   string shipment_status = 22;
+  // Per-warehouse fulfillment groups (phase 1+). A single-warehouse order has
+  // one G1 group; split orders expose more when the feature is enabled.
+  repeated OrderFulfillmentGroup fulfillment_groups = 23;
 }
 message CreateOrderRequest {
   int64 user_id = 1;
@@ -513,6 +516,7 @@ message ShipmentPermitRequest {
   string order_no = 1;
   string shipment_no = 2;
   string after_sale_no = 3;
+  string fulfillment_group_no = 4;
 }
 
 message CancelOrderInnerRequest { string order_no = 1; string reason = 2; }
@@ -763,6 +767,8 @@ message Shipment {
   string tracking_no = 5;
   repeated ShipmentItem items = 6;
   int64 created_at_unix = 7;
+  string fulfillment_group_no = 8;
+  int64 warehouse_id = 9;
 }
 message CreateShipmentRequest {
   string order_no = 1;
@@ -770,6 +776,7 @@ message CreateShipmentRequest {
   string carrier = 3;
   string tracking_no = 4;
   repeated ShipmentItem items = 5;
+  string fulfillment_group_no = 6;
 }
 message ShipRequest { string shipment_no = 1; }
 message ReceiveRequest { string shipment_no = 1; }

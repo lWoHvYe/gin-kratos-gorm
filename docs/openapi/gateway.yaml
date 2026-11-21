@@ -145,6 +145,14 @@ components:
           type: array
           items: { type: string }
         shipment_status: { type: string }
+        fulfillment_groups:
+          type: array
+          items:
+            type: object
+            properties:
+              group_no: { type: string }
+              warehouse_id: { type: integer, format: int64 }
+              freight_cent: { type: integer, format: int64 }
         receiver_name: { type: string }
         receiver_phone: { type: string }
         receiver_address: { type: string }

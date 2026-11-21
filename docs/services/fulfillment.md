@@ -78,6 +78,11 @@ later requires dropping `uk_shipments_order` and keying idempotency on
 
 ## Schema
 
+- `shipments` includes `fulfillment_group_no` and `warehouse_id`; the unique
+  key is `(order_no, fulfillment_group_no)`.
+- `shipment_items` is scoped by `shipment_id`, so each group parcels only its
+  own lines.
+
 - `shipments(id, shipment_no, order_no, warehouse_id, carrier, tracking_no,
   status, version, created_at, updated_at)` — `uk_shipments_no`,
   `uk_shipments_order`, `idx_shipments_status`.

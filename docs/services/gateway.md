@@ -109,6 +109,8 @@ Details worth knowing:
 - `POST /checkout/preview` with no `items` reads the selected cart lines. This
   makes the server cart the normal C-end source of truth and avoids trusting a
   client-generated list.
+- `POST /orders/:orderNo/receive` accepts an optional `shipment_no` (body or
+  query); a split order must receive each group's shipment explicitly.
 - `POST /checkout/place` fills any missing receiver fields from `address_id`
   (the address must belong to the user) before creating the order, then clears
   selected cart lines after the order and payment intent succeed. Clearing is best-effort: a stale cart is preferable to failing
@@ -173,7 +175,7 @@ etcd service health or the HTTP probe in `deploy/`.
 | `<SERVICE>_ADDR` | port table | direct target override |
 | `LOG_LEVEL` | `info` | `debug`, `warn`, `error` |
 | `WAREHOUSE_ALLOCATION_SHADOW` | `false` | phase-2a dual-read: call Inventory `AllocateOrder` during preview, log mismatches, never change the quote |
-| `WAREHOUSE_SPLIT_ENABLED` | `false` | phase-3b: allow multi-warehouse allocations through Pricing/Order; keep false until split shipments/permits |
+| `WAREHOUSE_SPLIT_ENABLED` | `false` | phase-3b/4: allow multi-warehouse allocations through Pricing/Order and per-group shipments; dev single-node sets `true`, production stays `false` until phase 5/6 |
 | `GIN_MODE` | `debug` | set `release` in production |
 
 `config.Load("gateway")` still parses `MySQL_DSN`, `NATS_URL`, `DTM_ADDRESS`,

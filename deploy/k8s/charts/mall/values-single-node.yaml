@@ -22,3 +22,4 @@ payment:
   mockEnabled: "true"
 
 warehouseAllocationShadow: true
+warehouseSplitEnabled: true

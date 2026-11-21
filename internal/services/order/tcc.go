@@ -99,6 +99,9 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 		if err := insertStatusLog(ctx, tx, orderNo, statusPendingPayment, statusPaid, "payment "+paymentNo, operator); err != nil {
 			return err
 		}
+		if err := setFulfillmentGroupStatus(ctx, tx, orderNo, statusAllocated); err != nil {
+			return err
+		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic: topicOrderPaid, AggregateType: "order", AggregateID: orderNo, EventType: "order.paid",
 			Payload: map[string]any{
@@ -202,6 +205,11 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 		}
 		if err := insertStatusLog(ctx, tx, orderNo, from, nextStatus, "payment tcc cancelled", "system"); err != nil {
 			return err
+		}
+		if nextStatus == statusPaid {
+			if err := setFulfillmentGroupStatus(ctx, tx, orderNo, statusAllocated); err != nil {
+				return err
+			}
 		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic: topicOrderRefundRequested, AggregateType: "order", AggregateID: orderNo, EventType: "order.refund_requested",

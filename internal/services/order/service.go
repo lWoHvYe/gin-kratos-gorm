@@ -236,6 +236,9 @@ func (s *Service) CreateOrderInner(ctx context.Context, req *pb.CreateOrderInner
 		if err := insertOrderItems(ctx, tx, orderNo, req.GetItems()); err != nil {
 			return err
 		}
+		if err := insertFulfillmentGroup(ctx, tx, orderNo, record.FreightCent); err != nil {
+			return err
+		}
 		if err := insertStatusLog(ctx, tx, orderNo, "", statusPendingPayment, "order created", "system"); err != nil {
 			return err
 		}
@@ -415,6 +418,9 @@ func (s *Service) CancelOrder(ctx context.Context, req *pb.CancelOrderRequest) (
 		if err := insertStatusLog(ctx, tx, orderNo, statusPendingPayment, statusCancelled, reason, operator); err != nil {
 			return err
 		}
+		if err := setFulfillmentGroupStatus(ctx, tx, orderNo, statusCancelled); err != nil {
+			return err
+		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic:         topicOrderCancelled,
 			AggregateType: "order",
@@ -503,6 +509,9 @@ func (s *Service) CancelOrderInner(ctx context.Context, req *pb.CancelOrderInner
 			return nil
 		}
 		if err := insertStatusLog(ctx, tx, orderNo, statusPendingPayment, statusCancelled, reason, "system"); err != nil {
+			return err
+		}
+		if err := setFulfillmentGroupStatus(ctx, tx, orderNo, statusCancelled); err != nil {
 			return err
 		}
 		items, err := loadOrderItems(ctx, tx, orderNo)
@@ -618,6 +627,9 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 		}
 		paid = true
 		if err := insertStatusLog(ctx, tx, orderNo, statusPendingPayment, statusPaid, "payment "+paymentNo, operator); err != nil {
+			return err
+		}
+		if err := setFulfillmentGroupStatus(ctx, tx, orderNo, statusAllocated); err != nil {
 			return err
 		}
 		return outbox.Append(ctx, tx, outbox.Event{

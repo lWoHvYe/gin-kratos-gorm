@@ -102,6 +102,13 @@ func (s *Service) applyShipmentStatus(ctx context.Context, orderNo, target strin
 			if err := insertStatusLog(ctx, tx, orderNo, record.Status, target, "shipment projection", "fulfillment"); err != nil {
 				return err
 			}
+			groupStatus := target
+			if target == statusCompleted {
+				groupStatus = "RECEIVED"
+			}
+			if err := setFulfillmentGroupStatus(ctx, tx, orderNo, groupStatus); err != nil {
+				return err
+			}
 			return outbox.Append(ctx, tx, outbox.Event{
 				Topic: topic, AggregateType: "order", AggregateID: orderNo, EventType: eventType,
 				Payload: map[string]any{"order_no": orderNo, "status": target, "changed_at": time.Now().Unix()},

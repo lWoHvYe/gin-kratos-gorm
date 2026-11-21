@@ -54,7 +54,7 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 
 | Item | Status | Evidence / remaining gap |
 |---|---|---|
-| C cross-warehouse split orders | design proposed | ADR [0002](adr/0002-cross-warehouse-split-orders.md) defines fulfillment groups, per-line warehouse allocation, per-group reservations/permits/shipments, origin-warehouse returns and a fixed migration/rollout order. No schema or business code is allowed until the ADR is approved. Open questions: freight rule, allocator policy, whether a SKU line may split quantity, cross-warehouse returns, partial-cancel UX. |
+| C cross-warehouse split orders | phase 1 done (dev); phase 2 pending | ADR [0002](adr/0002-cross-warehouse-split-orders.md) accepted. Phase 1 live: `order/0011` applied after real-data preflight; 94 orders -> 94 `G1`/warehouse-1 groups, 0 missing groups, 0 bad item allocations; a new smoke order got `G1/1/ALLOCATED` and line 1/warehouse 1; `TestFulfillmentGroupShadowTracksOrder` passes. This is shadow state only: no split allocation, quote/pricing warehouse input, per-group permit/shipment or inventory key change yet. Phase 2 is the allocator + quote/proto work; open defaults were approved (flat per-warehouse freight, stock/priority allocator, line-level split only, origin returns, paid-unshipped via refund). |
 
 ## P3
 

@@ -42,7 +42,12 @@ DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
 - `orders` – money in `_cent BIGINT`, `status` as `VARCHAR`, `version` for
   optimistic concurrency, `expire_at` for the payment window,
   `UNIQUE (order_no)` and `UNIQUE (user_id, client_request_id)`.
-- `order_items` – item snapshot taken from the quote (name/price/quantity/discount).
+- `order_items` – item snapshot taken from the quote (line_no/name/price/quantity/
+  discount); phase 1 of cross-warehouse split orders adds `warehouse_id` and
+  `fulfillment_group_no`.
+- `order_fulfillment_groups` – phase 1 allocation snapshot. Every existing/new
+  order has one `G1`/warehouse-1 group; it is shadow state until the split
+  phases in `docs/adr/0002-cross-warehouse-split-orders.md`.
 - `order_status_logs` – append-only audit trail of every transition
   (`from_status`, `to_status`, `reason`, `operator`).
 - `outbox_events` – transactional outbox used by the relay worker.
@@ -50,6 +55,9 @@ DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
 - `0010_settlement_protocol.sql` – adds `refund_state`, backfills legacy
   `REFUNDING/PARTIALLY_REFUNDED/REFUNDED` lifecycle values from
   `order_status_logs` (default `PAID`), and creates `order_shipping_permits`.
+- `0011_fulfillment_groups.sql` – creates `order_fulfillment_groups`, adds
+  `line_no/warehouse_id/fulfillment_group_no` to `order_items`, and backfills
+  every order as one `G1`/warehouse-1 group.
 
 ## Statuses and settlement
 

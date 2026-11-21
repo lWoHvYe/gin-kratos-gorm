@@ -145,11 +145,12 @@ func insertOrder(ctx context.Context, tx *sql.Tx, o *orderRecord, now time.Time)
 }
 
 func insertOrderItems(ctx context.Context, tx *sql.Tx, orderNo string, items []*pb.OrderItem) error {
-	for _, item := range items {
+	for i, item := range items {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO order_items
-			(order_no, sku_id, name, price_cent, quantity, discount_cent)
-			VALUES (?, ?, ?, ?, ?, ?)`,
-			orderNo, item.GetSkuId(), item.GetName(), item.GetPriceCent(), item.GetQuantity(), item.GetDiscountCent()); err != nil {
+			(order_no, line_no, sku_id, name, price_cent, quantity, warehouse_id, fulfillment_group_no, discount_cent)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			orderNo, i+1, item.GetSkuId(), item.GetName(), item.GetPriceCent(), item.GetQuantity(),
+			defaultWarehouseID, defaultGroupNo, item.GetDiscountCent()); err != nil {
 			return err
 		}
 	}

@@ -57,6 +57,23 @@ func orderTestDB(t *testing.T) *sql.DB {
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_orders_order_no (order_no))`,
+		`CREATE TABLE IF NOT EXISTS order_items (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL,
+			line_no INT NOT NULL DEFAULT 0, sku_id BIGINT NOT NULL, name VARCHAR(255) NOT NULL DEFAULT '',
+			price_cent BIGINT NOT NULL DEFAULT 0, quantity INT NOT NULL DEFAULT 0,
+			warehouse_id BIGINT NOT NULL DEFAULT 1, fulfillment_group_no VARCHAR(64) NOT NULL DEFAULT 'G1',
+			discount_cent BIGINT NOT NULL DEFAULT 0,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			UNIQUE KEY uk_order_items_line (order_no, line_no))`,
+		`CREATE TABLE IF NOT EXISTS order_fulfillment_groups (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, group_no VARCHAR(64) NOT NULL,
+			order_no VARCHAR(64) NOT NULL, seq INT NOT NULL DEFAULT 1, warehouse_id BIGINT NOT NULL DEFAULT 1,
+			status VARCHAR(24) NOT NULL DEFAULT 'PENDING', reservation_state VARCHAR(16) NOT NULL DEFAULT 'HELD',
+			freight_cent BIGINT NOT NULL DEFAULT 0, version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+			UNIQUE KEY uk_order_fulfillment_group_no (order_no, group_no),
+			UNIQUE KEY uk_order_fulfillment_group_seq (order_no, seq))`,
 		`CREATE TABLE IF NOT EXISTS order_status_logs (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL,
 			from_status VARCHAR(32) NOT NULL DEFAULT '', to_status VARCHAR(32) NOT NULL,
@@ -83,7 +100,7 @@ func orderTestDB(t *testing.T) *sql.DB {
 			t.Fatalf("create order test table: %v", err)
 		}
 	}
-	for _, table := range []string{"order_shipping_permits", "order_status_logs", "orders", "outbox_events"} {
+	for _, table := range []string{"order_fulfillment_groups", "order_items", "order_shipping_permits", "order_status_logs", "orders", "outbox_events"} {
 		if _, err := db.Exec("DELETE FROM " + table); err != nil {
 			t.Fatal(err)
 		}
@@ -303,5 +320,55 @@ func TestTccCancelKeepsLifecycleAndSetsRefundState(t *testing.T) {
 	}
 	if status != statusPaid || refundState != refundStateRefunding {
 		t.Fatalf("paid tcc cancel = %s/%s", status, refundState)
+	}
+}
+
+func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	ctx := context.Background()
+	seedSettlementOrder(t, db, "ORD-GROUP", statusPendingPayment, 1000, 0, refundStateNone)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := insertOrderItems(ctx, tx, "ORD-GROUP", []*pb.OrderItem{
+		{SkuId: 1, Name: "a", PriceCent: 500, Quantity: 1, DiscountCent: 0},
+		{SkuId: 2, Name: "b", PriceCent: 500, Quantity: 1, DiscountCent: 0},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertFulfillmentGroup(ctx, tx, "ORD-GROUP", 1000); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	groups, err := loadFulfillmentGroups(ctx, db, "ORD-GROUP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 || groups[0].GroupNo != defaultGroupNo || groups[0].WarehouseID != defaultWarehouseID ||
+		groups[0].Status != "PENDING" || groups[0].FreightCent != 1000 {
+		t.Fatalf("groups = %+v", groups)
+	}
+	var line, warehouse int64
+	var groupNo string
+	if err := db.QueryRow(`SELECT line_no, warehouse_id, fulfillment_group_no FROM order_items WHERE order_no = 'ORD-GROUP' ORDER BY line_no LIMIT 1`).
+		Scan(&line, &warehouse, &groupNo); err != nil {
+		t.Fatal(err)
+	}
+	if line != 1 || warehouse != 1 || groupNo != defaultGroupNo {
+		t.Fatalf("item allocation = %d/%d/%s", line, warehouse, groupNo)
+	}
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{OrderNo: "ORD-GROUP", PaymentNo: "PAY-G", PaidCent: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	groups, err = loadFulfillmentGroups(ctx, db, "ORD-GROUP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 || groups[0].Status != statusAllocated {
+		t.Fatalf("group after captured cancel = %+v", groups)
 	}
 }

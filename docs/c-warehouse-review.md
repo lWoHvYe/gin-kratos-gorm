@@ -72,8 +72,9 @@ rollout is still gated.
 
 ## Not covered / production gates
 
-- No production migration/rollback rehearsal for C, and production values keep
-  split disabled.
+- Dev fixture migration/rollback rehearsal passed (disposable MySQL, pre-C
+  dumps, current migrate image). A production backup/restore and old-image
+  smoke are still required; production values keep split disabled.
 - No high-load/chaos run for split checkout, shipment concurrency, or restock
   workers.
 - Admin group-shipment UI has unit/type coverage but not a browser Playwright

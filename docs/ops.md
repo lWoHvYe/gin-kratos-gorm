@@ -339,6 +339,7 @@ make build        # ./bin/<service> for every cmd
 make test         # unit tests only; no MySQL/NATS/DTM required
 make e2e-phase15  # opt-in B-end/C-end/return E2E; running stack required
 make e2e-warehouse-split # opt-in split E2E; two SKUs stocked in two warehouses
+make rehearse-c-migration # disposable MySQL: pre-C dumps -> migrate -> restore
 make concurrency-phase15 # opt-in one-unit oversell race check
 make fmt-check    # gofmt gate
 make vet          # go vet ./...
@@ -572,8 +573,11 @@ Production order:
 `WAREHOUSE_SPLIT_ENABLED` stays `false` in both the dev and production values.
 Phase 4/5/6 now have per-group shipments, permits, returns/refunds and
 group-aware storefront/admin UI. The dev single-node values enable split; the
-production defaults keep `WAREHOUSE_SPLIT_ENABLED=false` until a production
-rollout/rollback rehearsal.
+production defaults keep `WAREHOUSE_SPLIT_ENABLED=false` until the
+[production rollout/rollback rehearsal](runbooks/c-migration-rollback.md)
+passes against a production backup. The disposable dev rehearsal is
+`make rehearse-c-migration`; it uses the pre-C dumps in `/tmp/mall-predeploy`
+by default.
 
 The AI RAG build is not a release gate by default. `ai-rag-build-scheduled`
 runs as a CronJob; `ai.ragBuild.hook=true` opts into the old blocking

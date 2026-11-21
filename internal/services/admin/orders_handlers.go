@@ -85,17 +85,21 @@ func (h *handlers) createShipment(c *gin.Context) {
 		httpx.Error(c, apperr.Invalid("order_no is required"))
 		return
 	}
+	order, err := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: orderNo, Admin: true})
+	if err != nil {
+		httpx.Error(c, bff.RemoteError(err))
+		return
+	}
+	if err := validateShipmentOrder(order); err != nil {
+		httpx.Error(c, err)
+		return
+	}
 	items := make([]*pb.ShipmentItem, 0, len(in.Items))
 	for _, item := range in.Items {
 		items = append(items, &pb.ShipmentItem{SkuId: item.SkuID, Quantity: item.Quantity})
 	}
 	if len(items) == 0 {
 		// Default to a full shipment: copy the order lines through.
-		order, err := h.clients.Order.GetOrder(c.Request.Context(), &pb.GetOrderRequest{OrderNo: orderNo, Admin: true})
-		if err != nil {
-			httpx.Error(c, bff.RemoteError(err))
-			return
-		}
 		for _, line := range order.GetItems() {
 			items = append(items, &pb.ShipmentItem{SkuId: line.GetSkuId(), Quantity: line.GetQuantity()})
 		}
@@ -119,6 +123,19 @@ func (h *handlers) createShipment(c *gin.Context) {
 		}
 	}
 	httpx.Created(c, shipment)
+}
+
+// validateShipmentOrder uses Order's server-owned action list instead of
+// re-deriving the lifecycle/refund state in the BFF. A refunding/full-refunded
+// order has no "ship" action, so no draft shipment is created before the
+// fulfillment permit would reject it.
+func validateShipmentOrder(order *pb.Order) error {
+	for _, action := range order.GetAvailableActions() {
+		if action == "ship" {
+			return nil
+		}
+	}
+	return apperr.Failed("shipping is not available for this order")
 }
 
 // approveRequest is the body of POST /after-sales/:no/approve. approved defaults

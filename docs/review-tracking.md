@@ -1,5 +1,9 @@
 # Architecture review tracking
 
+This is the canonical running status ledger. Update it every round with evidence
+and remaining gaps. `docs/handoff.md` is a session-boundary snapshot and is only
+refreshed when a new conversation is started.
+
 Source: 2026-11-20 handoff plus follow-up implementation. `done` means the code
 and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
@@ -43,8 +47,14 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 
 | Item | Status | Evidence / remaining gap |
 |---|---|---|
-| A (#20/#21/#24/#36) | done (dev cluster) | Order lifecycle is separate from `refund_state`/projection; shipping permit CAS + refund admission; server-owned `available_actions`; after-sales lifetime ledger from Payment captured, immutable effective-amount versions, `RETURN_RECEIVED`, durable restock/refund tasks, no status scanner; Payment `GetPaymentByOrder`; Fulfillment `Ship` requires the permit. MySQL tests cover permit/refund race, projection/lifecycle separation, TCC cancel, concurrent amount admission, restock failure/retry, refund retry/idempotency. Live dev verification: real-data preflight clones then Helm migration job complete; 17 legacy restock tasks converged to `DONE`; refund-only after shipment kept `SHIPPED/FULL`; pre-ship refund blocked shipment (`422`, permit `REVOKED`); `make dtm-smoke` passed; E2E phase15 passed; Playwright 7/7. Remaining: production backup/restore and rollback rehearsal; order detail still reads after-sales from the separate endpoint. |
+| A (#20/#21/#24/#36) | done (dev cluster) | Order lifecycle is separate from `refund_state`/projection; shipping permit CAS + refund admission; server-owned `available_actions`; after-sales lifetime ledger from Payment captured, immutable effective-amount versions, `RETURN_RECEIVED`, durable restock/refund tasks, no status scanner; Payment `GetPaymentByOrder`; Fulfillment `Ship` requires the permit. MySQL tests cover permit/refund race, projection/lifecycle separation, TCC cancel, concurrent amount admission, restock failure/retry, refund retry/idempotency. Live dev verification: real-data preflight clones then Helm migration job complete; 17 legacy restock tasks converged to `DONE`; refund-only after shipment kept `SHIPPED/FULL`; pre-ship refund blocked shipment (`422`, permit `REVOKED`); the admin CREATE shipment path now checks `Order.available_actions` before inserting a shipment; `make dtm-smoke` passed; E2E phase15 passed; Playwright 7/7. Remaining: production backup/restore and rollback rehearsal; order detail still reads after-sales from the separate endpoint. |
 | #3 catalog rebuild | covered by B | Version CAS + stale/conflict reporting from the previous slice. |
+
+## 2026-11-21 product decision: multi-warehouse C
+
+| Item | Status | Evidence / remaining gap |
+|---|---|---|
+| C cross-warehouse split orders | design proposed | ADR [0002](adr/0002-cross-warehouse-split-orders.md) defines fulfillment groups, per-line warehouse allocation, per-group reservations/permits/shipments, origin-warehouse returns and a fixed migration/rollout order. No schema or business code is allowed until the ADR is approved. Open questions: freight rule, allocator policy, whether a SKU line may split quantity, cross-warehouse returns, partial-cancel UX. |
 
 ## P3
 

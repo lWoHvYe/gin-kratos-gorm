@@ -15,14 +15,9 @@ Repository:
 /Users/lWoHvYe/IdeaProjects/gin-kratos-gorm
 ```
 
-Latest feature commit at handoff:
-
-```text
-3b9d1a7 fix(deploy/e2e): keep optional AI build non-blocking and finish live A/B checks
-```
-
-This handoff file itself is committed immediately after that feature commit. See
-`git log -1` for the exact HEAD.
+Running status lives in `docs/review-tracking.md`. This handoff is a
+session-boundary snapshot: refresh it only when starting a new conversation, not
+after every implementation round. Use `git log -1` for the exact HEAD.
 
 Local `main` is ahead of `origin/main`. History was rewritten once to remove an
 accidentally committed `ai-pref-eval` binary, so a force push is required when

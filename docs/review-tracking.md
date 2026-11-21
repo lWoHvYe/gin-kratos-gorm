@@ -92,7 +92,7 @@ old table still described P2#10 as rejected and Phase 7 as not started.
   ./internal/services/aftersales ./internal/services/payment
   ./internal/services/fulfillment` passed with MySQL; `make test-integration`
   includes the new order/payment/after-sales/fulfillment tests. Migrations
-  `order/0004` and `aftersales/0010` were applied to scratch MySQL 8.4 data;
+  `order/0010` and `aftersales/0010` were applied to scratch MySQL 8.4 data;
   the legacy status/amount/restock backfills produced the expected rows.
 
 ## Explicit unverified / drift

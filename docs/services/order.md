@@ -47,7 +47,7 @@ DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
   (`from_status`, `to_status`, `reason`, `operator`).
 - `outbox_events` – transactional outbox used by the relay worker.
 - `dtm_barrier.barrier` – saga barrier table (DTM also creates it lazily).
-- `0004_settlement_protocol.sql` – adds `refund_state`, backfills legacy
+- `0010_settlement_protocol.sql` – adds `refund_state`, backfills legacy
   `REFUNDING/PARTIALLY_REFUNDED/REFUNDED` lifecycle values from
   `order_status_logs` (default `PAID`), and creates `order_shipping_permits`.
 

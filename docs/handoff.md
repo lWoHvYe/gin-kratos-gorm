@@ -106,7 +106,7 @@ git push --force origin main
   `RETURN_REFUND` cannot enter `REFUNDING` until every restock task is `DONE`;
   no status scanner remains (old `RunRefundRecovery` deleted).
 - `Payment.GetPaymentByOrder` is the read-only settlement fact source for
-  after-sales. Migrations: orders `0004`, after-sales `0010`; both backfills
+  after-sales. Migrations: orders `0010`, after-sales `0010`; both backfills
   were exercised on scratch MySQL data.
 
 ### AI

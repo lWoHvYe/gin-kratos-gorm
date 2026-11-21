@@ -89,10 +89,10 @@ containers:
             key: {{ .Values.ai.embeddingAPIKeySecretKey | default "embedding-api-key" }}
       {{- end }}
 {{- end }}
-{{- if and .Values.ai.enabled .Values.ai.ragEnabled .Values.ai.ragBuild.enabled }}
-# The build Job owns the embedding work; AI Pods never take the build lease.
-# It is a hook so an install/upgrade publishes an index before rollout health
-# checks depend on it, and it is cheap when the current version is fresh.
+{{- if and .Values.ai.enabled .Values.ai.ragEnabled .Values.ai.ragBuild.enabled .Values.ai.ragBuild.hook }}
+# Opt-in blocking build hook for environments that require a fresh index before
+# rollout. It is off by default: optional AI must never block a mall release.
+# The CronJob below is the normal, non-blocking build path.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -113,7 +113,8 @@ spec:
         {{- include "mall.labels" . | nindent 8 }}
     spec:
 {{ include "mall.aiRagBuildPodSpec" . | indent 6 }}
-{{- if .Values.ai.ragBuild.schedule }}
+{{- end }}
+{{- if and .Values.ai.enabled .Values.ai.ragEnabled .Values.ai.ragBuild.enabled .Values.ai.ragBuild.schedule }}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -139,4 +140,4 @@ spec:
         spec:
 {{ include "mall.aiRagBuildPodSpec" . | indent 10 }}
 {{- end }}
-{{- end }}
+

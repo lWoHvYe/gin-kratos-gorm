@@ -13,7 +13,9 @@ command -v kubectl >/dev/null || { echo "kubectl is required"; exit 1; }
 echo "== wait for workloads =="
 kubectl wait --for=condition=Available deployment --all -n "$NS" --timeout=300s
 for sts in mysql redis nats etcd; do
-  kubectl rollout status "statefulset/$sts" -n "$DATA_NS" --timeout=300s
+  if kubectl get "statefulset/$sts" -n "$DATA_NS" >/dev/null 2>&1; then
+    kubectl rollout status "statefulset/$sts" -n "$DATA_NS" --timeout=300s
+  fi
 done
 kubectl wait --for=condition=Complete job/mall-migrate -n "$DATA_NS" --timeout=300s
 

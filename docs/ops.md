@@ -527,3 +527,33 @@ make seckill-integration
 
 These cover activity/stock bucket/warmup, Redis admission/idempotency, and
 JetStream order/payment. They are integration checks, not a capacity test.
+
+## A/B settlement migration and production rollout
+
+The dev cluster was migrated on 2026-11-21 with the Helm `mall-migrate` job:
+`order/0010_settlement_protocol.sql`, `aftersales/0010_settlement_protocol.sql`,
+`inventory/0014_remove_smoke_seed.sql` and `inventory/0015_inventory_operations.sql`.
+Before the job, the same migrations were applied to clones of the real
+`mall_order`/`mall_aftersales`/`mall_inventory` data and the affected databases
+were dumped.
+
+Production order:
+
+1. Take a consistent backup of `mall_order`, `mall_aftersales`,
+   `mall_inventory`, `mall_payment` and `mall_fulfillment`.
+2. Rehearse the SQL on a clone and record row counts/backfill distributions.
+3. Run the migration job before rolling new pods.
+4. Roll Order, Payment, Inventory and AfterSales first; then Fulfillment
+   (it calls `Order.AuthorizeShipment`); then Gateway/Admin and frontends.
+5. Keep the old image digests. The new columns/tables are additive, but
+   `after_sales.RECEIVED -> RETURN_RECEIVED` is a one-way data rename: old
+   AfterSales code cannot resume new requests after a rollback. The supported
+   rollback is restore-from-backup or roll forward; do not invent a down SQL.
+
+The AI RAG build is not a release gate by default. `ai-rag-build-scheduled`
+runs as a CronJob; `ai.ragBuild.hook=true` opts into the old blocking
+post-upgrade Job. Trigger a build manually with:
+
+```bash
+kubectl -n mall create job --from=cronjob/ai-rag-build-scheduled ai-rag-build-manual
+```

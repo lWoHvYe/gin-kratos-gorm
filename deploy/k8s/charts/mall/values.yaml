@@ -134,11 +134,15 @@ ai:
   # and repeated upgrades are cheap.
   ragBuild:
     enabled: true
+    # Blocking post-upgrade hook. Off by default: optional AI must not block
+    # the core mall release. Enable only where a fresh index is a hard gate.
+    hook: false
     # Rebuild only when the published version is older than this. "0" always
     # rebuilds; an invalid/empty value is rejected by the Job.
     maxAge: 24h
-    # CronJob schedule for retries and drift repair; empty disables it. A
-    # failed hook build exits 0 (AI is optional) and this retries within 6h.
+    # Non-blocking CronJob for initial build, retries and drift repair; empty
+    # disables it. Manual trigger:
+    #   kubectl -n mall create job --from=cronjob/ai-rag-build-scheduled ai-rag-build-manual
     schedule: "0 */6 * * *"
     activeDeadlineSeconds: 1800
     backoffLimit: 6

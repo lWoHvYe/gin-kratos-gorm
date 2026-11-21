@@ -128,6 +128,16 @@ curl -fsS -X POST "$ADMIN/api/admin/v1/after-sales/$ASNO/approve" -H "$AH" -H 'C
 curl -fsS -X POST "$BASE/api/v1/after-sales/$ASNO/return-tracking" -H "$UH" -H 'Content-Type: application/json' \
   -d "{\"carrier\":\"SF\",\"tracking_no\":\"RET-$SUFFIX\"}" >/dev/null
 curl -fsS -X POST "$ADMIN/api/admin/v1/after-sales/$ASNO/receive" -H "$AH" -H 'Content-Type: application/json' -d '{"condition":"SELLABLE"}' >/dev/null
+# The refund must be blocked until the durable restock task reports DONE.
+BLOCKED="$(curl -sS -o /tmp/e2e-refund-blocked.json -w '%{http_code}' -X POST "$ADMIN/api/admin/v1/after-sales/$ASNO/refund" -H "$AH" -H 'Content-Type: application/json' -d '{}')"
+case "$BLOCKED" in 422) ;; *) echo "refund was not blocked before restock: HTTP $BLOCKED"; cat /tmp/e2e-refund-blocked.json; exit 1;; esac
+RESTOCK=""
+for _ in $(seq 1 40); do
+  RESTOCK="$(curl -fsS "$BASE/api/v1/after-sales/$ASNO" -H "$UH" | json "d.get('restock_state','')")"
+  [ "$RESTOCK" = "DONE" ] && break
+  sleep 0.5
+done
+[ "$RESTOCK" = "DONE" ] || { echo "restock did not converge: $RESTOCK"; exit 1; }
 AS_DONE="$(curl -fsS -X POST "$ADMIN/api/admin/v1/after-sales/$ASNO/refund" -H "$AH" -H 'Content-Type: application/json' -d '{}')"
 echo "$AS_DONE" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["status"]=="REFUNDED" and d.get("refund_no",""), d'
 

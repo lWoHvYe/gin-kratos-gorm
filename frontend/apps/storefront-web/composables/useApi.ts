@@ -6,10 +6,19 @@ interface RefreshReply {
   user: { id: number; username: string; nickname: string; roles: string[] }
 }
 
+// The deployed single-node profile is HTTP (and browser E2E runs there), while
+// production is HTTPS. Decide per request instead of baking the build mode in:
+// a Secure cookie on plain HTTP is silently dropped by the browser, which made
+// the session disappear after a full page load.
+function cookieSecure(): boolean {
+  return import.meta.client ? window.location.protocol === 'https:' : false
+}
+
 export function useApi() {
   const config = useRuntimeConfig()
-  const token = useCookie<string | null>('mall_access_token', { sameSite: 'lax', secure: !import.meta.dev })
-  const refreshToken = useCookie<string | null>('mall_refresh_token', { sameSite: 'lax', secure: !import.meta.dev })
+  const secure = cookieSecure()
+  const token = useCookie<string | null>('mall_access_token', { sameSite: 'lax', secure })
+  const refreshToken = useCookie<string | null>('mall_refresh_token', { sameSite: 'lax', secure })
 
   function base(): string | undefined {
     return (import.meta.server ? config.public.ssrApiBase : config.public.apiBase) || undefined

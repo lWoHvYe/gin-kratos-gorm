@@ -1,4 +1,7 @@
 namespace: mall
+# Namespace that owns MySQL/Redis/NATS for this release. Kept separate so a
+# UAT release can use its own data plane without sharing mall-data.
+dataNamespace: mall-data
 
 image:
   registry: mall
@@ -85,6 +88,9 @@ ingress:
   host: mall.local
   gatewayName: mall-gateway
   gatewayNamespace: istio-system
+  # A second release can attach to an existing shared Gateway. Set false in
+  # UAT when the mall-gateway already exists.
+  createGateway: true
   serviceAccount: istio-ingressgateway
 
 monitoring:

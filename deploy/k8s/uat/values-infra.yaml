@@ -1,0 +1,14 @@
+# UAT data plane: isolated from the dev mall-data namespace.
+namespace: mall-uat-data
+appNamespace: mall-uat
+network:
+  nodeCIDR: 10.211.55.0/24
+mysql:
+  storage: 2Gi
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+redis:
+  storage: 512Mi
+nats:
+  storage: 512Mi

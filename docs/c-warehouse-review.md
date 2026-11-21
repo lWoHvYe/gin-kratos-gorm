@@ -79,6 +79,9 @@ rollout is still gated.
   workers.
 - Admin group-shipment UI has unit/type coverage but not a browser Playwright
   assertion.
+- A separate k3s UAT stack was installed on 2026-11-22 with isolated
+  `mall-uat-data`; single E2E, split E2E, split Playwright and group refund
+  passed. It uses dev secrets/mock payment and is not a production profile.
 - Payment multi-intent aggregation and the A/B production rollback rehearsal
   remain separate gates.
 

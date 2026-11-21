@@ -32,7 +32,7 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: mall-data
+              kubernetes.io/metadata.name: {{ .Values.dataNamespace }}
     {{- with .Values.network.externalMySQLCIDR }}
     - to:
         - ipBlock:

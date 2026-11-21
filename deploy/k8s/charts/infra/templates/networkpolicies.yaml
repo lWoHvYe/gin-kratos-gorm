@@ -25,7 +25,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: mall
+              kubernetes.io/metadata.name: {{ .Values.appNamespace }}
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.namespace }}

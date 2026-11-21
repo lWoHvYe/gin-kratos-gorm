@@ -1,4 +1,6 @@
 namespace: mall-data
+# Application namespace allowed to reach the data services. Override for UAT.
+appNamespace: mall
 
 mysql:
   # standalone: render the single-primary StatefulSet below.

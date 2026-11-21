@@ -1,7 +1,9 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 
-const gateway = '/api/v1'
-const admin = '/api/admin/v1'
+const gatewayBase = process.env.API_BASE_URL || ''
+const adminBase = process.env.ADMIN_API_BASE_URL || gatewayBase
+const gateway = `${gatewayBase}/api/v1`
+const admin = `${adminBase}/api/admin/v1`
 const skuA = Number(process.env.SPLIT_SKU_A || 10179)
 const skuB = Number(process.env.SPLIT_SKU_B || 10178)
 
@@ -69,7 +71,7 @@ test('split order renders groups and receives one group', async ({ page, request
 
   await page.goto('/login')
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await page.waitForURL('http://mall.local/')
+  await page.waitForURL((url) => url.pathname === '/')
   await page.goto(`/orders/${orderNo}`)
   await expect(page.getByRole('heading', { name: '履约分组' })).toBeVisible()
   await expect(page.getByText('G1', { exact: true })).toBeVisible()

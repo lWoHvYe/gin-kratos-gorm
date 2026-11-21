@@ -66,27 +66,40 @@ type Service struct {
 	inventory inventoryPort
 	promotion pb.PromotionServiceClient
 
-	inventoryDTM string
-	orderDTM     string
+	inventoryDTM          string
+	orderDTM              string
+	warehouseSplitEnabled bool
 }
 
 // New builds the order service. pricing and inventory may be nil in tests that
 // only exercise local logic.
+type Options struct {
+	// WarehouseSplitEnabled allows multi-group quotes and per-warehouse
+	// reservations. It stays false until split shipments/permits are ready.
+	WarehouseSplitEnabled bool
+}
+
 func New(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client,
 	pricing pricingPort, inventory inventoryPort, promotion pb.PromotionServiceClient) *Service {
+	return NewWithOptions(database, client, logger, dtmClient, pricing, inventory, promotion, Options{})
+}
+
+func NewWithOptions(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client,
+	pricing pricingPort, inventory inventoryPort, promotion pb.PromotionServiceClient, opts Options) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Service{
-		db:           database,
-		mq:           client,
-		log:          logger,
-		dtm:          dtmClient,
-		pricing:      pricing,
-		inventory:    inventory,
-		promotion:    promotion,
-		inventoryDTM: strings.TrimRight(env("INVENTORY_DTM_URL", defaultInventoryDTMURL), "/"),
-		orderDTM:     strings.TrimRight(env("ORDER_DTM_URL", defaultOrderDTMURL), "/"),
+		warehouseSplitEnabled: opts.WarehouseSplitEnabled,
+		db:                    database,
+		mq:                    client,
+		log:                   logger,
+		dtm:                   dtmClient,
+		pricing:               pricing,
+		inventory:             inventory,
+		promotion:             promotion,
+		inventoryDTM:          strings.TrimRight(env("INVENTORY_DTM_URL", defaultInventoryDTMURL), "/"),
+		orderDTM:              strings.TrimRight(env("ORDER_DTM_URL", defaultOrderDTMURL), "/"),
 	}
 }
 
@@ -236,7 +249,7 @@ func (s *Service) CreateOrderInner(ctx context.Context, req *pb.CreateOrderInner
 		if err := insertOrderItems(ctx, tx, orderNo, req.GetItems()); err != nil {
 			return err
 		}
-		if err := insertFulfillmentGroup(ctx, tx, orderNo, record.FreightCent); err != nil {
+		if err := insertFulfillmentGroups(ctx, tx, orderNo, req.GetFulfillmentGroups(), record.FreightCent); err != nil {
 			return err
 		}
 		if err := insertStatusLog(ctx, tx, orderNo, "", statusPendingPayment, "order created", "system"); err != nil {
@@ -832,10 +845,38 @@ func (s *Service) getQuote(ctx context.Context, quoteID string) (*pb.Quote, erro
 			return nil, apperr.Internal("pricing returned negative quote amounts", nil)
 		}
 	}
-	if err := validateSingleWarehouseQuote(quote); err != nil {
+	if s.warehouseSplitEnabled {
+		if err := validateSplitQuote(quote); err != nil {
+			return nil, err
+		}
+	} else if err := validateSingleWarehouseQuote(quote); err != nil {
 		return nil, err
 	}
 	return quote, nil
+}
+
+// validateSplitQuote is enabled only after the split shipment/permit phase. It
+// checks that lines and groups agree; it does not create shipments itself.
+func validateSplitQuote(quote *pb.Quote) error {
+	groups := make(map[string]int64, len(quote.GetGroups()))
+	for _, group := range quote.GetGroups() {
+		if group.GetGroupNo() == "" || group.GetWarehouseId() <= 0 {
+			return apperr.Internal("pricing returned an invalid fulfillment group", nil)
+		}
+		if _, exists := groups[group.GetGroupNo()]; exists {
+			return apperr.Internal("pricing returned a duplicate fulfillment group", nil)
+		}
+		groups[group.GetGroupNo()] = group.GetWarehouseId()
+	}
+	for _, line := range quote.GetLines() {
+		if line.GetWarehouseId() <= 0 || line.GetGroupNo() == "" {
+			return apperr.Internal("pricing returned a split line without group/warehouse", nil)
+		}
+		if warehouseID, ok := groups[line.GetGroupNo()]; ok && warehouseID != line.GetWarehouseId() {
+			return apperr.Internal("pricing returned a line/group warehouse mismatch", nil)
+		}
+	}
+	return nil
 }
 
 // validateSingleWarehouseQuote is the phase-2b gate: pricing can now store
@@ -992,6 +1033,12 @@ func buildCreateOrderInner(orderNo string, in createOrderInput, quote *pb.Quote,
 			GroupNo:      groupNo,
 		})
 	}
+	groups := make([]*pb.OrderFulfillmentGroup, 0, len(quote.GetGroups()))
+	for _, group := range quote.GetGroups() {
+		groups = append(groups, &pb.OrderFulfillmentGroup{
+			GroupNo: group.GetGroupNo(), WarehouseId: group.GetWarehouseId(), FreightCent: group.GetFreightCent(),
+		})
+	}
 	return &pb.CreateOrderInnerRequest{
 		UserId:                in.UserID,
 		OrderNo:               orderNo,
@@ -1008,6 +1055,7 @@ func buildCreateOrderInner(orderNo string, in createOrderInput, quote *pb.Quote,
 		ReceiverAddress:       in.ReceiverAddress,
 		Items:                 items,
 		ExpireAtUnix:          expireAt.Unix(),
+		FulfillmentGroups:     groups,
 	}
 }
 

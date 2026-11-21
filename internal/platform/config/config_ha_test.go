@@ -227,6 +227,11 @@ func TestInvalidBooleanEnvFailsClosed(t *testing.T) {
 	if _, err := Load("gateway"); err == nil || !strings.Contains(err.Error(), "WAREHOUSE_ALLOCATION_SHADOW") {
 		t.Fatalf("invalid warehouse shadow bool err = %v", err)
 	}
+	clearConfigEnv(t)
+	t.Setenv("WAREHOUSE_SPLIT_ENABLED", "maybe")
+	if _, err := Load("gateway"); err == nil || !strings.Contains(err.Error(), "WAREHOUSE_SPLIT_ENABLED") {
+		t.Fatalf("invalid warehouse split bool err = %v", err)
+	}
 }
 
 func TestDevKeepsMockPaymentsAndSharedSeckillSecret(t *testing.T) {

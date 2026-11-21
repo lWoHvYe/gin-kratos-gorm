@@ -485,6 +485,11 @@ message CreateOrderRequest {
   string receiver_phone = 6;
   string receiver_address = 7;
 }
+message OrderFulfillmentGroup {
+  string group_no = 1;
+  int64 warehouse_id = 2;
+  int64 freight_cent = 3;
+}
 message CreateOrderInnerRequest {
   int64 user_id = 1;
   string order_no = 2;
@@ -501,6 +506,7 @@ message CreateOrderInnerRequest {
   int64 expire_at_unix = 13;
   int64 promotion_discount_cent = 14;
   string applied_promotions_json = 15;
+  repeated OrderFulfillmentGroup fulfillment_groups = 16;
 }
 message CancelOrderRequest { string order_no = 1; int64 user_id = 2; string reason = 3; bool admin = 4; }
 message ShipmentPermitRequest {

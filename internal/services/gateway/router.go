@@ -31,6 +31,9 @@ type Options struct {
 	// WarehouseAllocationShadow calls Inventory AllocateOrder during preview
 	// and logs mismatches without changing the quote. Phase 2a only.
 	WarehouseAllocationShadow bool
+	// WarehouseSplitEnabled lets multi-warehouse allocations reach Pricing and
+	// Order. Keep false until split shipments/permits are ready.
+	WarehouseSplitEnabled bool
 }
 
 // NewEngine builds the public gateway Gin engine. The routes under /api/v1 that
@@ -40,7 +43,8 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, opts Op
 		logger = slog.Default()
 	}
 	h := &handlers{clients: clients, log: logger, aiEnabled: opts.AIEnabled,
-		warehouseShadow: opts.WarehouseAllocationShadow, active: activecache.New(5 * time.Second)}
+		warehouseShadow: opts.WarehouseAllocationShadow, warehouseSplit: opts.WarehouseSplitEnabled,
+		active: activecache.New(5 * time.Second)}
 
 	engine := gin.New()
 	engine.Use(bff.Recovery(), httpx.RequestID(), httpx.AccessLog(logger), httpx.CORS(), httpx.MaxPage(1000),

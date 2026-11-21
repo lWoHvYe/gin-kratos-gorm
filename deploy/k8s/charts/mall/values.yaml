@@ -10,6 +10,9 @@ logLevel: info
 # Phase 2a: call Inventory AllocateOrder during checkout preview and log
 # mismatches without changing the quote. Keep false outside dev until phase 2b.
 warehouseAllocationShadow: false
+# Phase 3b: allow multi-group quotes/orders. Keep false until split
+# shipments/permits (phase 4) are ready.
+warehouseSplitEnabled: false
 
 mysql:
   host: mysql.mall-data.svc.cluster.local

@@ -221,7 +221,7 @@ func (h *handlers) shadowAllocations(ctx context.Context, items []*pb.QuoteItem)
 	}
 	allocations := make([]*pb.QuoteAllocation, 0, len(reply.GetAllocations()))
 	for _, allocation := range reply.GetAllocations() {
-		if allocation.GetWarehouseId() != 1 {
+		if allocation.GetWarehouseId() != 1 && !h.warehouseSplit {
 			h.log.Warn("warehouse allocation shadow has a split warehouse; quote remains single-group",
 				"sku_id", allocation.GetSkuId(), "quantity", allocation.GetQuantity(),
 				"warehouse_id", allocation.GetWarehouseId(), "line_no", allocation.GetLineNo())
@@ -232,6 +232,7 @@ func (h *handlers) shadowAllocations(ctx context.Context, items []*pb.QuoteItem)
 			WarehouseId: allocation.GetWarehouseId(),
 		})
 	}
-	h.log.Debug("warehouse allocation shadow matched single warehouse", "lines", len(allocations))
+	h.log.Debug("warehouse allocation shadow prepared quote allocations", "lines", len(allocations),
+		"warehouse_split", h.warehouseSplit)
 	return allocations
 }

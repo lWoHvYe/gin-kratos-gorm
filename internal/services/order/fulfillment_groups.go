@@ -3,6 +3,9 @@ package order
 import (
 	"context"
 	"database/sql"
+
+	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/apperr"
 )
 
 const defaultGroupNo = "G1"
@@ -20,12 +23,39 @@ type fulfillmentGroup struct {
 	FreightCent      int64
 }
 
-func insertFulfillmentGroup(ctx context.Context, tx *sql.Tx, orderNo string, freightCent int64) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO order_fulfillment_groups
-		(group_no, order_no, seq, warehouse_id, status, reservation_state, freight_cent, version)
-		VALUES (?, ?, 1, ?, 'PENDING', 'HELD', ?, 1)`,
-		defaultGroupNo, orderNo, defaultWarehouseID, freightCent)
-	return err
+func insertFulfillmentGroups(ctx context.Context, tx *sql.Tx, orderNo string, groups []*pb.OrderFulfillmentGroup, fallbackFreight int64) error {
+	if len(groups) == 0 {
+		groups = []*pb.OrderFulfillmentGroup{{
+			GroupNo: defaultGroupNo, WarehouseId: defaultWarehouseID, FreightCent: fallbackFreight,
+		}}
+	}
+	seenGroup := make(map[string]struct{}, len(groups))
+	seenWarehouse := make(map[int64]struct{}, len(groups))
+	for i, group := range groups {
+		groupNo := group.GetGroupNo()
+		if groupNo == "" {
+			groupNo = defaultGroupNo
+		}
+		warehouseID := group.GetWarehouseId()
+		if warehouseID <= 0 {
+			warehouseID = defaultWarehouseID
+		}
+		if _, exists := seenGroup[groupNo]; exists {
+			return apperr.Internal("duplicate fulfillment group", nil)
+		}
+		if _, exists := seenWarehouse[warehouseID]; exists {
+			return apperr.Internal("duplicate fulfillment warehouse", nil)
+		}
+		seenGroup[groupNo] = struct{}{}
+		seenWarehouse[warehouseID] = struct{}{}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO order_fulfillment_groups
+			(group_no, order_no, seq, warehouse_id, status, reservation_state, freight_cent, version)
+			VALUES (?, ?, ?, ?, 'PENDING', 'HELD', ?, 1)`,
+			groupNo, orderNo, i+1, warehouseID, group.GetFreightCent()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // setFulfillmentGroupStatus keeps the phase-1 group shadow aligned with the
@@ -37,7 +67,7 @@ func setFulfillmentGroupStatus(ctx context.Context, tx *sql.Tx, orderNo, status 
 	}
 	_, err := tx.ExecContext(ctx, `UPDATE order_fulfillment_groups
 		SET status = ?, reservation_state = ?, version = version + 1, updated_at = NOW(3)
-		WHERE order_no = ? AND group_no = ?`, status, reservation, orderNo, defaultGroupNo)
+		WHERE order_no = ?`, status, reservation, orderNo)
 	return err
 }
 

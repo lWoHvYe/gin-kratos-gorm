@@ -43,6 +43,9 @@ type Config struct {
 	// WarehouseAllocationShadow enables the checkout allocator dual-read. It
 	// never changes the quote or order; phase 2b wires warehouse quote lines.
 	WarehouseAllocationShadow bool
+	// WarehouseSplitEnabled allows Order/Gateway to accept multi-group quotes.
+	// It stays false until the split shipment/permit phases are ready.
+	WarehouseSplitEnabled bool
 	// SeckillTokenSecret signs admission tokens; must differ from JWTSecret.
 	SeckillTokenSecret string
 	NATSURL            string
@@ -446,6 +449,13 @@ func applyEnv(c *Config) error {
 		if d, err := time.ParseDuration(v); err == nil {
 			c.RefreshTTL = d
 		}
+	}
+	if v, ok := os.LookupEnv("WAREHOUSE_SPLIT_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("WAREHOUSE_SPLIT_ENABLED must be a boolean (got %q)", v)
+		}
+		c.WarehouseSplitEnabled = parsed
 	}
 	if v, ok := os.LookupEnv("WAREHOUSE_ALLOCATION_SHADOW"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))

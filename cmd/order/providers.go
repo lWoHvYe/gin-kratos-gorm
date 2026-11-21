@@ -91,8 +91,10 @@ func provideDTMClient(cfg *config.Config) *dtm.Client {
 	return dtm.New(cfg)
 }
 
-func provideOrderService(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client, pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient, promotion pb.PromotionServiceClient) *order.Service {
-	return order.New(database, client, logger, dtmClient, pricing, inventory, promotion)
+func provideOrderService(cfg *config.Config, database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client, pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient, promotion pb.PromotionServiceClient) *order.Service {
+	return order.NewWithOptions(database, client, logger, dtmClient, pricing, inventory, promotion, order.Options{
+		WarehouseSplitEnabled: cfg.WarehouseSplitEnabled,
+	})
 }
 
 func provideGRPCServer(cfg *config.Config, logger *slog.Logger, svc *order.Service) *kratosgrpc.Server {

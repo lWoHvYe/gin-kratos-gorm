@@ -148,6 +148,10 @@ spec:
             - name: WAREHOUSE_ALLOCATION_SHADOW
               value: {{ $.Values.warehouseAllocationShadow | quote }}
             {{- end }}
+            {{- if or (eq $name "gateway") (eq $name "order") }}
+            - name: WAREHOUSE_SPLIT_ENABLED
+              value: {{ $.Values.warehouseSplitEnabled | quote }}
+            {{- end }}
             {{- if or (eq $name "gateway") (eq $name "admin") }}
             - name: AI_ENABLED
               value: {{ $.Values.ai.enabled | quote }}

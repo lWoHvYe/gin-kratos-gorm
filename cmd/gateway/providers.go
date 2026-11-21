@@ -37,6 +37,7 @@ func provideEngine(cfg *config.Config, logger *slog.Logger, jwt *auth.Manager, c
 		PaymentMockEnabled:        cfg.PaymentMockEnabled,
 		AIEnabled:                 cfg.AIEnabled,
 		WarehouseAllocationShadow: cfg.WarehouseAllocationShadow,
+		WarehouseSplitEnabled:     cfg.WarehouseSplitEnabled,
 	})
 }
 

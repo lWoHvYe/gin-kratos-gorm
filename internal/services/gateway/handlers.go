@@ -18,6 +18,7 @@ type handlers struct {
 	log             *slog.Logger
 	aiEnabled       bool
 	warehouseShadow bool
+	warehouseSplit  bool
 	active          *activecache.Cache
 }
 

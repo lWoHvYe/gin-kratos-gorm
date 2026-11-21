@@ -338,7 +338,9 @@ func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := insertFulfillmentGroup(ctx, tx, "ORD-GROUP", 1000); err != nil {
+	if err := insertFulfillmentGroups(ctx, tx, "ORD-GROUP", []*pb.OrderFulfillmentGroup{
+		{GroupNo: "G1", WarehouseId: 1, FreightCent: 1000},
+	}, 1000); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -370,5 +372,50 @@ func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
 	}
 	if len(groups) != 1 || groups[0].Status != statusAllocated {
 		t.Fatalf("group after captured cancel = %+v", groups)
+	}
+}
+
+func TestMultiGroupShadowAllocatedTogether(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	ctx := context.Background()
+	seedSettlementOrder(t, db, "ORD-MULTI", statusPendingPayment, 1000, 0, refundStateNone)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := insertOrderItems(ctx, tx, "ORD-MULTI", []*pb.OrderItem{
+		{SkuId: 1, Name: "a", PriceCent: 500, Quantity: 1, WarehouseId: 1, GroupNo: "G1"},
+		{SkuId: 2, Name: "b", PriceCent: 500, Quantity: 1, WarehouseId: 2, GroupNo: "G2"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertFulfillmentGroups(ctx, tx, "ORD-MULTI", []*pb.OrderFulfillmentGroup{
+		{GroupNo: "G1", WarehouseId: 1, FreightCent: 500},
+		{GroupNo: "G2", WarehouseId: 2, FreightCent: 500},
+	}, 1000); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	groups, err := loadFulfillmentGroups(ctx, db, "ORD-MULTI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 || groups[0].GroupNo != "G1" || groups[1].GroupNo != "G2" {
+		t.Fatalf("groups = %+v", groups)
+	}
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{OrderNo: "ORD-MULTI", PaymentNo: "PAY-M", PaidCent: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	groups, err = loadFulfillmentGroups(ctx, db, "ORD-MULTI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, group := range groups {
+		if group.Status != statusAllocated {
+			t.Fatalf("group %s = %s", group.GroupNo, group.Status)
+		}
 	}
 }

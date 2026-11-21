@@ -619,7 +619,7 @@ func (s *Service) CreateSeckillReservation(ctx context.Context, req *pb.CreateSe
 		req.GetQuantity() <= 0 || strings.TrimSpace(req.GetRefNo()) == "" {
 		return nil, apperr.Invalid("activity_id, order_no, sku_id, quantity and ref_no are required")
 	}
-	existing, err := s.reservationByOrderSku(ctx, s.db, req.GetOrderNo(), req.GetSkuId(), false)
+	existing, err := s.reservationByOrderSku(ctx, s.db, req.GetOrderNo(), req.GetSkuId(), defaultWarehouseID, false)
 	if err == nil {
 		return reservationReply(existing)
 	}
@@ -641,7 +641,7 @@ func (s *Service) CreateSeckillReservation(ctx context.Context, req *pb.CreateSe
 		}
 		if m != nil && m.status == statusHeld {
 			// Already converted.
-			r, rerr := s.reservationByOrderSku(ctx, tx, req.GetOrderNo(), req.GetSkuId(), false)
+			r, rerr := s.reservationByOrderSku(ctx, tx, req.GetOrderNo(), req.GetSkuId(), defaultWarehouseID, false)
 			created = r
 			return rerr
 		}
@@ -701,7 +701,7 @@ func (s *Service) ReleaseSeckillReservation(ctx context.Context, req *pb.Release
 		return nil, apperr.Invalid("order_no and sku_id are required")
 	}
 	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		r, err := s.reservationByOrderSku(ctx, tx, req.GetOrderNo(), req.GetSkuId(), true)
+		r, err := s.reservationByOrderSku(ctx, tx, req.GetOrderNo(), req.GetSkuId(), defaultWarehouseID, true)
 		if err != nil {
 			return err
 		}

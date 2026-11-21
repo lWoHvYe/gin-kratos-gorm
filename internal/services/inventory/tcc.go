@@ -23,7 +23,7 @@ func (s *Service) TccTryConfirm(ctx context.Context, req *pb.TccPaymentRequest) 
 		return nil, apperr.Invalid("items are required")
 	}
 	for _, item := range items {
-		r, err := s.reservationByOrderSku(ctx, s.db, orderNo, item.GetSkuId(), false)
+		r, err := s.reservationByOrderSku(ctx, s.db, orderNo, item.GetSkuId(), item.GetWarehouseId(), false)
 		if err != nil {
 			return nil, apperr.Failed(fmt.Sprintf("reservation missing for sku %d", item.GetSkuId()))
 		}
@@ -84,8 +84,8 @@ func (s *Service) TccCancelConfirm(ctx context.Context, req *pb.TccPaymentReques
 // operation runner and TccCancelConfirm. It locks the reservation, applies the
 // HELD/CONFIRMED/seckill branch, and CASes the terminal status. The caller owns
 // the transaction and any savepoint around a partial failure.
-func (s *Service) cancelReservationTx(ctx context.Context, tx *sql.Tx, orderNo string, skuID, quantity int64) (*reservation, error) {
-	r, err := s.reservationByOrderSku(ctx, tx, orderNo, skuID, true)
+func (s *Service) cancelReservationTx(ctx context.Context, tx *sql.Tx, orderNo string, skuID, warehouseID, quantity int64) (*reservation, error) {
+	r, err := s.reservationByOrderSku(ctx, tx, orderNo, skuID, warehouseID, true)
 	if err != nil {
 		if apperr.IsCode(err, apperr.CodeNotFound) {
 			return nil, apperr.Wrap(apperr.CodeNotFound, "reservation missing", errReservationMissing)
@@ -195,7 +195,7 @@ func (s *Service) TccQueryConfirm(ctx context.Context, req *pb.TccPaymentRequest
 		return nil, apperr.Invalid("order_no is required")
 	}
 	for _, item := range req.GetItems() {
-		r, err := s.reservationByOrderSku(ctx, s.db, orderNo, item.GetSkuId(), false)
+		r, err := s.reservationByOrderSku(ctx, s.db, orderNo, item.GetSkuId(), item.GetWarehouseId(), false)
 		if err != nil || (r.status != statusHeld && r.status != statusConfirmed) {
 			return &pb.TccQueryReply{Prepared: false}, nil
 		}

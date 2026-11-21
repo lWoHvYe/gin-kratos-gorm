@@ -160,6 +160,8 @@ components:
               price_cent: { type: integer, format: int64 }
               quantity: { type: integer }
               discount_cent: { type: integer, format: int64 }
+              warehouse_id: { type: integer, format: int64 }
+              group_no: { type: string }
     AfterSale:
       type: object
       properties:

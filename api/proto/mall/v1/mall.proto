@@ -445,6 +445,8 @@ message OrderItem {
   int64 price_cent = 3;
   int32 quantity = 4;
   int64 discount_cent = 5;
+  int64 warehouse_id = 6;
+  string group_no = 7;
 }
 message Order {
   string order_no = 1;

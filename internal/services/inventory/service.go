@@ -83,7 +83,7 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveRequest) (*pb.Rese
 		return nil, err
 	}
 
-	existing, err := s.reservationByOrderSku(ctx, s.db, in.orderNo, in.skuID, false)
+	existing, err := s.reservationByOrderSku(ctx, s.db, in.orderNo, in.skuID, in.warehouseID, false)
 	switch {
 	case err == nil:
 		s.log.Debug("reserve replay", "order_no", in.orderNo, "sku_id", in.skuID, "status", existing.status)
@@ -105,7 +105,7 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveRequest) (*pb.Rese
 	}
 	if err := s.write(ctx, write); err != nil {
 		if errors.Is(err, errReservationExists) {
-			winner, readErr := s.reservationByOrderSku(ctx, s.db, in.orderNo, in.skuID, false)
+			winner, readErr := s.reservationByOrderSku(ctx, s.db, in.orderNo, in.skuID, in.warehouseID, false)
 			if readErr != nil {
 				return nil, readErr
 			}
@@ -116,7 +116,7 @@ func (s *Service) Reserve(ctx context.Context, req *pb.ReserveRequest) (*pb.Rese
 	if created == nil {
 		// A replayed DTM branch is skipped by the barrier; the work was already
 		// committed by an earlier attempt, so surface the committed reservation.
-		r, err := s.reservationByOrderSku(ctx, s.db, in.orderNo, in.skuID, false)
+		r, err := s.reservationByOrderSku(ctx, s.db, in.orderNo, in.skuID, in.warehouseID, false)
 		if err != nil {
 			return nil, err
 		}
@@ -225,7 +225,7 @@ func normalizeReservationKey(req *pb.ReserveRequest) (reserveInput, error) {
 	if req.GetQuantity() < 0 {
 		return reserveInput{}, apperr.Invalid("quantity must not be negative")
 	}
-	return reserveInput{orderNo: orderNo, skuID: req.GetSkuId(), quantity: int64(req.GetQuantity())}, nil
+	return reserveInput{orderNo: orderNo, skuID: req.GetSkuId(), warehouseID: normalizeWarehouse(req.GetWarehouseId()), quantity: int64(req.GetQuantity())}, nil
 }
 
 func normalizeWarehouse(warehouseID int64) int64 {

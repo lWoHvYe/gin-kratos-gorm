@@ -68,8 +68,9 @@ var (
 )
 
 type operationItemInput struct {
-	skuID    int64
-	quantity int64
+	skuID       int64
+	warehouseID int64
+	quantity    int64
 }
 
 type operationSpec struct {
@@ -81,11 +82,12 @@ type operationSpec struct {
 }
 
 type operationItem struct {
-	skuID     int64
-	quantity  int64
-	status    string
-	attempts  int
-	lastError string
+	skuID       int64
+	warehouseID int64
+	quantity    int64
+	status      string
+	attempts    int
+	lastError   string
 }
 
 type operation struct {
@@ -148,12 +150,13 @@ func newOperationSpec(typ, orderNo string, items []*pb.OrderItem) (operationSpec
 		return operationSpec{}, apperr.Invalid("items are required")
 	}
 	normalized := make([]operationItemInput, 0, len(items))
-	seen := make(map[int64]struct{}, len(items))
+	index := make(map[[2]int64]int, len(items))
 	for _, item := range items {
 		if item == nil {
 			return operationSpec{}, apperr.Invalid("inventory operation item is nil")
 		}
 		skuID := item.GetSkuId()
+		warehouseID := normalizeWarehouse(item.GetWarehouseId())
 		quantity := int64(item.GetQuantity())
 		if skuID <= 0 {
 			return operationSpec{}, apperr.Invalid("sku_id is required")
@@ -161,19 +164,26 @@ func newOperationSpec(typ, orderNo string, items []*pb.OrderItem) (operationSpec
 		if quantity <= 0 {
 			return operationSpec{}, apperr.Invalid("quantity must be positive for sku %d", skuID)
 		}
-		if _, ok := seen[skuID]; ok {
-			return operationSpec{}, apperr.Invalid("duplicate sku %d in inventory operation", skuID)
+		key := [2]int64{skuID, warehouseID}
+		if i, ok := index[key]; ok {
+			normalized[i].quantity += quantity
+			continue
 		}
-		seen[skuID] = struct{}{}
-		normalized = append(normalized, operationItemInput{skuID: skuID, quantity: quantity})
+		index[key] = len(normalized)
+		normalized = append(normalized, operationItemInput{skuID: skuID, warehouseID: warehouseID, quantity: quantity})
 	}
-	sort.Slice(normalized, func(i, j int) bool { return normalized[i].skuID < normalized[j].skuID })
+	sort.Slice(normalized, func(i, j int) bool {
+		if normalized[i].skuID == normalized[j].skuID {
+			return normalized[i].warehouseID < normalized[j].warehouseID
+		}
+		return normalized[i].skuID < normalized[j].skuID
+	})
 	var canonical strings.Builder
 	for i, item := range normalized {
 		if i > 0 {
 			canonical.WriteByte(',')
 		}
-		fmt.Fprintf(&canonical, "%d:%d", item.skuID, item.quantity)
+		fmt.Fprintf(&canonical, "%d:%d:%d", item.skuID, item.warehouseID, item.quantity)
 	}
 	sum := sha256.Sum256([]byte(canonical.String()))
 	scopeHash := hex.EncodeToString(sum[:])
@@ -188,7 +198,7 @@ func newOperationSpec(typ, orderNo string, items []*pb.OrderItem) (operationSpec
 
 func operationIDFor(typ, orderNo, scopeHash string) string {
 	// "inv:" + 7-char type + 64-char order + ":" + 32-char scope = at most 109.
-	return "inv:" + strings.ToLower(typ) + ":" + orderNo + ":" + scopeHash[:32]
+	return "inv:v2:" + strings.ToLower(typ) + ":" + orderNo + ":" + scopeHash[:32]
 }
 
 // applyInventoryOperation is the entry point used by consumers. It routes DTM
@@ -310,7 +320,7 @@ func (s *Service) runOperationLocal(ctx context.Context, spec operationSpec) (op
 			if current.terminal() {
 				return nil
 			}
-			target := current.item(item.skuID)
+			target := current.item(item.skuID, item.warehouseID)
 			if target == nil || target.status != itemStatusPending {
 				return nil
 			}
@@ -363,14 +373,14 @@ func (s *Service) applyItemBusinessTx(ctx context.Context, tx *sql.Tx, op *opera
 	switch op.typ {
 	case opTypeConfirm:
 		_, err := s.confirmTx(ctx, tx, reserveInput{
-			orderNo: op.orderNo, skuID: item.skuID, warehouseID: defaultWarehouseID, quantity: item.quantity,
+			orderNo: op.orderNo, skuID: item.skuID, warehouseID: item.warehouseID, quantity: item.quantity,
 		})
 		if err == nil {
 			return itemResult{outcome: outcomeDone}, nil
 		}
 		return classifyConfirmItemError(err)
 	case opTypeCancel:
-		_, err := s.cancelReservationTx(ctx, tx, op.orderNo, item.skuID, item.quantity)
+		_, err := s.cancelReservationTx(ctx, tx, op.orderNo, item.skuID, item.warehouseID, item.quantity)
 		if err == nil {
 			return itemResult{outcome: outcomeDone}, nil
 		}
@@ -444,8 +454,8 @@ func (s *Service) markItemDoneTx(ctx context.Context, tx *sql.Tx, op *operation,
 	attempts := item.attempts + 1
 	res, err := tx.ExecContext(ctx, `UPDATE inventory_operation_items
 		SET status = ?, attempts = ?, last_error = '', updated_at = NOW(3)
-		WHERE operation_id = ? AND sku_id = ? AND status = ?`,
-		itemStatusDone, attempts, op.id, item.skuID, itemStatusPending)
+		WHERE operation_id = ? AND sku_id = ? AND warehouse_id = ? AND status = ?`,
+		itemStatusDone, attempts, op.id, item.skuID, item.warehouseID, itemStatusPending)
 	if err != nil {
 		return apperr.Internal("mark operation item done", err)
 	}
@@ -480,8 +490,8 @@ func (s *Service) markItemTerminalTx(ctx context.Context, tx *sql.Tx, op *operat
 	reason = truncateOperationError(reason)
 	res, err := tx.ExecContext(ctx, `UPDATE inventory_operation_items
 		SET status = ?, attempts = ?, last_error = ?, updated_at = NOW(3)
-		WHERE operation_id = ? AND sku_id = ? AND status = ?`,
-		status, attempts, reason, op.id, item.skuID, itemStatusPending)
+		WHERE operation_id = ? AND sku_id = ? AND warehouse_id = ? AND status = ?`,
+		status, attempts, reason, op.id, item.skuID, item.warehouseID, itemStatusPending)
 	if err != nil {
 		return apperr.Internal("mark operation item terminal", err)
 	}
@@ -536,8 +546,8 @@ func (s *Service) markItemRetryTx(ctx context.Context, tx *sql.Tx, op *operation
 	}
 	res, err := tx.ExecContext(ctx, `UPDATE inventory_operation_items
 		SET attempts = ?, last_error = ?, updated_at = NOW(3)
-		WHERE operation_id = ? AND sku_id = ? AND status = ?`,
-		attempts, reason, op.id, item.skuID, itemStatusPending)
+		WHERE operation_id = ? AND sku_id = ? AND warehouse_id = ? AND status = ?`,
+		attempts, reason, op.id, item.skuID, item.warehouseID, itemStatusPending)
 	if err != nil {
 		return apperr.Internal("mark operation item retry", err)
 	}
@@ -636,7 +646,7 @@ func (s *Service) appendItemFailedEvent(ctx context.Context, tx *sql.Tx, op *ope
 		EventType:     eventOperationItemFailed,
 		Payload: map[string]any{
 			"operation_id": op.id, "operation_type": op.typ, "order_no": op.orderNo,
-			"sku_id": item.skuID, "quantity": item.quantity,
+			"sku_id": item.skuID, "warehouse_id": item.warehouseID, "quantity": item.quantity,
 			"outcome": status, "reason": reason, "attempts": attempts,
 			"failed_at": time.Now().Unix(),
 		},
@@ -673,9 +683,9 @@ func (o *operation) terminal() bool {
 	return o.status == opStatusSucceeded || o.status == opStatusPartial
 }
 
-func (o *operation) item(skuID int64) *operationItem {
+func (o *operation) item(skuID, warehouseID int64) *operationItem {
 	for i := range o.items {
-		if o.items[i].skuID == skuID {
+		if o.items[i].skuID == skuID && (warehouseID == 0 || o.items[i].warehouseID == warehouseID) {
 			return &o.items[i]
 		}
 	}
@@ -752,10 +762,10 @@ func (s *Service) ensureOperationTx(ctx context.Context, tx *sql.Tx, spec operat
 	}
 	for _, item := range spec.items {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO inventory_operation_items
-			(operation_id, sku_id, quantity, status, attempts, last_error, created_at, updated_at)
-			VALUES (?, ?, ?, ?, 0, '', NOW(3), NOW(3))
+			(operation_id, sku_id, warehouse_id, quantity, status, attempts, last_error, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, 0, '', NOW(3), NOW(3))
 			ON DUPLICATE KEY UPDATE operation_id = operation_id`,
-			spec.operationID, item.skuID, item.quantity, itemStatusPending); err != nil {
+			spec.operationID, item.skuID, item.warehouseID, item.quantity, itemStatusPending); err != nil {
 			return nil, apperr.Internal("ensure inventory operation item", err)
 		}
 	}
@@ -766,12 +776,12 @@ func (s *Service) ensureOperationTx(ctx context.Context, tx *sql.Tx, spec operat
 	if len(op.items) != len(spec.items) {
 		return nil, apperr.Conflict("inventory operation item set does not match its scope")
 	}
-	bySKU := make(map[int64]operationItem, len(op.items))
+	byKey := make(map[[2]int64]operationItem, len(op.items))
 	for _, item := range op.items {
-		bySKU[item.skuID] = item
+		byKey[[2]int64{item.skuID, item.warehouseID}] = item
 	}
 	for _, want := range spec.items {
-		got, ok := bySKU[want.skuID]
+		got, ok := byKey[[2]int64{want.skuID, want.warehouseID}]
 		if !ok || got.quantity != want.quantity {
 			return nil, apperr.Conflict("inventory operation item set does not match its scope")
 		}
@@ -791,15 +801,15 @@ func (s *Service) loadOperation(ctx context.Context, operationID string) (*opera
 		}
 		return nil, apperr.Internal("load inventory operation", err)
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT sku_id, quantity, status, attempts, last_error
-		FROM inventory_operation_items WHERE operation_id = ? ORDER BY sku_id`, operationID)
+	rows, err := s.db.QueryContext(ctx, `SELECT sku_id, warehouse_id, quantity, status, attempts, last_error
+		FROM inventory_operation_items WHERE operation_id = ? ORDER BY sku_id, warehouse_id`, operationID)
 	if err != nil {
 		return nil, apperr.Internal("load inventory operation items", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var item operationItem
-		if err := rows.Scan(&item.skuID, &item.quantity, &item.status, &item.attempts, &item.lastError); err != nil {
+		if err := rows.Scan(&item.skuID, &item.warehouseID, &item.quantity, &item.status, &item.attempts, &item.lastError); err != nil {
 			return nil, apperr.Internal("scan inventory operation item", err)
 		}
 		op.items = append(op.items, item)
@@ -834,8 +844,8 @@ func (s *Service) loadOperationTx(ctx context.Context, tx *sql.Tx, operationID s
 		}
 		return nil, apperr.Internal("load inventory operation", err)
 	}
-	itemQuery := `SELECT sku_id, quantity, status, attempts, last_error
-		FROM inventory_operation_items WHERE operation_id = ? ORDER BY sku_id`
+	itemQuery := `SELECT sku_id, warehouse_id, quantity, status, attempts, last_error
+		FROM inventory_operation_items WHERE operation_id = ? ORDER BY sku_id, warehouse_id`
 	if forUpdate {
 		itemQuery += " FOR UPDATE"
 	}
@@ -846,7 +856,7 @@ func (s *Service) loadOperationTx(ctx context.Context, tx *sql.Tx, operationID s
 	defer rows.Close()
 	for rows.Next() {
 		var item operationItem
-		if err := rows.Scan(&item.skuID, &item.quantity, &item.status, &item.attempts, &item.lastError); err != nil {
+		if err := rows.Scan(&item.skuID, &item.warehouseID, &item.quantity, &item.status, &item.attempts, &item.lastError); err != nil {
 			return nil, apperr.Internal("scan inventory operation item", err)
 		}
 		op.items = append(op.items, item)
@@ -883,7 +893,7 @@ func (s *Service) ReplayInventoryOperation(ctx context.Context, operationID stri
 			return apperr.Conflict("inventory operation has no replayable items")
 		}
 		for _, sku := range selected {
-			item := op.item(sku)
+			item := op.item(sku, 0)
 			if item == nil {
 				return apperr.NotFound(fmt.Sprintf("sku %d is not part of operation %s", sku, operationID))
 			}
@@ -911,8 +921,8 @@ func (s *Service) ReplayInventoryOperation(ctx context.Context, operationID stri
 			}
 			res, err = tx.ExecContext(ctx, `UPDATE inventory_operation_items
 				SET status = ?, attempts = 0, last_error = '', updated_at = NOW(3)
-				WHERE operation_id = ? AND sku_id = ? AND status = ?`,
-				itemStatusPending, operationID, sku, item.status)
+				WHERE operation_id = ? AND sku_id = ? AND warehouse_id = ? AND status = ?`,
+				itemStatusPending, operationID, sku, item.warehouseID, item.status)
 			if err != nil {
 				return apperr.Internal("reset operation item for replay", err)
 			}
@@ -930,7 +940,7 @@ func (s *Service) ReplayInventoryOperation(ctx context.Context, operationID stri
 		}
 		inputs := make([]operationItemInput, 0, len(op.items))
 		for _, item := range op.items {
-			inputs = append(inputs, operationItemInput{skuID: item.skuID, quantity: item.quantity})
+			inputs = append(inputs, operationItemInput{skuID: item.skuID, warehouseID: item.warehouseID, quantity: item.quantity})
 		}
 		spec = operationSpec{
 			typ: op.typ, orderNo: op.orderNo, scopeHash: op.scopeHash,

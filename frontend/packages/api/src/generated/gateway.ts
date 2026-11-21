@@ -2195,6 +2195,9 @@ export interface components {
                 quantity?: number;
                 /** Format: int64 */
                 discount_cent?: number;
+                /** Format: int64 */
+                warehouse_id?: number;
+                group_no?: string;
             }[];
         };
         AfterSale: {

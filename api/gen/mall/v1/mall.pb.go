@@ -4882,6 +4882,8 @@ type OrderItem struct {
 	PriceCent     int64                  `protobuf:"varint,3,opt,name=price_cent,json=priceCent,proto3" json:"price_cent,omitempty"`
 	Quantity      int32                  `protobuf:"varint,4,opt,name=quantity,proto3" json:"quantity,omitempty"`
 	DiscountCent  int64                  `protobuf:"varint,5,opt,name=discount_cent,json=discountCent,proto3" json:"discount_cent,omitempty"`
+	WarehouseId   int64                  `protobuf:"varint,6,opt,name=warehouse_id,json=warehouseId,proto3" json:"warehouse_id,omitempty"`
+	GroupNo       string                 `protobuf:"bytes,7,opt,name=group_no,json=groupNo,proto3" json:"group_no,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4949,6 +4951,20 @@ func (x *OrderItem) GetDiscountCent() int64 {
 		return x.DiscountCent
 	}
 	return 0
+}
+
+func (x *OrderItem) GetWarehouseId() int64 {
+	if x != nil {
+		return x.WarehouseId
+	}
+	return 0
+}
+
+func (x *OrderItem) GetGroupNo() string {
+	if x != nil {
+		return x.GroupNo
+	}
+	return ""
 }
 
 type Order struct {
@@ -13403,14 +13419,16 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\bquote_id\x18\x05 \x01(\tR\aquoteId\x12(\n" +
 	"\x05items\x18\x06 \x03(\v2\x12.mall.v1.OrderItemR\x05items\"+\n" +
 	"\rTccQueryReply\x12\x1a\n" +
-	"\bprepared\x18\x01 \x01(\bR\bprepared\"\x96\x01\n" +
+	"\bprepared\x18\x01 \x01(\bR\bprepared\"\xd4\x01\n" +
 	"\tOrderItem\x12\x15\n" +
 	"\x06sku_id\x18\x01 \x01(\x03R\x05skuId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
 	"price_cent\x18\x03 \x01(\x03R\tpriceCent\x12\x1a\n" +
 	"\bquantity\x18\x04 \x01(\x05R\bquantity\x12#\n" +
-	"\rdiscount_cent\x18\x05 \x01(\x03R\fdiscountCent\"\xaf\x06\n" +
+	"\rdiscount_cent\x18\x05 \x01(\x03R\fdiscountCent\x12!\n" +
+	"\fwarehouse_id\x18\x06 \x01(\x03R\vwarehouseId\x12\x19\n" +
+	"\bgroup_no\x18\a \x01(\tR\agroupNo\"\xaf\x06\n" +
 	"\x05Order\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x16\n" +

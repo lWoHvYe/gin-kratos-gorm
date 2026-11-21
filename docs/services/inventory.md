@@ -83,7 +83,7 @@ fields and per-warehouse freight.
 Requires a non-empty `order_no` (max 64 chars), `sku_id > 0`, `quantity > 0`,
 and `0 <= ttl_seconds <= 86400`.
 
-1. Idempotency check by `(order_no, sku_id)`. A `HELD` or `CONFIRMED`
+1. Idempotency check by `(order_no, sku_id, warehouse_id)`. A `HELD` or `CONFIRMED`
    reservation is returned unchanged (`reservation_no` and `expires_at_unix`). A
    `RELEASED` reservation is a `CONFLICT`; reservations are never revived under
    the same order line.

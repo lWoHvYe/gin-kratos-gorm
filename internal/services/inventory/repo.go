@@ -96,15 +96,15 @@ func (s *Service) stock(ctx context.Context, q rowQuerier, skuID, warehouseID in
 // reservationByOrderSku resolves the unique reservation of an order line. When
 // forUpdate is set the row is locked for the remainder of the transaction so
 // status transitions serialize.
-func (s *Service) reservationByOrderSku(ctx context.Context, q rowQuerier, orderNo string, skuID int64, forUpdate bool) (*reservation, error) {
+func (s *Service) reservationByOrderSku(ctx context.Context, q rowQuerier, orderNo string, skuID, warehouseID int64, forUpdate bool) (*reservation, error) {
 	query := `SELECT id, reservation_no, order_no, sku_id, warehouse_id, quantity, status, expires_at, created_at
-		FROM stock_reservations WHERE order_no = ? AND sku_id = ?`
+		FROM stock_reservations WHERE order_no = ? AND sku_id = ? AND warehouse_id = ?`
 	if forUpdate {
 		query += " FOR UPDATE"
 	}
-	r, err := scanReservation(q.QueryRowContext(ctx, query, orderNo, skuID))
+	r, err := scanReservation(q.QueryRowContext(ctx, query, orderNo, skuID, normalizeWarehouse(warehouseID)))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, apperr.NotFound(fmt.Sprintf("reservation not found for order %s sku %d", orderNo, skuID))
+		return nil, apperr.NotFound(fmt.Sprintf("reservation not found for order %s sku %d warehouse %d", orderNo, skuID, normalizeWarehouse(warehouseID)))
 	}
 	if err != nil {
 		return nil, apperr.Internal("query reservation", err)
@@ -173,7 +173,7 @@ func (s *Service) reserveTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 // confirmTx converts a HELD reservation into a CONFIRMED one and consumes the
 // reserved quantity. Re-confirming an already CONFIRMED reservation is a no-op.
 func (s *Service) confirmTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*reservation, error) {
-	r, err := s.reservationByOrderSku(ctx, tx, in.orderNo, in.skuID, true)
+	r, err := s.reservationByOrderSku(ctx, tx, in.orderNo, in.skuID, in.warehouseID, true)
 	if err != nil {
 		if apperr.IsCode(err, apperr.CodeNotFound) {
 			return nil, apperr.Wrap(apperr.CodeNotFound, "reservation missing", errReservationMissing)
@@ -245,7 +245,7 @@ func (s *Service) confirmTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 // RELEASED reservation is a no-op; a CONFIRMED reservation must go through the
 // restock flow instead.
 func (s *Service) releaseTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*reservation, error) {
-	r, err := s.reservationByOrderSku(ctx, tx, in.orderNo, in.skuID, true)
+	r, err := s.reservationByOrderSku(ctx, tx, in.orderNo, in.skuID, in.warehouseID, true)
 	if err != nil {
 		return nil, err
 	}

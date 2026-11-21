@@ -48,7 +48,7 @@ func TestNewOperationSpecIsCanonicalAndScoped(t *testing.T) {
 	if cancel.operationID == a.operationID {
 		t.Fatal("confirm and cancel reused the operation id")
 	}
-	if !strings.HasPrefix(a.operationID, "inv:confirm:ORD-SCOPE:") {
+	if !strings.HasPrefix(a.operationID, "inv:v2:confirm:ORD-SCOPE:") {
 		t.Fatalf("operation id = %q", a.operationID)
 	}
 	if len(a.operationID) > 128 {
@@ -69,7 +69,6 @@ func TestNewOperationSpecRejectsInvalidInput(t *testing.T) {
 		{"sku", opTypeConfirm, "ORD-1", []*pb.OrderItem{{SkuId: 0, Quantity: 1}}},
 		{"zero qty", opTypeConfirm, "ORD-1", []*pb.OrderItem{{SkuId: 1, Quantity: 0}}},
 		{"negative qty", opTypeCancel, "ORD-1", []*pb.OrderItem{{SkuId: 1, Quantity: -1}}},
-		{"duplicate", opTypeCancel, "ORD-1", []*pb.OrderItem{{SkuId: 1, Quantity: 1}, {SkuId: 1, Quantity: 2}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -78,6 +77,29 @@ func TestNewOperationSpecRejectsInvalidInput(t *testing.T) {
 				t.Fatalf("err = %v, want INVALID_ARGUMENT", err)
 			}
 		})
+	}
+}
+
+func TestNewOperationSpecMergesSameSkuWarehouseAndSeparatesWarehouses(t *testing.T) {
+	merged, err := newOperationSpec(opTypeCancel, "ORD-MERGE", []*pb.OrderItem{
+		{SkuId: 1, WarehouseId: 1, Quantity: 1},
+		{SkuId: 1, WarehouseId: 1, Quantity: 2},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(merged.items) != 1 || merged.items[0].quantity != 3 {
+		t.Fatalf("merged items = %+v", merged.items)
+	}
+	split, err := newOperationSpec(opTypeCancel, "ORD-MERGE", []*pb.OrderItem{
+		{SkuId: 1, WarehouseId: 1, Quantity: 1},
+		{SkuId: 1, WarehouseId: 2, Quantity: 2},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(split.items) != 2 || split.operationID == merged.operationID {
+		t.Fatalf("split items = %+v id=%s", split.items, split.operationID)
 	}
 }
 

@@ -43,8 +43,10 @@ DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
   optimistic concurrency, `expire_at` for the payment window,
   `UNIQUE (order_no)` and `UNIQUE (user_id, client_request_id)`.
 - `order_items` – item snapshot taken from the quote (line_no/name/price/quantity/
-  discount); phase 1 of cross-warehouse split orders adds `warehouse_id` and
-  `fulfillment_group_no`.
+  discount); phase 1 adds `warehouse_id`/`fulfillment_group_no`, and
+  `pb.OrderItem` carries them so inventory Confirm/Cancel can address the right
+  reservation. Phase 3a supports per-warehouse reservation identity; multi-group
+  order creation remains gated.
 - `order_fulfillment_groups` – phase 1 allocation snapshot. Every existing/new
   order has one `G1`/warehouse-1 group; it is shadow state until the split
   phases in `docs/adr/0002-cross-warehouse-split-orders.md`.

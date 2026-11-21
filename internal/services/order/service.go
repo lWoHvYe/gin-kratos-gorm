@@ -189,11 +189,11 @@ func (s *Service) submitCreateSaga(ctx context.Context, orderNo, clientRequestID
 		}
 		saga.BranchHeaders[clientRequestIDHeader] = clientRequestID
 	}
-	for _, line := range lines {
+	for _, line := range mergeReserveLines(lines) {
 		reserve := &pb.ReserveRequest{
 			OrderNo:     orderNo,
 			SkuId:       line.GetSkuId(),
-			WarehouseId: defaultWarehouseID,
+			WarehouseId: line.GetWarehouseId(),
 			Quantity:    line.GetQuantity(),
 			TtlSeconds:  reserveTTLSeconds,
 		}
@@ -589,7 +589,7 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 			if _, err := s.inventory.Confirm(ctx, &pb.ReserveRequest{
 				OrderNo:     orderNo,
 				SkuId:       item.GetSkuId(),
-				WarehouseId: defaultWarehouseID,
+				WarehouseId: item.GetWarehouseId(),
 				Quantity:    item.GetQuantity(),
 			}); err != nil {
 				// Include the current SKU: Confirm may have committed remotely
@@ -766,7 +766,7 @@ func (s *Service) afterPaid(ctx context.Context, record *orderRecord) {
 			req := &pb.ReserveRequest{
 				OrderNo:     record.OrderNo,
 				SkuId:       item.GetSkuId(),
-				WarehouseId: defaultWarehouseID,
+				WarehouseId: item.GetWarehouseId(),
 				Quantity:    item.GetQuantity(),
 			}
 			if _, err := s.inventory.Confirm(ctx, req); err != nil {
@@ -974,12 +974,22 @@ func buildCreateOrderInner(orderNo string, in createOrderInput, quote *pb.Quote,
 	total, discount, freight, pay := quoteAmounts(quote)
 	items := make([]*pb.OrderItem, 0, len(quote.GetLines()))
 	for _, line := range quote.GetLines() {
+		warehouseID := line.GetWarehouseId()
+		if warehouseID <= 0 {
+			warehouseID = defaultWarehouseID
+		}
+		groupNo := line.GetGroupNo()
+		if groupNo == "" {
+			groupNo = defaultGroupNo
+		}
 		items = append(items, &pb.OrderItem{
 			SkuId:        line.GetSkuId(),
 			Name:         line.GetName(),
 			PriceCent:    line.GetPriceCent(),
 			Quantity:     line.GetQuantity(),
 			DiscountCent: line.GetDiscountCent(),
+			WarehouseId:  warehouseID,
+			GroupNo:      groupNo,
 		})
 	}
 	return &pb.CreateOrderInnerRequest{

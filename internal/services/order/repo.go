@@ -146,11 +146,19 @@ func insertOrder(ctx context.Context, tx *sql.Tx, o *orderRecord, now time.Time)
 
 func insertOrderItems(ctx context.Context, tx *sql.Tx, orderNo string, items []*pb.OrderItem) error {
 	for i, item := range items {
+		warehouseID := item.GetWarehouseId()
+		if warehouseID <= 0 {
+			warehouseID = defaultWarehouseID
+		}
+		groupNo := item.GetGroupNo()
+		if groupNo == "" {
+			groupNo = defaultGroupNo
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO order_items
 			(order_no, line_no, sku_id, name, price_cent, quantity, warehouse_id, fulfillment_group_no, discount_cent)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			orderNo, i+1, item.GetSkuId(), item.GetName(), item.GetPriceCent(), item.GetQuantity(),
-			defaultWarehouseID, defaultGroupNo, item.GetDiscountCent()); err != nil {
+			warehouseID, groupNo, item.GetDiscountCent()); err != nil {
 			return err
 		}
 	}
@@ -159,8 +167,8 @@ func insertOrderItems(ctx context.Context, tx *sql.Tx, orderNo string, items []*
 
 // loadOrderItems loads the items of a single order.
 func loadOrderItems(ctx context.Context, q querier, orderNo string) ([]*pb.OrderItem, error) {
-	rows, err := q.QueryContext(ctx, `SELECT sku_id, name, price_cent, quantity, discount_cent
-		FROM order_items WHERE order_no = ? ORDER BY id`, orderNo)
+	rows, err := q.QueryContext(ctx, `SELECT sku_id, name, price_cent, quantity, discount_cent, warehouse_id, fulfillment_group_no
+		FROM order_items WHERE order_no = ? ORDER BY line_no`, orderNo)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +176,8 @@ func loadOrderItems(ctx context.Context, q querier, orderNo string) ([]*pb.Order
 	items := make([]*pb.OrderItem, 0, 4)
 	for rows.Next() {
 		var item pb.OrderItem
-		if err := rows.Scan(&item.SkuId, &item.Name, &item.PriceCent, &item.Quantity, &item.DiscountCent); err != nil {
+		if err := rows.Scan(&item.SkuId, &item.Name, &item.PriceCent, &item.Quantity, &item.DiscountCent,
+			&item.WarehouseId, &item.GroupNo); err != nil {
 			return nil, err
 		}
 		items = append(items, &item)
@@ -187,8 +196,8 @@ func loadOrderItemsByOrder(ctx context.Context, q querier, orderNos []string) (m
 	for _, orderNo := range orderNos {
 		args = append(args, orderNo)
 	}
-	rows, err := q.QueryContext(ctx, `SELECT order_no, sku_id, name, price_cent, quantity, discount_cent
-		FROM order_items WHERE order_no IN (`+placeholders+`) ORDER BY id`, args...)
+	rows, err := q.QueryContext(ctx, `SELECT order_no, sku_id, name, price_cent, quantity, discount_cent, warehouse_id, fulfillment_group_no
+		FROM order_items WHERE order_no IN (`+placeholders+`) ORDER BY order_no, line_no`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +207,8 @@ func loadOrderItemsByOrder(ctx context.Context, q querier, orderNos []string) (m
 			orderNo string
 			item    pb.OrderItem
 		)
-		if err := rows.Scan(&orderNo, &item.SkuId, &item.Name, &item.PriceCent, &item.Quantity, &item.DiscountCent); err != nil {
+		if err := rows.Scan(&orderNo, &item.SkuId, &item.Name, &item.PriceCent, &item.Quantity, &item.DiscountCent,
+			&item.WarehouseId, &item.GroupNo); err != nil {
 			return nil, err
 		}
 		grouped[orderNo] = append(grouped[orderNo], &item)

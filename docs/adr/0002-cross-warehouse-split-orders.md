@@ -1,6 +1,6 @@
 # ADR 0002: cross-warehouse split orders (warehouse mode C)
 
-- Status: Accepted 2026-11-21; phase 1 (schema/backfill/single-group shadow) and phase 2a (read-only allocator + checkout shadow) and phase 2b (warehouse quote lines/groups + per-group freight) and phase 3a (warehouse-aware reservation/operation identity) implemented. Phase 3b (multi-group Order/gateway enablement) and phase 4 (per-group permits/shipments and partial projection) are implemented; split is enabled in the dev single-node values. Production remains false until phase 5 (group-aware returns/refunds) and phase 6 (UI).
+- Status: Accepted 2026-11-21; phase 1 (schema/backfill/single-group shadow) and phase 2a (read-only allocator + checkout shadow) and phase 2b (warehouse quote lines/groups + per-group freight) and phase 3a (warehouse-aware reservation/operation identity) implemented. Phase 3b (multi-group Order/gateway enablement) and phase 4 (per-group permits/shipments and partial projection) are implemented and live-validated with a temporary flag. The flag is off by default again until phase 5 (group-aware returns/refunds) and phase 6 (UI); enabling split before then could refund while another group is still shipping.
 - Date: 2026-11-21
 - Supersedes: none
 - Related: `docs/ext-review.md` section 4 (multi-warehouse decision), A/B settlement ADRs

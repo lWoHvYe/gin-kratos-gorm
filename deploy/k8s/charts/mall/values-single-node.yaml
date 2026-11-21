@@ -22,4 +22,5 @@ payment:
   mockEnabled: "true"
 
 warehouseAllocationShadow: true
-warehouseSplitEnabled: true
+# Split checkout stays off until phase 5 makes after-sales/returns group-aware.
+warehouseSplitEnabled: false

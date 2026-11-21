@@ -550,10 +550,11 @@ Production order:
    AfterSales code cannot resume new requests after a rollback. The supported
    rollback is restore-from-backup or roll forward; do not invent a down SQL.
 
-`WAREHOUSE_SPLIT_ENABLED` is enabled in the dev single-node values and remains
-`false` in the production defaults. Phase 4 now has per-group shipments and
-permits; phase 5 must make returns/refunds group-aware and phase 6 must expose
-per-group actions in the UI before a customer environment enables it.
+`WAREHOUSE_SPLIT_ENABLED` stays `false` in both the dev and production values.
+Phase 4 now has per-group shipments and permits and was live-validated with a
+temporary flag, but phase 5 must make returns/refunds group-aware and phase 6
+must expose per-group actions before the flag can be enabled. Otherwise a
+refund could be admitted while another group is still shipping.
 
 The AI RAG build is not a release gate by default. `ai-rag-build-scheduled`
 runs as a CronJob; `ai.ragBuild.hook=true` opts into the old blocking

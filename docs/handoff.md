@@ -18,7 +18,7 @@ Repository:
 Latest feature commit at handoff:
 
 ```text
-ee7a204 feat(settlement): separate order lifecycle from refund and shipping state
+e09e7ca feat(security): fail-closed payment config and AI read-only mesh
 ```
 
 This handoff file itself is committed immediately after that feature commit. See
@@ -40,6 +40,18 @@ git push --force origin main
 - Seckill Redis Lua admission, durable holds, NATS worker, DLQ/replay, sold-out
   cache, Playwright flow.
 - HA reference profile, PDB/topology spread, Alertmanager, OTLP egress policy.
+
+### Security small fixes (external review #22/#38)
+
+- Payment config is fail-closed: an invalid `PAYMENT_MOCK_ENABLED`/`AI_ENABLED`/
+  `AI_RAG_ENABLED` boolean fails `config.Load`; a non-dev environment rejects
+  `PAYMENT_MOCK_ENABLED=true`; `PAYMENT_SECRET` is still required when mock is
+  off. Tests cover all three.
+- AI mesh authorization no longer has wildcard method access. Explicit
+  `*-ai-read` AuthorizationPolicies allow only the read methods AI actually
+  calls: Catalog List/Get, Inventory ListLowStock/GetStock, Promotion
+  EvaluateDraft, Order List/Get/Stats, AfterSales List/Get/Stats. Helm render
+  contains no `ai-sa` wildcard; live 403 verification is pending.
 
 ### P1/P2 handoff fixes
 
@@ -144,12 +156,13 @@ git push --force origin main
 4. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
    split can continue.
 
-5. **Live DTM/rollout checks for A/B** — local MySQL/NATS protocol tests and
+5. **Live DTM/rollout checks for A/B and optional B replay surface** — local MySQL/NATS protocol tests and
    `make test-integration` passed, but the new image was not rolled out and
    `make dtm-smoke` was not run against the DTM barrier. A's migrations were
    applied to scratch MySQL data, but the new order/after-sales/fulfillment
    images were not rolled out; no browser E2E for the new actions. Inventory
-   B's replay remains an internal/API-pending method.
+   B's replay is available as `/app/app op-replay -operation ...` in the
+   inventory image; a gRPC/BFF surface is still optional.
 
 ## Verification commands
 

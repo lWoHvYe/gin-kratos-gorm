@@ -101,9 +101,11 @@ Authenticated (`Authorization: Bearer <token>`):
 
 Details worth knowing:
 
-- With `WAREHOUSE_ALLOCATION_SHADOW=true`, preview also calls
-  `Inventory.AllocateOrder` (read-only, 500ms cap) and logs warehouse
-  mismatches; the quote/order path is unchanged until phase 2b.
+- With `WAREHOUSE_ALLOCATION_SHADOW=true`, preview calls
+  `Inventory.AllocateOrder` (read-only, 500ms cap). A single warehouse-1 result
+  is passed to `Pricing.CreateQuote` as quote allocations; a multi-warehouse
+  result is logged and falls back to the legacy quote because Order still
+  rejects split quotes until phase 3.
 - `POST /checkout/preview` with no `items` reads the selected cart lines. This
   makes the server cart the normal C-end source of truth and avoids trusting a
   client-generated list.

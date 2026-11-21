@@ -69,9 +69,33 @@ writes and the outbox row share the same `*sql.Tx`.
 - `coupons(id, code, user_id, amount_cent, min_amount_cent, status, expire_at, order_no, version)`
 - `quotes(quote_id, user_id, total_cent, discount_cent, freight_cent, pay_cent, coupon_id, expires_at)`
   where `coupon_id` stores the coupon **code** (`''` when unused).
-- `quote_lines(quote_id, sku_id, name, price_cent, quantity, discount_cent)`,
-  primary key `(quote_id, sku_id)`; `name` is the catalog `sku_code` because the
-  catalog contract exposes no SKU display name.
+- `quote_lines(quote_id, line_no, sku_id, name, price_cent, quantity,
+  warehouse_id, group_no, discount_cent)`, unique `(quote_id, line_no)`; `name`
+  is the catalog `sku_code` because the catalog contract exposes no SKU display
+  name.
+- `quote_groups(quote_id, group_no, warehouse_id, goods_cent, discount_cent,
+  freight_cent)`, unique `(quote_id, group_no)`; existing quotes backfill to
+  `G1/warehouse 1`.
+
+## Warehouse allocations (phase 2b)
+
+`QuoteRequest.allocations[{line_no, sku_id, warehouse_id}]` binds each request
+line to a warehouse preview. When absent, lines default to `G1/warehouse 1` and
+the old behavior is unchanged. When present, every line must have exactly one
+matching allocation; a partial set or SKU mismatch is `INVALID_ARGUMENT`.
+
+`quote_groups` is the freight authority:
+
+- goods/discount are summed per group;
+- `freight_cent = sum(freightFor(group.goods_cent))`; the promotion shipping
+  discount is consumed in group order, so the group freight sum equals
+  `Quote.freight_cent`;
+- `pay_cent` remains `total - discount + freight`.
+
+Order's `getQuote` still rejects a quote with more than one group or a line
+outside `G1/warehouse 1` (`FAILED_PRECONDITION`) until the reservation/permit/
+shipment phases are enabled. The gateway only passes allocations when the
+preview allocator returns the single warehouse-1 group.
 - `outbox_events` (standard layout)
 - `dtm_barrier` (created by DTM on demand, included for fresh databases)
 

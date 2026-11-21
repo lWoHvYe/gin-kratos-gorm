@@ -32,11 +32,22 @@ type coupon struct {
 
 // quoteLine is one priced line of a quote.
 type quoteLine struct {
+	LineNo       int32
 	SkuID        int64
 	Name         string
 	PriceCent    int64
 	Quantity     int32
+	WarehouseID  int64
+	GroupNo      string
 	DiscountCent int64
+}
+
+type quoteGroup struct {
+	GroupNo      string
+	WarehouseID  int64
+	GoodsCent    int64
+	DiscountCent int64
+	FreightCent  int64
 }
 
 // quote is a priced basket with a fixed lifetime.
@@ -54,6 +65,7 @@ type quote struct {
 	PromotionVersion      int64
 	ExpiresAt             time.Time
 	Lines                 []quoteLine
+	Groups                []quoteGroup
 }
 
 // querier is satisfied by both *sql.DB and *sql.Tx.
@@ -145,10 +157,19 @@ func insertQuote(ctx context.Context, tx *sql.Tx, q *quote) error {
 func insertQuoteLines(ctx context.Context, tx *sql.Tx, q *quote) error {
 	for _, line := range q.Lines {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO quote_lines
-			(quote_id, sku_id, name, price_cent, quantity, discount_cent)
-			VALUES (?, ?, ?, ?, ?, ?)`,
-			q.QuoteID, line.SkuID, line.Name, line.PriceCent, line.Quantity, line.DiscountCent); err != nil {
+			(quote_id, line_no, sku_id, name, price_cent, quantity, warehouse_id, group_no, discount_cent)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			q.QuoteID, line.LineNo, line.SkuID, line.Name, line.PriceCent, line.Quantity,
+			line.WarehouseID, line.GroupNo, line.DiscountCent); err != nil {
 			return apperr.Internal("insert quote line", err)
+		}
+	}
+	for _, group := range q.Groups {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO quote_groups
+			(quote_id, group_no, warehouse_id, goods_cent, discount_cent, freight_cent)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			q.QuoteID, group.GroupNo, group.WarehouseID, group.GoodsCent, group.DiscountCent, group.FreightCent); err != nil {
+			return apperr.Internal("insert quote group", err)
 		}
 	}
 	return nil
@@ -181,8 +202,8 @@ func loadQuote(ctx context.Context, q querier, quoteID string) (*quote, error) {
 }
 
 func loadQuoteLines(ctx context.Context, q querier, quoteID string) ([]quoteLine, error) {
-	rows, err := q.QueryContext(ctx, `SELECT sku_id, name, price_cent, quantity, discount_cent
-		FROM quote_lines WHERE quote_id = ? ORDER BY sku_id`, quoteID)
+	rows, err := q.QueryContext(ctx, `SELECT line_no, sku_id, name, price_cent, quantity, warehouse_id, group_no, discount_cent
+		FROM quote_lines WHERE quote_id = ? ORDER BY line_no`, quoteID)
 	if err != nil {
 		return nil, apperr.Internal("load quote lines", err)
 	}
@@ -190,7 +211,8 @@ func loadQuoteLines(ctx context.Context, q querier, quoteID string) ([]quoteLine
 	var lines []quoteLine
 	for rows.Next() {
 		var line quoteLine
-		if err := rows.Scan(&line.SkuID, &line.Name, &line.PriceCent, &line.Quantity, &line.DiscountCent); err != nil {
+		if err := rows.Scan(&line.LineNo, &line.SkuID, &line.Name, &line.PriceCent, &line.Quantity,
+			&line.WarehouseID, &line.GroupNo, &line.DiscountCent); err != nil {
 			return nil, apperr.Internal("scan quote line", err)
 		}
 		lines = append(lines, line)
@@ -302,4 +324,22 @@ func consumeCoupon(ctx context.Context, tx *sql.Tx, couponID int64, orderNo stri
 	default:
 		return false, apperr.Failed(fmt.Sprintf("coupon cannot be consumed from status %s", cur.Status))
 	}
+}
+
+func loadQuoteGroups(ctx context.Context, q querier, quoteID string) ([]quoteGroup, error) {
+	rows, err := q.QueryContext(ctx, `SELECT group_no, warehouse_id, goods_cent, discount_cent, freight_cent
+		FROM quote_groups WHERE quote_id = ? ORDER BY group_no`, quoteID)
+	if err != nil {
+		return nil, apperr.Internal("load quote groups", err)
+	}
+	defer rows.Close()
+	groups := make([]quoteGroup, 0, 1)
+	for rows.Next() {
+		var group quoteGroup
+		if err := rows.Scan(&group.GroupNo, &group.WarehouseID, &group.GoodsCent, &group.DiscountCent, &group.FreightCent); err != nil {
+			return nil, apperr.Internal("scan quote group", err)
+		}
+		groups = append(groups, group)
+	}
+	return groups, rows.Err()
 }

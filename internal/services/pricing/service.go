@@ -157,14 +157,10 @@ func (s *Service) CreateQuote(ctx context.Context, req *pb.QuoteRequest) (*pb.Qu
 		}
 	}
 	allocateDiscount(lines, totalCent, discountCent)
-
-	freight := freightFor(totalCent)
-	if shippingDiscountCent > 0 {
-		freight -= shippingDiscountCent
-		if freight < 0 {
-			freight = 0
-		}
+	if err := applyQuoteAllocations(lines, req.GetAllocations()); err != nil {
+		return nil, err
 	}
+	groups, freight := buildQuoteGroups(lines, shippingDiscountCent)
 	q := &quote{
 		QuoteID:               id.New("QTE"),
 		UserID:                userID,
@@ -178,6 +174,7 @@ func (s *Service) CreateQuote(ctx context.Context, req *pb.QuoteRequest) (*pb.Qu
 		PromotionVersion:      promotionVersion,
 		ExpiresAt:             now.Add(quoteTTL),
 		Lines:                 lines,
+		Groups:                groups,
 	}
 	q.PayCent = payFor(totalCent, discountCent, q.FreightCent)
 
@@ -211,7 +208,12 @@ func (s *Service) GetQuote(ctx context.Context, req *pb.GetQuoteRequest) (*pb.Qu
 	if err != nil {
 		return nil, err
 	}
+	groups, err := loadQuoteGroups(ctx, s.db, quoteID)
+	if err != nil {
+		return nil, err
+	}
 	q.Lines = lines
+	q.Groups = groups
 	return q.toProto(), nil
 }
 
@@ -551,6 +553,17 @@ func (q *quote) toProto() *pb.Quote {
 			PriceCent:    line.PriceCent,
 			Quantity:     line.Quantity,
 			DiscountCent: line.DiscountCent,
+			LineNo:       line.LineNo,
+			WarehouseId:  line.WarehouseID,
+			GroupNo:      line.GroupNo,
+		})
+	}
+	out.Groups = make([]*pb.QuoteGroup, 0, len(q.Groups))
+	for _, group := range q.Groups {
+		out.Groups = append(out.Groups, &pb.QuoteGroup{
+			GroupNo: group.GroupNo, WarehouseId: group.WarehouseID,
+			FreightCent: group.FreightCent, GoodsCent: group.GoodsCent,
+			DiscountCent: group.DiscountCent,
 		})
 	}
 	return out

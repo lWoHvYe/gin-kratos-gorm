@@ -112,6 +112,19 @@ components:
               price_cent: { type: integer, format: int64 }
               quantity: { type: integer }
               discount_cent: { type: integer, format: int64 }
+              line_no: { type: integer }
+              warehouse_id: { type: integer, format: int64 }
+              group_no: { type: string }
+        groups:
+          type: array
+          items:
+            type: object
+            properties:
+              group_no: { type: string }
+              warehouse_id: { type: integer, format: int64 }
+              freight_cent: { type: integer, format: int64 }
+              goods_cent: { type: integer, format: int64 }
+              discount_cent: { type: integer, format: int64 }
     Order:
       type: object
       properties:

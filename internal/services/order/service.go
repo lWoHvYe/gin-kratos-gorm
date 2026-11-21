@@ -832,7 +832,28 @@ func (s *Service) getQuote(ctx context.Context, quoteID string) (*pb.Quote, erro
 			return nil, apperr.Internal("pricing returned negative quote amounts", nil)
 		}
 	}
+	if err := validateSingleWarehouseQuote(quote); err != nil {
+		return nil, err
+	}
 	return quote, nil
+}
+
+// validateSingleWarehouseQuote is the phase-2b gate: pricing can now store
+// warehouse groups, but Order must not accept a split quote until the
+// reservation/permit/shipment phases are enabled.
+func validateSingleWarehouseQuote(quote *pb.Quote) error {
+	if len(quote.GetGroups()) > 1 {
+		return apperr.Failed("cross-warehouse split is not enabled")
+	}
+	for _, line := range quote.GetLines() {
+		if line.GetWarehouseId() > 1 {
+			return apperr.Failed("cross-warehouse split is not enabled")
+		}
+		if group := line.GetGroupNo(); group != "" && group != defaultGroupNo {
+			return apperr.Failed("cross-warehouse split is not enabled")
+		}
+	}
+	return nil
 }
 
 // replyFor loads the order items and converts a record to its protobuf form.

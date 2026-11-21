@@ -358,17 +358,35 @@ service PricingService {
   rpc TccQueryConsume (TccPaymentRequest) returns (TccQueryReply);
 }
 message QuoteItem { int64 sku_id = 1; int32 quantity = 2; }
+message QuoteAllocation {
+  int32 line_no = 1;
+  int64 sku_id = 2;
+  int64 warehouse_id = 3;
+}
 message QuoteRequest {
   int64 user_id = 1;
   repeated QuoteItem items = 2;
   int64 address_id = 3;
   string coupon_id = 4;
+  // Optional preview allocations. When present, every item line must have an
+  // allocation; when absent the quote keeps the legacy warehouse-1 behavior.
+  repeated QuoteAllocation allocations = 5;
 }
 message QuoteLine {
   int64 sku_id = 1;
   string name = 2;
   int64 price_cent = 3;
   int32 quantity = 4;
+  int64 discount_cent = 5;
+  int32 line_no = 6;
+  int64 warehouse_id = 7;
+  string group_no = 8;
+}
+message QuoteGroup {
+  string group_no = 1;
+  int64 warehouse_id = 2;
+  int64 freight_cent = 3;
+  int64 goods_cent = 4;
   int64 discount_cent = 5;
 }
 message Quote {
@@ -384,6 +402,7 @@ message Quote {
   string applied_promotions_json = 10;
   int64 promotion_version = 11;
   int64 coupon_discount_cent = 12;
+  repeated QuoteGroup groups = 13;
 }
 message GetQuoteRequest { string quote_id = 1; }
 message LockCouponRequest { string quote_id = 1; string coupon_id = 2; int64 user_id = 3; }

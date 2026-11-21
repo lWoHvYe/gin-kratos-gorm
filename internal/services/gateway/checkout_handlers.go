@@ -67,14 +67,16 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
+	var allocations []*pb.QuoteAllocation
 	if h.warehouseShadow {
-		h.logAllocationShadow(c.Request.Context(), items)
+		allocations = h.shadowAllocations(c.Request.Context(), items)
 	}
 	quote, err := h.clients.Pricing.CreateQuote(c.Request.Context(), &pb.QuoteRequest{
-		UserId:    uid,
-		Items:     items,
-		AddressId: in.AddressID,
-		CouponId:  strings.TrimSpace(in.CouponID),
+		UserId:      uid,
+		Items:       items,
+		AddressId:   in.AddressID,
+		CouponId:    strings.TrimSpace(in.CouponID),
+		Allocations: allocations,
 	})
 	if err != nil {
 		httpx.Error(c, bff.RemoteError(err))
@@ -198,12 +200,13 @@ func joinAddress(address *pb.Address) string {
 	return strings.Join(out, " ")
 }
 
-// logAllocationShadow is the phase-2a dual-read: it asks Inventory for a
-// warehouse preview but never changes the quote or order. Errors are logged and
-// do not block checkout; phase 2b will make the allocation part of the quote.
-func (h *handlers) logAllocationShadow(ctx context.Context, items []*pb.QuoteItem) {
+// shadowAllocations is the phase-2a/2b dual-read: it asks Inventory for a
+// warehouse preview and returns quote allocations only when the split is still
+// the single warehouse-1 group. Multi-warehouse results are logged and fall
+// back to the legacy quote; Order would reject a split quote until phase 3.
+func (h *handlers) shadowAllocations(ctx context.Context, items []*pb.QuoteItem) []*pb.QuoteAllocation {
 	if h.clients == nil || h.clients.Inventory == nil || h.log == nil {
-		return
+		return nil
 	}
 	lines := make([]*pb.AllocateOrderLine, 0, len(items))
 	for _, item := range items {
@@ -214,15 +217,21 @@ func (h *handlers) logAllocationShadow(ctx context.Context, items []*pb.QuoteIte
 	reply, err := h.clients.Inventory.AllocateOrder(callCtx, &pb.AllocateOrderRequest{Lines: lines})
 	if err != nil {
 		h.log.Warn("warehouse allocation shadow failed", "error", err)
-		return
+		return nil
 	}
+	allocations := make([]*pb.QuoteAllocation, 0, len(reply.GetAllocations()))
 	for _, allocation := range reply.GetAllocations() {
 		if allocation.GetWarehouseId() != 1 {
-			h.log.Warn("warehouse allocation shadow differs from single-warehouse path",
+			h.log.Warn("warehouse allocation shadow has a split warehouse; quote remains single-group",
 				"sku_id", allocation.GetSkuId(), "quantity", allocation.GetQuantity(),
 				"warehouse_id", allocation.GetWarehouseId(), "line_no", allocation.GetLineNo())
-			return
+			return nil
 		}
+		allocations = append(allocations, &pb.QuoteAllocation{
+			LineNo: allocation.GetLineNo(), SkuId: allocation.GetSkuId(),
+			WarehouseId: allocation.GetWarehouseId(),
+		})
 	}
-	h.log.Debug("warehouse allocation shadow matched single warehouse", "lines", len(reply.GetAllocations()))
+	h.log.Debug("warehouse allocation shadow matched single warehouse", "lines", len(allocations))
+	return allocations
 }

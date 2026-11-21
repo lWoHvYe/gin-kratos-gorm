@@ -2138,6 +2138,21 @@ export interface components {
                 quantity?: number;
                 /** Format: int64 */
                 discount_cent?: number;
+                line_no?: number;
+                /** Format: int64 */
+                warehouse_id?: number;
+                group_no?: string;
+            }[];
+            groups?: {
+                group_no?: string;
+                /** Format: int64 */
+                warehouse_id?: number;
+                /** Format: int64 */
+                freight_cent?: number;
+                /** Format: int64 */
+                goods_cent?: number;
+                /** Format: int64 */
+                discount_cent?: number;
             }[];
         };
         Order: {

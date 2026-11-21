@@ -64,6 +64,20 @@ why `Reserve` re-reads the committed reservation when its callback did not run.
 Requires `sku_id > 0`; `warehouse_id` defaults to 1. Returns `on_hand`,
 `reserved` and `available = on_hand - reserved`.
 
+### AllocateOrder (read-only)
+
+`AllocateOrder` is the phase-2 checkout preview used by the warehouse-C shadow
+path. It takes `lines[{sku_id, quantity}]` and returns one
+`{line_no, sku_id, quantity, warehouse_id}` per input line. It selects the
+lowest warehouse id that has enough available stock for the whole line
+(`on_hand - reserved`), consuming a local preview pool for repeated SKU lines.
+It does **not** create a reservation or ledger row.
+
+A line that cannot fit in one warehouse returns `FAILED_PRECONDITION`; v1 is
+line-level split only, so the checkout must split the line before payment
+rather than silently changing the quantity. Phase 2b will add quote/warehouse
+fields and per-warehouse freight.
+
 ### Reserve
 
 Requires a non-empty `order_no` (max 64 chars), `sku_id > 0`, `quantity > 0`,

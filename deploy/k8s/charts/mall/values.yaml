@@ -7,6 +7,9 @@ image:
 
 appEnv: dev
 logLevel: info
+# Phase 2a: call Inventory AllocateOrder during checkout preview and log
+# mismatches without changing the quote. Keep false outside dev until phase 2b.
+warehouseAllocationShadow: false
 
 mysql:
   host: mysql.mall-data.svc.cluster.local

@@ -243,6 +243,9 @@ service InventoryService {
   rpc AdminAdjustStock (AdminAdjustStockRequest) returns (Stock);
   rpc ListStocks (ListStocksRequest) returns (StockList);
   rpc ListLowStock (ListLowStockRequest) returns (StockList);
+  // Read-only warehouse allocation for checkout preview. It never reserves
+  // stock; Order/Reserve still own the durable allocation.
+  rpc AllocateOrder (AllocateOrderRequest) returns (AllocateOrderReply);
   rpc Restock (RestockRequest) returns (Stock);
   rpc TccTryConfirm (TccPaymentRequest) returns (Empty);
   rpc TccConfirm (TccPaymentRequest) returns (Empty);
@@ -267,6 +270,15 @@ message Stock {
   int64 version = 6;
 }
 message GetStockRequest { int64 sku_id = 1; int64 warehouse_id = 2; }
+message AllocateOrderLine { int64 sku_id = 1; int32 quantity = 2; }
+message AllocateOrderRequest { repeated AllocateOrderLine lines = 1; }
+message AllocateOrderAllocation {
+  int64 sku_id = 1;
+  int32 quantity = 2;
+  int64 warehouse_id = 3;
+  int32 line_no = 4;
+}
+message AllocateOrderReply { repeated AllocateOrderAllocation allocations = 1; }
 message BatchGetStockRequest { repeated int64 sku_ids = 1; int64 warehouse_id = 2; }
 message ReserveRequest {
   string order_no = 1;

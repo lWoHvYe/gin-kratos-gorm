@@ -101,6 +101,9 @@ Authenticated (`Authorization: Bearer <token>`):
 
 Details worth knowing:
 
+- With `WAREHOUSE_ALLOCATION_SHADOW=true`, preview also calls
+  `Inventory.AllocateOrder` (read-only, 500ms cap) and logs warehouse
+  mismatches; the quote/order path is unchanged until phase 2b.
 - `POST /checkout/preview` with no `items` reads the selected cart lines. This
   makes the server cart the normal C-end source of truth and avoids trusting a
   client-generated list.
@@ -167,6 +170,7 @@ etcd service health or the HTTP probe in `deploy/`.
 | `ETCD_ENDPOINTS` | empty | optional configuration-center bootstrap only |
 | `<SERVICE>_ADDR` | port table | direct target override |
 | `LOG_LEVEL` | `info` | `debug`, `warn`, `error` |
+| `WAREHOUSE_ALLOCATION_SHADOW` | `false` | phase-2a dual-read: call Inventory `AllocateOrder` during preview, log mismatches, never change the quote |
 | `GIN_MODE` | `debug` | set `release` in production |
 
 `config.Load("gateway")` still parses `MySQL_DSN`, `NATS_URL`, `DTM_ADDRESS`,

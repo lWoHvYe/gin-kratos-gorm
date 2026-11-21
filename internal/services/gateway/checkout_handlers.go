@@ -8,6 +8,7 @@ import (
 	"gin-kratos-gorm/internal/platform/httpx"
 	"gin-kratos-gorm/internal/platform/id"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -65,6 +66,9 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 	if err := h.ensureStocks(c.Request.Context(), totals); err != nil {
 		httpx.Error(c, err)
 		return
+	}
+	if h.warehouseShadow {
+		h.logAllocationShadow(c.Request.Context(), items)
 	}
 	quote, err := h.clients.Pricing.CreateQuote(c.Request.Context(), &pb.QuoteRequest{
 		UserId:    uid,
@@ -192,4 +196,33 @@ func joinAddress(address *pb.Address) string {
 		}
 	}
 	return strings.Join(out, " ")
+}
+
+// logAllocationShadow is the phase-2a dual-read: it asks Inventory for a
+// warehouse preview but never changes the quote or order. Errors are logged and
+// do not block checkout; phase 2b will make the allocation part of the quote.
+func (h *handlers) logAllocationShadow(ctx context.Context, items []*pb.QuoteItem) {
+	if h.clients == nil || h.clients.Inventory == nil || h.log == nil {
+		return
+	}
+	lines := make([]*pb.AllocateOrderLine, 0, len(items))
+	for _, item := range items {
+		lines = append(lines, &pb.AllocateOrderLine{SkuId: item.GetSkuId(), Quantity: item.GetQuantity()})
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	reply, err := h.clients.Inventory.AllocateOrder(callCtx, &pb.AllocateOrderRequest{Lines: lines})
+	if err != nil {
+		h.log.Warn("warehouse allocation shadow failed", "error", err)
+		return
+	}
+	for _, allocation := range reply.GetAllocations() {
+		if allocation.GetWarehouseId() != 1 {
+			h.log.Warn("warehouse allocation shadow differs from single-warehouse path",
+				"sku_id", allocation.GetSkuId(), "quantity", allocation.GetQuantity(),
+				"warehouse_id", allocation.GetWarehouseId(), "line_no", allocation.GetLineNo())
+			return
+		}
+	}
+	h.log.Debug("warehouse allocation shadow matched single warehouse", "lines", len(reply.GetAllocations()))
 }

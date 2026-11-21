@@ -20,3 +20,5 @@ resources:
 payment:
   # Local demo only; never use mock payment in a shared environment.
   mockEnabled: "true"
+
+warehouseAllocationShadow: true

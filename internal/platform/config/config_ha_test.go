@@ -222,6 +222,11 @@ func TestInvalidBooleanEnvFailsClosed(t *testing.T) {
 	if _, err := Load("gateway"); err == nil || !strings.Contains(err.Error(), "AI_ENABLED") {
 		t.Fatalf("invalid ai bool err = %v", err)
 	}
+	clearConfigEnv(t)
+	t.Setenv("WAREHOUSE_ALLOCATION_SHADOW", "on")
+	if _, err := Load("gateway"); err == nil || !strings.Contains(err.Error(), "WAREHOUSE_ALLOCATION_SHADOW") {
+		t.Fatalf("invalid warehouse shadow bool err = %v", err)
+	}
 }
 
 func TestDevKeepsMockPaymentsAndSharedSeckillSecret(t *testing.T) {

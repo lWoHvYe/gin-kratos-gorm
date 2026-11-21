@@ -34,8 +34,9 @@ func provideAuth(cfg *config.Config) *auth.Manager {
 
 func provideEngine(cfg *config.Config, logger *slog.Logger, jwt *auth.Manager, clients *gateway.Clients) *gin.Engine {
 	return gateway.NewEngine(logger, jwt, clients, gateway.Options{
-		PaymentMockEnabled: cfg.PaymentMockEnabled,
-		AIEnabled:          cfg.AIEnabled,
+		PaymentMockEnabled:        cfg.PaymentMockEnabled,
+		AIEnabled:                 cfg.AIEnabled,
+		WarehouseAllocationShadow: cfg.WarehouseAllocationShadow,
 	})
 }
 

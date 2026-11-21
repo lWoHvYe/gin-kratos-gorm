@@ -1,6 +1,6 @@
 # ADR 0002: cross-warehouse split orders (warehouse mode C)
 
-- Status: Accepted 2026-11-21; phase 1 (schema/backfill/single-group shadow) implemented and live-verified on the dev cluster. Phases 2-6 require their own rollout gate.
+- Status: Accepted 2026-11-21; phase 1 (schema/backfill/single-group shadow) and phase 2a (read-only allocator + checkout shadow) implemented. Phase 2b (quote/warehouse freight) and phases 3-6 require their own rollout gate.
 - Date: 2026-11-21
 - Supersedes: none
 - Related: `docs/ext-review.md` section 4 (multi-warehouse decision), A/B settlement ADRs

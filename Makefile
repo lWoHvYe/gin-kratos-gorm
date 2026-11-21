@@ -205,7 +205,7 @@ test-integration:
 	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
 		$(GO) test ./internal/services/seckill -run TestReserveScript -count=1
 	@echo ">> inventory seckill/compensation/ledger (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/inventory -run 'TestCancelConfirmed|TestReleaseHeld|TestQualificationRelease|TestConcurrentRelease|TestReleaseTxClosed|TestTccCancelConfirm|TestCompensationHandler|TestConfirmConsumerNATS|TestConfirmConsumerMultiSKUOperation|TestOrderCancelledConsumerNATS|TestArchiveLedger|TestConfirmOperation|TestCancelOperation|TestOperationTx|TestReplayMissing|TestOperationRetry|TestConcurrentConfirm|TestOperationScope' -count=1
+	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/inventory -run 'TestCancelConfirmed|TestReleaseHeld|TestQualificationRelease|TestConcurrentRelease|TestReleaseTxClosed|TestTccCancelConfirm|TestCompensationHandler|TestConfirmConsumerNATS|TestConfirmConsumerMultiSKUOperation|TestOrderCancelledConsumerNATS|TestArchiveLedger|TestConfirmOperation|TestCancelOperation|TestOperationTx|TestReplayMissing|TestOperationRetry|TestConcurrentConfirm|TestOperationScope|TestAllocateOrder' -count=1
 	@echo ">> order settlement + shipping permits (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/order -run 'TestShippingPermit|TestBlockShipment|TestAuthorizeShipment|TestRefundProjection|TestAvailableActions|TestTccCancelKeepsLifecycle|TestFulfillmentGroupShadow' -count=1
 	@echo ">> payment settlement read (MySQL)"

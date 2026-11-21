@@ -18,7 +18,7 @@ Repository:
 Latest feature commit at handoff:
 
 ```text
-1be3371 feat(ai): job-owned RAG builds, HITL CAS, attribution, signed webhooks
+7aa1104 feat(inventory): whole-order confirm/cancel operation protocol
 ```
 
 This handoff file itself is committed immediately after that feature commit. See
@@ -44,9 +44,9 @@ git push --force origin main
 ### P1/P2 handoff fixes
 
 - P1#1 closed-bucket release writes exactly one ledger/event; MySQL test.
-- P1#2 `order.cancelled` uses `TccCancelConfirm`; partial MarkPaid compensation
-  includes the failing SKU; durable confirm consumer retries `TccConfirm`;
-  NATS confirm/order.cancelled tests.
+- P1#2 `order.cancelled` uses the inventory cancel operation protocol; partial
+  MarkPaid compensation includes the failing SKU; durable confirm consumer
+  retries the confirm operation; NATS confirm/order.cancelled tests.
 - P1#3 `Stock.version` + `cmd/catalog-stock-rebuild`; live dry-run found and
   fixed 3 projection mismatches.
 - P1#4 HITL full draft hash, fail-closed meta, close failures surfaced.
@@ -56,6 +56,25 @@ git push --force origin main
   integration target; P2#17 RAG versioning/lease/cache/metrics.
 - P2#17 is still **partial** only for cache/rerank quality comparison: the
   independent build Job/CronJob and load-only follower Pods now exist.
+
+### Transaction refactor B (inventory whole-order operations)
+
+- New `inventory_operations` / `inventory_operation_items` (migration `0015`)
+  with deterministic `(order_no, operation_type, scope_hash)` identity.
+- Confirm/Cancel no longer return on the first item error. Non-DTM calls
+  process each pending item in its own transaction + savepoint, persist
+  per-item `DONE`/`FAILED_PERMANENT`/`MISSING` progress, continue other items,
+  and Ack only when every item is terminal. Consumers NAK while any item is
+  retryable; permanent failures emit per-item events instead of retrying the
+  whole batch.
+- DTM confirm/cancel use one `dtm.Branch` transaction for the whole item set.
+  After a branch commit (including a barrier replay) the committed operation is
+  read back so a previous `PARTIAL` cannot be reported as success.
+- Terminal `shop.inventory.operation.completed.v1`/`.failed.v1` events are
+  written in the final item's transaction; `ReplayInventoryOperation` is the
+  explicit recovery path for failed/missing items and refuses DONE items.
+- `cmd/catalog-stock-rebuild` now refuses to overwrite a newer catalog
+  projection (`stock_version` CAS) and reports stale/conflict/missing rows.
 
 ### AI
 
@@ -90,23 +109,28 @@ git push --force origin main
 
 ## Remaining work, in priority order
 
-1. **Real GitHub CI** — local `make test-integration` has passed; Actions was
+1. **Transaction refactor A** — order/after-sales/payment/fulfillment state
+   ownership and refund/restock protocol. B deliberately preceded it because
+   A depends on deterministic inventory Confirm/Cancel outcomes.
+
+2. **Real GitHub CI** — local `make test-integration` has passed; Actions was
    not actually run.
 
-2. **Phase 8 benchmark breadth** — attribution UI and the owner-scoped event are
+3. **Phase 8 benchmark breadth** — attribution UI and the owner-scoped event are
    implemented, but the A/B benchmark still uses one prompt family; add a
    cross-user/no-memory regression set.
 
-3. **Phase 9 richer anomaly explanations** — the signed webhook is implemented;
+4. **Phase 9 richer anomaly explanations** — the signed webhook is implemented;
    exception explanations are still mostly low-stock links, not
    cancellation/refund anomalies.
 
-4. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
+5. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
    split can continue.
 
-5. **Live deployment check for this batch** — `make verify`, frontend
-   typecheck/build and Redis-backed tests passed locally; the new image/Job was
-   not rolled out to the dev cluster in this session.
+6. **Live DTM/rollout checks for B** — local MySQL/NATS protocol tests and
+   `make test-integration` passed, but the new image was not rolled out and
+   `make dtm-smoke` was not run against the DTM barrier. The operation replay is
+   an internal/API-pending method, not exposed through the admin BFF yet.
 
 ## Verification commands
 
@@ -150,8 +174,8 @@ TEST_REDIS_ADDR='127.0.0.1:16379' make test-integration
 
 The Makefile target includes outbox/consumer, AI RAG + lease + preference
 isolation + RAG follower + HITL CAS + attribution, seckill, inventory
-seckill/compensation/ledger/NATS, catalog projection + keyset, and pricing
-cleanup.
+seckill/compensation/ledger/NATS + whole-order operation protocol, catalog
+projection + keyset, and pricing cleanup.
 
 Live AI:
 
@@ -211,9 +235,10 @@ Then read:
 ```text
 继续 gin-kratos-gorm。先读 docs/handoff.md、docs/review-tracking.md 和
 docs/ai-hardening-review.md，运行 ./scripts/bootstrap-context.sh 与 git status。
-不要重做已完成的主链路。按 handoff 的 Remaining work 顺序，先做真实 GitHub CI，
-再做 Phase8 跨用户/多变体回归、Phase9 退款/取消异常解释和 P3 清理。每个改动报告
-文件、检查、未验证项；不要在没有证据时标 done。
+不要重做已完成的主链路。按 handoff 的 Remaining work 顺序，先做交易重构 A
+（订单/售后/支付/履约状态归属），再处理 CI、Phase8/9 与 P3。设计先行，禁止
+为状态组合继续加 if、recovery scanner 或前端特判。每个改动报告文件、检查、
+未验证项；不要在没有证据时标 done。
 ```
 
 The durable files are the context; keep the new session small.

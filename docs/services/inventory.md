@@ -9,7 +9,9 @@ returns physical stock for a sku it has no row for.
 - gRPC: `:9003` (`GRPC_ADDR`), health/metrics: `:9103` (`HTTP_ADDR`)
 - Database: `mall_inventory` (`MYSQL_DSN`)
 - Events: `shop.inventory.reserved.v1`, `shop.inventory.confirmed.v1`,
-  `shop.inventory.released.v1`
+  `shop.inventory.released.v1`, `shop.inventory.operation.completed.v1`,
+  `shop.inventory.operation.failed.v1`,
+  `shop.inventory.operation.item_failed.v1`
 
 ## Data model
 
@@ -27,6 +29,13 @@ returns physical stock for a sku it has no row for.
   quantity, entry_type, on_hand_after, reserved_after)` with
   `UNIQUE (reservation_no, entry_type)`. Entry types: `RESERVE`, `CONFIRM`,
   `RELEASE`.
+- `inventory_operations(id, operation_id, operation_type, order_no, scope_hash,
+  status, total_items, succeeded_items, failed_items, skipped_items, version,
+  ...)` with `UNIQUE (order_no, operation_type, scope_hash)`. Statuses:
+  `PENDING`, `IN_PROGRESS`, `SUCCEEDED`, `PARTIAL`.
+- `inventory_operation_items(operation_id, sku_id, quantity, status, attempts,
+  last_error, ...)` with `PRIMARY KEY (operation_id, sku_id)`. Item statuses:
+  `PENDING`, `DONE`, `FAILED_PERMANENT`, `MISSING`.
 - `outbox_events` — the standard platform outbox, relayed by `outbox.Relay`.
 - `dtm_barrier` — the DTM barrier table (also created by DTM on demand).
 
@@ -101,6 +110,40 @@ Repeating a `RELEASED` release is a no-op.
   so releasing it would silently add availability back.
 - Unknown reservation: `NOT_FOUND`.
 
+## Whole-order operations
+
+Multi-SKU Confirm and Cancel do not loop with "first error wins" any more. Each
+call is an operation:
+
+1. Canonicalize the item set by `sku_id`, reject duplicate/non-positive items,
+   and derive `scope_hash = sha256(sku:qty,...)` and
+   `operation_id = "inv:<type>:<order_no>:<scope_hash[:32]>"`. Confirm and
+   Cancel, or two different item sets, are different operations.
+2. Ensure `inventory_operations` and `inventory_operation_items` exist. A
+   replay with the same `(order_no, type, scope_hash)` reuses the same progress;
+   a conflicting item set is `CONFLICT` before any stock write.
+3. For non-DTM calls (consumers/direct RPC), process each `PENDING` item in its
+   own transaction with a savepoint around the business write. Success marks
+   `DONE`; a permanent failure marks `FAILED_PERMANENT`; a missing reservation
+   on Cancel marks `MISSING` and does **not** drop the remaining items. A
+   transient failure increments `attempts`/`last_error` and remains `PENDING`.
+   The handler returns an error (NAK) while any item is PENDING, so a
+   redelivery skips completed items. Terminal `PARTIAL` is Acked; permanent
+   failures are durable per-item records/events, not an endless batch retry.
+4. For a DTM branch call, the whole item set is applied in **one**
+   `dtm.Branch` transaction; any failure rolls the branch back and DTM owns the
+   retry. A later retry skips items a consumer already committed.
+5. When every item is terminal the operation becomes `SUCCEEDED` (all `DONE`)
+   or `PARTIAL` (any `FAILED_PERMANENT`/`MISSING`), and the terminal outbox
+   event is written in the same transaction as the final item/progress update.
+   Item retries stop after 8 attempts and become `FAILED_PERMANENT`.
+
+`ReplayInventoryOperation(operation_id, skus)` is the explicit recovery path for
+`FAILED_PERMANENT`/`MISSING` items: it decrements the matching counters, resets
+selected items to `PENDING` with `attempts = 0`, and re-runs the protocol. It
+refuses to replay a `DONE` item because stock already moved, and there is no
+background recovery scanner.
+
 ## Invariants
 
 - `available = on_hand - reserved` and `0 <= reserved <= on_hand` at all times;
@@ -117,6 +160,9 @@ Repeating a `RELEASED` release is a no-op.
 | `shop.inventory.reserved.v1` | `inventory.reserved` | `stock_reservation/<reservation_no>` |
 | `shop.inventory.confirmed.v1` | `inventory.confirmed` | `stock_reservation/<reservation_no>` |
 | `shop.inventory.released.v1` | `inventory.released` | `stock_reservation/<reservation_no>` |
+| `shop.inventory.operation.completed.v1` | `inventory.operation_completed` | `inventory_operation/<hashed id>` |
+| `shop.inventory.operation.failed.v1` | `inventory.operation_failed` | `inventory_operation/<hashed id>` |
+| `shop.inventory.operation.item_failed.v1` | `inventory.operation_item_failed` | `inventory_operation/<hashed id>` |
 
 Payload:
 
@@ -139,10 +185,13 @@ chars) so a replayed branch cannot double-publish.
 ## DTM integration
 
 Create-order saga: `Reserve` is an action branch, `Release` is its compensation.
-Payment-confirm saga: `Confirm` is an action branch. Business writes and
-`outbox.Append` always use the `*sql.Tx` passed to `dtm.Branch`; the service
-never opens a second transaction inside a branch. The barrier makes branch
-executions idempotent by `gid + branch_id`.
+Payment-confirm saga: `TccConfirm`/`TccCancelConfirm` are one branch each. All
+item writes, operation progress and `outbox.Append` use the single `*sql.Tx`
+passed to `dtm.Branch`; the service never opens a nested transaction inside a
+branch. The barrier makes branch executions idempotent by `gid + branch_id`.
+After a branch commit (including a barrier replay that skips the callback), the
+operation summary is read back from MySQL so a previous `PARTIAL` cannot be
+reported as success.
 
 ## Configuration
 

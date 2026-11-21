@@ -32,6 +32,8 @@ func TestOrderCancelledConsumerNATS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
+	// See the confirm consumer test: drop the durable's stale backlog first.
+	_ = client.JS.DeleteConsumer("MALL", "inventory-order-cancelled")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

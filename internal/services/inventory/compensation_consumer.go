@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -13,7 +14,7 @@ import (
 )
 
 type compensationService interface {
-	TccCancelConfirm(ctx context.Context, in *pb.TccPaymentRequest) (*pb.Empty, error)
+	applyInventoryOperation(ctx context.Context, typ, orderNo string, items []*pb.OrderItem) (operationSummary, error)
 }
 
 type compensationEvent struct {
@@ -57,6 +58,12 @@ func handleCompensation(ctx context.Context, svc compensationService, data []byt
 	if len(items) == 0 {
 		return nil
 	}
-	_, err := svc.TccCancelConfirm(ctx, &pb.TccPaymentRequest{OrderNo: event.OrderNo, Items: items})
-	return err
+	summary, err := svc.applyInventoryOperation(ctx, opTypeCancel, event.OrderNo, items)
+	if err != nil {
+		return err
+	}
+	if summary.Retryable > 0 {
+		return fmt.Errorf("inventory compensation has %d retryable item(s)", summary.Retryable)
+	}
+	return nil
 }

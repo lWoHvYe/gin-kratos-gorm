@@ -108,7 +108,9 @@ See [ai-design.md](ai-design.md).
 - Saga branch handlers must call `dtm.Branch(ctx, db, func(tx *sql.Tx) error { ... })`.
 - Business writes and `outbox.Append(ctx, tx, ...)` must use the same `*sql.Tx`.
 - A Saga branch invoked outside a DTM context must return `UNAVAILABLE`; do not open a separate transaction.
-- Direct admin calls and TCC Confirm/Cancel are not DTM barrier calls; they use the service-local transaction helper and must be idempotent.
+- Direct admin calls use the service-local transaction helper. TCC
+  Confirm/Cancel use the DTM barrier when branch metadata is present and the
+  service-local helper otherwise; both paths must be idempotent.
 - Branch IDs must be deterministic from `order_no` / `reservation_no`.
 - Use `gid = order-create:<order_no>`, `payment-confirm:<payment_no>`. `order-cancel` is not a DTM GID: order cancellation is local + `shop.order.cancelled.v1` outbox compensation.
 - Payment-confirm TCC branch methods live in `order/tcc.go`, `inventory/tcc.go`
@@ -133,6 +135,9 @@ Events for Phase 1:
 - `shop.inventory.reserved.v1`
 - `shop.inventory.confirmed.v1`
 - `shop.inventory.released.v1`
+- `shop.inventory.operation.completed.v1`
+- `shop.inventory.operation.failed.v1`
+- `shop.inventory.operation.item_failed.v1`
 - `shop.payment.succeeded.v1`
 - `shop.payment.refunded.v1`
 - `shop.shipment.created.v1`

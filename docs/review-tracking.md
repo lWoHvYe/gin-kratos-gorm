@@ -28,6 +28,13 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 | P2#14 | done | `make test-integration` covers inventory/catalog/pricing and CI invokes it; local run passed. Real GitHub CI not run. |
 | P2#17 | partial | Versioned index, dual-write, lease renewal, alias/cache invalidation, metrics, hit@5 5/5 done. Independent `ai-rag-build` Job/CronJob + load-only follower Pods remove the first-build/follower window. Remaining gap: cache/rerank quality comparison still thin. |
 
+## 2026-11-21 external review: transaction refactor B
+
+| Item | Status | Evidence / remaining gap |
+|---|---|---|
+| B (#1/#2/#37) | partial | `inventory_operations`/`inventory_operation_items` (0015), deterministic operation id + scope hash, per-item progress, savepoint per item, terminal events, replay, DTM single-branch path. MySQL/NATS tests cover middle-item failure/resume, permanent per-item failure, mixed cancel, all-or-nothing branch tx, retry budget, concurrent confirm/cancel, replay. Gap: live DTM smoke/rollout and an admin/API replay surface are not done. |
+| #3 catalog rebuild | done for version guard | `decideProjection` refuses a newer catalog projection and the SQL update is CAS-guarded; unit test covers equal/newer/stale/conflict. Missing-catalog/inventory rows are reported as counters, not a full reconciliation UI. |
+
 ## P3
 
 - Version increments: done for catalog category/brand/SKU, identity address,
@@ -69,6 +76,9 @@ old table still described P2#10 as rejected and Phase 7 as not started.
   non-2xx rejection; frontend typecheck + build pass. `make verify` passes with
   proto guard at 685 baseline entries (the refresh also added previously missing
   HITL abort fields).
+- Inventory B: `go test -race ./internal/services/inventory` with MySQL/NATS
+  passed; `make test-integration` passed including the new operation tests;
+  migration `0015` applied cleanly to a scratch MySQL 8.4 database.
 
 ## Explicit unverified / drift
 
@@ -79,3 +89,6 @@ old table still described P2#10 as rejected and Phase 7 as not started.
   benchmark beyond the one prompt family.
 - Phase 9 has a signed external webhook, but no rich cancellation/refund anomaly
   explanations.
+- Inventory B has no live DTM barrier smoke (`make dtm-smoke`) or cluster
+  rollout; `ReplayInventoryOperation` is an internal method without an admin
+  RPC/BFF surface yet.

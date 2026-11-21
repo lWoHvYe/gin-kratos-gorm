@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -13,7 +14,7 @@ import (
 )
 
 type confirmService interface {
-	TccConfirm(ctx context.Context, in *pb.TccPaymentRequest) (*pb.Empty, error)
+	applyInventoryOperation(ctx context.Context, typ, orderNo string, items []*pb.OrderItem) (operationSummary, error)
 }
 
 type confirmEvent struct {
@@ -55,6 +56,14 @@ func handleConfirmRequest(ctx context.Context, svc confirmService, data []byte) 
 	if len(items) == 0 {
 		return nil
 	}
-	_, err := svc.TccConfirm(ctx, &pb.TccPaymentRequest{OrderNo: event.OrderNo, Items: items})
-	return err
+	summary, err := svc.applyInventoryOperation(ctx, opTypeConfirm, event.OrderNo, items)
+	if err != nil {
+		return err
+	}
+	if summary.Retryable > 0 {
+		return fmt.Errorf("inventory confirm has %d retryable item(s)", summary.Retryable)
+	}
+	// Terminal PARTIAL is Acked: per-item failures are durable records and
+	// events, so retrying the whole batch would starve the other items.
+	return nil
 }

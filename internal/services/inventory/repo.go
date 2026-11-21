@@ -175,6 +175,9 @@ func (s *Service) reserveTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 func (s *Service) confirmTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*reservation, error) {
 	r, err := s.reservationByOrderSku(ctx, tx, in.orderNo, in.skuID, true)
 	if err != nil {
+		if apperr.IsCode(err, apperr.CodeNotFound) {
+			return nil, apperr.Wrap(apperr.CodeNotFound, "reservation missing", errReservationMissing)
+		}
 		return nil, err
 	}
 	if in.quantity > 0 && in.quantity != r.quantity {
@@ -184,7 +187,8 @@ func (s *Service) confirmTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 	case statusConfirmed:
 		return r, nil
 	case statusReleased:
-		return nil, apperr.Conflict(fmt.Sprintf("reservation %s is already released", r.reservationNo))
+		return nil, apperr.Wrap(apperr.CodeConflict,
+			fmt.Sprintf("reservation %s is already released", r.reservationNo), errReservationReleased)
 	case statusHeld:
 	default:
 		return nil, apperr.Internal("unexpected reservation status", fmt.Errorf("status %q", r.status))
@@ -214,7 +218,8 @@ func (s *Service) confirmTx(ctx context.Context, tx *sql.Tx, in reserveInput) (*
 		return nil, apperr.Internal("confirm reservation rows", err)
 	}
 	if affected == 0 {
-		return nil, apperr.Conflict(fmt.Sprintf("reservation %s changed concurrently", r.reservationNo))
+		return nil, apperr.Wrap(apperr.CodeConflict,
+			fmt.Sprintf("reservation %s changed concurrently", r.reservationNo), errReservationChanged)
 	}
 	if err := s.confirmSeckillMapping(ctx, tx, r); err != nil {
 		return nil, err

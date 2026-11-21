@@ -40,7 +40,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	checked, mismatched, updated := 0, 0, 0
+	checked, mismatched, updated, stale, conflicts, missingCatalog := 0, 0, 0, 0, 0, 0
 	for page := int32(1); ; page++ {
 		list, err := client.ListStocks(ctx, &pb.ListStocksRequest{Page: page, PageSize: 200})
 		if err != nil {
@@ -56,22 +56,42 @@ func main() {
 			var stock, version int64
 			err := db.QueryRowContext(ctx, `SELECT stock, stock_version FROM skus WHERE id = ?`, st.GetSkuId()).Scan(&stock, &version)
 			if err == sql.ErrNoRows {
+				missingCatalog++
 				continue
 			}
 			if err != nil {
 				fatal("load sku: " + err.Error())
 			}
-			if stock == st.GetAvailable() && version == st.GetVersion() {
+			action, conflict := decideProjection(stock, version, st.GetAvailable(), st.GetVersion())
+			if action == projectionSkip {
 				continue
 			}
 			mismatched++
-			if *dry {
-				fmt.Printf("sku=%d catalog=(%d,%d) inventory=(%d,%d)\n", st.GetSkuId(), stock, version, st.GetAvailable(), st.GetVersion())
+			if conflict {
+				conflicts++
+			}
+			if action == projectionStale {
+				// The catalog projection has a newer version than this inventory
+				// snapshot; writing it back would regress the projection.
+				stale++
 				continue
 			}
-			if _, err := db.ExecContext(ctx, `UPDATE skus SET stock = ?, stock_version = ? WHERE id = ?`,
-				st.GetAvailable(), st.GetVersion(), st.GetSkuId()); err != nil {
+			if *dry {
+				fmt.Printf("sku=%d catalog=(%d,%d) inventory=(%d,%d) conflict=%v\n",
+					st.GetSkuId(), stock, version, st.GetAvailable(), st.GetVersion(), conflict)
+				continue
+			}
+			// Guard the write too: never overwrite a projection that advanced
+			// after the row was read (compare-and-set on stock_version).
+			res, err := db.ExecContext(ctx, `UPDATE skus SET stock = ?, stock_version = ?
+				WHERE id = ? AND stock_version <= ?`,
+				st.GetAvailable(), st.GetVersion(), st.GetSkuId(), st.GetVersion())
+			if err != nil {
 				fatal("update projection: " + err.Error())
+			}
+			if n, _ := res.RowsAffected(); n == 0 {
+				stale++
+				continue
 			}
 			updated++
 		}
@@ -79,7 +99,34 @@ func main() {
 			break
 		}
 	}
-	fmt.Printf("checked=%d mismatched=%d updated=%d dry_run=%v\n", checked, mismatched, updated, *dry)
+	fmt.Printf("checked=%d mismatched=%d updated=%d stale=%d conflicts=%d missing_catalog=%d dry_run=%v\n",
+		checked, mismatched, updated, stale, conflicts, missingCatalog, *dry)
+}
+
+type projectionAction int
+
+const (
+	projectionSkip projectionAction = iota
+	projectionUpdate
+	projectionStale
+)
+
+// decideProjection keeps the catalog display projection from moving backwards.
+// Equal version+stock is a no-op. A newer inventory version updates the
+// projection; a newer *catalog* version is stale input and must not overwrite
+// it. Same version with different stock is a conflict worth reporting, but the
+// inventory value is authoritative and can be written.
+func decideProjection(catalogStock, catalogVersion, inventoryStock, inventoryVersion int64) (projectionAction, bool) {
+	switch {
+	case catalogVersion > inventoryVersion:
+		return projectionStale, false
+	case catalogStock == inventoryStock && catalogVersion == inventoryVersion:
+		return projectionSkip, false
+	case catalogVersion == inventoryVersion && catalogStock != inventoryStock:
+		return projectionUpdate, true
+	default:
+		return projectionUpdate, false
+	}
 }
 
 func env(k, fallback string) string {

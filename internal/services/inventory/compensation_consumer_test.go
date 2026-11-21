@@ -11,18 +11,20 @@ import (
 type fakeCompensation struct {
 	calls  int
 	failed bool
+	typ    string
 	order  string
 	items  []*pb.OrderItem
 }
 
-func (f *fakeCompensation) TccCancelConfirm(_ context.Context, in *pb.TccPaymentRequest) (*pb.Empty, error) {
+func (f *fakeCompensation) applyInventoryOperation(_ context.Context, typ, orderNo string, items []*pb.OrderItem) (operationSummary, error) {
 	f.calls++
-	f.order = in.GetOrderNo()
-	f.items = in.GetItems()
+	f.typ = typ
+	f.order = orderNo
+	f.items = items
 	if f.failed {
-		return nil, context.DeadlineExceeded
+		return operationSummary{}, context.DeadlineExceeded
 	}
-	return &pb.Empty{}, nil
+	return operationSummary{Status: opStatusSucceeded}, nil
 }
 
 func TestCompensationHandlerRetriesAndSkipsInvalidItems(t *testing.T) {
@@ -31,8 +33,8 @@ func TestCompensationHandlerRetriesAndSkipsInvalidItems(t *testing.T) {
 	if err := handleCompensation(context.Background(), fake, payload); err == nil {
 		t.Fatal("expected retryable error")
 	}
-	if fake.calls != 1 || fake.order != "ORD-1" || len(fake.items) != 1 || fake.items[0].GetSkuId() != 1 {
-		t.Fatalf("call=%d order=%s items=%+v", fake.calls, fake.order, fake.items)
+	if fake.calls != 1 || fake.typ != opTypeCancel || fake.order != "ORD-1" || len(fake.items) != 1 || fake.items[0].GetSkuId() != 1 {
+		t.Fatalf("call=%d type=%s order=%s items=%+v", fake.calls, fake.typ, fake.order, fake.items)
 	}
 
 	fake.failed = false

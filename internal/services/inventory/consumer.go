@@ -3,10 +3,10 @@ package inventory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
-	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/consumer"
 	"gin-kratos-gorm/internal/platform/mq"
 
@@ -53,13 +53,15 @@ func handleOrderCancelled(ctx context.Context, svc *Service, data []byte) error 
 	if len(items) == 0 {
 		return nil
 	}
-	// Use the same HELD/CONFIRMED/seckill compensation path as TCC cancel;
-	// plain Release rejects a CONFIRMED reservation.
-	if _, err := svc.TccCancelConfirm(ctx, &pb.TccPaymentRequest{OrderNo: event.OrderNo, Items: items}); err != nil {
-		if apperr.IsCode(err, apperr.CodeNotFound) {
-			return nil
-		}
+	// Use the same HELD/CONFIRMED/seckill compensation path as TCC cancel.
+	// A missing reservation is a terminal MISSING item, not an early return:
+	// the remaining items must still be processed before this message is Acked.
+	summary, err := svc.applyInventoryOperation(ctx, opTypeCancel, event.OrderNo, items)
+	if err != nil {
 		return err
+	}
+	if summary.Retryable > 0 {
+		return fmt.Errorf("inventory cancel has %d retryable item(s)", summary.Retryable)
 	}
 	return nil
 }

@@ -79,12 +79,31 @@ func seckillTestDB(t *testing.T) *sql.DB {
 			lease_owner VARCHAR(128) NULL, lease_until DATETIME(3) NULL,
 			traceparent VARCHAR(256) NULL, created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_outbox_event_id (event_id))`,
+		`CREATE TABLE IF NOT EXISTS inventory_operations (
+			operation_id VARCHAR(128) NOT NULL, operation_type VARCHAR(16) NOT NULL,
+			order_no VARCHAR(64) NOT NULL, scope_hash CHAR(64) NOT NULL,
+			status VARCHAR(24) NOT NULL DEFAULT 'PENDING', total_items INT NOT NULL,
+			succeeded_items INT NOT NULL DEFAULT 0, failed_items INT NOT NULL DEFAULT 0,
+			skipped_items INT NOT NULL DEFAULT 0, version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+			PRIMARY KEY (operation_id),
+			UNIQUE KEY uk_inventory_operation_scope (order_no, operation_type, scope_hash),
+			KEY idx_inventory_operation_status (status, updated_at))`,
+		`CREATE TABLE IF NOT EXISTS inventory_operation_items (
+			operation_id VARCHAR(128) NOT NULL, sku_id BIGINT NOT NULL,
+			quantity BIGINT NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+			attempts INT NOT NULL DEFAULT 0, last_error VARCHAR(512) NOT NULL DEFAULT '',
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+			PRIMARY KEY (operation_id, sku_id),
+			KEY idx_inventory_operation_item_status (operation_id, status))`,
 	} {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatalf("create test table: %v", err)
 		}
 	}
-	for _, table := range []string{"inventory_stocks", "stock_reservations", "seckill_stocks", "seckill_order_stock", "seckill_stock_ledger", "inventory_ledger", "outbox_events"} {
+	for _, table := range []string{"inventory_operation_items", "inventory_operations", "inventory_stocks", "stock_reservations", "seckill_stocks", "seckill_order_stock", "seckill_stock_ledger", "inventory_ledger", "outbox_events"} {
 		if _, err := db.Exec("DELETE FROM " + table); err != nil {
 			t.Fatal(err)
 		}

@@ -18,7 +18,7 @@ Repository:
 Latest feature commit at handoff:
 
 ```text
-e09e7ca feat(security): fail-closed payment config and AI read-only mesh
+3b9d1a7 fix(deploy/e2e): keep optional AI build non-blocking and finish live A/B checks
 ```
 
 This handoff file itself is committed immediately after that feature commit. See
@@ -107,7 +107,14 @@ git push --force origin main
   no status scanner remains (old `RunRefundRecovery` deleted).
 - `Payment.GetPaymentByOrder` is the read-only settlement fact source for
   after-sales. Migrations: orders `0010`, after-sales `0010`; both backfills
-  were exercised on scratch MySQL data.
+  were preflighted on real-data clones and then applied to the dev cluster.
+- Live dev verification: Helm migration job `Complete`; 17 legacy
+  `RETURN_REFUND` rows converged through idempotent restock tasks to
+  `restock_state=DONE`; multi-SKU live orders produced `CONFIRM SUCCEEDED 2/2`
+  and `CANCEL SUCCEEDED 2/2`; refund-only after shipment kept the order
+  `SHIPPED` with `refund_state=FULL`; a pre-ship refund returned `422` and left
+  the permit `REVOKED`; `make dtm-smoke` passed; `scripts/e2e-phase15.sh`
+  passed; Playwright 7/7 passed.
 
 ### AI
 
@@ -116,8 +123,9 @@ git push --force origin main
   15/15, tool-selection 3/3, normal answer emitted 246 SSE deltas.
 - RAG: versioned index/alias, dual-write, post-build/15m reconciliation,
   exact/semantic cache, rollback runbook, 3m lease with 1m renewal. Builds are
-  owned by the `ai-rag-build` Job (Helm hook) and `ai-rag-build-scheduled`
-  CronJob; AI Pods are load-only followers of `ai:rag:current`
+  owned by the non-blocking `ai-rag-build-scheduled` CronJob by default
+  (`ai.ragBuild.hook=true` opts into the blocking post-upgrade Job); AI Pods are
+  load-only followers of `ai:rag:current`
   (`RAG_ALIAS_REFRESH`, default 1m). The build Job skips a fresh version
   (`RAG_BUILD_MAX_AGE`, default 24h; `RAG_BUILD_FORCE` overrides); a fresh
   pointer whose index is missing is treated as stale. Compose has a one-shot
@@ -156,13 +164,13 @@ git push --force origin main
 4. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
    split can continue.
 
-5. **Live DTM/rollout checks for A/B and optional B replay surface** — local MySQL/NATS protocol tests and
-   `make test-integration` passed, but the new image was not rolled out and
-   `make dtm-smoke` was not run against the DTM barrier. A's migrations were
-   applied to scratch MySQL data, but the new order/after-sales/fulfillment
-   images were not rolled out; no browser E2E for the new actions. Inventory
-   B's replay is available as `/app/app op-replay -operation ...` in the
-   inventory image; a gRPC/BFF surface is still optional.
+5. **Production rollout hardening for A/B** — the dev cluster is migrated and
+   verified, but there is no production rehearsal: backup/restore timing,
+   rolling image order, and rollback behavior after the one-way
+   `RETURN_RECEIVED` rename are not exercised. The aftersales status rename has
+   no automatic down migration; the supported rollback is restore-from-backup
+   or roll forward. Inventory B replay is a CLI; a gRPC/BFF surface is
+   optional.
 
 ## Verification commands
 

@@ -37,8 +37,8 @@ const currentShipment = computed<Shipment | undefined>(() => shipment.data.value
       <div><h1 class="page-title">订单详情</h1><div class="page-subtitle mono">{{ orderNo }}</div></div>
       <div class="toolbar" style="margin:0">
         <router-link to="/orders"><el-button>返回</el-button></router-link>
-        <el-button v-if="order.data.value?.status === 'PENDING_PAYMENT'" type="danger" @click="cancel.mutate()">取消订单</el-button>
-        <el-button v-if="order.data.value?.status === 'PAID'" type="primary" @click="shipDialog = true">创建发货</el-button>
+        <el-button v-if="order.data.value?.available_actions?.includes('cancel')" type="danger" @click="cancel.mutate()">取消订单</el-button>
+        <el-button v-if="order.data.value?.available_actions?.includes('ship')" type="primary" @click="shipDialog = true">创建发货</el-button>
       </div>
     </div>
     <el-row :gutter="16" v-if="order.data.value">
@@ -49,6 +49,7 @@ const currentShipment = computed<Shipment | undefined>(() => shipment.data.value
             <div><span>应付</span><strong>{{ formatMoney(order.data.value.pay_cent) }}</strong></div>
             <div><span>已退款</span><strong>{{ formatMoney(order.data.value.refunded_cent) }}</strong></div>
             <div><span>退款状态</span><strong>{{ order.data.value.refund_status || '-' }}</strong></div>
+            <div><span>退款进度</span><strong>{{ order.data.value.refund_state || 'NONE' }}</strong></div>
           </div>
           <h3>商品</h3>
           <el-table :data="order.data.value.items">

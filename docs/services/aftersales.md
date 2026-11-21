@@ -1,147 +1,125 @@
 # After-sales service
 
-Owns refund-only and return-refund requests: intake, review decision and the
-refund intent/state machine.
+Owns refund-only and return-refund requests: intake, review, lifetime amount
+admission, return/restock progress and the durable refund task. Payment remains
+the owner of captured/refunded facts; Inventory remains the owner of stock.
 
 - gRPC `:9009`, health/metrics `:9109`, database `mall_aftersales`
 - Package `internal/services/aftersales`, entrypoint `cmd/aftersales`
-- Migration `migrations/aftersales/0001_init.sql`
+- Migrations `migrations/aftersales/0001_init.sql` … `0010_settlement_protocol.sql`
 
 ## Responsibilities
 
-- Persist after-sale requests, their line items and an append-only audit log.
-- Enforce the after-sale state machine.
+- Persist after-sale requests, line items, amount versions and an audit log.
+- Serialize lifetime amount consumption in `after_sale_amount_ledger` using
+  Payment `captured_cent` (order snapshot only for legacy rows).
+- Record return receipt and queue durable per-SKU restock tasks.
+- Record the refund intent and queue a durable refund task; call
+  `Payment.RefundOrder` idempotently by `after_sale_no`.
 - Emit `shop.aftersale.*` events through the transactional outbox.
-- Record the refund intent, call `Payment.RefundOrder`, then complete the
-  request. The two-phase `REFUNDING` state makes retries safe.
+
+## Amount model
+
+`after_sale_amount_ledger` (one row per order):
+
+- `captured_cent` comes from `Payment.GetPaymentByOrder` (source `payment`);
+  `order_snapshot` is only the legacy fallback.
+- `consumed_cent` is the sum of every non-released request's
+  `effective_amount_cent`.
+- Creation/approval lock the row `FOR UPDATE` and enforce
+  `consumed + effective <= captured`.
+- `REFUNDED` stays `CONSUMED`; only a rejected/cancelled request releases.
+- `after_sales.amount_cent` is the requested amount;
+  `effective_amount_cent` is the approved amount. Every change appends an
+  immutable `after_sale_amount_versions` row.
+- Payment independently enforces `refunded + amount <= captured`.
+
+## Statuses and return progress
+
+```text
+REQUESTED --Approve(true)--> APPROVED --Refund--> REFUNDING --> REFUNDED
+REQUESTED --Approve(false)--> REJECTED
+APPROVED (RETURN_REFUND) --SubmitReturnTracking--> RETURNING
+RETURNING --ReceiveReturn--> RETURN_RECEIVED --restock worker--> restock_state DONE
+```
+
+- `RETURN_RECEIVED` means the parcel arrived; it does **not** mean stock was
+  restored.
+- `restock_state` is `NONE/PENDING/DONE/FAILED_PERMANENT`.
+  `RETURN_REFUND` cannot enter `REFUNDING` until `restock_state=DONE`.
+- `amount_state` is `ACTIVE/CONSUMED/RELEASED`.
 
 ## API
 
-`pb.AfterSalesService` from `api/gen/mall/v1`:
+| RPC | Behaviour |
+|---|---|
+| `CreateAfterSale` | Validates order/items, reserves lifetime amount, creates `REQUESTED` |
+| `Approve` | `REQUESTED -> APPROVED/REJECTED`; partial approval releases the difference and appends an amount version |
+| `SubmitReturnTracking` | `APPROVED -> RETURNING` for return-refund |
+| `ReceiveReturn` | `RETURNING -> RETURN_RECEIVED`, creates per-SKU restock tasks, no inventory call in the request path |
+| `Refund` | Calls `Order.BlockShipmentForRefund`, persists `REFUNDING` + refund task, fast-paths Payment |
 
-| RPC | Request | Behaviour |
-|---|---|---|
-| `CreateAfterSale` | `order_no, user_id, type, reason, amount_cent, items[]` | Creates a request in `REQUESTED` |
-| `GetAfterSale` | `after_sale_no` | Reads the request |
-| `Approve` | `after_sale_no, approved, amount_cent, reason` | `REQUESTED -> APPROVED` or `-> REJECTED` |
-| `Refund` | `after_sale_no` | `APPROVED -> REFUNDING -> REFUNDED` |
+Validation uses `apperr`: invalid amounts/items are `INVALID_ARGUMENT`, illegal
+states are `FAILED_PRECONDITION`, unknown requests are `NOT_FOUND`.
 
-Validation (returns `INVALID_ARGUMENT` via `apperr`):
+## Durable workers
 
-- `order_no` non-empty, `user_id > 0`;
-- `type` is `REFUND_ONLY` or `RETURN_REFUND`;
-- `amount_cent > 0`;
-- optional items: `sku_id > 0`, `quantity > 0`; duplicate `sku_id` lines are
-  merged (quantities summed).
-
-`Approve`/`Refund` on an unknown request return `NOT_FOUND`; illegal transitions
-return `FAILED_PRECONDITION`. Approving with `amount_cent > 0` records a partial
-approval and must not exceed the requested amount (`INVALID_ARGUMENT` otherwise).
-
-## State machine
-
-```text
-REQUESTED --Approve(approved=true)--> APPROVED --Refund--> REFUNDING --> REFUNDED
-REQUESTED --Approve(approved=false)--> REJECTED
-```
-
-- The aggregate row is locked with `SELECT ... FOR UPDATE` before each decision.
-- Repeated identical decisions are idempotent no-ops (`APPROVED` + approve,
-  `REJECTED` + reject, refund of `REFUNDED`): the aggregate is returned and no
-  extra event is appended.
-- Conflicting or out-of-order transitions are rejected (e.g. refunding a
-  `REQUESTED` or `REJECTED` request).
-- `Refund` commits `REFUNDING` first, calls payment, then commits `REFUNDED`.
-  A crash or payment failure leaves the row `REFUNDING`; retrying resumes from
-  that state and calls the idempotent payment refund again.
+- `RunRestockWorker` claims `after_sale_restock_tasks` with a lease, calls
+  `Inventory.Restock` (`restockNo=after_sale_no`, per-SKU idempotent), marks the
+  task `DONE`, and only when every task is `DONE` sets
+  `restock_state=DONE` + emits `shop.aftersale.restocked.v1`.
+  Transient failures retry; permanent failures emit
+  `shop.aftersale.restock_failed.v1` and keep refunds blocked.
+- `RunRefundWorker` claims `after_sale_refund_tasks` with a lease, calls
+  `Payment.RefundOrder` with `amount=effective_amount_cent` and
+  `IdempotencyKey=after_sale_no`, then marks `REFUNDED` + emits
+  `shop.aftersale.completed.v1`. Failures retry; a permanently failed task is
+  visible and can be re-armed by an explicit `Refund` retry.
+- There is no status scanner over `REFUNDING`/`RECEIVED` combinations.
 
 ## Audit log
 
-`after_sale_logs` is append-only and written in the same transaction as every
-state change:
-
-| action | from -> to | remark |
-|---|---|---|
-| `CREATE` | `` -> `REQUESTED` | request reason |
-| `APPROVE` | `REQUESTED` -> `APPROVED` | decision reason |
-| `REJECT` | `REQUESTED` -> `REJECTED` | decision reason |
-| `REFUND_INTENT` | `APPROVED` -> `REFUNDING` | JSON refund intent (`amount_cent`, `payment: "pending"`) |
-| `REFUND` | `REFUNDING` -> `REFUNDED` | payment refund completed |
-
-The `REFUND_INTENT` row is the durable record of the approved amount before the
-payment call; the actual refund is executed by `Payment.RefundOrder`.
+`after_sale_logs` is append-only: `CREATE`, `APPROVE`, `REJECT`,
+`RETURN_TRACKING`, `RECEIVE_RETURN`, `REFUND_INTENT`, `REFUND`. Amount changes
+also append `after_sale_amount_versions`.
 
 ## Events
 
-Outbox table `outbox_events`, relayed by `outbox.Relay` to NATS JetStream.
-Aggregate type `after_sale`, keyed by `after_sale_no`.
+| Topic | Appended when |
+|---|---|
+| `shop.aftersale.created.v1` | `CreateAfterSale` commits |
+| `shop.aftersale.approved.v1` / `.rejected.v1` | review commits |
+| `shop.aftersale.returning.v1` | return tracking commits |
+| `shop.aftersale.received.v1` | `RETURN_RECEIVED` commits |
+| `shop.aftersale.restock_pending.v1` | restock tasks queued |
+| `shop.aftersale.restocked.v1` | all restock tasks done |
+| `shop.aftersale.restock_failed.v1` | a restock task is permanently failed |
+| `shop.aftersale.refund_requested.v1` | `REFUNDING` + refund task committed |
+| `shop.aftersale.completed.v1` | payment refund completed |
 
-| Topic | Appended when | Payload |
-|---|---|---|
-| `shop.aftersale.created.v1` | `CreateAfterSale` commits | `after_sale_no, order_no, user_id, type, status, amount_cent, reason` |
-| `shop.aftersale.approved.v1` | approve commits | same shape, `status = APPROVED` |
-| `shop.aftersale.rejected.v1` | reject commits | same shape, `status = REJECTED` |
-| `shop.aftersale.completed.v1` | `Refund` commits | same shape, `status = REFUNDED` |
-
-`created` and `completed` are part of the Phase 1 event set in
-`docs/contracts.md`; `approved`/`rejected` follow the same `shop.<domain>.<event>.v1`
-naming and need main-agent sign-off if they are to be treated as contract.
+All payloads carry `after_sale_no, order_no, user_id, type, status,
+amount_cent, effective_amount_cent, amount_state, restock_state, reason`.
 
 ## Schema
 
-- `after_sales(id, after_sale_no, order_no, user_id, type, status, amount_cent,
-  reason, version, created_at, updated_at)` — `uk_after_sales_no`,
-  `idx_after_sales_order`, `idx_after_sales_user`, `idx_after_sales_status`.
-  `type` is a MySQL keyword and is back-quoted in queries.
-- `after_sale_items(id, after_sale_id, sku_id, quantity, created_at)` —
-  `uk_after_sale_items_sku (after_sale_id, sku_id)`.
-- `after_sale_logs(id, after_sale_id, action, from_status, to_status, remark,
-  created_at)`.
-- `outbox_events(...)` — shared outbox schema from `docs/contracts.md`.
-
-`amount_cent` is `BIGINT` per the money convention.
+- `after_sales(after_sale_no, order_no, user_id, type, status, amount_cent,
+  effective_amount_cent, amount_state, restock_state, reason, return_*,
+  refund_no, refunded_cent, version, client_request_id, ...)`.
+- `after_sale_items(after_sale_id, sku_id, quantity, received_quantity,
+  condition_code)`.
+- `after_sale_logs` — audit trail.
+- `after_sale_amount_versions(after_sale_id, version, effective_amount_cent,
+  reason)` — immutable amount history.
+- `after_sale_amount_ledger(order_no, captured_cent, consumed_cent, source,
+  version)` — lifetime cap.
+- `after_sale_restock_tasks(after_sale_no, sku_id, quantity, condition, status,
+  attempts, lease_owner, lease_until, ...)`.
+- `after_sale_refund_tasks(after_sale_no, status, attempts, lease_owner,
+  lease_until, ...)`.
+- `outbox_events` — shared outbox.
 
 ## Configuration
 
-`config.Load("aftersales")`; standard env vars apply (`MYSQL_DSN`, `NATS_URL`,
-`ETCD_ENDPOINTS`, `GRPC_ADDR`, `HTTP_ADDR`). `PAYMENT_ADDR` points at the payment
-gRPC service. There is no DTM branch in this service; the payment refund is a
-normal idempotent gRPC call.
-
-## Build and test
-
-```bash
-GOCACHE=$PWD/.tmp/gocache GOTMPDIR=$PWD/.tmp GOSUMDB=off \
-  go build ./cmd/aftersales ./internal/services/aftersales
-GOCACHE=$PWD/.tmp/gocache GOTMPDIR=$PWD/.tmp GOSUMDB=off \
-  go test ./internal/services/aftersales/...
-```
-
-Unit tests cover request validation, SKU merging and both transition tables.
-There are no integration tests, per `docs/contracts.md`.
-
-## Not implemented (deliberately)
-
-- No idempotency key on `CreateAfterSale` (multiple requests per order are
-  legal); a client retry creates a second request.
-- No item-return logistics or inspection step for `RETURN_REFUND`.
-- `GetAfterSale` does not return line items: the generated `AfterSale` message
-  has no items field. Items are stored for audit and future contract use.
-
-## Payment integration
-
-`Refund` is two-phase: it commits `REFUNDING`, calls `Payment.RefundOrder`, and
-then commits `REFUNDED` with `shop.aftersale.completed.v1`. If payment is down,
-the request stays `REFUNDING` and a retry resumes it; the payment refund itself
-is idempotent. The service now depends on the payment gRPC service.
-
-## Phase 1.5 return flow
-
-`0002_return_flow.sql` adds return carrier/tracking, refund number, cumulative
-refunded amount and per-item received quantity/condition. `RETURN_REFUND` goes
-through `Approve -> SubmitReturnTracking -> ReceiveReturn -> Refund`; receiving
-calls inventory `Restock` with the after-sale number as the idempotency key.
-`SELLABLE` returns restore stock; `DAMAGED` returns are recorded in the ledger
-without increasing sellable stock. Create/approve is validated against the
-order service (ownership, order status, refundable amount and ordered
-quantities). `ListAfterSales` serves user and admin lists.
+`MYSQL_DSN`, `NATS_URL`, `PAYMENT_ADDR`, `INVENTORY_ADDR`, `ORDER_ADDR`,
+`GRPC_ADDR`, `HTTP_ADDR`. `cmd/aftersales/main.go` starts the outbox relay plus
+the restock and refund workers.

@@ -2949,19 +2949,21 @@ var PricingService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	OrderService_CreateOrder_FullMethodName        = "/mall.v1.OrderService/CreateOrder"
-	OrderService_CreateSeckillOrder_FullMethodName = "/mall.v1.OrderService/CreateSeckillOrder"
-	OrderService_CreateOrderInner_FullMethodName   = "/mall.v1.OrderService/CreateOrderInner"
-	OrderService_CancelOrder_FullMethodName        = "/mall.v1.OrderService/CancelOrder"
-	OrderService_CancelOrderInner_FullMethodName   = "/mall.v1.OrderService/CancelOrderInner"
-	OrderService_MarkPaid_FullMethodName           = "/mall.v1.OrderService/MarkPaid"
-	OrderService_GetOrder_FullMethodName           = "/mall.v1.OrderService/GetOrder"
-	OrderService_ListOrders_FullMethodName         = "/mall.v1.OrderService/ListOrders"
-	OrderService_GetOrderStats_FullMethodName      = "/mall.v1.OrderService/GetOrderStats"
-	OrderService_TccTryMarkPaid_FullMethodName     = "/mall.v1.OrderService/TccTryMarkPaid"
-	OrderService_TccConfirmMarkPaid_FullMethodName = "/mall.v1.OrderService/TccConfirmMarkPaid"
-	OrderService_TccCancelMarkPaid_FullMethodName  = "/mall.v1.OrderService/TccCancelMarkPaid"
-	OrderService_TccQueryMarkPaid_FullMethodName   = "/mall.v1.OrderService/TccQueryMarkPaid"
+	OrderService_CreateOrder_FullMethodName            = "/mall.v1.OrderService/CreateOrder"
+	OrderService_CreateSeckillOrder_FullMethodName     = "/mall.v1.OrderService/CreateSeckillOrder"
+	OrderService_CreateOrderInner_FullMethodName       = "/mall.v1.OrderService/CreateOrderInner"
+	OrderService_CancelOrder_FullMethodName            = "/mall.v1.OrderService/CancelOrder"
+	OrderService_CancelOrderInner_FullMethodName       = "/mall.v1.OrderService/CancelOrderInner"
+	OrderService_MarkPaid_FullMethodName               = "/mall.v1.OrderService/MarkPaid"
+	OrderService_GetOrder_FullMethodName               = "/mall.v1.OrderService/GetOrder"
+	OrderService_ListOrders_FullMethodName             = "/mall.v1.OrderService/ListOrders"
+	OrderService_GetOrderStats_FullMethodName          = "/mall.v1.OrderService/GetOrderStats"
+	OrderService_TccTryMarkPaid_FullMethodName         = "/mall.v1.OrderService/TccTryMarkPaid"
+	OrderService_TccConfirmMarkPaid_FullMethodName     = "/mall.v1.OrderService/TccConfirmMarkPaid"
+	OrderService_TccCancelMarkPaid_FullMethodName      = "/mall.v1.OrderService/TccCancelMarkPaid"
+	OrderService_TccQueryMarkPaid_FullMethodName       = "/mall.v1.OrderService/TccQueryMarkPaid"
+	OrderService_AuthorizeShipment_FullMethodName      = "/mall.v1.OrderService/AuthorizeShipment"
+	OrderService_BlockShipmentForRefund_FullMethodName = "/mall.v1.OrderService/BlockShipmentForRefund"
 )
 
 // OrderServiceClient is the client API for OrderService service.
@@ -2983,6 +2985,12 @@ type OrderServiceClient interface {
 	TccConfirmMarkPaid(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccCancelMarkPaid(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccQueryMarkPaid(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*TccQueryReply, error)
+	// AuthorizeShipment is the only shipping permit. Fulfillment must call it
+	// before Ship; a refund request revokes an unused permit.
+	AuthorizeShipment(ctx context.Context, in *ShipmentPermitRequest, opts ...grpc.CallOption) (*Empty, error)
+	// BlockShipmentForRefund records refund admission on the same permit row. A
+	// permit already CONSUMED still allows refund-only after shipment.
+	BlockShipmentForRefund(ctx context.Context, in *ShipmentPermitRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type orderServiceClient struct {
@@ -3123,6 +3131,26 @@ func (c *orderServiceClient) TccQueryMarkPaid(ctx context.Context, in *TccPaymen
 	return out, nil
 }
 
+func (c *orderServiceClient) AuthorizeShipment(ctx context.Context, in *ShipmentPermitRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, OrderService_AuthorizeShipment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orderServiceClient) BlockShipmentForRefund(ctx context.Context, in *ShipmentPermitRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, OrderService_BlockShipmentForRefund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrderServiceServer is the server API for OrderService service.
 // All implementations must embed UnimplementedOrderServiceServer
 // for forward compatibility.
@@ -3142,6 +3170,12 @@ type OrderServiceServer interface {
 	TccConfirmMarkPaid(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccCancelMarkPaid(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccQueryMarkPaid(context.Context, *TccPaymentRequest) (*TccQueryReply, error)
+	// AuthorizeShipment is the only shipping permit. Fulfillment must call it
+	// before Ship; a refund request revokes an unused permit.
+	AuthorizeShipment(context.Context, *ShipmentPermitRequest) (*Empty, error)
+	// BlockShipmentForRefund records refund admission on the same permit row. A
+	// permit already CONSUMED still allows refund-only after shipment.
+	BlockShipmentForRefund(context.Context, *ShipmentPermitRequest) (*Empty, error)
 	mustEmbedUnimplementedOrderServiceServer()
 }
 
@@ -3190,6 +3224,12 @@ func (UnimplementedOrderServiceServer) TccCancelMarkPaid(context.Context, *TccPa
 }
 func (UnimplementedOrderServiceServer) TccQueryMarkPaid(context.Context, *TccPaymentRequest) (*TccQueryReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TccQueryMarkPaid not implemented")
+}
+func (UnimplementedOrderServiceServer) AuthorizeShipment(context.Context, *ShipmentPermitRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AuthorizeShipment not implemented")
+}
+func (UnimplementedOrderServiceServer) BlockShipmentForRefund(context.Context, *ShipmentPermitRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BlockShipmentForRefund not implemented")
 }
 func (UnimplementedOrderServiceServer) mustEmbedUnimplementedOrderServiceServer() {}
 func (UnimplementedOrderServiceServer) testEmbeddedByValue()                      {}
@@ -3446,6 +3486,42 @@ func _OrderService_TccQueryMarkPaid_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrderService_AuthorizeShipment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShipmentPermitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).AuthorizeShipment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_AuthorizeShipment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).AuthorizeShipment(ctx, req.(*ShipmentPermitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OrderService_BlockShipmentForRefund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShipmentPermitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).BlockShipmentForRefund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_BlockShipmentForRefund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).BlockShipmentForRefund(ctx, req.(*ShipmentPermitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // OrderService_ServiceDesc is the grpc.ServiceDesc for OrderService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3505,19 +3581,28 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "TccQueryMarkPaid",
 			Handler:    _OrderService_TccQueryMarkPaid_Handler,
 		},
+		{
+			MethodName: "AuthorizeShipment",
+			Handler:    _OrderService_AuthorizeShipment_Handler,
+		},
+		{
+			MethodName: "BlockShipmentForRefund",
+			Handler:    _OrderService_BlockShipmentForRefund_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "mall/v1/mall.proto",
 }
 
 const (
-	PaymentService_CreateIntent_FullMethodName  = "/mall.v1.PaymentService/CreateIntent"
-	PaymentService_GetIntent_FullMethodName     = "/mall.v1.PaymentService/GetIntent"
-	PaymentService_Callback_FullMethodName      = "/mall.v1.PaymentService/Callback"
-	PaymentService_Refund_FullMethodName        = "/mall.v1.PaymentService/Refund"
-	PaymentService_RefundOrder_FullMethodName   = "/mall.v1.PaymentService/RefundOrder"
-	PaymentService_VerifyPayment_FullMethodName = "/mall.v1.PaymentService/VerifyPayment"
-	PaymentService_ListRefunds_FullMethodName   = "/mall.v1.PaymentService/ListRefunds"
+	PaymentService_CreateIntent_FullMethodName      = "/mall.v1.PaymentService/CreateIntent"
+	PaymentService_GetIntent_FullMethodName         = "/mall.v1.PaymentService/GetIntent"
+	PaymentService_GetPaymentByOrder_FullMethodName = "/mall.v1.PaymentService/GetPaymentByOrder"
+	PaymentService_Callback_FullMethodName          = "/mall.v1.PaymentService/Callback"
+	PaymentService_Refund_FullMethodName            = "/mall.v1.PaymentService/Refund"
+	PaymentService_RefundOrder_FullMethodName       = "/mall.v1.PaymentService/RefundOrder"
+	PaymentService_VerifyPayment_FullMethodName     = "/mall.v1.PaymentService/VerifyPayment"
+	PaymentService_ListRefunds_FullMethodName       = "/mall.v1.PaymentService/ListRefunds"
 )
 
 // PaymentServiceClient is the client API for PaymentService service.
@@ -3528,6 +3613,10 @@ const (
 type PaymentServiceClient interface {
 	CreateIntent(ctx context.Context, in *CreateIntentRequest, opts ...grpc.CallOption) (*Intent, error)
 	GetIntent(ctx context.Context, in *GetIntentRequest, opts ...grpc.CallOption) (*Intent, error)
+	// Read-only settlement facts for after-sales amount admission. Returns the
+	// captured intent for an order; only captured/partially-refunded/refunded
+	// intents are eligible.
+	GetPaymentByOrder(ctx context.Context, in *GetPaymentByOrderRequest, opts ...grpc.CallOption) (*Intent, error)
 	Callback(ctx context.Context, in *CallbackRequest, opts ...grpc.CallOption) (*CallbackReply, error)
 	Refund(ctx context.Context, in *RefundRequest, opts ...grpc.CallOption) (*Empty, error)
 	RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*RefundOrderReply, error)
@@ -3557,6 +3646,16 @@ func (c *paymentServiceClient) GetIntent(ctx context.Context, in *GetIntentReque
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Intent)
 	err := c.cc.Invoke(ctx, PaymentService_GetIntent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) GetPaymentByOrder(ctx context.Context, in *GetPaymentByOrderRequest, opts ...grpc.CallOption) (*Intent, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Intent)
+	err := c.cc.Invoke(ctx, PaymentService_GetPaymentByOrder_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3621,6 +3720,10 @@ func (c *paymentServiceClient) ListRefunds(ctx context.Context, in *ListRefundsR
 type PaymentServiceServer interface {
 	CreateIntent(context.Context, *CreateIntentRequest) (*Intent, error)
 	GetIntent(context.Context, *GetIntentRequest) (*Intent, error)
+	// Read-only settlement facts for after-sales amount admission. Returns the
+	// captured intent for an order; only captured/partially-refunded/refunded
+	// intents are eligible.
+	GetPaymentByOrder(context.Context, *GetPaymentByOrderRequest) (*Intent, error)
 	Callback(context.Context, *CallbackRequest) (*CallbackReply, error)
 	Refund(context.Context, *RefundRequest) (*Empty, error)
 	RefundOrder(context.Context, *RefundOrderRequest) (*RefundOrderReply, error)
@@ -3641,6 +3744,9 @@ func (UnimplementedPaymentServiceServer) CreateIntent(context.Context, *CreateIn
 }
 func (UnimplementedPaymentServiceServer) GetIntent(context.Context, *GetIntentRequest) (*Intent, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetIntent not implemented")
+}
+func (UnimplementedPaymentServiceServer) GetPaymentByOrder(context.Context, *GetPaymentByOrderRequest) (*Intent, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPaymentByOrder not implemented")
 }
 func (UnimplementedPaymentServiceServer) Callback(context.Context, *CallbackRequest) (*CallbackReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Callback not implemented")
@@ -3710,6 +3816,24 @@ func _PaymentService_GetIntent_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PaymentServiceServer).GetIntent(ctx, req.(*GetIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_GetPaymentByOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPaymentByOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).GetPaymentByOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_GetPaymentByOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).GetPaymentByOrder(ctx, req.(*GetPaymentByOrderRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3818,6 +3942,10 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetIntent",
 			Handler:    _PaymentService_GetIntent_Handler,
+		},
+		{
+			MethodName: "GetPaymentByOrder",
+			Handler:    _PaymentService_GetPaymentByOrder_Handler,
 		},
 		{
 			MethodName: "Callback",

@@ -64,6 +64,7 @@ type orderRecord struct {
 	PaidCent              int64
 	RefundedCent          int64
 	RefundStatus          string
+	RefundState           string
 	ReceiverName          string
 	ReceiverPhone         string
 	ReceiverAddress       string
@@ -87,6 +88,9 @@ func (o *orderRecord) toProto(items []*pb.OrderItem) *pb.Order {
 		PaidCent:              o.PaidCent,
 		RefundedCent:          o.RefundedCent,
 		RefundStatus:          o.RefundStatus,
+		RefundState:           o.RefundState,
+		AvailableActions:      availableActions(o),
+		ShipmentStatus:        shipmentStatus(o.Status),
 		ReceiverName:          o.ReceiverName,
 		ReceiverPhone:         o.ReceiverPhone,
 		ReceiverAddress:       o.ReceiverAddress,
@@ -98,12 +102,12 @@ func (o *orderRecord) toProto(items []*pb.OrderItem) *pb.Order {
 }
 
 const orderColumns = `order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent, applied_promotions_json,
-	freight_cent, pay_cent, paid_cent, refunded_cent, refund_status, receiver_name, receiver_phone, receiver_address, quote_id, client_request_id, created_at, expire_at`
+	freight_cent, pay_cent, paid_cent, refunded_cent, refund_status, refund_state, receiver_name, receiver_phone, receiver_address, quote_id, client_request_id, created_at, expire_at`
 
 func scanOrder(row *sql.Row) (*orderRecord, error) {
 	var o orderRecord
 	err := row.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
-		&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus,
+		&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.RefundState,
 		&o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
 		&o.ClientRequestID, &o.CreatedAt, &o.ExpireAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -233,7 +237,7 @@ func listOrders(ctx context.Context, q querier, where string, args []any, orderB
 	for rows.Next() {
 		var o orderRecord
 		if err := rows.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
-			&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus,
+			&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.RefundState,
 			&o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
 			&o.ClientRequestID, &o.CreatedAt, &o.ExpireAt); err != nil {
 			return nil, err

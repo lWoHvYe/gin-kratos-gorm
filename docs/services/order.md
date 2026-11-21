@@ -37,7 +37,7 @@ migrations/order/0001_init.sql
 DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
 `driver-kratos` import are gone; Kubernetes/Docker DNS resolves the target.
 
-## Schema (`migrations/order/0001_init.sql`)
+## Schema (`migrations/order/`)
 
 - `orders` – money in `_cent BIGINT`, `status` as `VARCHAR`, `version` for
   optimistic concurrency, `expire_at` for the payment window,
@@ -47,11 +47,36 @@ DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
   (`from_status`, `to_status`, `reason`, `operator`).
 - `outbox_events` – transactional outbox used by the relay worker.
 - `dtm_barrier.barrier` – saga barrier table (DTM also creates it lazily).
+- `0004_settlement_protocol.sql` – adds `refund_state`, backfills legacy
+  `REFUNDING/PARTIALLY_REFUNDED/REFUNDED` lifecycle values from
+  `order_status_logs` (default `PAID`), and creates `order_shipping_permits`.
 
-## Statuses
+## Statuses and settlement
 
-`PENDING_PAYMENT` → `PAID` → `SHIPPED` → `COMPLETED`, plus `CANCELLED` and
-`CLOSED`. Only `PENDING_PAYMENT` orders can be paid or cancelled.
+`orders.status` is the fulfilment lifecycle:
+`PENDING_PAYMENT` → `PAID` → `ALLOCATED` → `SHIPPED` → `COMPLETED`, plus
+`CANCELLED` and `CLOSED`. Only `PENDING_PAYMENT` orders can be paid or
+cancelled; a refund in progress blocks both.
+
+Refund state is orthogonal and never written into `status`:
+`refund_state` is `NONE/PARTIAL/FULL/REFUNDING`, while
+`refund_status/refunded_cent` remain the Payment projection used for display.
+`refund_status` is updated by `shop.payment.refunded.v1`.
+
+`order_shipping_permits` is the only shipping authority:
+
+- `AuthorizeShipment(order_no, shipment_no)` requires `PAID/ALLOCATED`, a
+  non-refunding/non-full refund state, and CASes the permit to `CONSUMED`.
+  Repeating the same shipment is idempotent; a different shipment conflicts.
+- `BlockShipmentForRefund(order_no, after_sale_no)` revokes an unused permit
+  and sets `refund_state=REFUNDING`. If the permit was already `CONSUMED`,
+  refund-only after shipment remains allowed and the permit stays consumed.
+- Fulfillment must call `AuthorizeShipment` before `Ship`; the permit row is the
+  serialization point for the refund/ship race.
+
+`pb.Order.available_actions` is the server-owned action list for BFF/UI
+(`pay`, `cancel`, `ship`, `receive`, `apply_after_sale`). `shipment_status` is
+derived from the lifecycle (`CREATED/SHIPPED/RECEIVED`).
 
 ## Methods
 
@@ -91,7 +116,8 @@ The idempotency key is forwarded through DTM saga branch headers
 ### `CancelOrder`
 
 Owner (or `admin`) loads the order; `CANCELLED` is returned idempotently,
-`PAID`/`SHIPPED`/`COMPLETED`/`CLOSED` return `FAILED_PRECONDITION`. A
+`PAID`/`SHIPPED`/`COMPLETED`/`CLOSED` return `FAILED_PRECONDITION`; any
+`REFUNDING/FULL` refund state blocks cancellation. A
 `PENDING_PAYMENT` order is cancelled in a local transaction (guarded update +
 status log + `shop.order.cancelled.v1`), then inventory `Release` and pricing
 `UnlockCoupon` run best-effort (failures are logged, the cancellation stands).

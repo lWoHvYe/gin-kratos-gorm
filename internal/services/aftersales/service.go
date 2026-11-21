@@ -31,22 +31,45 @@ const (
 //	REQUESTED -> APPROVED -> REFUNDING -> REFUNDED
 //	REQUESTED -> REJECTED
 const (
-	statusRequested = "REQUESTED"
-	statusApproved  = "APPROVED"
-	statusRejected  = "REJECTED"
-	statusRefunding = "REFUNDING"
-	statusReturning = "RETURNING"
-	statusReceived  = "RECEIVED"
-	statusRefunded  = "REFUNDED"
+	statusRequested      = "REQUESTED"
+	statusApproved       = "APPROVED"
+	statusRejected       = "REJECTED"
+	statusRefunding      = "REFUNDING"
+	statusReturning      = "RETURNING"
+	statusReturnReceived = "RETURN_RECEIVED"
+	statusRefunded       = "REFUNDED"
+
+	amountActive   = "ACTIVE"
+	amountConsumed = "CONSUMED"
+	amountReleased = "RELEASED"
+
+	restockNone       = "NONE"
+	restockPending    = "PENDING"
+	restockProcessing = "PROCESSING"
+	restockDone       = "DONE"
+	restockFailed     = "FAILED_PERMANENT"
+
+	taskPending    = "PENDING"
+	taskProcessing = "PROCESSING"
+	taskDone       = "DONE"
+	taskFailed     = "FAILED_PERMANENT"
+
+	maxTaskAttempts = 8
 )
 
 // Outbox subjects. created/completed are part of the documented Phase 1 event
 // set; approved/rejected are service-local additions on the same naming scheme.
 const (
-	topicAfterSaleCreated   = "shop.aftersale.created.v1"
-	topicAfterSaleApproved  = "shop.aftersale.approved.v1"
-	topicAfterSaleRejected  = "shop.aftersale.rejected.v1"
-	topicAfterSaleCompleted = "shop.aftersale.completed.v1"
+	topicAfterSaleCreated         = "shop.aftersale.created.v1"
+	topicAfterSaleApproved        = "shop.aftersale.approved.v1"
+	topicAfterSaleRejected        = "shop.aftersale.rejected.v1"
+	topicAfterSaleReceived        = "shop.aftersale.received.v1"
+	topicAfterSaleReturning       = "shop.aftersale.returning.v1"
+	topicAfterSaleRestockPending  = "shop.aftersale.restock_pending.v1"
+	topicAfterSaleRestocked       = "shop.aftersale.restocked.v1"
+	topicAfterSaleRestockFailed   = "shop.aftersale.restock_failed.v1"
+	topicAfterSaleRefundRequested = "shop.aftersale.refund_requested.v1"
+	topicAfterSaleCompleted       = "shop.aftersale.completed.v1"
 )
 
 const aggregateAfterSale = "after_sale"
@@ -66,43 +89,35 @@ func New(db *sql.DB, client *mq.Client, payments pb.PaymentServiceClient, invent
 }
 
 // validateAgainstOrder prevents after-sales from inventing money or stock. The
-// order service is the source of truth for paid/refunded totals and items.
-func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, userID int64, typ string, amountCent int64, items []afterSaleItem) error {
+// amount cap now lives in the per-order amount ledger, not in the order's
+// asynchronous refund projection.
+func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, userID int64, typ string, items []afterSaleItem) (*pb.Order, error) {
 	if s.orders == nil {
-		return apperr.Unavailable("order client is not configured", nil)
+		return nil, apperr.Unavailable("order client is not configured", nil)
 	}
 	order, err := s.orders.GetOrder(ctx, &pb.GetOrderRequest{OrderNo: orderNo, UserId: userID})
 	if err != nil {
-		return apperr.Unavailable("load order for after-sale validation", err)
+		return nil, apperr.Unavailable("load order for after-sale validation", err)
 	}
 	if order.GetOrderNo() == "" || order.GetUserId() != userID {
-		return apperr.NotFound("order not found")
+		return nil, apperr.NotFound("order not found")
 	}
 	switch order.GetStatus() {
-	case "PAID", "ALLOCATED", "SHIPPED", "COMPLETED", "PARTIALLY_REFUNDED":
+	case "PAID", "ALLOCATED", "SHIPPED", "COMPLETED":
 	default:
-		return apperr.Failed(fmt.Sprintf("order is not eligible for after-sales in status %s", order.GetStatus()))
+		return nil, apperr.Failed(fmt.Sprintf("order is not eligible for after-sales in status %s", order.GetStatus()))
 	}
-	if typ == typeReturnRefund && order.GetStatus() != "SHIPPED" && order.GetStatus() != "COMPLETED" && order.GetStatus() != "PARTIALLY_REFUNDED" {
-		return apperr.Failed("return refund requires a shipped or completed order")
+	if order.GetRefundState() == "FULL" {
+		return nil, apperr.Failed("order is already fully refunded")
 	}
-	remaining := order.GetPaidCent() - order.GetRefundedCent()
-	if remaining <= 0 {
-		return apperr.Failed("order has no refundable amount")
-	}
-	var requested int64
-	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(amount_cent), 0) FROM after_sales
-		WHERE order_no = ? AND status <> 'REJECTED'`, orderNo).Scan(&requested); err != nil {
-		return apperr.Internal("sum after-sale amounts", err)
-	}
-	if requested+amountCent > remaining {
-		return apperr.Invalid("after-sale amount %d exceeds remaining refundable amount %d", amountCent, remaining-requested)
+	if typ == typeReturnRefund && order.GetStatus() != "SHIPPED" && order.GetStatus() != "COMPLETED" {
+		return nil, apperr.Failed("return refund requires a shipped or completed order")
 	}
 	if len(items) == 0 {
 		if typ == typeReturnRefund {
-			return apperr.Invalid("return refund requires at least one item")
+			return nil, apperr.Invalid("return refund requires at least one item")
 		}
-		return nil
+		return order, nil
 	}
 	ordered := make(map[int64]int64, len(order.GetItems()))
 	for _, item := range order.GetItems() {
@@ -110,19 +125,19 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 	}
 	for _, item := range items {
 		if ordered[item.SkuID] == 0 {
-			return apperr.Invalid("sku %d is not part of order %s", item.SkuID, orderNo)
+			return nil, apperr.Invalid("sku %d is not part of order %s", item.SkuID, orderNo)
 		}
 		var existing int64
 		if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(i.quantity), 0)
 			FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id
 			WHERE a.order_no = ? AND a.status <> 'REJECTED' AND i.sku_id = ?`, orderNo, item.SkuID).Scan(&existing); err != nil {
-			return apperr.Internal("sum after-sale item quantity", err)
+			return nil, apperr.Internal("sum after-sale item quantity", err)
 		}
 		if existing+int64(item.Quantity) > ordered[item.SkuID] {
-			return apperr.Invalid("return quantity for sku %d exceeds ordered quantity", item.SkuID)
+			return nil, apperr.Invalid("return quantity for sku %d exceeds ordered quantity", item.SkuID)
 		}
 	}
-	return nil
+	return order, nil
 }
 
 // CreateAfterSale opens a refund only / return-refund request. The request is
@@ -132,7 +147,12 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	if err != nil {
 		return nil, err
 	}
-	if err := s.validateAgainstOrder(ctx, input.orderNo, input.userID, input.typ, input.amountCent, items); err != nil {
+	order, err := s.validateAgainstOrder(ctx, input.orderNo, input.userID, input.typ, items)
+	if err != nil {
+		return nil, err
+	}
+	capturedCent, capturedSource, err := s.capturedForOrder(ctx, order)
+	if err != nil {
 		return nil, err
 	}
 	// A retried submit must return the first request instead of creating a
@@ -155,9 +175,16 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	ledger, err := s.ensureAmountLedgerTx(ctx, tx, input.orderNo, capturedCent, capturedSource)
+	if err != nil {
+		return nil, err
+	}
+	if err := reserveAmountTx(ctx, tx, ledger, input.amountCent); err != nil {
+		return nil, err
+	}
 	key := sql.NullString{String: requestID, Valid: requestID != ""}
-	res, err := tx.ExecContext(ctx, "INSERT INTO after_sales (after_sale_no, order_no, user_id, `type`, status, amount_cent, reason, client_request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		afterSaleNo, input.orderNo, input.userID, input.typ, statusRequested, input.amountCent, input.reason, key)
+	res, err := tx.ExecContext(ctx, "INSERT INTO after_sales (after_sale_no, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, reason, client_request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		afterSaleNo, input.orderNo, input.userID, input.typ, statusRequested, input.amountCent, input.amountCent, amountActive, restockNone, input.reason, key)
 	if err != nil {
 		if isDuplicateKey(err) && requestID != "" {
 			// Another replica won the race; return its row.
@@ -176,6 +203,9 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	if err != nil {
 		return nil, apperr.Internal("after sale id", err)
 	}
+	if err := appendAmountVersionTx(ctx, tx, afterSaleID, 1, input.amountCent, "CREATE"); err != nil {
+		return nil, err
+	}
 	for _, it := range items {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_items (after_sale_id, sku_id, quantity) VALUES (?, ?, ?)`,
 			afterSaleID, it.SkuID, it.Quantity); err != nil {
@@ -187,7 +217,9 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	}
 	payload, err := json.Marshal(afterSaleEvent{
 		AfterSaleNo: afterSaleNo, OrderNo: input.orderNo, UserID: input.userID,
-		Type: input.typ, Status: statusRequested, AmountCent: input.amountCent, Reason: input.reason,
+		Type: input.typ, Status: statusRequested, AmountCent: input.amountCent,
+		EffectiveAmountCent: input.amountCent, AmountState: amountActive, RestockState: restockNone,
+		Reason: input.reason,
 	})
 	if err != nil {
 		return nil, apperr.Internal("marshal after sale event", err)
@@ -213,12 +245,29 @@ func (s *Service) GetAfterSale(ctx context.Context, req *pb.GetAfterSaleRequest)
 }
 
 // Approve accepts or rejects a pending request. Approving with an amount_cent
-// lower than the requested amount records a partial approval.
+// lower than the requested amount records a new effective-amount version and
+// releases the difference back to the order's lifetime ledger.
 func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.AfterSale, error) {
 	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
 	if afterSaleNo == "" {
 		return nil, apperr.Invalid("after_sale_no is required")
 	}
+	pre, err := s.getAfterSaleRow(ctx, afterSaleNo)
+	if err != nil {
+		return nil, err
+	}
+	order, err := s.loadOrder(ctx, pre.orderNo, pre.userID)
+	if err != nil {
+		return nil, err
+	}
+	if order.GetRefundState() == "FULL" {
+		return nil, apperr.Failed("order is already fully refunded")
+	}
+	capturedCent, capturedSource, err := s.capturedForOrder(ctx, order)
+	if err != nil {
+		return nil, err
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, apperr.Internal("begin approve after sale", err)
@@ -233,147 +282,74 @@ func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.Afte
 	if err != nil {
 		return nil, err
 	}
-	amountCent := row.amountCent
-	if req.GetApproved() && req.GetAmountCent() > 0 {
+	if !changed {
+		if err := tx.Commit(); err != nil {
+			return nil, apperr.Internal("commit idempotent approval", err)
+		}
+		return s.loadAfterSale(ctx, afterSaleNo)
+	}
+	nextEffective := row.amountCent
+	nextAmountState := amountActive
+	if next == statusRejected {
+		nextEffective = row.effectiveAmountCent
+		nextAmountState = amountReleased
+	} else if req.GetAmountCent() > 0 {
 		if req.GetAmountCent() > row.amountCent {
 			return nil, apperr.Invalid("approved amount_cent exceeds the requested amount")
 		}
-		amountCent = req.GetAmountCent()
+		nextEffective = req.GetAmountCent()
 	}
-	topic, eventType, action := topicAfterSaleApproved, "aftersale.approved", "APPROVE"
+	ledger, err := s.ensureAmountLedgerTx(ctx, tx, row.orderNo, capturedCent, capturedSource)
+	if err != nil {
+		return nil, err
+	}
+	delta := nextEffective - row.effectiveAmountCent
 	if next == statusRejected {
-		topic, eventType, action = topicAfterSaleRejected, "aftersale.rejected", "REJECT"
+		delta = -row.effectiveAmountCent
 	}
-	if changed {
-		if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, amount_cent = ?, version = version + 1 WHERE id = ?",
-			next, amountCent, row.id); err != nil {
-			return nil, apperr.Internal("update after sale status", err)
-		}
-		if err := appendLog(ctx, tx, row.id, action, row.status, next, req.GetReason()); err != nil {
+	if delta > 0 {
+		if err := reserveAmountTx(ctx, tx, ledger, delta); err != nil {
 			return nil, err
 		}
-		payload, err := json.Marshal(afterSaleEvent{
-			AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
-			Type: row.typ, Status: next, AmountCent: amountCent, Reason: row.reason,
-		})
-		if err != nil {
-			return nil, apperr.Internal("marshal after sale event", err)
-		}
-		if err := outbox.Append(ctx, tx, outbox.Event{
-			Topic: topic, AggregateType: aggregateAfterSale,
-			AggregateID: afterSaleNo, EventType: eventType, Payload: payload,
-		}); err != nil {
-			return nil, apperr.Internal("append "+eventType, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, apperr.Internal("commit approve after sale", err)
-	}
-	return s.loadAfterSale(ctx, afterSaleNo)
-}
-
-// Refund first persists REFUNDING, then calls payment, then marks REFUNDED.
-// A failure between the two phases leaves the request REFUNDING so a retry can
-// safely call the idempotent payment refund again.
-func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*pb.AfterSale, error) {
-	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
-	if afterSaleNo == "" {
-		return nil, apperr.Invalid("after_sale_no is required")
-	}
-	if s.payments == nil {
-		return nil, apperr.Unavailable("payment client is not configured", nil)
-	}
-	var row *afterSaleRow
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, apperr.Internal("begin refund after sale", err)
-	}
-	row, err = lockAfterSale(ctx, tx, afterSaleNo)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if row.status == statusRefunded {
-		_ = tx.Rollback()
-		return s.loadAfterSale(ctx, afterSaleNo)
-	}
-	if err := refundableStatus(row); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if row.status != statusRefunding {
-		if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, version = version + 1 WHERE id = ?",
-			statusRefunding, row.id); err != nil {
-			_ = tx.Rollback()
-			return nil, apperr.Internal("mark after sale refunding", err)
-		}
-		intent, _ := json.Marshal(map[string]any{
-			"after_sale_no": afterSaleNo, "order_no": row.orderNo, "user_id": row.userID,
-			"amount_cent": row.amountCent, "payment": "pending",
-		})
-		if err := appendLog(ctx, tx, row.id, "REFUND_INTENT", row.status, statusRefunding, string(intent)); err != nil {
-			_ = tx.Rollback()
+	} else if delta < 0 {
+		if err := releaseAmountTx(ctx, tx, ledger, -delta); err != nil {
 			return nil, err
 		}
-		if err := tx.Commit(); err != nil {
-			return nil, apperr.Internal("commit refund intent", err)
-		}
-	} else {
-		_ = tx.Rollback()
 	}
-
-	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	refundReply, err := s.payments.RefundOrder(callCtx, &pb.RefundOrderRequest{
-		OrderNo: row.orderNo, AmountCent: row.amountCent,
-		Reason: "after-sale " + afterSaleNo, IdempotencyKey: afterSaleNo,
-	})
-	if err != nil {
-		s.log.Warn("after sale payment refund failed", "after_sale_no", afterSaleNo, "order_no", row.orderNo, "error", err)
-		return nil, apperr.Unavailable("payment refund failed; retry is safe", err)
+	action := "APPROVE"
+	topic, eventType := topicAfterSaleApproved, "aftersale.approved"
+	if next == statusRejected {
+		action = "REJECT"
+		topic, eventType = topicAfterSaleRejected, "aftersale.rejected"
 	}
-	refundNo := ""
-	if refundReply != nil {
-		refundNo = refundReply.GetRefundNo()
+	if _, err := tx.ExecContext(ctx, `UPDATE after_sales
+		SET status = ?, effective_amount_cent = ?, amount_state = ?, version = version + 1
+		WHERE id = ?`, next, nextEffective, nextAmountState, row.id); err != nil {
+		return nil, apperr.Internal("update after sale status", err)
 	}
-
-	tx, err = s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, apperr.Internal("begin complete refund", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	row, err = lockAfterSale(ctx, tx, afterSaleNo)
-	if err != nil {
+	if err := appendAmountVersionTx(ctx, tx, row.id, row.version+1, nextEffective, action); err != nil {
 		return nil, err
 	}
-	if row.status == statusRefunded {
-		return s.loadAfterSale(ctx, afterSaleNo)
-	}
-	if row.status != statusRefunding {
-		return nil, apperr.Failed(fmt.Sprintf("after sale cannot be completed in status %s", row.status))
-	}
-	if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, refund_no = ?, refunded_cent = ?, version = version + 1 WHERE id = ?",
-		statusRefunded, refundNo, row.amountCent, row.id); err != nil {
-		return nil, apperr.Internal("mark after sale refunded", err)
-	}
-	if err := appendLog(ctx, tx, row.id, "REFUND", statusRefunding, statusRefunded, "payment refund completed"); err != nil {
+	if err := appendLog(ctx, tx, row.id, action, row.status, next, req.GetReason()); err != nil {
 		return nil, err
 	}
 	payload, err := json.Marshal(afterSaleEvent{
 		AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
-		Type: row.typ, Status: statusRefunded, AmountCent: row.amountCent, Reason: row.reason,
+		Type: row.typ, Status: next, AmountCent: row.amountCent,
+		EffectiveAmountCent: nextEffective, AmountState: nextAmountState,
+		Reason: row.reason,
 	})
 	if err != nil {
 		return nil, apperr.Internal("marshal after sale event", err)
 	}
 	if err := outbox.Append(ctx, tx, outbox.Event{
-		Topic: topicAfterSaleCompleted, AggregateType: aggregateAfterSale,
-		AggregateID: afterSaleNo, EventType: "aftersale.completed", Payload: payload,
+		Topic: topic, AggregateType: aggregateAfterSale,
+		AggregateID: afterSaleNo, EventType: eventType, Payload: payload,
 	}); err != nil {
-		return nil, apperr.Internal("append aftersale.completed", err)
+		return nil, apperr.Internal("append "+eventType, err)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, apperr.Internal("commit refund after sale", err)
+		return nil, apperr.Internal("commit approve after sale", err)
 	}
 	return s.loadAfterSale(ctx, afterSaleNo)
 }
@@ -385,13 +361,114 @@ func refundableStatus(row *afterSaleRow) error {
 			return apperr.Failed("refund-only after sale must be approved before refunding")
 		}
 	case typeReturnRefund:
-		if row.status != statusReceived && row.status != statusRefunding {
+		if row.status != statusReturnReceived && row.status != statusRefunding {
 			return apperr.Failed("return-refund after sale must be received before refunding")
+		}
+		if row.restockState != restockDone {
+			return apperr.Failed("return-refund stock must be restocked before refunding")
 		}
 	default:
 		return apperr.Failed("unsupported after sale type")
 	}
 	return nil
+}
+
+// Refund first blocks new shipments in Order, then persists REFUNDING plus a
+// durable refund task. Payment is idempotent by after_sale_no; a failed inline
+// attempt is retried by the refund worker, never by a status scanner.
+func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*pb.AfterSale, error) {
+	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
+	if afterSaleNo == "" {
+		return nil, apperr.Invalid("after_sale_no is required")
+	}
+	pre, err := s.getAfterSaleRow(ctx, afterSaleNo)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.loadOrder(ctx, pre.orderNo, pre.userID); err != nil {
+		return nil, err
+	}
+	if pre.status == statusRefunded {
+		return s.loadAfterSale(ctx, afterSaleNo)
+	}
+	if err := refundableStatus(pre); err != nil {
+		return nil, err
+	}
+	if s.orders == nil {
+		return nil, apperr.Unavailable("order client is not configured", nil)
+	}
+	if _, err := s.orders.BlockShipmentForRefund(ctx, &pb.ShipmentPermitRequest{
+		OrderNo: pre.orderNo, AfterSaleNo: afterSaleNo,
+	}); err != nil {
+		return nil, apperr.Unavailable("block shipping for refund", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, apperr.Internal("begin refund after sale", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	row, err := lockAfterSale(ctx, tx, afterSaleNo)
+	if err != nil {
+		return nil, err
+	}
+	if row.status == statusRefunded {
+		if err := tx.Commit(); err != nil {
+			return nil, apperr.Internal("commit idempotent refund", err)
+		}
+		return s.loadAfterSale(ctx, afterSaleNo)
+	}
+	if row.status == statusRefunding {
+		if err := ensureRefundTaskTx(ctx, tx, afterSaleNo); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, apperr.Internal("commit refund task replay", err)
+		}
+	} else {
+		if err := refundableStatus(row); err != nil {
+			return nil, err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE after_sales
+			SET status = ?, version = version + 1 WHERE id = ?`, statusRefunding, row.id); err != nil {
+			return nil, apperr.Internal("mark after sale refunding", err)
+		}
+		if err := ensureRefundTaskTx(ctx, tx, afterSaleNo); err != nil {
+			return nil, err
+		}
+		intent, _ := json.Marshal(map[string]any{
+			"after_sale_no": afterSaleNo, "order_no": row.orderNo, "user_id": row.userID,
+			"amount_cent": row.effectiveAmountCent, "payment": "pending",
+		})
+		if err := appendLog(ctx, tx, row.id, "REFUND_INTENT", row.status, statusRefunding, string(intent)); err != nil {
+			return nil, err
+		}
+		payload, _ := json.Marshal(afterSaleEvent{
+			AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
+			Type: row.typ, Status: statusRefunding, AmountCent: row.amountCent,
+			EffectiveAmountCent: row.effectiveAmountCent, AmountState: row.amountState,
+			RestockState: row.restockState, Reason: row.reason, RefundIntent: true,
+		})
+		if err := outbox.Append(ctx, tx, outbox.Event{
+			Topic: topicAfterSaleRefundRequested, AggregateType: aggregateAfterSale,
+			AggregateID: afterSaleNo, EventType: "aftersale.refund_requested", Payload: payload,
+		}); err != nil {
+			return nil, apperr.Internal("append refund requested", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, apperr.Internal("commit refund intent", err)
+		}
+	}
+
+	if err := s.processRefundTask(ctx, afterSaleNo); err != nil {
+		// The intent and task are committed; an inline Payment failure must not
+		// lose the refund. The worker retries idempotently.
+		if s.log != nil {
+			s.log.Warn("after sale refund queued for retry", "after_sale_no", afterSaleNo, "error", err)
+		}
+		return nil, apperr.Unavailable("refund queued for retry", err)
+	}
+	return s.loadAfterSale(ctx, afterSaleNo)
 }
 
 // SubmitReturnTracking records the reverse logistics information for a
@@ -415,7 +492,7 @@ func (s *Service) SubmitReturnTracking(ctx context.Context, req *pb.SubmitReturn
 	if row.typ != typeReturnRefund {
 		return nil, apperr.Failed("only RETURN_REFUND requests have return logistics")
 	}
-	if row.status == statusReturning || row.status == statusReceived {
+	if row.status == statusReturning || row.status == statusReturnReceived {
 		return s.loadAfterSale(ctx, afterSaleNo)
 	}
 	if row.status != statusApproved {
@@ -438,8 +515,9 @@ func (s *Service) SubmitReturnTracking(ctx context.Context, req *pb.SubmitReturn
 	return s.loadAfterSale(ctx, afterSaleNo)
 }
 
-// ReceiveReturn marks the returned parcel as received and restocks sellable
-// units. The inventory restock key is the after-sale number, so retries are safe.
+// ReceiveReturn records that the parcel arrived and queues durable per-SKU
+// restock tasks. RETURN_RECEIVED does not mean stock was restored: refund
+// admission requires restock_state=DONE.
 func (s *Service) ReceiveReturn(ctx context.Context, req *pb.ReceiveReturnRequest) (*pb.AfterSale, error) {
 	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
 	if afterSaleNo == "" {
@@ -452,77 +530,90 @@ func (s *Service) ReceiveReturn(ctx context.Context, req *pb.ReceiveReturnReques
 	if condition != "SELLABLE" && condition != "DAMAGED" {
 		return nil, apperr.Invalid("condition must be SELLABLE or DAMAGED")
 	}
+	items, err := s.loadItems(ctx, afterSaleNo)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, apperr.Internal("begin receive return", err)
 	}
+	defer func() { _ = tx.Rollback() }()
 	row, err := lockAfterSale(ctx, tx, afterSaleNo)
 	if err != nil {
-		_ = tx.Rollback()
 		return nil, err
 	}
 	if row.typ != typeReturnRefund {
-		_ = tx.Rollback()
 		return nil, apperr.Failed("only RETURN_REFUND requests can be received")
 	}
-	if row.status == statusReceived {
-		_ = tx.Rollback()
-		if err := s.restockReturn(ctx, afterSaleNo, row.orderNo, condition); err != nil {
-			return nil, err
+	if row.status == statusReturnReceived {
+		// An explicit Receive retry re-arms permanently failed restock tasks;
+		// successful/DONE tasks are never replayed.
+		if row.restockState == restockFailed {
+			if _, err := tx.ExecContext(ctx, `UPDATE after_sale_restock_tasks
+				SET status = ?, attempts = 0, last_error = '', lease_owner = '', lease_until = NULL, updated_at = NOW(3)
+				WHERE after_sale_no = ? AND status = ?`, taskPending, afterSaleNo, taskFailed); err != nil {
+				return nil, apperr.Internal("re-arm restock tasks", err)
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE after_sales SET restock_state = ?, version = version + 1 WHERE id = ?`,
+				restockPending, row.id); err != nil {
+				return nil, apperr.Internal("re-arm restock state", err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, apperr.Internal("commit idempotent receive", err)
 		}
 		return s.loadAfterSale(ctx, afterSaleNo)
 	}
 	if row.status != statusReturning {
-		_ = tx.Rollback()
 		return nil, apperr.Failed(fmt.Sprintf("after sale cannot be received in status %s", row.status))
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE after_sales SET status = ?, version = version + 1 WHERE id = ?", statusReceived, row.id); err != nil {
-		_ = tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE after_sales
+		SET status = ?, restock_state = ?, version = version + 1 WHERE id = ?`,
+		statusReturnReceived, restockPending, row.id); err != nil {
 		return nil, apperr.Internal("mark return received", err)
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE after_sale_items SET received_quantity = quantity, condition_code = ? WHERE after_sale_id = ?", condition, row.id); err != nil {
-		_ = tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE after_sale_items
+		SET received_quantity = quantity, condition_code = ? WHERE after_sale_id = ?`, condition, row.id); err != nil {
 		return nil, apperr.Internal("mark items received", err)
-	}
-	if err := appendLog(ctx, tx, row.id, "RECEIVE_RETURN", row.status, statusReceived, condition); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	payload, _ := json.Marshal(afterSaleEvent{AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID, Type: row.typ, Status: statusReceived, AmountCent: row.amountCent, Reason: row.reason})
-	if err := outbox.Append(ctx, tx, outbox.Event{Topic: "shop.aftersale.received.v1", AggregateType: aggregateAfterSale, AggregateID: afterSaleNo, EventType: "aftersale.received", Payload: payload}); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, apperr.Internal("commit receive return", err)
-	}
-	if err := s.restockReturn(ctx, afterSaleNo, row.orderNo, condition); err != nil {
-		return nil, err
-	}
-	return s.loadAfterSale(ctx, afterSaleNo)
-}
-
-func (s *Service) restockReturn(ctx context.Context, afterSaleNo, orderNo, condition string) error {
-	if s.inventory == nil {
-		return apperr.Unavailable("inventory client is not configured", nil)
-	}
-	items, err := s.loadItems(ctx, afterSaleNo)
-	if err != nil {
-		return err
 	}
 	for _, item := range items {
 		if item.GetQuantity() <= 0 {
 			continue
 		}
-		if _, err := s.inventory.Restock(ctx, &pb.RestockRequest{
-			OrderNo: orderNo, SkuId: item.GetSkuId(), WarehouseId: 1,
-			Quantity: int64(item.GetQuantity()), Condition: condition,
-			Reason: "after-sale " + afterSaleNo, RestockNo: afterSaleNo,
-		}); err != nil {
-			return apperr.Unavailable("restock returned goods", err)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_restock_tasks
+			(after_sale_no, sku_id, quantity, `+"`condition`"+`, status, attempts, last_error, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, 0, '', NOW(3), NOW(3))
+			ON DUPLICATE KEY UPDATE after_sale_no = after_sale_no`,
+			afterSaleNo, item.GetSkuId(), item.GetQuantity(), condition, taskPending); err != nil {
+			return nil, apperr.Internal("queue restock task", err)
 		}
 	}
-	return nil
+	if err := appendLog(ctx, tx, row.id, "RECEIVE_RETURN", row.status, statusReturnReceived, condition); err != nil {
+		return nil, err
+	}
+	payload, _ := json.Marshal(afterSaleEvent{
+		AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
+		Type: row.typ, Status: statusReturnReceived, AmountCent: row.amountCent,
+		EffectiveAmountCent: row.effectiveAmountCent, AmountState: row.amountState,
+		RestockState: restockPending, Reason: row.reason,
+	})
+	if err := outbox.Append(ctx, tx, outbox.Event{
+		Topic: topicAfterSaleReceived, AggregateType: aggregateAfterSale,
+		AggregateID: afterSaleNo, EventType: "aftersale.received", Payload: payload,
+	}); err != nil {
+		return nil, err
+	}
+	if err := outbox.Append(ctx, tx, outbox.Event{
+		Topic: topicAfterSaleRestockPending, AggregateType: aggregateAfterSale,
+		AggregateID: afterSaleNo, EventType: "aftersale.restock_pending", Payload: payload,
+	}); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, apperr.Internal("commit receive return", err)
+	}
+	return s.loadAfterSale(ctx, afterSaleNo)
 }
 
 // ListAfterSales returns the user/admin after-sale list.
@@ -579,23 +670,27 @@ func (s *Service) ListAfterSales(ctx context.Context, req *pb.ListAfterSalesRequ
 
 // afterSaleRow is the mutable state needed by the state machine.
 type afterSaleRow struct {
-	id             int64
-	orderNo        string
-	userID         int64
-	typ            string
-	status         string
-	amountCent     int64
-	reason         string
-	returnCarrier  string
-	returnTracking string
-	refundNo       string
-	refundedCent   int64
+	id                  int64
+	orderNo             string
+	userID              int64
+	typ                 string
+	status              string
+	amountCent          int64
+	effectiveAmountCent int64
+	amountState         string
+	restockState        string
+	version             int64
+	reason              string
+	returnCarrier       string
+	returnTracking      string
+	refundNo            string
+	refundedCent        int64
 }
 
 func lockAfterSale(ctx context.Context, tx *sql.Tx, afterSaleNo string) (*afterSaleRow, error) {
 	var row afterSaleRow
-	err := tx.QueryRowContext(ctx, "SELECT id, order_no, user_id, `type`, status, amount_cent, reason, return_carrier, return_tracking_no, refund_no, refunded_cent FROM after_sales WHERE after_sale_no = ? FOR UPDATE", afterSaleNo).
-		Scan(&row.id, &row.orderNo, &row.userID, &row.typ, &row.status, &row.amountCent, &row.reason, &row.returnCarrier, &row.returnTracking, &row.refundNo, &row.refundedCent)
+	err := tx.QueryRowContext(ctx, "SELECT id, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, version, reason, return_carrier, return_tracking_no, refund_no, refunded_cent FROM after_sales WHERE after_sale_no = ? FOR UPDATE", afterSaleNo).
+		Scan(&row.id, &row.orderNo, &row.userID, &row.typ, &row.status, &row.amountCent, &row.effectiveAmountCent, &row.amountState, &row.restockState, &row.version, &row.reason, &row.returnCarrier, &row.returnTracking, &row.refundNo, &row.refundedCent)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("after sale not found")
 	}
@@ -610,8 +705,8 @@ func (s *Service) loadAfterSale(ctx context.Context, afterSaleNo string) (*pb.Af
 		as        pb.AfterSale
 		createdAt time.Time
 	)
-	err := s.db.QueryRowContext(ctx, "SELECT after_sale_no, order_no, user_id, `type`, status, amount_cent, reason, return_carrier, return_tracking_no, refund_no, refunded_cent, created_at FROM after_sales WHERE after_sale_no = ?", afterSaleNo).
-		Scan(&as.AfterSaleNo, &as.OrderNo, &as.UserId, &as.Type, &as.Status, &as.AmountCent, &as.Reason, &as.ReturnCarrier, &as.ReturnTrackingNo, &as.RefundNo, &as.RefundedCent, &createdAt)
+	err := s.db.QueryRowContext(ctx, "SELECT after_sale_no, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, reason, return_carrier, return_tracking_no, refund_no, refunded_cent, created_at FROM after_sales WHERE after_sale_no = ?", afterSaleNo).
+		Scan(&as.AfterSaleNo, &as.OrderNo, &as.UserId, &as.Type, &as.Status, &as.AmountCent, &as.EffectiveAmountCent, &as.AmountState, &as.RestockState, &as.Reason, &as.ReturnCarrier, &as.ReturnTrackingNo, &as.RefundNo, &as.RefundedCent, &createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("after sale not found")
 	}
@@ -669,14 +764,17 @@ type afterSaleItem struct {
 
 // afterSaleEvent is the outbox payload for shop.aftersale.* events.
 type afterSaleEvent struct {
-	AfterSaleNo  string `json:"after_sale_no"`
-	OrderNo      string `json:"order_no"`
-	UserID       int64  `json:"user_id"`
-	Type         string `json:"type"`
-	Status       string `json:"status"`
-	AmountCent   int64  `json:"amount_cent"`
-	Reason       string `json:"reason"`
-	RefundIntent bool   `json:"refund_intent,omitempty"`
+	AfterSaleNo         string `json:"after_sale_no"`
+	OrderNo             string `json:"order_no"`
+	UserID              int64  `json:"user_id"`
+	Type                string `json:"type"`
+	Status              string `json:"status"`
+	AmountCent          int64  `json:"amount_cent"`
+	EffectiveAmountCent int64  `json:"effective_amount_cent,omitempty"`
+	AmountState         string `json:"amount_state,omitempty"`
+	RestockState        string `json:"restock_state,omitempty"`
+	Reason              string `json:"reason"`
+	RefundIntent        bool   `json:"refund_intent,omitempty"`
 }
 
 // validateCreate validates and normalises a CreateAfterSale request.

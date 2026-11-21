@@ -87,6 +87,14 @@ downgrades a `SUCCEEDED`/`REFUNDED` one.
 - If the TCC/MarkPaid step fails the callback returns an error so the channel
   retries; the callback row, intent and refund keys are idempotent.
 
+### `GetPaymentByOrder(GetPaymentByOrderRequest) returns (Intent)`
+
+Read-only settlement facts used by after-sales. Returns the latest intent in
+`SUCCEEDED`, `PARTIALLY_REFUNDED` or `REFUNDED` for an order (including
+`captured_cent`/`refunded_cent`). Pending/failed/missing orders return
+`NOT_FOUND`; the after-sales amount ledger never uses the asynchronous order
+projection as its cap.
+
 ### `Refund(RefundRequest) returns (Empty)`
 
 - Validates `payment_no != ""`, `amount_cent > 0`, and that the intent is

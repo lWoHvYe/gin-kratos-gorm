@@ -330,11 +330,14 @@ services:
       MYSQL_DSN: "root:root@tcp(mysql:3306)/mall_fulfillment?parseTime=true&loc=Local&charset=utf8mb4"
       GRPC_ADDR: ":9008"
       HTTP_ADDR: ":9108"
+      ORDER_ADDR: order:9006
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9108/healthz"]
     depends_on:
       <<: *deps-core
+      order:
+        condition: service_healthy
 
   aftersales:
     <<: *service-base

@@ -21,7 +21,7 @@ delivery confirmation.
 | RPC | Request | Behaviour |
 |---|---|---|
 | `CreateShipment` | `order_no, warehouse_id, carrier, tracking_no, items[]` | Creates a shipment in `CREATED`; idempotent per `order_no` |
-| `Ship` | `shipment_no` | `CREATED -> SHIPPED` |
+| `Ship` | `shipment_no` | `CREATED -> SHIPPED`; requires `Order.AuthorizeShipment` first |
 | `Receive` | `shipment_no` | `SHIPPED -> RECEIVED` |
 | `GetShipment` | `shipment_no` | Reads the shipment and its items |
 
@@ -32,7 +32,10 @@ Validation (returns `INVALID_ARGUMENT` via `apperr`):
 - `sku_id > 0`, `quantity > 0`;
 - duplicate `sku_id` lines are merged (quantities summed) before persisting.
 
-`Ship`/`Receive` on an unknown shipment return `NOT_FOUND`. Illegal transitions
+`Ship` first resolves the shipment's order and calls
+`Order.AuthorizeShipment(order_no, shipment_no)`; a denied/revoked permit returns
+`FAILED_PRECONDITION` and the shipment stays `CREATED`. `Receive` does not need
+a new permit. `Ship`/`Receive` on an unknown shipment return `NOT_FOUND`. Illegal transitions
 return `FAILED_PRECONDITION`.
 
 ## State machine

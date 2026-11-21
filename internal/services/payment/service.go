@@ -157,6 +157,24 @@ func (s *Service) GetIntent(ctx context.Context, req *pb.GetIntentRequest) (*pb.
 	return in.toPB(), nil
 }
 
+// GetPaymentByOrder exposes the settled payment facts to after-sales. The
+// after-sales amount ledger uses captured_cent, not the asynchronous order
+// refund projection.
+func (s *Service) GetPaymentByOrder(ctx context.Context, req *pb.GetPaymentByOrderRequest) (*pb.Intent, error) {
+	orderNo := strings.TrimSpace(req.GetOrderNo())
+	if orderNo == "" {
+		return nil, apperr.Invalid("order_no is required")
+	}
+	in, err := newRepo(s.db).intentByOrder(ctx, s.db, orderNo)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, apperr.NotFound("settled payment not found for order")
+	}
+	if err != nil {
+		return nil, apperr.Internal("get payment by order", err)
+	}
+	return in.toPB(), nil
+}
+
 // Callback applies a channel event to an intent. A (channel, event_id) pair is
 // processed at most once; replaying it is a successful no-op that still
 // reconciles the order, so a callback retried after a MarkPaid failure is able

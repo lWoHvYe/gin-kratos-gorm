@@ -46,8 +46,18 @@ func main() {
 	workers := runtime.NewWorkers()
 	defer workers.Stop()
 	workers.Go(func(ctx context.Context) { outbox.Relay(ctx, database, client, logger, time.Second) })
+	orderAddr := os.Getenv("ORDER_ADDR")
+	if orderAddr == "" {
+		orderAddr = "order:9006"
+	}
+	orderConn, err := grpcx.Dial(context.Background(), orderAddr)
+	if err != nil {
+		logger.Error("dial order", "error", err)
+		os.Exit(1)
+	}
+	defer orderConn.Close()
 	gs := grpcx.NewServer(cfg, logger)
-	svc := fulfillment.New(database, client, logger)
+	svc := fulfillment.New(database, client, logger, pb.NewOrderServiceClient(orderConn))
 	workers.Go(func(ctx context.Context) { fulfillment.RunOrderPaidConsumer(ctx, client, svc, logger) })
 	pb.RegisterFulfillmentServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger, client.Healthy))

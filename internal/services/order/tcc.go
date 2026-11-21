@@ -29,8 +29,11 @@ func (s *Service) TccTryMarkPaid(ctx context.Context, req *pb.TccPaymentRequest)
 	if record == nil {
 		return nil, apperr.NotFound("order not found")
 	}
+	if record.RefundState == refundStateRefunding || record.RefundState == refundStateFull {
+		return nil, apperr.Failed("order refund is in progress")
+	}
 	switch record.Status {
-	case statusPaid, statusRefunding:
+	case statusPaid:
 		return &pb.Empty{}, nil
 	case statusPendingPayment:
 		paid := req.GetPaidCent()
@@ -60,7 +63,10 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 	if record == nil {
 		return nil, apperr.NotFound("order not found")
 	}
-	if record.Status == statusPaid || record.Status == statusRefunding {
+	if record.RefundState == refundStateRefunding || record.RefundState == refundStateFull {
+		return nil, apperr.Failed("order refund is in progress")
+	}
+	if record.Status == statusPaid {
 		return &pb.Empty{}, nil
 	}
 	if record.Status != statusPendingPayment {
@@ -136,7 +142,7 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 	if record == nil {
 		return &pb.Empty{}, nil
 	} // nothing was created
-	if record.Status == statusRefunding || record.Status == statusCancelled {
+	if record.RefundState == refundStateRefunding || record.RefundState == refundStateFull || record.Status == statusCancelled {
 		return &pb.Empty{}, nil
 	}
 	from := record.Status
@@ -165,19 +171,41 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 		return &pb.Empty{}, nil
 	}
 	err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		affected, err := updateOrderStatus(ctx, tx, orderNo, from, statusRefunding, paid)
-		if err != nil {
-			return err
+		// Refund is orthogonal to the lifecycle. If the order was still pending
+		// when money was captured, record PAID (without an order.paid event so
+		// fulfillment does not auto-create a shipment) and REFUNDING; otherwise
+		// keep the fulfilled lifecycle and only change refund_state.
+		nextStatus := from
+		if from == statusPendingPayment && paid > 0 {
+			res, err := tx.ExecContext(ctx, `UPDATE orders
+				SET status = ?, paid_cent = ?, refund_state = ?, version = version + 1, updated_at = ?
+				WHERE order_no = ? AND status = ? AND refund_state <> ?`,
+				statusPaid, paid, refundStateRefunding, time.Now(), orderNo, statusPendingPayment, refundStateFull)
+			if err != nil {
+				return apperr.Internal("mark captured order paid for refund", err)
+			}
+			if n, _ := res.RowsAffected(); n == 0 {
+				return nil
+			}
+			nextStatus = statusPaid
+		} else {
+			res, err := tx.ExecContext(ctx, `UPDATE orders
+				SET refund_state = ?, version = version + 1, updated_at = ?
+				WHERE order_no = ? AND refund_state <> ?`,
+				refundStateRefunding, time.Now(), orderNo, refundStateFull)
+			if err != nil {
+				return apperr.Internal("mark order refunding", err)
+			}
+			if n, _ := res.RowsAffected(); n == 0 {
+				return nil
+			}
 		}
-		if affected == 0 {
-			return nil
-		}
-		if err := insertStatusLog(ctx, tx, orderNo, from, statusRefunding, "payment tcc cancelled", "system"); err != nil {
+		if err := insertStatusLog(ctx, tx, orderNo, from, nextStatus, "payment tcc cancelled", "system"); err != nil {
 			return err
 		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic: topicOrderRefundRequested, AggregateType: "order", AggregateID: orderNo, EventType: "order.refund_requested",
-			Payload: map[string]any{"order_no": orderNo, "payment_no": req.GetPaymentNo(), "reason": "payment confirm tcc cancelled", "status": statusRefunding, "paid_cent": paid, "created_at": time.Now().Unix()},
+			Payload: map[string]any{"order_no": orderNo, "payment_no": req.GetPaymentNo(), "reason": "payment confirm tcc cancelled", "refund_state": refundStateRefunding, "status": nextStatus, "paid_cent": paid, "created_at": time.Now().Unix()},
 		})
 	})
 	if err != nil {
@@ -198,8 +226,11 @@ func (s *Service) TccQueryMarkPaid(ctx context.Context, req *pb.TccPaymentReques
 	if record == nil {
 		return &pb.TccQueryReply{Prepared: false}, nil
 	}
+	if record.RefundState == refundStateRefunding {
+		return &pb.TccQueryReply{Prepared: true}, nil
+	}
 	switch record.Status {
-	case statusPendingPayment, statusPaid, statusRefunding:
+	case statusPendingPayment, statusPaid:
 		return &pb.TccQueryReply{Prepared: true}, nil
 	default:
 		return &pb.TccQueryReply{Prepared: false}, nil

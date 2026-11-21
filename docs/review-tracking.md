@@ -35,6 +35,13 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 | B (#1/#2/#37) | partial | `inventory_operations`/`inventory_operation_items` (0015), deterministic operation id + scope hash, per-item progress, savepoint per item, terminal events, replay, DTM single-branch path. MySQL/NATS tests cover middle-item failure/resume, permanent per-item failure, mixed cancel, all-or-nothing branch tx, retry budget, concurrent confirm/cancel, replay. Gap: live DTM smoke/rollout and an admin/API replay surface are not done. |
 | #3 catalog rebuild | done for version guard | `decideProjection` refuses a newer catalog projection and the SQL update is CAS-guarded; unit test covers equal/newer/stale/conflict. Missing-catalog/inventory rows are reported as counters, not a full reconciliation UI. |
 
+## 2026-11-21 external review: transaction refactor A
+
+| Item | Status | Evidence / remaining gap |
+|---|---|---|
+| A (#20/#21/#24/#36) | partial | Order lifecycle is separate from `refund_state`/projection; shipping permit CAS + refund admission; server-owned `available_actions`; after-sales lifetime ledger from Payment captured, immutable effective-amount versions, `RETURN_RECEIVED`, durable restock/refund tasks, no status scanner; Payment `GetPaymentByOrder`; Fulfillment `Ship` requires the permit. MySQL tests cover permit/refund race, projection/lifecycle separation, TCC cancel, concurrent amount admission, restock failure/retry, refund retry/idempotency. Gap: migrations were applied to scratch data but not rolled out; no live DTM smoke or browser E2E. |
+| #3 catalog rebuild | covered by B | Version CAS + stale/conflict reporting from the previous slice. |
+
 ## P3
 
 - Version increments: done for catalog category/brand/SKU, identity address,
@@ -79,6 +86,12 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 - Inventory B: `go test -race ./internal/services/inventory` with MySQL/NATS
   passed; `make test-integration` passed including the new operation tests;
   migration `0015` applied cleanly to a scratch MySQL 8.4 database.
+- Transaction A: `go test -race ./internal/services/order
+  ./internal/services/aftersales ./internal/services/payment
+  ./internal/services/fulfillment` passed with MySQL; `make test-integration`
+  includes the new order/payment/after-sales/fulfillment tests. Migrations
+  `order/0004` and `aftersales/0010` were applied to scratch MySQL 8.4 data;
+  the legacy status/amount/restock backfills produced the expected rows.
 
 ## Explicit unverified / drift
 
@@ -92,3 +105,6 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 - Inventory B has no live DTM barrier smoke (`make dtm-smoke`) or cluster
   rollout; `ReplayInventoryOperation` is an internal method without an admin
   RPC/BFF surface yet.
+- Transaction A has no cluster rollout, live DTM smoke, or browser E2E; the
+  new migrations were validated on scratch data, not against the deployed
+  `mall_order`/`mall_aftersales` databases.

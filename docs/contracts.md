@@ -143,6 +143,12 @@ Events for Phase 1:
 - `shop.shipment.created.v1`
 - `shop.shipment.shipped.v1`
 - `shop.shipment.delivered.v1`
+- `shop.aftersale.returning.v1`
+- `shop.aftersale.received.v1`
+- `shop.aftersale.restock_pending.v1`
+- `shop.aftersale.restocked.v1`
+- `shop.aftersale.restock_failed.v1`
+- `shop.aftersale.refund_requested.v1`
 - `shop.aftersale.completed.v1`
 
 Consumers:
@@ -152,6 +158,30 @@ Consumers:
   `SHIPPED` / `COMPLETED`.
 - payment consumes `shop.order.refund_requested.v1`.
 - fulfillment consumes `shop.order.paid.v1` to create a shipment.
+
+## Settlement model (transaction refactor A)
+
+- `orders.status` is the fulfilment lifecycle only:
+  `PENDING_PAYMENT -> PAID -> ALLOCATED -> SHIPPED -> COMPLETED`, plus
+  `CANCELLED/CLOSED`. Refund progress is `refund_state`
+  (`NONE/PARTIAL/FULL/REFUNDING`) plus the `refund_status/refunded_cent`
+  projection; neither is written into the lifecycle.
+- `shop.payment.refunded.v1` updates the projection only. Eligibility and caps
+  never read the projection.
+- Shipping is a permit owned by Order (`order_shipping_permits`):
+  `Fulfillment.Ship` calls `Order.AuthorizeShipment`; a refund request calls
+  `Order.BlockShipmentForRefund` on the same permit row. A permit already
+  `CONSUMED` still allows refund-only after shipment.
+- After-sales uses a per-order lifetime amount ledger
+  (`after_sale_amount_ledger`) with `captured_cent` from Payment.
+  `effective_amount_cent` is versioned in `after_sale_amount_versions`.
+  `REFUNDED` stays `CONSUMED`; only rejected/cancelled requests release.
+- `RETURN_RECEIVED` means the parcel arrived; `restock_state` gates refund
+  admission (`DONE` required for `RETURN_REFUND`). Restock and refund retries
+  are durable task rows (`after_sale_restock_tasks`,
+  `after_sale_refund_tasks`), not status scanners.
+- `Payment.GetPaymentByOrder` is the read-only settlement fact source for
+  after-sales.
 
 ## API / errors
 

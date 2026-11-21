@@ -381,6 +381,9 @@ func (s *Service) CancelOrder(ctx context.Context, req *pb.CancelOrderRequest) (
 	if !req.GetAdmin() && (req.GetUserId() <= 0 || req.GetUserId() != record.UserID) {
 		return nil, apperr.Forbidden("order belongs to another user")
 	}
+	if record.RefundState == refundStateRefunding || record.RefundState == refundStateFull {
+		return nil, apperr.Failed("order refund is in progress")
+	}
 	switch record.Status {
 	case statusCancelled:
 		return s.replyFor(ctx, s.db, record)
@@ -544,6 +547,9 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	}
 	if record == nil {
 		return nil, apperr.NotFound("order not found")
+	}
+	if record.RefundState == refundStateRefunding || record.RefundState == refundStateFull {
+		return nil, apperr.Failed("order refund is in progress")
 	}
 	switch record.Status {
 	case statusPaid:

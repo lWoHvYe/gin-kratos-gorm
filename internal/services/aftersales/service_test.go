@@ -153,21 +153,24 @@ func TestRefundOutcome(t *testing.T) {
 
 func TestRefundableStatus(t *testing.T) {
 	cases := []struct {
-		name    string
-		typ     string
-		status  string
-		wantErr bool
+		name         string
+		typ          string
+		status       string
+		restockState string
+		wantErr      bool
 	}{
-		{"refund only approved", typeRefundOnly, statusApproved, false},
-		{"refund only requested", typeRefundOnly, statusRequested, true},
-		{"return received", typeReturnRefund, statusReceived, false},
-		{"return approved", typeReturnRefund, statusApproved, true},
-		{"return returning", typeReturnRefund, statusReturning, true},
-		{"retry refunding", typeReturnRefund, statusRefunding, false},
+		{"refund only approved", typeRefundOnly, statusApproved, restockNone, false},
+		{"refund only requested", typeRefundOnly, statusRequested, restockNone, true},
+		{"return received but not restocked", typeReturnRefund, statusReturnReceived, restockPending, true},
+		{"return received and restocked", typeReturnRefund, statusReturnReceived, restockDone, false},
+		{"return approved", typeReturnRefund, statusApproved, restockNone, true},
+		{"return returning", typeReturnRefund, statusReturning, restockNone, true},
+		{"retry refunding after restock", typeReturnRefund, statusRefunding, restockDone, false},
+		{"retry refunding before restock", typeReturnRefund, statusRefunding, restockPending, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := refundableStatus(&afterSaleRow{typ: tc.typ, status: tc.status})
+			err := refundableStatus(&afterSaleRow{typ: tc.typ, status: tc.status, restockState: tc.restockState})
 			if tc.wantErr != (err != nil) {
 				t.Fatalf("wantErr=%v got %v", tc.wantErr, err)
 			}

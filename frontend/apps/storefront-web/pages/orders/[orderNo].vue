@@ -1,6 +1,6 @@
 <script setup lang="ts">
 interface Item { sku_id: number; name: string; price_cent: number; quantity: number; discount_cent: number }
-interface Order { order_no: string; status: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; freight_cent: number; pay_cent: number; paid_cent: number; refunded_cent: number; refund_status: string; receiver_name: string; receiver_phone: string; receiver_address: string; items: Item[]; created_at_unix: number; expire_at_unix: number }
+interface Order { order_no: string; status: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; freight_cent: number; pay_cent: number; paid_cent: number; refunded_cent: number; refund_status: string; refund_state: string; available_actions: string[]; shipment_status: string; receiver_name: string; receiver_phone: string; receiver_address: string; items: Item[]; created_at_unix: number; expire_at_unix: number }
 const route = useRoute()
 const orderNo = String(route.params.orderNo)
 const { request, token } = useApi()
@@ -33,14 +33,15 @@ async function act(path: string, body: Record<string, unknown> = {}): Promise<vo
         <div><span>运费</span><span>¥{{ ((order.freight_cent ?? 0) / 100).toFixed(2) }}</span></div>
         <div class="grand"><span>应付</span><span>¥{{ ((order.pay_cent ?? 0) / 100).toFixed(2) }}</span></div>
         <div v-if="order.refunded_cent"><span>已退款</span><span>¥{{ ((order.refunded_cent ?? 0) / 100).toFixed(2) }}</span></div>
+        <div v-if="order.refund_state && order.refund_state !== 'NONE'"><span>退款进度</span><span>{{ order.refund_state }}</span></div>
       </div>
       <h3>收货信息</h3>
       <p>{{ order.receiver_name }} {{ order.receiver_phone }}</p>
       <p class="muted">{{ order.receiver_address }}</p>
       <div class="actions">
-        <van-button v-if="order.status === 'PENDING_PAYMENT'" type="danger" plain @click="act('/cancel', { reason: 'user cancelled' })">取消订单</van-button>
-        <van-button v-if="order.status === 'SHIPPED'" type="primary" @click="act('/receive')">确认收货</van-button>
-        <NuxtLink v-if="['PAID','ALLOCATED','SHIPPED','COMPLETED','PARTIALLY_REFUNDED'].includes(order.status)" :to="`/after-sales/apply?order=${order.order_no}`"><van-button type="warning" plain>申请售后</van-button></NuxtLink>
+        <van-button v-if="order.available_actions?.includes('cancel')" type="danger" plain @click="act('/cancel', { reason: 'user cancelled' })">取消订单</van-button>
+        <van-button v-if="order.available_actions?.includes('receive')" type="primary" @click="act('/receive')">确认收货</van-button>
+        <NuxtLink v-if="order.available_actions?.includes('apply_after_sale')" :to="`/after-sales/apply?order=${order.order_no}`"><van-button type="warning" plain>申请售后</van-button></NuxtLink>
       </div>
       <p v-if="message" class="muted">{{ message }}</p>
     </div>

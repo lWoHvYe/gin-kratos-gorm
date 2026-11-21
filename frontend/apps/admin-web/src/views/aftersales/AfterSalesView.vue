@@ -33,7 +33,7 @@ const refund = useMutation({
   <div class="page">
     <div class="page-header"><div><h1 class="page-title">售后</h1><div class="page-subtitle">审核、退货收货、退款；RETURN_REFUND 必须先收货</div></div></div>
     <div class="panel">
-      <div class="toolbar"><el-select v-model="status" placeholder="全部状态" clearable style="width:160px" @change="page = 1"><el-option v-for="s in ['REQUESTED','APPROVED','REJECTED','RETURNING','RECEIVED','REFUNDING','REFUNDED']" :key="s" :label="s" :value="s" /></el-select></div>
+      <div class="toolbar"><el-select v-model="status" placeholder="全部状态" clearable style="width:160px" @change="page = 1"><el-option v-for="s in ['REQUESTED','APPROVED','REJECTED','RETURNING','RETURN_RECEIVED','REFUNDING','REFUNDED']" :key="s" :label="s" :value="s" /></el-select></div>
       <el-table :data="query.data.value?.after_sales ?? []" :loading="query.isLoading.value" empty-text="暂无售后">
         <el-table-column prop="after_sale_no" label="售后单号" min-width="220" class="mono" />
         <el-table-column prop="order_no" label="订单号" min-width="220"><template #default="{ row }"><router-link :to="`/orders/${row.order_no}`" class="mono">{{ row.order_no }}</router-link></template></el-table-column>
@@ -48,7 +48,7 @@ const refund = useMutation({
               <el-button link type="success" @click="receive.mutate({ no: row.after_sale_no, condition: 'SELLABLE' })">收货（可售）</el-button>
               <el-button link type="warning" @click="receive.mutate({ no: row.after_sale_no, condition: 'DAMAGED' })">收货（残次）</el-button>
             </template>
-            <el-button v-if="row.status === 'RECEIVED' || (row.type === 'REFUND_ONLY' && row.status === 'APPROVED')" link type="danger" @click="refund.mutate(row.after_sale_no)">退款</el-button>
+            <el-button v-if="(row.type === 'REFUND_ONLY' && row.status === 'APPROVED') || (row.type === 'RETURN_REFUND' && row.status === 'RETURN_RECEIVED' && row.restock_state === 'DONE')" link type="danger" @click="refund.mutate(row.after_sale_no)">退款</el-button>
           </template>
         </el-table-column>
       </el-table>

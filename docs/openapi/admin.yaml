@@ -93,6 +93,11 @@ components:
         paid_cent: { type: integer, format: int64 }
         refunded_cent: { type: integer, format: int64 }
         refund_status: { type: string }
+        refund_state: { type: string }
+        available_actions:
+          type: array
+          items: { type: string }
+        shipment_status: { type: string }
         receiver_name: { type: string }
         receiver_phone: { type: string }
         receiver_address: { type: string }

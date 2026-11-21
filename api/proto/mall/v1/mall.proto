@@ -391,6 +391,12 @@ service OrderService {
   rpc TccConfirmMarkPaid (TccPaymentRequest) returns (Empty);
   rpc TccCancelMarkPaid (TccPaymentRequest) returns (Empty);
   rpc TccQueryMarkPaid (TccPaymentRequest) returns (TccQueryReply);
+  // AuthorizeShipment is the only shipping permit. Fulfillment must call it
+  // before Ship; a refund request revokes an unused permit.
+  rpc AuthorizeShipment (ShipmentPermitRequest) returns (Empty);
+  // BlockShipmentForRefund records refund admission on the same permit row. A
+  // permit already CONSUMED still allows refund-only after shipment.
+  rpc BlockShipmentForRefund (ShipmentPermitRequest) returns (Empty);
 }
 message TccPaymentRequest {
   string order_no = 1;
@@ -429,6 +435,13 @@ message Order {
   string refund_status = 17;
   int64 promotion_discount_cent = 18;
   string applied_promotions_json = 19;
+  // refund_state is NONE/PARTIAL/FULL/REFUNDING; refund_status remains a
+  // payment projection. Neither is written into the lifecycle status.
+  string refund_state = 20;
+  // available_actions is the server-owned action list for BFF/frontend.
+  repeated string available_actions = 21;
+  // shipment_status is derived from the lifecycle (CREATED/SHIPPED/RECEIVED).
+  string shipment_status = 22;
 }
 message CreateOrderRequest {
   int64 user_id = 1;
@@ -457,6 +470,12 @@ message CreateOrderInnerRequest {
   string applied_promotions_json = 15;
 }
 message CancelOrderRequest { string order_no = 1; int64 user_id = 2; string reason = 3; bool admin = 4; }
+message ShipmentPermitRequest {
+  string order_no = 1;
+  string shipment_no = 2;
+  string after_sale_no = 3;
+}
+
 message CancelOrderInnerRequest { string order_no = 1; string reason = 2; }
 message MarkPaidRequest { string order_no = 1; string payment_no = 2; int64 paid_cent = 3; }
 message GetOrderRequest { string order_no = 1; int64 user_id = 2; bool admin = 3; }
@@ -487,6 +506,10 @@ message OrderStats {
 service PaymentService {
   rpc CreateIntent (CreateIntentRequest) returns (Intent);
   rpc GetIntent (GetIntentRequest) returns (Intent);
+  // Read-only settlement facts for after-sales amount admission. Returns the
+  // captured intent for an order; only captured/partially-refunded/refunded
+  // intents are eligible.
+  rpc GetPaymentByOrder (GetPaymentByOrderRequest) returns (Intent);
   rpc Callback (CallbackRequest) returns (CallbackReply);
   rpc Refund (RefundRequest) returns (Empty);
   rpc RefundOrder (RefundOrderRequest) returns (RefundOrderReply);
@@ -512,6 +535,7 @@ message CreateIntentRequest {
   string channel = 4;
 }
 message GetIntentRequest { string payment_no = 1; }
+message GetPaymentByOrderRequest { string order_no = 1; }
 message CallbackRequest {
   string payment_no = 1;
   string channel = 2;
@@ -741,6 +765,14 @@ message AfterSale {
   string refund_no = 11;
   int64 refunded_cent = 12;
   repeated AfterSaleItem items = 13;
+  // effective_amount_cent is the approved amount; amount_cent stays the
+  // requested amount. Every change is versioned in after_sale_amount_versions.
+  int64 effective_amount_cent = 14;
+  // ACTIVE/CONSUMED/RELEASED. REFUNDED stays CONSUMED so the lifetime cap is
+  // never released by a completed refund.
+  string amount_state = 15;
+  // NONE/PENDING/DONE/FAILED_PERMANENT. RETURN_REFUND refunding requires DONE.
+  string restock_state = 16;
 }
 message AfterSaleList { repeated AfterSale after_sales = 1; int64 total = 2; }
 

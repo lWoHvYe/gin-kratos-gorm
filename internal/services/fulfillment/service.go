@@ -41,13 +41,14 @@ const aggregateShipment = "shipment"
 
 type Service struct {
 	pb.UnimplementedFulfillmentServiceServer
-	db  *sql.DB
-	mq  *mq.Client
-	log *slog.Logger
+	db     *sql.DB
+	mq     *mq.Client
+	log    *slog.Logger
+	orders pb.OrderServiceClient
 }
 
-func New(db *sql.DB, client *mq.Client, logger *slog.Logger) *Service {
-	return &Service{db: db, mq: client, log: logger}
+func New(db *sql.DB, client *mq.Client, logger *slog.Logger, orders pb.OrderServiceClient) *Service {
+	return &Service{db: db, mq: client, log: logger, orders: orders}
 }
 
 // CreateShipment registers a parcel for an order. It is idempotent by order_no:
@@ -147,7 +148,40 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 // shop.shipment.shipped.v1. Repeating the call on an already shipped shipment is
 // a no-op that returns the current aggregate.
 func (s *Service) Ship(ctx context.Context, req *pb.ShipRequest) (*pb.Shipment, error) {
-	return s.advance(ctx, strings.TrimSpace(req.GetShipmentNo()), topicShipmentShipped, "shipment.shipped", shipOutcome)
+	shipmentNo := strings.TrimSpace(req.GetShipmentNo())
+	if shipmentNo == "" {
+		return nil, apperr.Invalid("shipment_no is required")
+	}
+	orderNo, shipmentStatus, err := s.shipmentOrder(ctx, shipmentNo)
+	if err != nil {
+		return nil, err
+	}
+	// Legacy/already-shipped parcels are idempotent: do not require a new
+	// permit for a shipment that already left CREATED.
+	if shipmentStatus != statusCreated {
+		return s.advance(ctx, shipmentNo, topicShipmentShipped, "shipment.shipped", shipOutcome)
+	}
+	if s.orders == nil {
+		return nil, apperr.Unavailable("order client is not configured for shipping permits", nil)
+	}
+	if _, err := s.orders.AuthorizeShipment(ctx, &pb.ShipmentPermitRequest{
+		OrderNo: orderNo, ShipmentNo: shipmentNo,
+	}); err != nil {
+		return nil, apperr.Failed("shipping permit denied: " + err.Error())
+	}
+	return s.advance(ctx, shipmentNo, topicShipmentShipped, "shipment.shipped", shipOutcome)
+}
+
+func (s *Service) shipmentOrder(ctx context.Context, shipmentNo string) (string, string, error) {
+	var orderNo, status string
+	err := s.db.QueryRowContext(ctx, `SELECT order_no, status FROM shipments WHERE shipment_no = ?`, shipmentNo).Scan(&orderNo, &status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", apperr.NotFound("shipment not found")
+	}
+	if err != nil {
+		return "", "", apperr.Internal("load shipment order", err)
+	}
+	return orderNo, status, nil
 }
 
 // Receive moves a shipment from SHIPPED to RECEIVED and emits

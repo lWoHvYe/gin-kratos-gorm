@@ -2161,6 +2161,9 @@ export interface components {
             /** Format: int64 */
             refunded_cent?: number;
             refund_status?: string;
+            refund_state?: string;
+            available_actions?: string[];
+            shipment_status?: string;
             receiver_name?: string;
             receiver_phone?: string;
             receiver_address?: string;
@@ -2194,6 +2197,10 @@ export interface components {
             refund_no?: string;
             /** Format: int64 */
             refunded_cent?: number;
+            /** Format: int64 */
+            effective_amount_cent?: number;
+            amount_state?: string;
+            restock_state?: string;
             /** Format: int64 */
             created_at_unix?: number;
         };

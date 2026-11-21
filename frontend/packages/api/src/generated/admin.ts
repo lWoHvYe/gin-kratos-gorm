@@ -3038,6 +3038,9 @@ export interface components {
             /** Format: int64 */
             refunded_cent?: number;
             refund_status?: string;
+            refund_state?: string;
+            available_actions?: string[];
+            shipment_status?: string;
             receiver_name?: string;
             receiver_phone?: string;
             receiver_address?: string;

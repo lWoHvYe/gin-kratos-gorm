@@ -76,9 +76,6 @@ func (s *Service) applyShipmentStatus(ctx context.Context, orderNo, target strin
 		if record == nil {
 			return nil
 		}
-		if record.Status == statusPartiallyRefunded || record.Status == statusRefunded {
-			return nil
-		}
 		if record.Status == target || rankStatus(record.Status) > rankStatus(target) {
 			return nil
 		}

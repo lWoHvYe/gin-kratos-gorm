@@ -1,6 +1,6 @@
 <script setup lang="ts">
 interface Item { sku_id: number; quantity: number }
-interface AfterSale { after_sale_no: string; order_no: string; type: string; status: string; amount_cent: number; reason: string; return_carrier: string; return_tracking_no: string; refund_no: string; refunded_cent: number; items: Item[]; created_at_unix: number }
+interface AfterSale { after_sale_no: string; order_no: string; type: string; status: string; amount_cent: number; effective_amount_cent: number; amount_state: string; restock_state: string; reason: string; return_carrier: string; return_tracking_no: string; refund_no: string; refunded_cent: number; items: Item[]; created_at_unix: number }
 const route = useRoute()
 const no = String(route.params.no)
 const { request, token } = useApi()
@@ -30,7 +30,9 @@ async function submitTracking(): Promise<void> {
       <div class="row"><van-tag type="primary">{{ afterSale.type }}</van-tag><van-tag type="warning">{{ afterSale.status }}</van-tag></div>
       <p class="muted">订单 {{ afterSale.order_no }}</p>
       <p>原因：{{ afterSale.reason }}</p>
-      <p>退款金额：<span class="price">¥{{ (afterSale.amount_cent / 100).toFixed(2) }}</span></p>
+      <p>申请金额：<span class="price">¥{{ (afterSale.amount_cent / 100).toFixed(2) }}</span></p>
+      <p v-if="afterSale.effective_amount_cent && afterSale.effective_amount_cent !== afterSale.amount_cent">批准金额：¥{{ (afterSale.effective_amount_cent / 100).toFixed(2) }}</p>
+      <p v-if="afterSale.restock_state && afterSale.restock_state !== 'NONE'" class="muted">回库进度：{{ afterSale.restock_state }}</p>
       <p v-if="afterSale.refunded_cent">已退款：¥{{ (afterSale.refunded_cent / 100).toFixed(2) }}</p>
       <p v-if="afterSale.refund_no" class="muted">退款单号：{{ afterSale.refund_no }}</p>
       <div v-if="afterSale.status === 'RETURNING'">

@@ -294,7 +294,7 @@ authz:
       sources: [gateway, admin, order, payment, dtm, ai]
       paths: ["/mall.v1.PricingService/*", "/mall.v1.PromotionService/*"]
     - name: order
-      sources: [gateway, admin, payment, aftersales, dtm, seckill, ai]
+      sources: [gateway, admin, payment, aftersales, fulfillment, dtm, seckill, ai]
       paths: ["/mall.v1.OrderService/*"]
     - name: payment
       sources: [gateway, admin, aftersales, seckill]

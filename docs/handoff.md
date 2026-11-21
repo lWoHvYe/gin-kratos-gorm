@@ -18,7 +18,7 @@ Repository:
 Latest feature commit at handoff:
 
 ```text
-7aa1104 feat(inventory): whole-order confirm/cancel operation protocol
+ee7a204 feat(settlement): separate order lifecycle from refund and shipping state
 ```
 
 This handoff file itself is committed immediately after that feature commit. See
@@ -76,6 +76,27 @@ git push --force origin main
 - `cmd/catalog-stock-rebuild` now refuses to overwrite a newer catalog
   projection (`stock_version` CAS) and reports stale/conflict/missing rows.
 
+### Transaction refactor A (order/after-sales/payment/fulfillment)
+
+- `orders.status` is lifecycle-only; `refund_state` and the
+  `refund_status/refunded_cent` projection are orthogonal. The payment refund
+  consumer no longer writes `PARTIALLY_REFUNDED/REFUNDED` into `status`.
+- `order_shipping_permits` + `AuthorizeShipment`/`BlockShipmentForRefund` make
+  Order the shipping/refund race arbiter; Fulfillment `Ship` must authorize
+  first. A permit already `CONSUMED` still allows refund-only after shipment
+  (human decision), while an un-used permit is revoked before refund.
+- `pb.Order` exposes `refund_state`, `shipment_status` and server-owned
+  `available_actions`; storefront/admin actions use that list.
+- After-sales has a per-order lifetime `after_sale_amount_ledger` using Payment
+  `captured_cent` (order snapshot only for legacy), immutable
+  `after_sale_amount_versions`, `RETURN_RECEIVED` semantics, per-SKU
+  `after_sale_restock_tasks`, and durable `after_sale_refund_tasks`.
+  `RETURN_REFUND` cannot enter `REFUNDING` until every restock task is `DONE`;
+  no status scanner remains (old `RunRefundRecovery` deleted).
+- `Payment.GetPaymentByOrder` is the read-only settlement fact source for
+  after-sales. Migrations: orders `0004`, after-sales `0010`; both backfills
+  were exercised on scratch MySQL data.
+
 ### AI
 
 - ADK tool-aware streaming is working: cumulative DeepSeek chunks are
@@ -109,28 +130,26 @@ git push --force origin main
 
 ## Remaining work, in priority order
 
-1. **Transaction refactor A** — order/after-sales/payment/fulfillment state
-   ownership and refund/restock protocol. B deliberately preceded it because
-   A depends on deterministic inventory Confirm/Cancel outcomes.
-
-2. **Real GitHub CI** — local `make test-integration` has passed; Actions was
+1. **Real GitHub CI** — local `make test-integration` has passed; Actions was
    not actually run.
 
-3. **Phase 8 benchmark breadth** — attribution UI and the owner-scoped event are
+2. **Phase 8 benchmark breadth** — attribution UI and the owner-scoped event are
    implemented, but the A/B benchmark still uses one prompt family; add a
    cross-user/no-memory regression set.
 
-4. **Phase 9 richer anomaly explanations** — the signed webhook is implemented;
+3. **Phase 9 richer anomaly explanations** — the signed webhook is implemented;
    exception explanations are still mostly low-stock links, not
    cancellation/refund anomalies.
 
-5. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
+4. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
    split can continue.
 
-6. **Live DTM/rollout checks for B** — local MySQL/NATS protocol tests and
+5. **Live DTM/rollout checks for A/B** — local MySQL/NATS protocol tests and
    `make test-integration` passed, but the new image was not rolled out and
-   `make dtm-smoke` was not run against the DTM barrier. The operation replay is
-   an internal/API-pending method, not exposed through the admin BFF yet.
+   `make dtm-smoke` was not run against the DTM barrier. A's migrations were
+   applied to scratch MySQL data, but the new order/after-sales/fulfillment
+   images were not rolled out; no browser E2E for the new actions. Inventory
+   B's replay remains an internal/API-pending method.
 
 ## Verification commands
 
@@ -151,7 +170,8 @@ Targeted tests:
 go test ./internal/services/ai ./internal/services/gateway \
   ./internal/services/admin ./internal/services/inventory \
   ./internal/services/catalog ./internal/services/order \
-  ./internal/platform/bff -count=1
+  ./internal/services/aftersales ./internal/services/payment \
+  ./internal/services/fulfillment ./internal/platform/bff -count=1
 ```
 
 The HITL CAS, RAG follower/build-due and attribution tests run only with a
@@ -174,8 +194,10 @@ TEST_REDIS_ADDR='127.0.0.1:16379' make test-integration
 
 The Makefile target includes outbox/consumer, AI RAG + lease + preference
 isolation + RAG follower + HITL CAS + attribution, seckill, inventory
-seckill/compensation/ledger/NATS + whole-order operation protocol, catalog
-projection + keyset, and pricing cleanup.
+seckill/compensation/ledger/NATS + whole-order operation protocol, order
+settlement/shipping permits, payment settlement read, after-sales
+amount/restock/refund protocol, fulfillment permit, catalog projection +
+keyset, and pricing cleanup.
 
 Live AI:
 
@@ -235,10 +257,10 @@ Then read:
 ```text
 继续 gin-kratos-gorm。先读 docs/handoff.md、docs/review-tracking.md 和
 docs/ai-hardening-review.md，运行 ./scripts/bootstrap-context.sh 与 git status。
-不要重做已完成的主链路。按 handoff 的 Remaining work 顺序，先做交易重构 A
-（订单/售后/支付/履约状态归属），再处理 CI、Phase8/9 与 P3。设计先行，禁止
-为状态组合继续加 if、recovery scanner 或前端特判。每个改动报告文件、检查、
-未验证项；不要在没有证据时标 done。
+不要重做已完成的主链路。按 handoff 的 Remaining work 顺序，先做真实 GitHub CI，
+再处理 Phase8/9 与 P3，并补 A/B 的 live DTM/rollout 验证。设计先行，禁止为状态
+组合继续加 if、recovery scanner 或前端特判。每个改动报告文件、检查、未验证项；
+不要在没有证据时标 done。
 ```
 
 The durable files are the context; keep the new session small.

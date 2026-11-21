@@ -144,6 +144,13 @@ selected items to `PENDING` with `attempts = 0`, and re-runs the protocol. It
 refuses to replay a `DONE` item because stock already moved, and there is no
 background recovery scanner.
 
+The same image exposes it as a one-shot command (not a scanner):
+
+```bash
+/app/app op-replay -operation <operation_id>        # all non-DONE items
+/app/app op-replay -operation <operation_id> -skus 1001,1002
+```
+
 ## Invariants
 
 - `available = on_hand - reserved` and `0 <= reserved <= on_hand` at all times;

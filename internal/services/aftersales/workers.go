@@ -204,7 +204,8 @@ func (s *Service) releaseRestockTask(ctx context.Context, afterSaleNo string, sk
 		return
 	}
 	next := taskPending
-	if attempts >= maxTaskAttempts {
+	permanent := attempts >= maxTaskAttempts
+	if permanent {
 		next = taskFailed
 		if _, err := tx.ExecContext(ctx, `UPDATE after_sales
 			SET restock_state = ?, version = version + 1 WHERE after_sale_no = ?`, restockFailed, afterSaleNo); err != nil {
@@ -215,6 +216,28 @@ func (s *Service) releaseRestockTask(ctx context.Context, afterSaleNo string, sk
 		SET status = ?, last_error = ?, lease_owner = '', lease_until = NULL, updated_at = NOW(3)
 		WHERE after_sale_no = ? AND sku_id = ?`, next, cutRunes(cause.Error(), 512), afterSaleNo, skuID); err != nil {
 		return
+	}
+	if permanent {
+		var row afterSaleRow
+		if err := tx.QueryRowContext(ctx, `SELECT id, order_no, user_id, `+"`type`"+`, status, amount_cent,
+			effective_amount_cent, amount_state, restock_state, reason
+			FROM after_sales WHERE after_sale_no = ?`, afterSaleNo).
+			Scan(&row.id, &row.orderNo, &row.userID, &row.typ, &row.status, &row.amountCent,
+				&row.effectiveAmountCent, &row.amountState, &row.restockState, &row.reason); err != nil {
+			return
+		}
+		payload, _ := json.Marshal(afterSaleEvent{
+			AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
+			Type: row.typ, Status: row.status, AmountCent: row.amountCent,
+			EffectiveAmountCent: row.effectiveAmountCent, AmountState: row.amountState,
+			RestockState: restockFailed, Reason: cutRunes(cause.Error(), 512),
+		})
+		if err := outbox.Append(ctx, tx, outbox.Event{
+			Topic: topicAfterSaleRestockFailed, AggregateType: aggregateAfterSale,
+			AggregateID: afterSaleNo, EventType: "aftersale.restock_failed", Payload: payload,
+		}); err != nil {
+			return
+		}
 	}
 	_ = tx.Commit()
 }

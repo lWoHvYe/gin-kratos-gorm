@@ -32,7 +32,9 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 
 | Item | Status | Evidence / remaining gap |
 |---|---|---|
-| B (#1/#2/#37) | partial | `inventory_operations`/`inventory_operation_items` (0015), deterministic operation id + scope hash, per-item progress, savepoint per item, terminal events, replay, DTM single-branch path. MySQL/NATS tests cover middle-item failure/resume, permanent per-item failure, mixed cancel, all-or-nothing branch tx, retry budget, concurrent confirm/cancel, replay. Gap: live DTM smoke/rollout and an admin/API replay surface are not done. |
+| B (#1/#2/#37) | partial | `inventory_operations`/`inventory_operation_items` (0015), deterministic operation id + scope hash, per-item progress, savepoint per item, terminal events, replay, DTM single-branch path. MySQL/NATS tests cover middle-item failure/resume, permanent per-item failure, mixed cancel, all-or-nothing branch tx, retry budget, concurrent confirm/cancel, replay. The inventory image now exposes `op-replay` as a one-shot recovery command. Gap: live DTM smoke/rollout; a gRPC/BFF replay surface is optional. |
+| #22 payment config | done | Invalid `PAYMENT_MOCK_ENABLED`/AI booleans fail config loading; non-dev `PAYMENT_MOCK_ENABLED=true` is rejected; `PAYMENT_SECRET` remains required when mock is off. Config tests cover all three. |
+| #38 AI mesh | partial | `values.yaml` has explicit `*-ai-read` rules for Catalog/Inventory/Pricing/Order/AfterSales; Helm render has no `ai-sa` wildcard. Live 403 verification was not run. |
 | #3 catalog rebuild | done for version guard | `decideProjection` refuses a newer catalog projection and the SQL update is CAS-guarded; unit test covers equal/newer/stale/conflict. Missing-catalog/inventory rows are reported as counters, not a full reconciliation UI. |
 
 ## 2026-11-21 external review: transaction refactor A

@@ -355,8 +355,14 @@ missing `SERVICE` build argument fails the build with a clear message.
   directly to the internet.
 - The gateway is the only public application surface; admin requires a JWT
   with the `admin` role.
-- `PAYMENT_SECRET` must be set to enforce payment callback signatures;
-  otherwise the service logs a warning and runs in mock mode.
+- `PAYMENT_SECRET` must be set to enforce payment callback signatures.
+  `PAYMENT_MOCK_ENABLED=true` is dev-only: a non-dev environment refuses to
+  start with mock payments, and an invalid boolean fails config loading instead
+  of silently falling back.
+- The AI service is authorized only for explicit read methods on catalog,
+  inventory, promotion evaluation, orders and after-sales; the mesh rules in
+  `deploy/k8s/charts/mall/values.yaml` contain no `/*` wildcard for the `ai`
+  service account.
 - Traefik mounts the Docker socket read-only. Keep the ingress profile off on
   hosts where that is not acceptable.
 

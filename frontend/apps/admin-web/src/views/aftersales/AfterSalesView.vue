@@ -49,6 +49,8 @@ const refund = useMutation({
               <el-button link type="warning" @click="receive.mutate({ no: row.after_sale_no, condition: 'DAMAGED' })">收货（残次）</el-button>
             </template>
             <el-button v-if="(row.type === 'REFUND_ONLY' && row.status === 'APPROVED') || (row.type === 'RETURN_REFUND' && row.status === 'RETURN_RECEIVED' && row.restock_state === 'DONE')" link type="danger" @click="refund.mutate(row.after_sale_no)">退款</el-button>
+            <el-button v-if="row.type === 'RETURN_REFUND' && row.status === 'RETURN_RECEIVED' && row.restock_state === 'FAILED_PERMANENT'" link type="danger" @click="receive.mutate({ no: row.after_sale_no, condition: 'SELLABLE' })">重试回库</el-button>
+            <el-button v-if="row.status === 'REFUNDING'" link type="danger" @click="refund.mutate(row.after_sale_no)">重试退款</el-button>
           </template>
         </el-table-column>
       </el-table>

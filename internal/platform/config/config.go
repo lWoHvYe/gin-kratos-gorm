@@ -163,7 +163,9 @@ func Load(service string) (*Config, error) {
 			return nil, err
 		}
 	}
-	applyEnv(c)
+	if err := applyEnv(c); err != nil {
+		return nil, err
+	}
 	if len(c.JWTSecret) < 16 {
 		return nil, fmt.Errorf("JWT_SECRET must be at least 16 characters")
 	}
@@ -254,6 +256,9 @@ func (c *Config) validateSecrets() error {
 	}
 	if c.Env == "dev" {
 		return nil
+	}
+	if c.PaymentMockEnabled {
+		return fmt.Errorf("PAYMENT_MOCK_ENABLED must be false when APP_ENV=%s", c.Env)
 	}
 	if c.JWTSecret == DefaultDevJWTSecret || len(c.JWTSecret) < 32 {
 		return fmt.Errorf("JWT_SECRET must be overridden (>=32 chars) when APP_ENV=%s", c.Env)
@@ -366,7 +371,7 @@ func applyEtcd(c *Config, f *etcdFile) error {
 	}
 	return nil
 }
-func applyEnv(c *Config) {
+func applyEnv(c *Config) error {
 	if v := os.Getenv("APP_ENV"); v != "" {
 		c.Env = v
 	}
@@ -404,12 +409,14 @@ func applyEnv(c *Config) {
 		c.PaymentSecret = v
 	}
 	if v, ok := os.LookupEnv("PAYMENT_MOCK_ENABLED"); ok && strings.TrimSpace(v) != "" {
-		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
-			c.PaymentMockEnabled = parsed
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("PAYMENT_MOCK_ENABLED must be a boolean (got %q)", v)
 		}
+		c.PaymentMockEnabled = parsed
 	} else if c.Env != "dev" {
-		// Mock payments are a development capability; production must opt in
-		// explicitly and then also provide PAYMENT_SECRET.
+		// Mock payments are a development capability; a non-dev environment
+		// must never default to them.
 		c.PaymentMockEnabled = false
 	}
 	if v := os.Getenv("SECKILL_TOKEN_SECRET"); v != "" {
@@ -438,9 +445,11 @@ func applyEnv(c *Config) {
 		}
 	}
 	if v, ok := os.LookupEnv("AI_ENABLED"); ok && strings.TrimSpace(v) != "" {
-		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
-			c.AIEnabled = parsed
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("AI_ENABLED must be a boolean (got %q)", v)
 		}
+		c.AIEnabled = parsed
 	}
 	if v := os.Getenv("AI_PROVIDER"); v != "" {
 		c.AIProvider = v
@@ -471,9 +480,11 @@ func applyEnv(c *Config) {
 		}
 	}
 	if v, ok := os.LookupEnv("AI_RAG_ENABLED"); ok && strings.TrimSpace(v) != "" {
-		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
-			c.RAGEnabled = parsed
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("AI_RAG_ENABLED must be a boolean (got %q)", v)
 		}
+		c.RAGEnabled = parsed
 	}
 	if v := os.Getenv("EMBEDDING_PROVIDER"); v != "" {
 		c.EmbeddingProvider = v
@@ -510,6 +521,7 @@ func applyEnv(c *Config) {
 	if v := os.Getenv("AI_PRICE_COMPLETION_CENTS_PER_1K"); v != "" {
 		c.AIPriceCompletionPer1K = int64(EnvInt("AI_PRICE_COMPLETION_CENTS_PER_1K", int(c.AIPriceCompletionPer1K)))
 	}
+	return nil
 }
 
 // splitCSV turns a comma-separated endpoint list into trimmed entries, dropping

@@ -441,3 +441,39 @@ func TestConcurrentAfterSaleCreateRespectsCaptured(t *testing.T) {
 		t.Fatalf("consumed = %d", consumed)
 	}
 }
+
+func TestRestockPermanentFailureEmitsEvent(t *testing.T) {
+	db := afterSaleTestDB(t)
+	svc, _, _, inventory := newAfterSaleTestService(t, db, "SHIPPED")
+	as := createAfterSale(t, svc, typeReturnRefund, 600)
+	approveAfterSale(t, svc, as.GetAfterSaleNo(), 600)
+	if _, err := svc.SubmitReturnTracking(context.Background(), &pb.SubmitReturnTrackingRequest{
+		AfterSaleNo: as.GetAfterSaleNo(), Carrier: "SF", TrackingNo: "SF1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ReceiveReturn(context.Background(), &pb.ReceiveReturnRequest{AfterSaleNo: as.GetAfterSaleNo()}); err != nil {
+		t.Fatal(err)
+	}
+	inventory.restockErr = context.DeadlineExceeded
+	for attempt := 1; attempt <= maxTaskAttempts; attempt++ {
+		_ = svc.processRestockTask(context.Background(), as.GetAfterSaleNo(), 1)
+	}
+	var taskStatus, restockState string
+	if err := db.QueryRow(`SELECT status FROM after_sale_restock_tasks WHERE after_sale_no = ? AND sku_id = 1`, as.GetAfterSaleNo()).Scan(&taskStatus); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT restock_state FROM after_sales WHERE after_sale_no = ?`, as.GetAfterSaleNo()).Scan(&restockState); err != nil {
+		t.Fatal(err)
+	}
+	if taskStatus != taskFailed || restockState != restockFailed {
+		t.Fatalf("permanent restock = %s/%s", taskStatus, restockState)
+	}
+	var events int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM outbox_events WHERE topic = 'shop.aftersale.restock_failed.v1'`).Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if events != 1 {
+		t.Fatalf("restock_failed events = %d", events)
+	}
+}

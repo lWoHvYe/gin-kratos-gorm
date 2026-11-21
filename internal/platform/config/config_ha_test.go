@@ -189,7 +189,7 @@ func TestProductionSeckillNeedsOwnTokenSecret(t *testing.T) {
 	}
 }
 
-func TestProductionPaymentRequiresSecretUnlessMock(t *testing.T) {
+func TestProductionPaymentRequiresSecretAndRejectsMock(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
@@ -200,13 +200,27 @@ func TestProductionPaymentRequiresSecretUnlessMock(t *testing.T) {
 	if _, err := Load("payment"); err != nil {
 		t.Fatalf("valid payment secret rejected: %v", err)
 	}
-	// Explicit mock mode in production is allowed but must not be the default.
+	// Explicit mock mode in production is forbidden (fail closed).
 	clearConfigEnv(t)
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	t.Setenv("PAYMENT_SECRET", "callback-secret")
 	t.Setenv("PAYMENT_MOCK_ENABLED", "true")
-	if c, err := Load("payment"); err != nil || !c.PaymentMockEnabled {
-		t.Fatalf("mock opt-in failed: %v %+v", err, c)
+	if _, err := Load("payment"); err == nil || !strings.Contains(err.Error(), "PAYMENT_MOCK_ENABLED") {
+		t.Fatalf("production mock err = %v", err)
+	}
+}
+
+func TestInvalidBooleanEnvFailsClosed(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("PAYMENT_MOCK_ENABLED", "yes-please")
+	if _, err := Load("payment"); err == nil || !strings.Contains(err.Error(), "PAYMENT_MOCK_ENABLED") {
+		t.Fatalf("invalid payment bool err = %v", err)
+	}
+	clearConfigEnv(t)
+	t.Setenv("AI_ENABLED", "sometimes")
+	if _, err := Load("gateway"); err == nil || !strings.Contains(err.Error(), "AI_ENABLED") {
+		t.Fatalf("invalid ai bool err = %v", err)
 	}
 }
 

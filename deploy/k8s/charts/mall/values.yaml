@@ -282,20 +282,41 @@ authz:
       sources: [gateway, admin]
       paths: ["/mall.v1.IdentityService/*"]
     - name: catalog
-      sources: [gateway, admin, cart, pricing, ai]
+      sources: [gateway, admin, cart, pricing]
       paths: ["/mall.v1.CatalogService/*"]
+    - name: catalog-ai-read
+      sources: [ai]
+      paths:
+        - "/mall.v1.CatalogService/ListProducts"
+        - "/mall.v1.CatalogService/GetProduct"
+        - "/mall.v1.CatalogService/GetSku"
     - name: inventory
-      sources: [gateway, admin, order, payment, aftersales, dtm, seckill, ai]
+      sources: [gateway, admin, order, payment, aftersales, dtm, seckill]
       paths: ["/mall.v1.InventoryService/*"]
+    - name: inventory-ai-read
+      sources: [ai]
+      paths:
+        - "/mall.v1.InventoryService/ListLowStock"
+        - "/mall.v1.InventoryService/GetStock"
     - name: cart
       sources: [gateway]
       paths: ["/mall.v1.CartService/*"]
     - name: pricing
-      sources: [gateway, admin, order, payment, dtm, ai]
+      sources: [gateway, admin, order, payment, dtm]
       paths: ["/mall.v1.PricingService/*", "/mall.v1.PromotionService/*"]
+    - name: pricing-ai-read
+      sources: [ai]
+      paths:
+        - "/mall.v1.PromotionService/EvaluateDraft"
     - name: order
-      sources: [gateway, admin, payment, aftersales, fulfillment, dtm, seckill, ai]
+      sources: [gateway, admin, payment, aftersales, fulfillment, dtm, seckill]
       paths: ["/mall.v1.OrderService/*"]
+    - name: order-ai-read
+      sources: [ai]
+      paths:
+        - "/mall.v1.OrderService/ListOrders"
+        - "/mall.v1.OrderService/GetOrder"
+        - "/mall.v1.OrderService/GetOrderStats"
     - name: payment
       sources: [gateway, admin, aftersales, seckill]
       paths: ["/mall.v1.PaymentService/*"]
@@ -303,8 +324,14 @@ authz:
       sources: [gateway, admin]
       paths: ["/mall.v1.FulfillmentService/*"]
     - name: aftersales
-      sources: [gateway, admin, ai]
+      sources: [gateway, admin]
       paths: ["/mall.v1.AfterSalesService/*"]
+    - name: aftersales-ai-read
+      sources: [ai]
+      paths:
+        - "/mall.v1.AfterSalesService/ListAfterSales"
+        - "/mall.v1.AfterSalesService/GetAfterSale"
+        - "/mall.v1.AfterSalesService/GetAfterSaleStats"
     - name: seckill
       sources: [admin, gateway]
       paths: ["/mall.v1.SeckillService/*"]

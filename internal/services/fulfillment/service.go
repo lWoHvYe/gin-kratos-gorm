@@ -68,7 +68,19 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 	carrier := cutFulfillmentRunes(strings.TrimSpace(req.GetCarrier()), 64)
 	trackingNo := cutFulfillmentRunes(strings.TrimSpace(req.GetTrackingNo()), 128)
 	warehouseID := req.GetWarehouseId()
-	if warehouseID <= 0 {
+	if order, err := s.orderForGroup(ctx, orderNo, groupNo); err != nil {
+		return nil, err
+	} else if order != nil {
+		if warehouseID <= 0 {
+			warehouseID = groupWarehouse(order, groupNo)
+		}
+		if warehouseID <= 0 {
+			warehouseID = 1
+		}
+		if err := validateShipmentGroup(order, groupNo, warehouseID, items); err != nil {
+			return nil, err
+		}
+	} else if warehouseID <= 0 {
 		warehouseID = 1
 	}
 
@@ -212,19 +224,19 @@ func (s *Service) GetShipmentByOrder(ctx context.Context, req *pb.GetShipmentByO
 	if orderNo == "" {
 		return nil, apperr.Invalid("order_no is required")
 	}
-	shipmentNo, err := s.shipmentNoByOrderGroup(ctx, orderNo, "G1")
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM shipments WHERE order_no = ?`, orderNo).Scan(&count); err != nil {
+		return nil, apperr.Internal("count order shipments", err)
+	}
+	if count == 0 {
+		return nil, apperr.NotFound("shipment not found for order")
+	}
+	if count > 1 {
+		return nil, apperr.Failed("order has multiple shipments; shipment_no is required")
+	}
+	shipmentNo, err := s.shipmentNoByOrderNo(ctx, orderNo)
 	if err != nil {
 		return nil, err
-	}
-	if shipmentNo == "" {
-		// Fall back to the first shipment for legacy/non-G1 callers.
-		shipmentNo, err = s.shipmentNoByOrderNo(ctx, orderNo)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if shipmentNo == "" {
-		return nil, apperr.NotFound("shipment not found for order")
 	}
 	return s.loadShipment(ctx, shipmentNo)
 }
@@ -510,4 +522,66 @@ func cutFulfillmentRunes(s string, max int) string {
 		return s
 	}
 	return string(r[:max])
+}
+
+// orderForGroup is a fail-closed integrity check when an order client is
+// configured. Legacy orders with no fulfillment groups are allowed only for G1.
+func (s *Service) orderForGroup(ctx context.Context, orderNo, groupNo string) (*pb.Order, error) {
+	if s.orders == nil {
+		return nil, apperr.Unavailable("order client is not configured for shipment validation", nil)
+	}
+	order, err := s.orders.GetOrder(ctx, &pb.GetOrderRequest{OrderNo: orderNo, Admin: true})
+	if err != nil {
+		return nil, apperr.Unavailable("load order for shipment validation: "+err.Error(), err)
+	}
+	if len(order.GetFulfillmentGroups()) == 0 {
+		if groupNo != "G1" {
+			return nil, apperr.Failed("order has no fulfillment group " + groupNo)
+		}
+		return order, nil
+	}
+	return order, nil
+}
+
+func groupWarehouse(order *pb.Order, groupNo string) int64 {
+	for _, group := range order.GetFulfillmentGroups() {
+		if group.GetGroupNo() == groupNo {
+			return group.GetWarehouseId()
+		}
+	}
+	return 0
+}
+
+func validateShipmentGroup(order *pb.Order, groupNo string, warehouseID int64, items []shipmentItem) error {
+	if len(order.GetFulfillmentGroups()) == 0 {
+		return nil
+	}
+	groupWarehouseID := groupWarehouse(order, groupNo)
+	if groupWarehouseID == 0 {
+		return apperr.Failed("fulfillment group " + groupNo + " is not part of the order")
+	}
+	if warehouseID != groupWarehouseID {
+		return apperr.Failed(fmt.Sprintf("shipment warehouse %d does not match group %s warehouse %d",
+			warehouseID, groupNo, groupWarehouseID))
+	}
+	allowed := make(map[int64]int64)
+	for _, item := range order.GetItems() {
+		itemGroup := item.GetGroupNo()
+		if itemGroup == "" {
+			itemGroup = "G1"
+		}
+		if itemGroup == groupNo {
+			allowed[item.GetSkuId()] += int64(item.GetQuantity())
+		}
+	}
+	requested := make(map[int64]int64)
+	for _, item := range items {
+		requested[item.SkuID] += int64(item.Quantity)
+	}
+	for skuID, quantity := range requested {
+		if quantity > allowed[skuID] {
+			return apperr.Failed(fmt.Sprintf("shipment quantity for sku %d exceeds group %s", skuID, groupNo))
+		}
+	}
+	return nil
 }

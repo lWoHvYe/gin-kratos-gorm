@@ -110,6 +110,9 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 	if order.GetRefundState() == "FULL" {
 		return nil, apperr.Failed("order is already fully refunded")
 	}
+	if len(order.GetFulfillmentGroups()) > 1 && len(items) == 0 {
+		return nil, apperr.Invalid("split orders require after-sale items so the fulfillment group is explicit")
+	}
 	groupStatuses := make(map[string]string, len(order.GetFulfillmentGroups()))
 	for _, group := range order.GetFulfillmentGroups() {
 		groupStatuses[group.GetGroupNo()] = group.GetStatus()

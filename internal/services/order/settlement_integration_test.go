@@ -207,6 +207,18 @@ func TestAuthorizeShipmentIsIdempotentPerShipment(t *testing.T) {
 	}
 }
 
+func TestAuthorizeShipmentAllowsOtherGroupWhileOneRefunding(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	ctx := context.Background()
+	seedSettlementOrder(t, db, "ORD-REFUNDING", statusAllocated, 1000, 0, refundStateRefunding)
+	if _, err := svc.AuthorizeShipment(ctx, &pb.ShipmentPermitRequest{
+		OrderNo: "ORD-REFUNDING", ShipmentNo: "SHIP-OTHER", FulfillmentGroupNo: "G1",
+	}); err != nil {
+		t.Fatalf("another group must remain shippable while one group refunds: %v", err)
+	}
+}
+
 func TestAuthorizeShipmentDeniedAfterFullRefund(t *testing.T) {
 	db := orderTestDB(t)
 	svc := settlementService(db)

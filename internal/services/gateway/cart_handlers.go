@@ -20,7 +20,7 @@ func (h *handlers) ensureStocks(ctx context.Context, totals map[int64]int32) err
 	if h.clients.Inventory == nil {
 		return apperr.Unavailable("inventory client is not configured", nil)
 	}
-	if h.warehouseShadow {
+	if h.warehouseShadow || h.warehouseSplit {
 		// The allocator is the warehouse-aware stock authority. The legacy
 		// check below only sees warehouse 1 and would reject a SKU that is
 		// available solely in another warehouse.

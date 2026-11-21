@@ -68,7 +68,7 @@ func (h *handlers) previewCheckout(c *gin.Context) {
 		return
 	}
 	var allocations []*pb.QuoteAllocation
-	if h.warehouseShadow {
+	if h.warehouseShadow || h.warehouseSplit {
 		allocations = h.shadowAllocations(c.Request.Context(), items)
 	}
 	quote, err := h.clients.Pricing.CreateQuote(c.Request.Context(), &pb.QuoteRequest{

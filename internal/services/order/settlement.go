@@ -108,20 +108,24 @@ func multiGroupActions(o *orderRecord, groups []*fulfillmentGroup) []string {
 		}
 		return actions
 	}
-	refunding := o.RefundState == refundStateRefunding || o.RefundState == refundStateFull
+	fullRefund := o.RefundState == refundStateFull
 	for _, group := range groups {
 		switch group.Status {
 		case "PENDING", statusAllocated:
-			if !refunding && (o.Status == statusPaid || o.Status == statusAllocated) {
+			// A refund for another group only revokes that group's permit; it
+			// must not stop this group from shipping.
+			permitOpen := group.PermitState == "" || group.PermitState == permitNone || group.PermitState == permitGranted
+			if !fullRefund && permitOpen &&
+				(o.Status == statusPaid || o.Status == statusAllocated) {
 				actions = append(actions, actionShipGroup+":"+group.GroupNo)
 			}
 		case "SHIPPED":
 			actions = append(actions, actionReceiveGroup+":"+group.GroupNo)
-			if !refunding {
+			if !fullRefund {
 				actions = append(actions, actionApplyAfterSaleGroup+":"+group.GroupNo)
 			}
 		case "RECEIVED":
-			if !refunding {
+			if !fullRefund {
 				actions = append(actions, actionApplyAfterSaleGroup+":"+group.GroupNo)
 			}
 		}
@@ -164,6 +168,22 @@ type shippingPermit struct {
 	shipmentNo  string
 	afterSaleNo string
 	version     int64
+}
+
+func ensureGroupExistsTx(ctx context.Context, tx *sql.Tx, orderNo, groupNo string) error {
+	if permitGroup(groupNo) == defaultGroupNo {
+		return nil
+	}
+	var one int
+	err := tx.QueryRowContext(ctx, `SELECT 1 FROM order_fulfillment_groups
+		WHERE order_no = ? AND group_no = ?`, orderNo, permitGroup(groupNo)).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return apperr.Failed(fmt.Sprintf("fulfillment group %s is not part of order %s", permitGroup(groupNo), orderNo))
+	}
+	if err != nil {
+		return apperr.Internal("load fulfillment group", err)
+	}
+	return nil
 }
 
 func permitGroup(groupNo string) string {
@@ -219,6 +239,9 @@ func (s *Service) AuthorizeShipment(ctx context.Context, req *pb.ShipmentPermitR
 			return apperr.NotFound("order not found")
 		}
 		groupNo := permitGroup(req.GetFulfillmentGroupNo())
+		if err := ensureGroupExistsTx(ctx, tx, orderNo, groupNo); err != nil {
+			return err
+		}
 		permit, err := ensurePermitTx(ctx, tx, orderNo, groupNo)
 		if err != nil {
 			return err
@@ -231,8 +254,8 @@ func (s *Service) AuthorizeShipment(ctx context.Context, req *pb.ShipmentPermitR
 		if record.Status != statusPaid && record.Status != statusAllocated {
 			return apperr.Failed(fmt.Sprintf("order cannot ship in status %s", record.Status))
 		}
-		if record.RefundState == refundStateRefunding || record.RefundState == refundStateFull {
-			return apperr.Failed("order refund is in progress; shipping is blocked")
+		if record.RefundState == refundStateFull {
+			return apperr.Failed("order is fully refunded; shipping is blocked")
 		}
 		switch permit.state {
 		case permitConsumed:
@@ -274,6 +297,9 @@ func (s *Service) BlockShipmentForRefund(ctx context.Context, req *pb.ShipmentPe
 			return apperr.Failed(fmt.Sprintf("order cannot refund in status %s", record.Status))
 		}
 		groupNo := permitGroup(req.GetFulfillmentGroupNo())
+		if err := ensureGroupExistsTx(ctx, tx, orderNo, groupNo); err != nil {
+			return err
+		}
 		permit, err := ensurePermitTx(ctx, tx, orderNo, groupNo)
 		if err != nil {
 			return err

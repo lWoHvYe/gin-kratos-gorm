@@ -83,9 +83,17 @@ func fulfillmentTestDB(t *testing.T) *sql.DB {
 
 type fakePermitOrder struct {
 	pb.OrderServiceClient
+	order  *pb.Order
 	err    error
 	calls  int
 	groups []string
+}
+
+func (f *fakePermitOrder) GetOrder(context.Context, *pb.GetOrderRequest, ...grpc.CallOption) (*pb.Order, error) {
+	if f.order == nil {
+		return nil, context.DeadlineExceeded
+	}
+	return f.order, nil
 }
 
 func (f *fakePermitOrder) AuthorizeShipment(_ context.Context, in *pb.ShipmentPermitRequest, _ ...grpc.CallOption) (*pb.Empty, error) {
@@ -143,6 +151,9 @@ func TestShipUsesShipmentGroup(t *testing.T) {
 	if len(permit.groups) != 2 || permit.groups[0] != "G1" || permit.groups[1] != "G2" {
 		t.Fatalf("permit groups = %v", permit.groups)
 	}
+	if _, err := svc.GetShipmentByOrder(context.Background(), &pb.GetShipmentByOrderRequest{OrderNo: "ORD-GROUPS"}); err == nil {
+		t.Fatal("ambiguous multi-shipment lookup must require shipment_no")
+	}
 	for _, shipmentNo := range []string{"SHIP-G1", "SHIP-G2"} {
 		var status string
 		if err := db.QueryRow(`SELECT status FROM shipments WHERE shipment_no = ?`, shipmentNo).Scan(&status); err != nil {
@@ -151,5 +162,39 @@ func TestShipUsesShipmentGroup(t *testing.T) {
 		if status != statusShipped {
 			t.Fatalf("%s = %s", shipmentNo, status)
 		}
+	}
+}
+
+func TestCreateShipmentValidatesGroupWarehouseAndItems(t *testing.T) {
+	db := fulfillmentTestDB(t)
+	order := &pb.Order{
+		OrderNo: "ORD-GROUP-VALIDATE",
+		FulfillmentGroups: []*pb.OrderFulfillmentGroup{
+			{GroupNo: "G1", WarehouseId: 1}, {GroupNo: "G2", WarehouseId: 2},
+		},
+		Items: []*pb.OrderItem{
+			{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1"},
+			{SkuId: 2, Quantity: 1, WarehouseId: 2, GroupNo: "G2"},
+		},
+	}
+	permit := &fakePermitOrder{order: order}
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), permit)
+	if _, err := svc.CreateShipment(context.Background(), &pb.CreateShipmentRequest{
+		OrderNo: "ORD-GROUP-VALIDATE", FulfillmentGroupNo: "G2", WarehouseId: 2,
+		Items: []*pb.ShipmentItem{{SkuId: 2, Quantity: 1}},
+	}); err != nil {
+		t.Fatalf("valid group shipment: %v", err)
+	}
+	if _, err := svc.CreateShipment(context.Background(), &pb.CreateShipmentRequest{
+		OrderNo: "ORD-GROUP-VALIDATE", FulfillmentGroupNo: "G2", WarehouseId: 1,
+		Items: []*pb.ShipmentItem{{SkuId: 2, Quantity: 1}},
+	}); err == nil {
+		t.Fatal("wrong warehouse was accepted")
+	}
+	if _, err := svc.CreateShipment(context.Background(), &pb.CreateShipmentRequest{
+		OrderNo: "ORD-GROUP-VALIDATE", FulfillmentGroupNo: "G2", WarehouseId: 2,
+		Items: []*pb.ShipmentItem{{SkuId: 1, Quantity: 1}},
+	}); err == nil {
+		t.Fatal("item from another group was accepted")
 	}
 }

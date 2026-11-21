@@ -27,7 +27,7 @@ K8S_INFRA_HA_VALUES := $(K8S_DIR)/charts/infra/values-ha.yaml
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo ai-eval clean \
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 e2e-warehouse-split concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo ai-eval clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-render-ha k8s-lint-ha k8s-ha-verify k8s-deploy mesh-smoke \
 	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration status
 
@@ -165,6 +165,9 @@ dtm-smoke:
 e2e-phase15:
 	./scripts/e2e-phase15.sh
 
+e2e-warehouse-split:
+	./scripts/e2e-warehouse-split.sh
+
 concurrency-phase15:
 	./scripts/concurrency-phase15.sh
 
@@ -216,14 +219,14 @@ test-integration:
 	@echo ">> after-sales amount/restock/refund protocol (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/aftersales -run 'TestAfterSaleAmount|TestPartialApproval|TestReturnRefund|TestRestockFailure|TestRestockPermanentFailureEmitsEvent|TestAfterSaleGroupRefundAndRestock|TestRefundTaskRetries|TestConcurrentAfterSale' -count=1
 	@echo ">> fulfillment shipping permit (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/fulfillment -run 'TestShipRequiresOrderPermit|TestShipUsesShipmentGroup' -count=1
+	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/fulfillment -run 'TestShipRequiresOrderPermit|TestShipUsesShipmentGroup|TestCreateShipmentValidatesGroupWarehouseAndItems' -count=1
 	@echo ">> catalog stock projection (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/catalog -run 'TestStockProjectionRejectsOlderVersion|TestKeysetPaginationBothReaders' -count=1
 	@echo ">> pricing quote cleanup (MySQL)"
 	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/pricing -run TestCleanupQuotesRemovesOnlyExpiredRetention -count=1
 
 test-race:
-	$(GO) test -race ./internal/services/... ./internal/platform/...
+	$(GO) test -race -p 1 ./internal/services/... ./internal/platform/...
 
 db-reset:
 	@echo ">> removing containers and named volumes for project mall"

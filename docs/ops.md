@@ -338,6 +338,7 @@ docker compose -f deploy/compose/infra.yml exec mysql mysql -uroot -proot -e 'SH
 make build        # ./bin/<service> for every cmd
 make test         # unit tests only; no MySQL/NATS/DTM required
 make e2e-phase15  # opt-in B-end/C-end/return E2E; running stack required
+make e2e-warehouse-split # opt-in split E2E; two SKUs stocked in two warehouses
 make concurrency-phase15 # opt-in one-unit oversell race check
 make fmt-check    # gofmt gate
 make vet          # go vet ./...

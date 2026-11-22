@@ -97,7 +97,13 @@ need "$ORDER" order
 curl -fsS -X POST "$BASE/api/v1/payments/$PAYMENT/pay" -H "$UH" -H 'Content-Type: application/json' \
   -d "{\"amount_cent\":$PAY_CENT,\"event_id\":\"e2e-pay-$SUFFIX\"}" >/dev/null
 
-RESERVATIONS="$(curl -fsS "$ADMIN/api/admin/v1/promotion-reservations?order_no=$ORDER" -H "$AH")"
+for _ in $(seq 1 30); do
+  RESERVATIONS="$(curl -fsS "$ADMIN/api/admin/v1/promotion-reservations?order_no=$ORDER" -H "$AH")"
+  if echo "$RESERVATIONS" | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d["total"]>=1 and any(r["status"]=="CONFIRMED" for r in d["reservations"]) else 1)'; then
+    break
+  fi
+  sleep 0.5
+done
 echo "$RESERVATIONS" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total"]>=1 and any(r["status"]=="CONFIRMED" for r in d["reservations"]), d'
 
 echo "== ship/receive =="

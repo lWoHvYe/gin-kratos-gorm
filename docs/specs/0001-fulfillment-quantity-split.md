@@ -9,7 +9,7 @@ approved_at: 2026-11-22
 domain: fulfillment
 supersedes: []
 superseded_by: null
-adr: []                   # ADR 编号在 Architect 出稿后回填
+adr: [0005]               # Architect 出稿后回填
 ```
 
 # SPEC-0001 — 多仓按数量拆行、选仓优先级与承运商签收

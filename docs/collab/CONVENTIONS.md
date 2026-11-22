@@ -22,6 +22,7 @@
 | 代码与测试 | `internal/**`、`cmd/**`、`api/**`… | Developer | Reviewer 只提议，不直接改 |
 | PO 记忆 | `docs/po/**` | Product Owner | 只读 |
 | Architect 记忆 | `docs/architect/**` | System Architect | 只读 |
+| Developer 记忆 | `docs/developer/**` | Developer | 只读 |
 | Reviewer 记忆 | `docs/reviewer/**` | Reviewer | 只读 |
 | 审查线程 | `docs/collab/developer-reviewer/threads/**` | 双方各自追加 | 不改对方已写内容 |
 | 闸门基线/覆盖台账 | `docs/collab/ac-baseline.txt`、`docs/collab/ac-coverage.tsv` | Reviewer | 只读（变更需 Reviewer 记录） |
@@ -142,7 +143,7 @@ scope 按**主产物路径**取，不按作者角色命名；小写，允许连�
 | `order` / `pricing` / `inventory` / `fulfillment` / `aftersales` / `payment` / `gateway` / `admin` / `catalog` / `cart` / `identity` / `seckill` / `ai` | 单服务代码与测试（既有 scope，无需新增） | `feat(order): ...`、`test(fulfillment): ...` |
 | `contracts` | `api/proto/**`、`api/gen/**`、跨服务事件契约（如 `internal/platform/events/registry.go`） | `feat(contracts): ...` |
 | `migrations` | `migrations/**` | `feat(migrations): ...` |
-| `gates` | `scripts/check-collab-gates.sh`、`scripts/collab_gates.py`、`scripts/test-collab-gates.sh`、`docs/collab/ac-baseline.txt`、`docs/collab/ac-coverage.tsv`、CI 闸门 job | `ci(gates): ...` |
+| `gates` | `scripts/check-collab-gates.sh`、`scripts/collab_gates.py`、`scripts/test-collab-gates.sh`、CI 闸门 job | `ci(gates): ...`；**不含台账** |
 | `tooling` | `Makefile`、非闸门 `scripts/**` | `chore(tooling): ...` |
 | `docs(developer)` | Developer 记忆区（只放指针/状态，不放业务规则） | `docs(developer): ...` |
 | `docs(impl)` | `docs/implementation/**` 偏差登记（既有 scope） | `docs(impl): ...` |
@@ -154,6 +155,9 @@ scope 按**主产物路径**取，不按作者角色命名；小写，允许连�
 3. `gates` 只放流程基础设施，不得夹带业务代码；`docs(developer)` 只放记忆/指针，不得承载业务规则。
 4. `test` 类型仍按被测服务取 scope（如 `test(aftersales)`），不新增 `test(ac)`。
 5. 历史提交不回改；本表只约束新提交。
+6. 闸门自测用 `ci(gates)`，不使用 `test(collab)`；`ac-baseline.txt`/`ac-coverage.tsv` 属 Reviewer（§1），Developer 只读。
+
+**追认（2026-11-22）**：本表由 Architect 在 `architect-developer/T-002` 中追认；`be11508` 由 Developer 直接改写本文件属越权，历史不回改。后续 Developer 不得直接改 CONVENTIONS，需开 `architect-developer/T-NNN` 线程。当前台账缺口行由 Reviewer 复核后接管。
 
 ---
 

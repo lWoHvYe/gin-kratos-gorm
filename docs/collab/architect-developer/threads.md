@@ -4,14 +4,14 @@
 
 | 编号 | 主题 | 发起 | 阻塞 | 状态 | 落点 | 文件 |
 |---|---|---|---|---|---|---|
-| T-001 | SPEC-0001 v1.2 实施交接（B-01/B-05 + v1.2 修正 + T-002 闸门） | Architect 2026-11-22 | 是 | **OPEN** | ADR-0005 v1.2 §18/§19.2、ADR-0006 | [T-001.md](threads/T-001.md) |
-| T-002 | 请求追认 Developer 提交 scope 词表 | Developer 2026-11-22 | 否 | **OPEN** | CONVENTIONS §5.2、commit `be11508` | [T-002.md](threads/T-002.md) |
+| T-001 | SPEC-0001 v1.2 实施交接（B-01/B-05 + v1.2 修正 + T-002 闸门） | Architect 2026-11-22 | 是 | **CLOSED** | ADR-0005 v1.2 §18/§19.2、ADR-0006；实施交接（commit pending） | [T-001.md](threads/T-001.md) |
+| T-002 | 请求追认 Developer 提交 scope 词表 | Developer 2026-11-22 | 否 | **CLOSED** | CONVENTIONS §1/§5.2（commit pending） | [T-002.md](threads/T-002.md) |
 
 ## 状态统计
 
-- `OPEN`：2（T-001 等 Architect 复核；T-002 等 Architect 追认 scope 词表）
+- `OPEN`：0
 - `ANSWERED`：0
-- `CLOSED`：0
+- `CLOSED`：2（T-001 实施交接；T-002 scope 追认）
 
 ## 维护规则
 

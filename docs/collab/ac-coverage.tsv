@@ -1,1 +1,7 @@
 # ac	owner	expiry	reason	thread
+AC-22	Developer	2026-12-15	3 个工作日 SLA 告警 worker 与页面提示未实现	developer-reviewer/T-001
+AC-28	Developer	2026-12-15	Playwright 结算页包裹数断言未接入 CI	developer-reviewer/T-001
+AC-29	Developer	2026-12-15	Playwright 订单详情组级物流断言未接入 CI	developer-reviewer/T-001
+AC-30	Developer	2026-12-15	C 端缺货二选一按钮/进度页面未接 BFF	developer-reviewer/T-001
+AC-35	Developer	2026-12-15	同刻申诉与到期 job 的真实竞态 Playwright/并发用例未跑	developer-reviewer/T-001
+AC-37	Developer	2026-12-15	AUTO_T7 页面文案未做浏览器断言	developer-reviewer/T-001

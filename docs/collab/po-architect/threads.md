@@ -6,11 +6,12 @@
 | 编号 | 主题 | 发起 | 阻塞 | 状态 | 裁决/落点 | 文件 |
 |---|---|---|---|---|---|---|
 | T-001 | 多仓拆单 P-01…P-18 业务歧义 | Architect 2026-11-22 | 是 | **ANSWERED** | SPEC-0001 v1.2 §15（`c8b9a2d`） | [T-001.md](threads/T-001.md) |
+| T-002 | 三条协作闸门可执行化（所有权/版本/AC↔测试） | PO 2026-11-22 | 否 | **OPEN** | 待 Architect 出方案 | [T-002.md](threads/T-002.md) |
 
 ## 状态统计
 
-- `OPEN`：0
-- `ANSWERED`：1（等 Architect 回写 ADR 并标 CLOSED）
+- `OPEN`：1（T-002，等 Architect 方案）
+- `ANSWERED`：1（T-001，等 Architect 回写 ADR 并标 CLOSED）
 - `CLOSED`：0
 
 ## 维护规则

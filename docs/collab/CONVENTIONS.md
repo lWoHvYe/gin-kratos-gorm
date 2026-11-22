@@ -118,6 +118,7 @@ scope 按**主产物路径**取，不按作者角色命名；小写，允许连�
 | `docs(impl)` | `docs/implementation/**` | 实现偏差登记 |
 | `docs(po)` | `docs/po/**` | PO 记忆区 |
 | `docs(architect)` | `docs/architect/**` | Architect 记忆区 |
+| `docs(developer)` | `docs/developer/**` | Developer 记忆区 |
 | `docs(collab)` | `docs/collab/**` | 协作约定、线程、索引、闸门台账 |
 | `docs(meta)` | `AGENTS.md`、`README.md`、`docs/*.md`（非上述目录） | 全局说明/索引 |
 
@@ -127,7 +128,29 @@ scope 按**主产物路径**取，不按作者角色命名；小写，允许连�
 2. 一个 commit 只允许一个主 scope；同时改 ADR 与线程时，**拆成 `docs(adr)` + `docs(collab)` 两笔**，不要用 `docs(collab)` 把 ADR 混进去。
 3. 不可避免的跨产物的机械同步（如回填 commit hash）：scope 取主产物，正文列出次产物，Reviewer 标 `[mixed]`；不得把业务/设计变更塞进 `[mixed]`。
 4. 历史提交不回改；本表只约束新提交。Reviewer 按 §4.3 把混提作为审查项。
-5. `feat`/`fix` 的 scope 仍按服务/模块名（如 `feat(order)`），不适用本表。
+5. `feat`/`fix` 的 scope 仍按服务/模块名（如 `feat(order)`），不适用本表；Developer 的补充 scope 见 §5.2。
+
+### 5.2 Developer 提交 scope（2026-11-22 补充）
+
+已有服务/模块 scope 已能满足单服务改动，不另造同义词。Developer 额外约定以下 scope：
+
+| scope | 适用主路径/场景 | 示例 |
+|---|---|---|
+| `order` / `pricing` / `inventory` / `fulfillment` / `aftersales` / `payment` / `gateway` / `admin` / `catalog` / `cart` / `identity` / `seckill` / `ai` | 单服务代码与测试（既有 scope，无需新增） | `feat(order): ...`、`test(fulfillment): ...` |
+| `contracts` | `api/proto/**`、`api/gen/**`、跨服务事件契约（如 `internal/platform/events/registry.go`） | `feat(contracts): ...` |
+| `migrations` | `migrations/**` | `feat(migrations): ...` |
+| `gates` | `scripts/check-collab-gates.sh`、`scripts/collab_gates.py`、`scripts/test-collab-gates.sh`、`docs/collab/ac-baseline.txt`、`docs/collab/ac-coverage.tsv`、CI 闸门 job | `ci(gates): ...` |
+| `tooling` | `Makefile`、非闸门 `scripts/**` | `chore(tooling): ...` |
+| `docs(developer)` | Developer 记忆区（只放指针/状态，不放业务规则） | `docs(developer): ...` |
+| `docs(impl)` | `docs/implementation/**` 偏差登记（既有 scope） | `docs(impl): ...` |
+
+规则：
+
+1. 单服务改动用服务/模块 scope；**不得**为同一服务另造 `core`、`backend`、`misc` 等含混 scope。
+2. proto/生成物/跨服务事件契约用 `contracts`；若同时改业务服务，拆成 `contracts` + 服务 scope 两笔，不混提。
+3. `gates` 只放流程基础设施，不得夹带业务代码；`docs(developer)` 只放记忆/指针，不得承载业务规则。
+4. `test` 类型仍按被测服务取 scope（如 `test(aftersales)`），不新增 `test(ac)`。
+5. 历史提交不回改；本表只约束新提交。
 
 ---
 

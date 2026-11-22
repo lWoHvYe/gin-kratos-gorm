@@ -49,6 +49,7 @@
 | P0-4 自动确认回拨 | `due_at` 同 reason 只允许向后、`DELIVERED` 不回拨；T1 再校验 `delivered_at+24h` | `TestAC20DuplicateDeliveredDoesNotShrinkWindow` | Developer | 2026-12-15 |
 | P0-5 历史混提 | 不回写历史；登记为 `[mixed]`；后续按 §5.2 拆分 | 下表 | Developer | 2026-12-15（T-002 追认） |
 | P0-6 AC 深度 | AC-14 补累计/在途封顶、AC-22 补 3 工作日 deadline；其余缺口写 coverage 台账 | `TestAC14...`、`TestAC22...` | Developer | 2026-12-15 |
+| P0-7 运费 hold 结清 | 驳回置 `WAIVED`；worker 只结算 `after_sales.status=REFUNDED` 的 hold；breakdown 用 upsert 幂等落运费；`freightCommitted` 排除驳回/取消 hold | `TestFreightHoldNotPaidForRejectedAfterSale`、`TestFreightHoldBeforeGoodsRefundIsRecordedInBreakdown` | Developer | 2026-12-15 |
 
 ### D.1 历史 `[mixed]` 提交（不重写历史）
 

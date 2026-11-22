@@ -6,7 +6,7 @@
 - Revision: **1.2 / Amendment 2**（2026-11-22；回写 T-001 / SPEC-0001 v1.2，P-01…P-18 全部 closed）
 - Previous: **1.1 / Amendment 1**（吸收 SPEC-0001 v1.1，回应[偏差登记](../implementation/adr-0005-deviation-register.md) A/B/C）
 - Review: **二次审计 2026-11-22（§19）**；19.1 的硬伤已入正文，19.2 的 P-01…P-18 已按 SPEC v1.2 全部 closed
-- Normative: **§18、§20 是增量契约；§19.2 已全部 closed，无待裁决项。与前文冲突时以 §18/§20 为准。**
+- Normative: **§18、§20 是增量契约；§19.2 已全部 closed，无未决项。与前文冲突时以 §18/§20 为准。**
 - Spec: [SPEC-0001 v1.2](../specs/0001-fulfillment-quantity-split.md)（已冻结）
 - Amends: [ADR 0002](0002-cross-warehouse-split-orders.md) 的 v1「行级拆分」范围；**废止基线 INV-10**
 - Related: [architecture-baseline.md](../architecture-baseline.md)、[ADR 0003](0003-c-production-rollout.md)、[ADR 0004](0004-p3-0-contract-and-production-scope.md)
@@ -1537,7 +1537,7 @@ AC-31…33 验证映射：
 ### 19.3 结论
 
 - 状态所有权、S1–S14、INV-17…29、E1–E25、AC-01…**38** 的覆盖在 ADR 中完整；19.1 的硬伤已修。
-- 19.2 的 **P-01…P-18 全部 closed**（依据 SPEC-0001 v1.2 §15，commit `c8b9a2d`）；AC-03/04/10/14 等不再有 `[待确认]`。
+- 19.2 的 **P-01…P-18 全部 closed**（依据 SPEC-0001 v1.2 §15，commit `c8b9a2d`）；AC-03/04/10/14 等均已解除。
 - 唯一仍未完成的是 **B-01、B-05**：`availability_json` 不得为 `{}`；AC-30 必须以“系统退款已创建并推进”为通过条件。
 
 ---

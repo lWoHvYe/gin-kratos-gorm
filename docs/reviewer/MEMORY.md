@@ -13,32 +13,32 @@
 - 不改对方已写内容：Developer 的偏差登记、代码、T-NNN 回复段只读；要改让对方改。
 - 不微观完美主义阻断交付；但以下必须阻断：**自检清单缺失、未覆盖 AC、核心资损/并发/状态机违约、未登记偏差、混提/越权**。
 
-## 2. 当前基线（2026-11-22 复跑）
+## 2. 当前基线（2026-11-22 复核通过）
 
 | 项 | 值 |
 |---|---|
-| 审查基线 | `baf0fd5`（初查 `8ea9236`；复跑新增 P0-7） |
+| 审查基线 | `f162ecf`（P0-7 修复；Developer 回复 `5b9e18e`；初查 `8ea9236`） |
 | Spec | SPEC-0001 **v1.2 approved** |
 | ADR | ADR-0005 **v1.2**、ADR-0006 accepted |
 | 实施线程 | `architect-developer/T-001`、`T-002` 均 **CLOSED**（`c085006` 追认 scope） |
-| 审查线程 | `docs/collab/developer-reviewer/threads/T-001.md` **OPEN / BLOCKING**（P0-7） |
-| 审查结论 | **FAIL**：P0-1…P0-6 已回证；**P0-7 运费 hold 结清未绑定售后状态/商品退款** |
+| 审查线程 | `docs/collab/developer-reviewer/threads/T-001.md` **CLOSED / PASS**（`closed_by=f162ecf`） |
+| 审查结论 | **PASS**：P0-1…P0-7 全关闭；P0-6 剩余项为有 owner/expiry 的到期项 |
 | 闸门命令 | `make gates-strict` → 38/38、`G-1=0 G-2=0 G-3=0 exit=0`；默认范围只到 `HEAD^..HEAD` |
 | AC 台账 | `ac-coverage.tsv` 已有 AC-22/28/29/30/35/37 的 owner/expiry/thread，Reviewer 复核接受为到期项 |
 
-> `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false；P0-7 属于**开关打开即资损**，修复前不得开启。
+> `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false；P0-7 已修复并复跑通过，按 ADR §13.1 分阶段灰度，不在本审查中自动打开。
 
-## 3. 未闭环阻断项（下轮开场先看）
+## 3. 审查项状态（下轮开场先看）
 
 | ID | 事项 | 契约 | 状态 |
 |---|---|---|---|
 | P0-1 | 自检清单三问 | `AGENTS.md` §1.3 | **CLOSED**（T-001 §7.2） |
-| P0-2 | 行级 `pending_*` 在途占用 | ADR-0005 §6.4 / §19.1#12 | **CLOSED**（创建/成功/驳回/永久失败四路径 + 并发测试） |
+| P0-2 | 行级 `pending_*` 在途占用 | ADR-0005 §6.4 / §19.1#12 | **CLOSED**（四路径 + 并发测试） |
 | P0-3 | `FREIGHT_RESPONSIBILITY_ENABLED` 开关 | ADR-0005 §13.1 | **CLOSED**（config + legacy 分支 + 测试） |
 | P0-4 | 重复 `DELIVERED` 回拨 `due_at` | Spec AC-20/22/35 | **CLOSED**（锚定 `delivered_at` + 回归测试） |
 | P0-5 | 历史混提 + 自改 CONVENTIONS/台账 | CONVENTIONS §1/§5.1/§5.2 | **CLOSED**（D.1 `[mixed]` + T-002 追认） |
 | P0-6 | AC-14/22/28/29/35/37 深度、台账为空 | CONVENTIONS §4.1/§A.4、ADR §14 | **CONDITIONAL**（台账已登记；AC-22 worker/页面断言 `2026-12-15` 到期） |
-| **P0-7** | 运费 hold 结清未绑定售后状态/商品退款，breakdown 缺失时漏账 | Spec 6.5.1/6.5.2、ADR §6.5/§18.4 | **OPEN**（不得开 `FREIGHT_RESPONSIBILITY_ENABLED`） |
+| P0-7 | 运费 hold 结清未绑定售后状态/商品退款 | Spec 6.5.1/6.5.2、ADR §6.5/§18.4 | **CLOSED**（`f162ecf`；驳回 WAIVED、worker 只结算 REFUNDED、breakdown upsert、committed 排除驳回） |
 
 ## 4. 红队题库（每轮至少抽 3 条追问）
 
@@ -82,8 +82,9 @@ git log --oneline -8 && git status --short
 6. 资金链路：`after_sale_line_ledger.pending_*`、`after_sale_amount_ledger.consumed`、Payment captured 三层缺一不可；`recordLineRefundTx` 没有 DB 上限约束，别只看代码。
 7. 所有“开关”都要在 `internal/platform/config/config.go` 找到 env 解析；只在文档里写开关等于没有。
 8. 偏差登记只认 `docs/implementation/**`；代码里的 `// TODO` 不能替代。
-9. **运费 hold 结算**：不能只按 `hold.status=HELD && deadline<=now` 扫（`responsibility.go:297-299`）；必须绑定 `after_sales.status=REFUNDED`（或商品退款完成），否则拒绝单/未退款单会白退运费。`refundFreightHold` 的 breakdown 只能 `UPDATE`（`:209-215`），若判责早于商品退款会漏账；`freightCommitted` 不能计入 REJECTED 单的 HELD（`:324-337`）。
-10. 开关默认 false **不是免责**：功能开关打开后的资损路径按“已交付”审查；P0-7 修复前不得开启 `FREIGHT_RESPONSIBILITY_ENABLED`。
+9. **运费 hold 结算**：不能只按 `hold.status=HELD && deadline<=now` 扫（`responsibility.go:312-317`）；必须绑定 `after_sales.status=REFUNDED`（或商品退款完成），否则拒绝单/未退款单会白退运费。`refundFreightHold` 的 breakdown 用 upsert（`:220-230`），`freightCommitted` 排除 REJECTED/CANCELLED（`:349-355`）；hold 创建时 effective 只含商品（`service.go:283-286`），退款时被 effective 截断（`workers.go:414-416`），保证 hold 与 goods refund 不重复付同一笔运费。
+10. 开关默认 false **不是免责**：功能开关打开后的资损路径按“已交付”审查；P0-7 已修复，但 `FREIGHT_RESPONSIBILITY_ENABLED` 仍按 ADR §13.1 分阶段灰度，不因 PASS 自动打开。
+11. `[TODO]` 长期停在 `REQUESTED/APPROVED` 的售后 hold 不会被 worker 结算，却仍被 `freightCommitted` 计入；到期自动 WAIVED 或排除未批准请求的清理项已交 Developer（不影响本轮 PASS）。
 
 ## 7. 新会话开场动作
 

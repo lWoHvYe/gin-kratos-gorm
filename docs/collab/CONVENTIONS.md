@@ -22,6 +22,8 @@
 | 代码与测试 | `internal/**`、`cmd/**`、`api/**`… | Developer | Reviewer 只提议，不直接改 |
 | PO 记忆 | `docs/po/**` | Product Owner | 只读 |
 | Architect 记忆 | `docs/architect/**` | System Architect | 只读 |
+| Reviewer 记忆 | `docs/reviewer/**` | Reviewer | 只读 |
+| 审查线程 | `docs/collab/developer-reviewer/threads/**` | 双方各自追加 | 不改对方已写内容 |
 | 闸门基线/覆盖台账 | `docs/collab/ac-baseline.txt`、`docs/collab/ac-coverage.tsv` | Reviewer | 只读（变更需 Reviewer 记录） |
 
 **禁止**：任何角色直接编辑他人产物。需要对方改，只能开线程。
@@ -119,12 +121,13 @@ scope 按**主产物路径**取，不按作者角色命名；小写，允许连�
 | `docs(po)` | `docs/po/**` | PO 记忆区 |
 | `docs(architect)` | `docs/architect/**` | Architect 记忆区 |
 | `docs(developer)` | `docs/developer/**` | Developer 记忆区 |
+| `docs(reviewer)` | `docs/reviewer/**` | Reviewer 记忆区 |
 | `docs(collab)` | `docs/collab/**` | 协作约定、线程、索引、闸门台账 |
 | `docs(meta)` | `AGENTS.md`、`README.md`、`docs/*.md`（非上述目录） | 全局说明/索引 |
 
 规则：
 
-1. `docs(po)` 只用于 `docs/po/**`；`docs(collab)` 只用于 `docs/collab/**`；两者不能互代，也不能用 `docs(docs)` 兜底。
+1. `docs(po)` 只用于 `docs/po/**`；`docs(reviewer)` 只用于 `docs/reviewer/**`；`docs(collab)` 只用于 `docs/collab/**`；三者不能互代，也不能用 `docs(docs)` 兜底。
 2. 一个 commit 只允许一个主 scope；同时改 ADR 与线程时，**拆成 `docs(adr)` + `docs(collab)` 两笔**，不要用 `docs(collab)` 把 ADR 混进去。
 3. 不可避免的跨产物的机械同步（如回填 commit hash）：scope 取主产物，正文列出次产物，Reviewer 标 `[mixed]`；不得把业务/设计变更塞进 `[mixed]`。
 4. 历史提交不回改；本表只约束新提交。Reviewer 按 §4.3 把混提作为审查项。
@@ -169,7 +172,7 @@ scope 按**主产物路径**取，不按作者角色命名；小写，允许连�
 | Product Owner | `AGENTS.md`、本文件、`docs/po/MEMORY.md`、线程索引 | 升版 Spec（YAML + 变更记录 + 索引） | 写代码、改 ADR/代码、在聊天里定规则 |
 | System Architect | `AGENTS.md`、本文件、Spec 当前版本、线程索引 | ADR / Amendment | 写业务代码、改 Spec |
 | Developer | `AGENTS.md`、本文件、Spec + ADR + 偏差登记 | 代码、测试（带 AC 编号）、偏差登记（带 owner/expiry） | 改 Spec/ADR、无主 shim、`// TODO` 掩盖冲突 |
-| Reviewer | `AGENTS.md`、本文件、Spec、ADR | 审查结论（按 AC 逐条 + 红队问题） | 微观完美主义阻断交付、放过未覆盖 AC |
+| Reviewer | `AGENTS.md`、本文件、Spec、ADR、`docs/reviewer/MEMORY.md`、线程索引 | 审查结论（按 AC 逐条 + 红队问题，落 `docs/collab/developer-reviewer/threads/T-NNN.md`） | 微观完美主义阻断交付、放过未覆盖 AC、写代码/代替 Developer 实施 |
 
 ---
 
@@ -212,9 +215,13 @@ docs/collab/architect-developer/threads.md、docs/implementation/ 偏差登记�
 **给 Reviewer**
 
 ```text
-你是 Reviewer。读 AGENTS.md、docs/collab/CONVENTIONS.md、Spec、ADR。
+你是 Reviewer。读 AGENTS.md、docs/collab/CONVENTIONS.md、Spec、ADR、
+docs/reviewer/MEMORY.md、docs/collab/developer-reviewer/threads.md（以及实施侧
+docs/collab/architect-developer/threads.md）。
 逐条核对 AC 是否有测试（用 CONVENTIONS §4.1 的命令），检查偏差是否有 owner/expiry，
-检查是否混提/越权，然后按红队思维直接问 Developer："我要是极端用户怎么打穿你这版？"
+检查是否混提/越权；结论（PASS/FAIL + AC 逐条 + 红队问题）写入
+docs/collab/developer-reviewer/threads/T-NNN.md，并同步线程索引与
+docs/collab/ac-coverage.tsv。不要直接改代码/Developer 产物；发现问题开线程。
 ```
 
 ---

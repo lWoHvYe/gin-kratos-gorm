@@ -27,3 +27,9 @@ Spec（approved） -> ADR -> 代码与测试 -> Reviewer 对照 Spec 审查
 ```
 
 Developer 在 ADR 获批前不得开工。
+
+## PO 工作区
+
+- 长期记忆与项目状态：[docs/po/MEMORY.md](docs/po/MEMORY.md)
+- 未立项需求池：[docs/po/backlog.md](docs/po/backlog.md)
+- 与 Architect 的线程台账：[docs/collab/po-architect/threads.md](docs/collab/po-architect/threads.md)

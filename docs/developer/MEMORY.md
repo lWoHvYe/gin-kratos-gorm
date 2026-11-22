@@ -54,7 +54,18 @@
 7. 支付冻结：`status=PAID` 与 `allocation_frozen_at` 同事务；冻结后行/组/仓只读（INV-22）。
 8. 新单拒绝直接改金额；历史 `line_no=0` 只走审计兼容路径（C-02）。
 
-## 6. 常用命令
+## 6. 提交 scope
+
+词表在 `docs/collab/CONVENTIONS.md` §5.1/§5.2。Developer 常用：
+
+- 单服务：`feat|fix|test(order|pricing|inventory|fulfillment|aftersales|payment|gateway|admin|catalog|cart|identity|seckill|ai)`
+- 契约：`feat(contracts)`；迁移：`feat(migrations)`
+- 闸门：`ci(gates)`；工具：`chore(tooling)`
+- 记忆：`docs(developer)`；偏差登记：`docs(impl)`
+
+单服务与契约同改时拆两笔，不混提。
+
+## 7. 常用命令
 
 ```bash
 export PATH="$PWD/.tmp/bin:$PATH"
@@ -70,7 +81,7 @@ TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/mall_order_test?parseTime=true&loc
   go test ./internal/services/order -count=1
 ```
 
-## 7. 新会话开场动作
+## 8. 新会话开场动作
 
 1. 读 `AGENTS.md`、`docs/collab/CONVENTIONS.md`、Spec 当前版本、ADR-0005/0006、本文件。
 2. 看 `docs/collab/architect-developer/threads.md` 与 T-001；有 OPEN 先处理。

@@ -58,6 +58,10 @@ type Config struct {
 	DeliveryAutoConfirmEnabled bool
 	// ShortageCaseEnabled exposes the post-payment shortage choice flow.
 	ShortageCaseEnabled bool
+	// FreightResponsibilityEnabled gates responsibility determination and the
+	// 168h freight hold. Off falls back to the legacy "unshipped full freight,
+	// otherwise none" rule.
+	FreightResponsibilityEnabled bool
 	// InventoryWarehousePriority is the configured warehouse business priority
 	// order (ADR 0005 §18.3). Empty means warehouse_id ascending.
 	InventoryWarehousePriority []int64
@@ -553,6 +557,13 @@ func applyEnv(c *Config) error {
 			return fmt.Errorf("DELIVERY_AUTO_CONFIRM_ENABLED must be a boolean (got %q)", v)
 		}
 		c.DeliveryAutoConfirmEnabled = parsed
+	}
+	if v, ok := os.LookupEnv("FREIGHT_RESPONSIBILITY_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("FREIGHT_RESPONSIBILITY_ENABLED must be a boolean (got %q)", v)
+		}
+		c.FreightResponsibilityEnabled = parsed
 	}
 	if v, ok := os.LookupEnv("SHORTAGE_CASE_ENABLED"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))

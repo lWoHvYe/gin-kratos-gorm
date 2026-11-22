@@ -79,7 +79,9 @@ func main() {
 	}
 	defer orderConn.Close()
 	orders := pb.NewOrderServiceClient(orderConn)
-	svc := aftersales.New(database, client, payments, inventory, orders, logger)
+	svc := aftersales.NewWithOptions(database, client, payments, inventory, orders, logger, aftersales.Options{
+		FreightResponsibilityEnabled: cfg.FreightResponsibilityEnabled,
+	})
 	workers.Go(func(ctx context.Context) { aftersales.RunShortageConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { aftersales.RunRestockWorker(ctx, database, svc, logger, 5*time.Second) })
 	workers.Go(func(ctx context.Context) { aftersales.RunRefundWorker(ctx, database, svc, logger, 5*time.Second) })

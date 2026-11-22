@@ -48,19 +48,19 @@ func (s *Service) computeLineRefunds(ctx context.Context, q lineQuery, order *pb
 		if item.GetQuantity() <= 0 {
 			return nil, 0, 0, "", apperr.Invalid("refund quantity must be positive")
 		}
-		var refundedQty, refundedCent int64
-		query := `SELECT refunded_quantity, refunded_amount_cent FROM after_sale_line_ledger
-			WHERE order_no = ? AND line_no = ?`
+		var refundedQty, refundedCent, pendingQty, pendingCent int64
+		query := `SELECT refunded_quantity, refunded_amount_cent, pending_quantity, pending_amount_cent
+			FROM after_sale_line_ledger WHERE order_no = ? AND line_no = ?`
 		if lock {
 			query += ` FOR UPDATE`
 		}
-		err := q.QueryRowContext(ctx, query, order.GetOrderNo(), item.GetLineNo()).Scan(&refundedQty, &refundedCent)
+		err := q.QueryRowContext(ctx, query, order.GetOrderNo(), item.GetLineNo()).Scan(&refundedQty, &refundedCent, &pendingQty, &pendingCent)
 		if errors.Is(err, sql.ErrNoRows) {
 			if lock {
 				if err := s.execLineLedgerInsert(ctx, q, order.GetOrderNo(), item.GetLineNo()); err != nil {
 					return nil, 0, 0, "", err
 				}
-				if err := q.QueryRowContext(ctx, query, order.GetOrderNo(), item.GetLineNo()).Scan(&refundedQty, &refundedCent); err != nil {
+				if err := q.QueryRowContext(ctx, query, order.GetOrderNo(), item.GetLineNo()).Scan(&refundedQty, &refundedCent, &pendingQty, &pendingCent); err != nil {
 					return nil, 0, 0, "", apperr.Internal("lock new line refund ledger", err)
 				}
 			}
@@ -69,8 +69,14 @@ func (s *Service) computeLineRefunds(ctx context.Context, q lineQuery, order *pb
 		}
 		linePaid := line.GetLinePaidCent()
 		lineQty := int64(line.GetQuantity())
-		remainingQty := lineQty - refundedQty
-		remainingCent := linePaid - refundedCent
+		remainingQty := lineQty - refundedQty - pendingQty
+		remainingCent := linePaid - refundedCent - pendingCent
+		if remainingQty < 0 {
+			remainingQty = 0
+		}
+		if remainingCent < 0 {
+			remainingCent = 0
+		}
 		if int64(item.GetQuantity()) > remainingQty {
 			return nil, 0, 0, "", apperr.Invalid("refund quantity exceeds the remaining line quantity").
 				WithDetails(map[string]any{"line_no": item.GetLineNo(), "remaining_quantity": remainingQty})

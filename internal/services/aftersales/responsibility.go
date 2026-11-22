@@ -69,6 +69,9 @@ func validReason(party, code string) bool {
 // requires a closed reason-code enum and evidence; free-text reason is never an
 // input (INV-29/AC-33).
 func (s *Service) DetermineResponsibility(ctx context.Context, req *pb.DetermineResponsibilityRequest) (*pb.AfterSale, error) {
+	if !s.freightResponsibilityEnabled {
+		return nil, apperr.Failed("[未启用] FREIGHT_RESPONSIBILITY_ENABLED=false")
+	}
 	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
 	party := strings.ToUpper(strings.TrimSpace(req.GetParty()))
 	source := strings.ToUpper(strings.TrimSpace(req.GetSource()))
@@ -121,6 +124,9 @@ func (s *Service) DetermineResponsibility(ctx context.Context, req *pb.Determine
 // applyFreightHold settles a pending freight hold after responsibility is
 // determined. Product refund is never blocked by this call.
 func (s *Service) applyFreightHold(ctx context.Context, afterSaleNo, party, code string) error {
+	if !s.freightResponsibilityEnabled {
+		return nil
+	}
 	var freight int64
 	var status string
 	err := s.db.QueryRowContext(ctx, `SELECT freight_cent, status FROM after_sale_freight_holds
@@ -224,13 +230,11 @@ func (s *Service) freightRefundFor(ctx context.Context, q lineQuery, order *pb.O
 			break
 		}
 	}
-	var already int64
-	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(b.freight_cent), 0)
-		FROM after_sale_refund_breakdowns b JOIN after_sales a ON a.after_sale_no = b.after_sale_no
-		WHERE a.order_no = ? AND a.status = ?`, order.GetOrderNo(), statusRefunded).Scan(&already); err != nil {
-		return 0, false, "", apperr.Internal("load refunded freight", err)
+	committed, err := s.freightCommitted(ctx, q, order.GetOrderNo())
+	if err != nil {
+		return 0, false, "", err
 	}
-	remaining := order.GetFreightCent() - already
+	remaining := order.GetFreightCent() - committed
 	if remaining < 0 {
 		remaining = 0
 	}
@@ -272,6 +276,9 @@ func allOtherGroupsClosed(order *pb.Order, groupNo string) bool {
 // RunFreightHoldWorker is the 168h fail-safe. It is a deadline timer over
 // freight holds, not a business-status scanner.
 func RunFreightHoldWorker(ctx context.Context, database *sql.DB, svc *Service, logger *slog.Logger, interval time.Duration) {
+	if svc == nil || !svc.freightResponsibilityEnabled {
+		return
+	}
 	if interval <= 0 {
 		interval = time.Minute
 	}
@@ -309,4 +316,23 @@ func (s *Service) processExpiredFreightHolds(ctx context.Context, logger *slog.L
 			logger.Warn("freight hold refund failed", "after_sale_no", afterSaleNo, "error", err)
 		}
 	}
+}
+
+// freightCommitted includes refunded freight and HELD freight reservations.
+// Without held amounts, a later full-order refund could consume freight that
+// another after-sale has already promised.
+func (s *Service) freightCommitted(ctx context.Context, q lineQuery, orderNo string) (int64, error) {
+	var refunded int64
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(b.freight_cent), 0)
+		FROM after_sale_refund_breakdowns b JOIN after_sales a ON a.after_sale_no = b.after_sale_no
+		WHERE a.order_no = ? AND a.status = ?`, orderNo, statusRefunded).Scan(&refunded); err != nil {
+		return 0, apperr.Internal("load refunded freight", err)
+	}
+	var held int64
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(h.freight_cent), 0)
+		FROM after_sale_freight_holds h JOIN after_sales a ON a.after_sale_no = h.after_sale_no
+		WHERE a.order_no = ? AND h.status = ?`, orderNo, freightStateHeld).Scan(&held); err != nil {
+		return 0, apperr.Internal("load held freight", err)
+	}
+	return refunded + held, nil
 }

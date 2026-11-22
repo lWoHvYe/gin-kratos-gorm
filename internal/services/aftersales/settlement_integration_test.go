@@ -78,7 +78,7 @@ func afterSaleTestDB(t *testing.T) *sql.DB {
 			group_no VARCHAR(64) NOT NULL DEFAULT 'G1', received_quantity INT NOT NULL DEFAULT 0,
 			condition_code VARCHAR(16) NOT NULL DEFAULT 'SELLABLE',
 			line_no INT NOT NULL DEFAULT 0, line_paid_cent_snapshot BIGINT NOT NULL DEFAULT 0,
-			unit_paid_cent_snapshot BIGINT NOT NULL DEFAULT 0,
+			unit_paid_cent_snapshot BIGINT NOT NULL DEFAULT 0, pending_amount_cent BIGINT NOT NULL DEFAULT 0,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_after_sale_items_line (after_sale_id, line_no),
 			KEY idx_after_sale_items_group (after_sale_id, sku_id, warehouse_id, group_no))`,
@@ -896,6 +896,43 @@ func TestAC14FreightRefundSixScenarios(t *testing.T) {
 	if err != nil || amount != 300 || !hold || rule != "FREIGHT_HOLD" {
 		t.Fatalf("undetermined = %d/%v/%s/%v", amount, hold, rule, err)
 	}
+	// Cumulative cap: a prior refunded breakdown consumes 700 of the 1000
+	// order freight; a later full-order refund can only return the remainder.
+	if _, err := db.Exec(`INSERT INTO after_sales
+		(after_sale_no, order_no, user_id, ` + "`type`" + `, status, amount_cent, effective_amount_cent,
+		 amount_state, restock_state, reason, client_request_id, source)
+		VALUES ('AS-PRIOR', 'ORD-FREIGHT', 1, 'REFUND_ONLY', 'REFUNDED', 700, 700,
+		 'CONSUMED', 'NONE', 'prior', 'prior', 'SYSTEM')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO after_sale_refund_breakdowns
+		(after_sale_no, goods_cent, freight_cent, total_cent, rule_id)
+		VALUES ('AS-PRIOR', 0, 700, 700, 'MERCHANT_FULL_FREIGHT')`); err != nil {
+		t.Fatal(err)
+	}
+	amount, hold, rule, err = svc.freightRefundFor(ctx, db, freightTestOrder(closed), "G1", partyMerchant)
+	if err != nil || amount != 300 || hold || rule != "MERCHANT_FULL_FREIGHT" {
+		t.Fatalf("cumulative cap = %d/%v/%s/%v", amount, hold, rule, err)
+	}
+	// A HELD commitment also consumes the order freight budget before payout.
+	if _, err := db.Exec(`DELETE FROM after_sale_refund_breakdowns WHERE after_sale_no = 'AS-PRIOR'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO after_sales
+		(after_sale_no, order_no, user_id, ` + "`type`" + `, status, amount_cent, effective_amount_cent,
+		 amount_state, restock_state, reason, client_request_id, source)
+		VALUES ('AS-HOLD', 'ORD-FREIGHT', 1, 'RETURN_REFUND', 'REFUNDED', 1000, 1000,
+		 'CONSUMED', 'DONE', 'hold', 'hold', 'USER')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO after_sale_freight_holds
+		(after_sale_no, freight_cent, status, deadline_at) VALUES ('AS-HOLD', 700, 'HELD', NOW(3))`); err != nil {
+		t.Fatal(err)
+	}
+	amount, hold, rule, err = svc.freightRefundFor(ctx, db, freightTestOrder(closed), "G1", partyMerchant)
+	if err != nil || amount != 300 || hold || rule != "MERCHANT_FULL_FREIGHT" {
+		t.Fatalf("held-freight cap = %d/%v/%s/%v", amount, hold, rule, err)
+	}
 }
 
 // AC-31/32/33: undetermined responsibility refunds goods, holds freight for
@@ -918,7 +955,7 @@ func testAC31To33FreightHoldTimeout(t *testing.T) {
 	}}
 	payment := &fakePaymentService{captured: 2000}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	svc := New(db, nil, payment, &fakeInventoryService{}, order, logger)
+	svc := NewWithOptions(db, nil, payment, &fakeInventoryService{}, order, logger, Options{FreightResponsibilityEnabled: true})
 	ctx := context.Background()
 	as, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
 		OrderNo: "ORD-HOLD", UserId: 1, Type: typeReturnRefund, Reason: "包裹破损",
@@ -1040,3 +1077,111 @@ func TestAC13CrossWarehouseLineIsolation(t *testing.T) {
 func TestAC31FreightHoldTimeout(t *testing.T)                   { testAC31To33FreightHoldTimeout(t) }
 func TestAC32FreightHoldTimeoutDefaultsToMerchant(t *testing.T) { testAC31To33FreightHoldTimeout(t) }
 func TestAC33FreeTextDoesNotDetermineCarrier(t *testing.T)      { testAC31To33FreightHoldTimeout(t) }
+
+// P0-2: two concurrent after-sales for 2 units on a 3-unit line cannot both
+// reserve the line; pending quantity/amount are cleared on completion.
+func TestLinePendingReservationBlocksConcurrentOverRefund(t *testing.T) {
+	db := afterSaleTestDB(t)
+	svc, _ := lineAfterSaleService(t, db, 2500)
+	ctx := context.Background()
+	results := make([]error, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			_, results[index] = svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+				OrderNo: "ORD-LINE", UserId: 1, Type: typeRefundOnly, Reason: "concurrent",
+				Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 2, WarehouseId: 1, GroupNo: "G1", LineNo: 1}},
+			})
+		}(i)
+	}
+	wg.Wait()
+	success := 0
+	for _, err := range results {
+		if err == nil {
+			success++
+		}
+	}
+	if success != 1 {
+		t.Fatalf("concurrent creates succeeded=%d errors=%v", success, results)
+	}
+	var pendingQty, pendingCent int64
+	if err := db.QueryRow(`SELECT pending_quantity, pending_amount_cent FROM after_sale_line_ledger
+		WHERE order_no = 'ORD-LINE' AND line_no = 1`).Scan(&pendingQty, &pendingCent); err != nil {
+		t.Fatal(err)
+	}
+	if pendingQty != 2 || pendingCent != 666 {
+		t.Fatalf("pending = %d/%d", pendingQty, pendingCent)
+	}
+	var afterSaleNo string
+	if err := db.QueryRow(`SELECT after_sale_no FROM after_sales WHERE order_no = 'ORD-LINE'`).Scan(&afterSaleNo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Approve(ctx, &pb.ApproveRequest{AfterSaleNo: afterSaleNo, Approved: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Refund(ctx, &pb.RefundAfterSaleRequest{AfterSaleNo: afterSaleNo}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT pending_quantity, refunded_quantity FROM after_sale_line_ledger
+		WHERE order_no = 'ORD-LINE' AND line_no = 1`).Scan(&pendingQty, &pendingCent); err != nil {
+		t.Fatal(err)
+	}
+	if pendingQty != 0 || pendingCent != 2 {
+		t.Fatalf("pending/refunded = %d/%d", pendingQty, pendingCent)
+	}
+}
+
+// P0-3: with FREIGHT_RESPONSIBILITY_ENABLED=false the legacy caliber applies:
+// unshipped REFUND_ONLY returns the full freight and creates no hold.
+func TestFreightResponsibilityDisabledUsesLegacyRule(t *testing.T) {
+	db := afterSaleTestDB(t)
+	order := &fakeOrderService{order: &pb.Order{
+		OrderNo: "ORD-FLAG", UserId: 1, Status: "PAID", PaidCent: 2000, FreightCent: 1000, RefundState: "NONE",
+		FulfillmentGroups: []*pb.OrderFulfillmentGroup{
+			{GroupNo: "G1", WarehouseId: 1, Status: "ALLOCATED", RefundState: "NONE", FreightShareCent: 1000},
+		},
+		Items: []*pb.OrderItem{
+			{LineNo: 1, SkuId: 1, PriceCent: 1000, Quantity: 1, WarehouseId: 1, GroupNo: "G1",
+				LinePaidCent: 1000, UnitPaidCent: 1000},
+		},
+	}}
+	svc := New(db, nil, &fakePaymentService{captured: 2000}, &fakeInventoryService{}, order,
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	as, err := svc.CreateAfterSale(context.Background(), &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-FLAG", UserId: 1, Type: typeRefundOnly, Reason: "unshipped",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1", LineNo: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if as.GetEffectiveAmountCent() != 2000 || as.GetFreightState() != "NONE" || as.GetFreightCent() != 0 {
+		t.Fatalf("legacy refund = %+v", as)
+	}
+}
+
+// P0-2: rejecting an after-sale releases its line pending quantity/amount.
+func TestRejectedAfterSaleReleasesLinePending(t *testing.T) {
+	db := afterSaleTestDB(t)
+	svc, _ := lineAfterSaleService(t, db, 2500)
+	ctx := context.Background()
+	as, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-LINE", UserId: 1, Type: typeRefundOnly, Reason: "reject",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1", LineNo: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Approve(ctx, &pb.ApproveRequest{AfterSaleNo: as.GetAfterSaleNo(), Approved: false, Reason: "no"}); err != nil {
+		t.Fatal(err)
+	}
+	var pendingQty, pendingCent int64
+	if err := db.QueryRow(`SELECT pending_quantity, pending_amount_cent FROM after_sale_line_ledger
+		WHERE order_no = 'ORD-LINE' AND line_no = 1`).Scan(&pendingQty, &pendingCent); err != nil {
+		t.Fatal(err)
+	}
+	if pendingQty != 0 || pendingCent != 0 {
+		t.Fatalf("pending after reject = %d/%d", pendingQty, pendingCent)
+	}
+}

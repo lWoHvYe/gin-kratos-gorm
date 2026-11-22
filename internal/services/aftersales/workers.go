@@ -376,11 +376,16 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 	if current.status != statusRefunding {
 		return apperr.Conflict(fmt.Sprintf("after sale is %s, not REFUNDING", current.status))
 	}
+	if err := s.clearPendingForAfterSaleTx(ctx, tx, afterSaleNo); err != nil {
+		return err
+	}
 	refunds, goodsCent, freightCent, ruleID, err := s.computeLineRefunds(ctx, tx, order, items, current.typ, true)
 	if err != nil {
 		return err
 	}
-	if current.source == sourceSystem {
+	if !s.freightResponsibilityEnabled {
+		// computedFreight/computedRule came from computeLineRefunds (legacy).
+	} else if current.source == sourceSystem {
 		share := groupFreightShare(order, groupNo)
 		freightCent, err = s.systemFreightRefund(ctx, tx, order, groupNo, share)
 		if err != nil {
@@ -561,6 +566,11 @@ func (s *Service) releaseRefundTask(ctx context.Context, afterSaleNo, owner stri
 		SET status = ?, last_error = ?, lease_owner = '', lease_until = NULL, updated_at = NOW(3)
 		WHERE after_sale_no = ?`, next, cutRunes(cause.Error(), 512), afterSaleNo); err != nil {
 		return
+	}
+	if next == taskFailed {
+		if err := s.releasePendingForAfterSaleTx(ctx, tx, afterSaleNo); err != nil {
+			return
+		}
 	}
 	_ = tx.Commit()
 }

@@ -83,10 +83,25 @@ type Service struct {
 	inventory pb.InventoryServiceClient
 	orders    pb.OrderServiceClient
 	log       *slog.Logger
+	// freightResponsibilityEnabled gates responsibility/holds; off keeps the
+	// legacy unshipped-full/otherwise-none behavior.
+	freightResponsibilityEnabled bool
+}
+
+// Options gates ADR 0005 §13.1 behavior.
+type Options struct {
+	FreightResponsibilityEnabled bool
 }
 
 func New(db *sql.DB, client *mq.Client, payments pb.PaymentServiceClient, inventory pb.InventoryServiceClient, orders pb.OrderServiceClient, logger *slog.Logger) *Service {
-	return &Service{db: db, mq: client, payments: payments, inventory: inventory, orders: orders, log: logger}
+	return NewWithOptions(db, client, payments, inventory, orders, logger, Options{})
+}
+
+func NewWithOptions(db *sql.DB, client *mq.Client, payments pb.PaymentServiceClient, inventory pb.InventoryServiceClient, orders pb.OrderServiceClient, logger *slog.Logger, opts Options) *Service {
+	return &Service{
+		db: db, mq: client, payments: payments, inventory: inventory, orders: orders, log: logger,
+		freightResponsibilityEnabled: opts.FreightResponsibilityEnabled,
+	}
 }
 
 // validateAgainstOrder prevents after-sales from inventing money or stock. The
@@ -249,7 +264,7 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 		groupNo = items[0].GroupNo
 	}
 	computedCent := input.amountCent
-	refunds, goodsCent, _, _, err := s.computeLineRefunds(ctx, tx, order, toProtoItems(items), input.typ, true)
+	refunds, goodsCent, computedFreight, computedRule, err := s.computeLineRefunds(ctx, tx, order, toProtoItems(items), input.typ, true)
 	if err != nil {
 		return nil, err
 	}
@@ -257,9 +272,13 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	holdFreight := false
 	ruleID := "LINE_REFUND"
 	if goodsCent > 0 {
-		freightCent, holdFreight, ruleID, err = s.freightRefundFor(ctx, tx, order, groupNo, party)
-		if err != nil {
-			return nil, err
+		if s.freightResponsibilityEnabled {
+			freightCent, holdFreight, ruleID, err = s.freightRefundFor(ctx, tx, order, groupNo, party)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			freightCent, holdFreight, ruleID = computedFreight, false, computedRule
 		}
 		computedCent = goodsCent
 		if !holdFreight {
@@ -309,14 +328,26 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	if err := appendAmountVersionTx(ctx, tx, afterSaleID, 1, computedCent, "CREATE"); err != nil {
 		return nil, err
 	}
+	pendingByLine := make(map[int32]int64, len(refunds))
+	for _, refund := range refunds {
+		pendingByLine[refund.LineNo] = refund.AmountCent
+	}
+	for i := range items {
+		items[i].PendingAmountCent = pendingByLine[items[i].LineNo]
+	}
 	for _, it := range items {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_items
 			(after_sale_id, sku_id, quantity, warehouse_id, group_no, line_no,
-			 line_paid_cent_snapshot, unit_paid_cent_snapshot)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			 line_paid_cent_snapshot, unit_paid_cent_snapshot, pending_amount_cent)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			afterSaleID, it.SkuID, it.Quantity, it.WarehouseID, it.GroupNo, it.LineNo,
-			it.LinePaidCent, it.UnitPaidCent); err != nil {
+			it.LinePaidCent, it.UnitPaidCent, it.PendingAmountCent); err != nil {
 			return nil, apperr.Internal("create after sale item", err)
+		}
+	}
+	for _, refund := range refunds {
+		if err := s.reservePendingLineTx(ctx, tx, input.orderNo, refund.LineNo, refund.Quantity, refund.AmountCent); err != nil {
+			return nil, err
 		}
 	}
 	if err := appendLog(ctx, tx, afterSaleID, "CREATE", "", statusRequested, input.reason); err != nil {
@@ -409,6 +440,9 @@ func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.Afte
 	if next == statusRejected {
 		nextEffective = row.effectiveAmountCent
 		nextAmountState = amountReleased
+		if err := s.releasePendingForAfterSaleTx(ctx, tx, afterSaleNo); err != nil {
+			return nil, err
+		}
 	} else if req.GetAmountCent() > 0 {
 		var newLineCount int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM after_sale_items
@@ -952,13 +986,14 @@ type afterSaleInput struct {
 
 // afterSaleItem is the persisted view of an after-sale line.
 type afterSaleItem struct {
-	SkuID        int64  `json:"sku_id"`
-	Quantity     int32  `json:"quantity"`
-	WarehouseID  int64  `json:"warehouse_id,omitempty"`
-	GroupNo      string `json:"group_no,omitempty"`
-	LineNo       int32  `json:"line_no,omitempty"`
-	LinePaidCent int64  `json:"line_paid_cent,omitempty"`
-	UnitPaidCent int64  `json:"unit_paid_cent,omitempty"`
+	SkuID             int64  `json:"sku_id"`
+	Quantity          int32  `json:"quantity"`
+	WarehouseID       int64  `json:"warehouse_id,omitempty"`
+	GroupNo           string `json:"group_no,omitempty"`
+	LineNo            int32  `json:"line_no,omitempty"`
+	LinePaidCent      int64  `json:"line_paid_cent,omitempty"`
+	UnitPaidCent      int64  `json:"unit_paid_cent,omitempty"`
+	PendingAmountCent int64  `json:"pending_amount_cent,omitempty"`
 }
 
 // afterSaleEvent is the outbox payload for shop.aftersale.* events.

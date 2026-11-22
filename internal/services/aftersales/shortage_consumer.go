@@ -165,16 +165,21 @@ func (s *Service) createSystemRefund(ctx context.Context, event shortageResolved
 	if err := appendAmountVersionTx(ctx, tx, afterSaleID, 1, effective, "CREATE_SYSTEM"); err != nil {
 		return err
 	}
+	pendingByLine := make(map[int32]int64, len(refunds))
+	for _, refund := range refunds {
+		pendingByLine[refund.LineNo] = refund.AmountCent
+	}
 	for _, item := range items {
+		pendingAmount := pendingByLine[item.GetLineNo()]
 		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_items
 			(after_sale_id, sku_id, quantity, warehouse_id, group_no, line_no,
-			 line_paid_cent_snapshot, unit_paid_cent_snapshot)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			 line_paid_cent_snapshot, unit_paid_cent_snapshot, pending_amount_cent)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			afterSaleID, item.GetSkuId(), item.GetQuantity(), item.GetWarehouseId(), item.GetGroupNo(),
-			item.GetLineNo(), item.GetLinePaidCent(), item.GetUnitPaidCent()); err != nil {
+			item.GetLineNo(), item.GetLinePaidCent(), item.GetUnitPaidCent(), pendingAmount); err != nil {
 			return apperr.Internal("create system after sale item", err)
 		}
-		if err := s.reservePendingLineTx(ctx, tx, event.OrderNo, item.GetLineNo(), int64(item.GetQuantity())); err != nil {
+		if err := s.reservePendingLineTx(ctx, tx, event.OrderNo, item.GetLineNo(), int64(item.GetQuantity()), pendingAmount); err != nil {
 			return err
 		}
 	}
@@ -232,13 +237,11 @@ func (s *Service) systemFreightRefund(ctx context.Context, tx *sql.Tx, order *pb
 	if groupShare <= 0 {
 		return 0, nil
 	}
-	var already int64
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(b.freight_cent), 0)
-		FROM after_sale_refund_breakdowns b JOIN after_sales a ON a.after_sale_no = b.after_sale_no
-		WHERE a.order_no = ? AND a.status = ?`, order.GetOrderNo(), statusRefunded).Scan(&already); err != nil {
-		return 0, apperr.Internal("load refunded freight", err)
+	committed, err := s.freightCommitted(ctx, tx, order.GetOrderNo())
+	if err != nil {
+		return 0, err
 	}
-	remaining := order.GetFreightCent() - already
+	remaining := order.GetFreightCent() - committed
 	if groupShare > remaining {
 		groupShare = remaining
 	}
@@ -249,13 +252,61 @@ func (s *Service) systemFreightRefund(ctx context.Context, tx *sql.Tx, order *pb
 	return groupShare, nil
 }
 
-func (s *Service) reservePendingLineTx(ctx context.Context, tx *sql.Tx, orderNo string, lineNo int32, quantity int64) error {
+func (s *Service) reservePendingLineTx(ctx context.Context, tx *sql.Tx, orderNo string, lineNo int32, quantity, amount int64) error {
 	if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_line_ledger
 		(order_no, line_no, refunded_quantity, refunded_amount_cent, pending_quantity, pending_amount_cent)
-		VALUES (?, ?, 0, 0, ?, 0)
+		VALUES (?, ?, 0, 0, ?, ?)
 		ON DUPLICATE KEY UPDATE pending_quantity = pending_quantity + VALUES(pending_quantity),
-			version = version + 1, updated_at = NOW(3)`, orderNo, lineNo, quantity); err != nil {
+			pending_amount_cent = pending_amount_cent + VALUES(pending_amount_cent),
+			version = version + 1, updated_at = NOW(3)`, orderNo, lineNo, quantity, amount); err != nil {
 		return apperr.Internal("reserve pending line quantity", err)
 	}
 	return nil
+}
+
+func (s *Service) releasePendingForAfterSaleTx(ctx context.Context, tx *sql.Tx, afterSaleNo string) error {
+	rows, err := tx.QueryContext(ctx, `SELECT i.line_no, i.quantity, i.pending_amount_cent
+		FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id
+		WHERE a.after_sale_no = ? AND i.line_no > 0`, afterSaleNo)
+	if err != nil {
+		return apperr.Internal("load pending after-sale lines", err)
+	}
+	type pendingLine struct {
+		lineNo   int32
+		quantity int64
+		amount   int64
+	}
+	var lines []pendingLine
+	for rows.Next() {
+		var line pendingLine
+		if err := rows.Scan(&line.lineNo, &line.quantity, &line.amount); err != nil {
+			rows.Close()
+			return apperr.Internal("scan pending after-sale line", err)
+		}
+		lines = append(lines, line)
+	}
+	if err := rows.Close(); err != nil {
+		return apperr.Internal("close pending after-sale lines", err)
+	}
+	for _, line := range lines {
+		if _, err := tx.ExecContext(ctx, `UPDATE after_sale_line_ledger
+			SET pending_quantity = GREATEST(pending_quantity - ?, 0),
+			    pending_amount_cent = GREATEST(pending_amount_cent - ?, 0),
+			    version = version + 1, updated_at = NOW(3)
+			WHERE order_no = ? AND line_no = ?`,
+			line.quantity, line.amount, s.orderNoForAfterSaleTx(ctx, tx, afterSaleNo), line.lineNo); err != nil {
+			return apperr.Internal("release pending line reservation", err)
+		}
+	}
+	return nil
+}
+
+func (s *Service) clearPendingForAfterSaleTx(ctx context.Context, tx *sql.Tx, afterSaleNo string) error {
+	return s.releasePendingForAfterSaleTx(ctx, tx, afterSaleNo)
+}
+
+func (s *Service) orderNoForAfterSaleTx(ctx context.Context, tx *sql.Tx, afterSaleNo string) string {
+	var orderNo string
+	_ = tx.QueryRowContext(ctx, `SELECT order_no FROM after_sales WHERE after_sale_no = ?`, afterSaleNo).Scan(&orderNo)
+	return orderNo
 }

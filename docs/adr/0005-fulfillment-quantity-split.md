@@ -4,7 +4,8 @@
 - Date: 2026-11-22
 - Approved: 2026-11-22（甲方/人类指挥官；OQ-01…OQ-10 按 §15 暂定口径一并批准）
 - Revision: **1.1 / Amendment 1**（2026-11-22；吸收 SPEC-0001 v1.1，回应 [偏差登记](../implementation/adr-0005-deviation-register.md) A/B/C）
-- Normative: **§18 是增量契约；与前文冲突时以 §18 为准。**
+- Review: **二次审计 2026-11-22（§19）**；19.1 的硬伤已入正文，19.2 的 P-01…P-10、P-18 待 PO 裁决
+- Normative: **§18 是增量契约；§19.2 是未决口径。与前文冲突时以 §18 为准；未决项不得判 done。**
 - Spec: [SPEC-0001 v1.0](../specs/0001-fulfillment-quantity-split.md)（已冻结）
 - Amends: [ADR 0002](0002-cross-warehouse-split-orders.md) 的 v1「行级拆分」范围；**废止基线 INV-10**
 - Related: [architecture-baseline.md](../architecture-baseline.md)、[ADR 0003](0003-c-production-rollout.md)、[ADR 0004](0004-p3-0-contract-and-production-scope.md)
@@ -164,14 +165,16 @@ UNSHIPPED | PARTIALLY_SHIPPED | SHIPPED | PARTIALLY_RECEIVED | RECEIVED
 
 映射（由组状态聚合，不落组）：
 
-| 组状态 | 履约投影 | 生命周期 |
+| 场景/组状态 | 履约投影 | 生命周期 |
 |---|---|---|
 | 全部未发 | UNSHIPPED | PAID/ALLOCATED |
 | 部分发货 | PARTIALLY_SHIPPED | ALLOCATED |
 | 全部发货 | SHIPPED | SHIPPED |
 | 部分收货 | PARTIALLY_RECEIVED | SHIPPED |
 | 全部收货 | RECEIVED | COMPLETED |
+| G2 退款（未发）、G1 已发 | PARTIALLY_SHIPPED | ALLOCATED |
 | 全部组关闭（退款/取消） | UNSHIPPED | 不变 |
+| 全部退款（未发）对外展示 | — | —（展示“已关闭（全部退款）”，不写 status） |
 
 **迁移要求**：现有 `shipmentStatus()` 返回的 `CREATED` 必须改为 `UNSHIPPED`；`CREATED` 只保留为运单状态，不得再作为订单履约投影（避免 S2/S6 混淆）。
 
@@ -328,18 +331,20 @@ BFF POST /checkout/preview
 
 - 目标函数（字典序）：
   1. 不同仓数量最少；
-  2. 发生拆量的 SKU 数最少；
-  3. 集中度最高：同等仓数下，优先填满优先级更高的仓（**填满仓数多者胜**；仍相同则最高优先级仓的分配量大者胜）；
-  4. 仓库业务优先级向量最优；
-  5. 可用量降序；
-  6. 仓库 `warehouse_id` 升序（稳定）。
+  2. 集中度最高：同等仓数下，优先填满优先级更高的仓（**填满仓数多者胜**；仍相同则最高优先级仓的分配量大者胜）；
+  3. 仓库业务优先级向量最优；
+  4. 可用量降序；
+  5. 仓库 `warehouse_id` 升序（稳定）。
+- **不得**把“发生拆量的 SKU 数”插到上述序列中间作为独立判据（Spec 6.2 未列）；如需，只能作为“集中度”的子度量。
 - 用有界 DFS + 记忆化（键 = 已用仓集合 + SKU 下标）；已用仓超过 3 立即剪枝。
 - 无解：返回 `FAILED_PRECONDITION`，附 `max_orderable_quantity`、`min_packages_needed`、`suggestion=reduce_quantity|split_orders`。
+
+> ⚠️ **P-03（待 PO 裁决，见 §19.2）**：Spec 6.2 的“集中度”写的是“商品金额最大或数量最多的仓吃满”；Inventory 不掌握价格，本节暂按“填满仓数 + 最高优先级仓数量”实现。若 PO 要求按商品金额，分配器契约需增加行金额输入。
 
 **第 4 步：行号/组号生成（冻结前一次）**
 
 - 输出行按 `(原始 item 顺序, split_seq)` 排序，`line_no = 1..N`。
-- 组号按仓首次出现顺序 `G1..Gn`；组内仓 = 该行 `warehouse_id`。
+- 组号按**仓库顺序**编号 `G1..Gn`：先按 §18.3 的业务优先级，再按 `warehouse_id` 升序。**不是**按行/仓首次出现顺序（Spec 6.3）。
 - 同一请求重复预览，结果必须逐字节一致（INV-28 可追溯）。
 
 ### 5.3 下单校验
@@ -426,6 +431,8 @@ chosen_json, rule_hits_json (命中 6.2 的规则编号), created_at
 - 包邮门槛按 `Σ line_paid` 判定，不按组（AC-05）。
 - 组运费只写 `QuoteGroup.freight_share_cent` / `OrderFulfillmentGroup.freight_share_cent`，用户应付只读订单级 `freight_cent`。
 
+> ⚠️ **P-01 / P-02（待 PO 裁决，见 §19.2）**：本节“最大余数法”与 Spec 6.4.4“累计取整、最后一行吸收”不是同一算法；运费优惠“先作用于订单级再按商品金额分摊”与 Spec 6.4.3“消耗顺序按组序”也可能产生不同的组内部份额。裁决前，AC-03/AC-04/AC-10/AC-14 只能标 `[待确认]`，不得判 done。
+
 ### 6.2 共享算法
 
 `internal/platform/money` 提供纯函数：
@@ -440,7 +447,7 @@ chosen_json, rule_hits_json (命中 6.2 的规则编号), created_at
 unit_paid = floor(line_paid / quantity)
 remainder = line_paid - unit_paid × quantity
 本次退款额 = unit_paid × 本次数量
-若 (已退数量 + 本次数量) == quantity: 本次退款额 += remainder
+若 (已退数量 + 在途占用数量 + 本次数量) == quantity: 本次退款额 += remainder
 ```
 
 不得四舍五入；不得把 `remainder` 提前摊进单价。
@@ -452,13 +459,13 @@ remainder = line_paid - unit_paid × quantity
 ```text
 line        = order_items 快照（冻结后不可变）
 ledger      = after_sale_line_ledger(order_no, line_no) FOR UPDATE
-remaining_q = line.quantity - ledger.refunded_quantity
-remaining_a = line.line_paid_cent - ledger.refunded_amount_cent
+remaining_q = line.quantity - ledger.refunded_quantity - ledger.pending_quantity
+remaining_a = line.line_paid_cent - ledger.refunded_amount_cent - ledger.pending_amount_cent
 
 拒绝: quantity <= 0 | quantity > remaining_q
 金额: unit = floor(line.line_paid_cent / line.quantity)
       amount = unit * quantity
-      if ledger.refunded_quantity + quantity == line.quantity:
+      if ledger.refunded_quantity + ledger.pending_quantity + quantity == line.quantity:
           amount += line.line_paid_cent - unit * line.quantity
 amount = min(amount, remaining_a)
 amount = min(amount, payment captured remaining)   -- 第二层
@@ -466,7 +473,10 @@ amount = min(amount, payment captured remaining)   -- 第二层
 
 - 两层都通过才写 `REFUNDING`；任一层失败返回明确错误（E12/E15/AC-12）。
 - `amount_cent` 入参只存 `expected_amount_cent`，不参与计算；返回 `computed_amount_cent` 与明细（AC-11）。
-- 退款执行成功后，同一本地事务更新 `after_sale_line_ledger`（`refunded_quantity += q`，`refunded_amount_cent += amount`），并写 `shop.aftersale.line_refunded.v1`。
+- **在途占用（Spec 3 定义）**：创建售后单的同一事务里 `pending_quantity += q`、`pending_amount_cent += amount`；这是行级预占，防止两个并发售后各自看到“剩余足够”而超退。
+- 退款成功：同一事务 `pending_* -= q/amount`、`refunded_* += q/amount`，并写 `shop.aftersale.line_refunded.v1`。
+- 驳回/取消（未退款）：释放 `pending_*`；退款任务永久失败时保留 pending 并告警，人工重放，不得自动释放。
+- `remaining_q/remaining_a` 必须同时扣除 `refunded_*` 与 `pending_*`；只扣已退款是超退漏洞。
 
 ### 6.5 运费退还
 
@@ -479,6 +489,8 @@ amount = min(amount, payment captured remaining)   -- 第二层
 - 不存在支付后改价 API。
 - 审批只能按**数量**调整（重新计算金额），不能直接写金额；直接金额调整返回 `INVALID_ARGUMENT`。
 - 冻结后任何金额字段写入被 SQL 守卫拒绝。
+
+> ⚠️ **P-06（待 PO 确认，见 §19.2）**：Spec R8 只禁止“申请方”填金额，未明确审批人能否直接改额。本 ADR 选择“只按数量调整”；若业务需要按金额部分批准，必须新增审批金额版本并与行台账对账，不能沿用旧 `Approve.amount_cent`。
 
 ### 6.7 优惠额度按退款比例释放（Spec 6.7）
 
@@ -503,7 +515,7 @@ created_at, updated_at, version
 ```
 
 - `CreateShipment` / `Ship` 必须传 `carrier_code` 且 `enabled=1`；未登记或停用 → `FAILED_PRECONDITION` + 可选清单（AC-17）。
-- 退货承运商复用同一清单；`SubmitReturnTracking` 必须校验 `enabled=1`（Spec 6.8）。
+- 退货承运商复用同一清单；`SubmitReturnTracking` 必须传 `return_carrier_code` 且 `enabled=1`（Spec 6.8）；`carrier` 名称仅展示。
 - `carrier` 名称作为展示冗余，不允许作为准入依据。
 - 管理端维护；变更留痕（`carrier_audit_logs`）。webhook 签名密钥从 K8s Secret 读取，不落库。
 
@@ -519,7 +531,8 @@ UNIQUE KEY uk_shipments_tracking (tracking_key)
 ```
 
 - 空运单号不冲突；同一承运商下重复运单号直接阻断发货并告警（E19/AC-18）。
-- 换承运商/运单号只允许在 `CREATED` 或 `CANCELLED` 运单上，写 `shipment_change_logs`。
+- `CreateShipment` 允许创建 **CREATED 草稿**（运单号可为空）；`Ship` 必须要求 `carrier_code` 已启用且 `tracking_no` 非空，否则 `FAILED_PRECONDITION`（Spec 6.8“运单号必填”）。
+- 换承运商/运单号只允许在 `CREATED` 或 `CANCELLED` 运单上，必须带 `change_reason` 并写 `shipment_change_logs`（operator/old/new/reason/time）。
 
 ### 7.3 轨迹事件与单调投影
 
@@ -754,7 +767,9 @@ ALTER TABLE after_sale_items
   ADD UNIQUE KEY uk_after_sale_items_line (after_sale_id, line_no),
   ADD KEY idx_after_sale_items_group (after_sale_id, sku_id, warehouse_id, group_no);
 CREATE TABLE after_sale_line_ledger (
-  order_no, line_no, refunded_quantity, refunded_amount_cent,
+  order_no, line_no,
+  refunded_quantity, refunded_amount_cent,
+  pending_quantity, pending_amount_cent,   -- 在途占用（Spec 3）
   version, created_at, updated_at, UNIQUE (order_no, line_no)
 );
 CREATE TABLE after_sale_refund_breakdowns (...);
@@ -835,6 +850,7 @@ CREATE TABLE restock_exception_authorizations (
 | 等式 | 所有者 | 计算 | 差异表 |
 |---|---|---|---|
 | ① `Σ line_paid + freight = pay` | Order | 按订单聚合 | `order_reconciliation_diffs` |
+| ①a `订单应收运费 = 用户实收运费` | Order | `orders.freight_cent = orders.paid_cent - Σ order_items.line_paid_cent` | `order_reconciliation_diffs` |
 | ② `Σ refunded <= captured`（订单/意图） | Payment | 按 intent/order 聚合 | `payment_reconciliation_diffs` |
 | ③ `Σ group.freight_share = order.freight` | Order | 按订单聚合 | `order_reconciliation_diffs` |
 | ④ `RESOLVED_REFUND` 缺货案 24h 内必须有 `after_sale`（Amendment 1） | Order | 按 case 聚合，联查本地 `refund_after_sale_no` 投影 | `order_reconciliation_diffs` |
@@ -904,7 +920,8 @@ CREATE TABLE restock_exception_authorizations (
 | `DELIVERY_AUTO_CONFIRM_ENABLED` | false | 自动确认 worker |
 | `SHORTAGE_CASE_ENABLED` | false | 缺货二选一流程 |
 
-- 配置加载时校验：与 Spec D-01…D-07 冲突的值 fail-closed（ADR 0004 §3）。
+- 配置加载时校验：与 Spec D-01…D-08 冲突的值 fail-closed（ADR 0004 §3）。
+- 新增 `FREIGHT_RESPONSIBILITY_ENABLED`（false）：责任判定/运费挂起开关；关闭时按旧口径“未发货全额、其余不退”，并明确标记 `[未启用]`。
 - 生产保持关闭，直到 ADR 0003 的生产门禁被显式执行。
 
 ### 13.2 阶段
@@ -931,7 +948,7 @@ CREATE TABLE restock_exception_authorizations (
 | AC | 验证方式 | 负责 |
 |---|---|---|
 | AC-01 单仓可满足 | Allocator/Pricing 单测 + 预览集成 | Inventory/Pricing |
-| AC-02 拆量成交 | Allocator 单测 + 预览集成（2 行 2 组） | Inventory/Pricing |
+| AC-02 拆量成交 | Allocator 单测 + 预览集成（2 行 2 组）；含反向：任一仓可满足时不拆 | Inventory/Pricing |
 | AC-03 拆量不改价 | Pricing 金额单测（Σ 优惠/实付守恒） | Pricing |
 | AC-04 运费只收一次 | Pricing 单测 + 对账等式 3 | Pricing/Order |
 | AC-05 包邮门槛按单 | Pricing 单测（99 元拆 2 组） | Pricing |
@@ -960,6 +977,9 @@ CREATE TABLE restock_exception_authorizations (
 | AC-28 付款前告知拆单 | Playwright（预览页包裹数） | Gateway |
 | AC-29 付款后组级物流 | Playwright + BFF 组合（Order+Shipments） | Gateway/Admin |
 | AC-30 缺货显式二选一 | 缺货流程集成 + Playwright（48h 默认退款） | Order/Gateway |
+| AC-31 未判定不阻塞商品退款 | AfterSales 集成（商品退款成功、运费 HELD） | AfterSales |
+| AC-32 超期默认商家责任 | 把 hold `deadline_at` 拨到过去跑 worker | AfterSales |
+| AC-33 自由文本不得判责 | 创建 reason 含“破损”的售后，断言责任不自动变 CARRIER | AfterSales |
 
 每条 AC 必须在测试名或测试日志中可追溯到编号；仅快乐路径不算通过。
 
@@ -1082,6 +1102,7 @@ message AllocateOrderReply {
 
 4. `rule_hits_json` 必须来自实际命中的规则，至少区分：`6.2:single_warehouse`、`6.2:min_warehouses`、`6.2:concentration`、`6.2:priority`、`6.2:available_desc`、`6.2:stable`。禁止硬编码一个固定数组冒充。
 5. `AllocateOrder` 失败时：`FAILED_PRECONDITION` 原样返回并补 `retry_preview`；`UNAVAILABLE`（预算超限）原样返回；**禁止**用 `{}`、空数组或过期快照继续建单。
+6. E1/AC-06 的错误详情必须含 `max_orderable_quantity`（总量）与 `single_warehouse_max`（单仓最大可满足量），用于提示“减少到 N 件可单包裹发货”；仅有总量不足以满足 Spec 6.1 的提示语。
 
 **接口改动**：`order.inventoryPort` 增加 `AllocateOrder`；`recordAllocationDecision` 增加 availability 入参。
 
@@ -1147,6 +1168,12 @@ message DetermineResponsibilityRequest {
 ```
 
 必须写 `responsibility_determined_by/at` 与审计日志；`party=UNDETERMINED` 只允许系统初始值，不允许客服回退。
+
+**判定输入缺一不可（Spec 6.5.2）**：
+
+- 自动落值也必须写全：`evidence_ref = "system:<reason_code>"`、`determined_by = "system"`、`determined_at = NOW`、`reason_code` 非空。
+- 客服判定：`evidence_ref`、`reason_code`、`operator` 均不得为空；空值返回 `INVALID_ARGUMENT`。
+- 承运商丢失/破损只形成**结构化建议**，不改 `responsibility_party`：`party=UNDETERMINED`、`source=CARRIER_EVIDENCE`、`reason_code=CARRIER_LOST|CARRIER_DAMAGED`、`evidence_ref=<track event id>`。UI 展示“建议承运商责任”，最终仍需客服确认。
 
 **运费挂起（强制）**
 
@@ -1247,7 +1274,7 @@ message VerifyRestockAuthorizationReply { bool valid = 1; string reason = 2; }
   `responsibility_party=MERCHANT_WAREHOUSE`、`responsibility_source=SYSTEM`、`reason_code=SHORTAGE_*`。
 - 行：该组所有未发货行，数量 = 行数量 − `after_sale_line_ledger.refunded_quantity`；`items` 只用于**定位行**，系统退款按“行剩余全退”执行，不信任事件里的数量。若全部为 0，则不再创建退款，只把 case 标记完成。
 - 金额：商品按 §6.4 计算；运费按 §18.4 的组分摊规则（`SHORTAGE_MERCHANT_FREIGHT_SHARE`）。
-- 额度：`after_sale_amount_ledger` 正常占用；`after_sale_line_ledger` 在退款成功时累加。
+- 额度：`after_sale_amount_ledger` 正常占用；`after_sale_line_ledger` 在创建时写 `pending_*`（在途占用），退款成功时转 `refunded_*`；驳回/取消释放 `pending_*`。
 - 任务：`ensureRefundTaskTx` 创建 durable refund task；由现有退款 worker 执行，不在 NATS handler 里直接打款。
 - 执行顺序：先退商品（Payment key = `after_sale_no`），再退运费（key = `after_sale_no:freight`）；运费为 `HELD` 时只退商品并保留 hold；两次调用都幂等，部分成功由 task 重试续跑。
 - 幂等：售后单唯一键 + refund task 主键 + Payment `after_sale_no` 幂等键；重复事件只重放已有任务。
@@ -1260,6 +1287,7 @@ message VerifyRestockAuthorizationReply { bool valid = 1; string reason = 2; }
 - Order 消费 `shop.aftersale.completed.v1` 时更新对应 case（按 order_no + group_no）。
 - `ShortageCase` proto 增列：8 `refund_after_sale_no`、9 `refunded_at_unix`、10 `refund_state`。
 - BFF 展示：`RESOLVED_REFUND` 且无 `refund_after_sale_no` → “退款处理中”；有 → “已退款”。**不得只显示“已决议”而不显示退款进度。**
+- 48h worker 只允许处理 `status=NOTIFIED AND choose_deadline_at <= NOW` 的到期 case；这是 **deadline timer**，不是状态组合 recovery scanner；不得扩展为扫描其他状态（ADR §12.1）。
 
 **AC-30 通过条件（新）**：
 
@@ -1277,12 +1305,13 @@ message VerifyRestockAuthorizationReply { bool valid = 1; string reason = 2; }
 | 消息 | 字段 | 语义 |
 |---|---|---|
 | `CreateOrderInnerRequest` | 17 `allocation_hash`、18 `package_count`、19 `warehouse_count` | DTM inner 分支携带冻结校验所需快照元数据 |
-| `CreateShipmentRequest` | 7 `carrier_code` | 受控承运商 code |
+| `CreateShipmentRequest` | 7 `carrier_code`、8 `change_reason` | 受控承运商 code + 变更原因 |
+| `SubmitReturnTrackingRequest` | 4 `return_carrier_code` | 退货承运商受控清单 |
 | `PreviewRefundQuoteRequest` | 4 `user_id`、5 `type` | 归属校验 + 运费规则 |
 | `ListLineRefundsRequest` | 2 `user_id`、3 `admin` | S14 读模型鉴权 |
 | `AllocateOrderReply` | 2 `availability` | §18.2 |
 | `RestockRequest` | 8 `restock_auth_no`、9 `origin_warehouse_id` | §18.5 |
-| `AfterSale` | 17–25 | §18.4 |
+| `AfterSale` | 17–25 + 26 `return_carrier_code` | §18.4 + 退货承运商受控 |
 | `ShortageCase` | 8 `refund_after_sale_no`、9 `refunded_at_unix`、10 `refund_state` | §18.6 |
 | 新 `CreateSystemRefundRequest` | 1 `order_no`、2 `group_no`、3 `source`、4 `idempotency_key`、5 `items`、6 `reason_code` | Admin/系统补退款 |
 | 新 `VerifyRestockAuthorizationRequest/Reply` | 见 §18.5 | 跨仓回库校验 |
@@ -1383,3 +1412,61 @@ AC-31…33 验证映射：
 10. 以上每条附测试日志；未跑项写 `[未覆盖范围]`。
 
 **否决条件**：`availability_json` 仍为 `{}`、缺货只写事件不打款、自由文本判责、跨仓回库无授权校验 —— 任一条出现，Amendment 1 不通过。
+
+---
+
+## 19. 二次审计（2026-11-22）
+
+> 对照 SPEC-0001 v1.1 逐条复核 ADR-0005（含 Amendment 1）。结论分两类：已直接修正的 ADR 硬伤；必须由 PO 拍板或确认的口径。
+
+### 19.1 已修正的 ADR 硬伤
+
+| # | 原问题 | 修正 |
+|---|---|---|
+| 1 | §5.2 组号按“仓首次出现顺序”，Spec 6.3 要求“仓库顺序” | 改为“业务优先级 + warehouse_id”；默认配置下与现有按 ID 排序一致；“仓库顺序”确切含义见 P-15 |
+| 2 | §3.2.1 投影表缺“G2 退款未发 / 全部退款展示” | 补两行，覆盖 AC-27 与 Spec 7.5 |
+| 3 | §14 AC 表缺 AC-31…33 | 补三行验证映射 |
+| 4 | §13.1 配置校验写 D-01…D-07 | 改为 D-01…D-08，并补 `FREIGHT_RESPONSIBILITY_ENABLED` |
+| 5 | §7.2 允许空运单号发货 | `Ship` 必须 `carrier_code` 已启用 + `tracking_no` 非空；CREATED 草稿可空 |
+| 6 | 退货承运商未受控 | 新增 `return_carrier_code`；`carrier` 仅展示 |
+| 7 | 换承运商/运单号无强制原因 | 新增 `change_reason`，写 `shipment_change_logs` |
+| 8 | 判责“六要素”允许空证据；承运商建议无落点 | 自动落值也写 `system:<reason>`/`system`/时间；承运商用 `party=UNDETERMINED + source=CARRIER_EVIDENCE + reason_code` 形成结构化建议 |
+| 9 | 对账缺“应收运费 = 实收运费” | §11.1 增补等式 ①a |
+| 10 | §5.2 目标函数把“拆量 SKU 数”插在 Spec 6.2 的判据序列中间 | 删除该独立判据，恢复 Spec 的 1→5 顺序；如需要只能作为集中度子度量 |
+| 11 | 缺“减少数量后可单包裹发货”的错误字段 | `AllocateOrder` 失败详情增加 `single_warehouse_max`（+ `max_orderable_quantity`） |
+| 12 | 行剩余可退额只扣已退款，未扣 Spec 3 的“在途占用” | `after_sale_line_ledger` 增 `pending_quantity/pending_amount_cent`；创建时预占、成功转已退、驳回释放；剩余额度同时扣两者 |
+
+### 19.2 需要 PO 裁决（影响金额/算法/用户承诺；未裁决相关 AC 标 `[待确认]`）
+
+| ID | Spec 口径 | ADR 当前处理 | 需要 PO 回答 |
+|---|---|---|---|
+| P-01 | 6.4.4 “按行商品金额比例分摊，**累计取整**，最后一行吸收” | “最大余数法” | 采用累计取整还是最大余数？累计取整是 floor 还是 round？最后一行是否无条件吸收差额？ |
+| P-02 | 6.4.3 运费优惠“消耗顺序按组序确定性执行” | 先作用于订单级，再按组商品金额分摊 | 是否改为“按 G1..Gn 顺序逐组抵扣，组之和 = 用户运费”？两者在部分组退款时结果不同 |
+| P-03 | 6.2 集中度“商品金额最大**或**数量最多的仓吃满” | 填满仓数 + 最高优先级仓数量 | 接受“数量口径”（Inventory 不掌握价格），还是要求按商品金额（则分配器需增加行金额输入）？ |
+| P-04 | 6.6 “4 小时内通知”；48h 默认退款；6.5.2 运费挂起 7 天；6.8 24h 申诉、T+1/T+7 | `ReportGroupShortage` 被调用时 `notified_at=NOW`；其余按 24h/48h/168h 计时 | 4h 是运营 SLA（以上报为起点），还是系统必须在“发现缺货”后计时？24h/48h/7d/T+1/T+7 是自然日还是小时，起点是谁？ |
+| P-05 | 6.5.1 部分组退款“该组商家责任 → 全额退运费” | 退该组 `freight_share_cent`；最后一组退剩余订单运费 | 确认“全额 = 该组分摊”还是整单运费（OQ-10） |
+| P-06 | R8 只禁止申请方填金额 | 审批只能按数量调整，禁止直接改额 | 客服是否允许“按金额部分批准”？若允许，审批金额与行台账如何对账？ |
+| P-07 | 24h 内申诉；T+1 自动确认 | 争议冻结自动确认；已确认后争议入口关闭 | 23:59:59 申诉与 T+1 自动确认谁优先？已自动确认后用户还能否申诉并回滚 receipt？ |
+| P-08 | 责任枚举含 `PLATFORM`；D-06 “全赔上限=行实付” | 假定 `PLATFORM` 全退运费；赔付=行实付+运费 | `PLATFORM` 退不退运费？D-06 的“上限=行实付”是否含运费？ |
+| P-09 | S11 只列 `PENDING/PROCESSING/DONE/FAILED_PERMANENT` | `restock_state` 对 REFUND_ONLY 使用 `NONE` | 允许 `NONE` 作为“无回库”占位，还是改用 NULL/缺省？ |
+| P-10 | D-08 标注“待甲方追认”；6.8 判责矩阵“明细标准由甲方补” | ADR 按 D-08 默认执行；仅定义四类自动落值 | D-08 是否追认？五类判责情形的 evidence/reason_code 明细何时给？ |
+| P-18 | 6.4.3 说运费优惠作用于运费；6.4.4 又把“运费券”列入按行商品金额分摊 | ADR 将运费券归入运费减免，不摊入行优惠 | 运费券到底减运费还是摊到行？若摊到行，AC-03/AC-04、行实付与退款基准都会变 |
+
+### 19.3 需要 PO/运营确认（实现口径，不阻塞设计但阻塞 done）
+
+| ID | 事项 | 需要确认 |
+|---|---|---|
+| P-11 | 退货承运商历史数据 | 现有 `return_carrier` 自由文本如何回填到 `return_carrier_code`？无匹配的历史单是否允许暂存 `UNKNOWN` 并人工处理？ |
+| P-12 | 承运商/运单号变更 | `change_reason` 是枚举还是自由文本？是否仅 Admin 可改？ |
+| P-13 | OQ-09 补发 | 本期是否只做部分退款、补发关闭？（当前默认） |
+| P-14 | “超额度退款”审计 | INV-24 无例外，是否确认不存在授权超退？Spec §10 的审计项是否仅指未来例外？ |
+| P-15 | 组号“仓库顺序” | 确认是“业务优先级 + warehouse_id”，不是纯 `warehouse_id` 数字序 |
+| P-16 | `AUTO_T7` 展示 | 无轨迹自动确认时，详情页是否统一显示“已自动确认收货（无物流轨迹）”，且绝不显示“已签收”？ |
+| P-17 | 库存变化后的“新预览” | Spec 6.6 要求“给出新预览”；ADR 当前返回 `retry_preview` 由客户端重试。是否要求 BFF 在同一响应返回重算后的 Quote（推荐），还是允许客户端自行重试？ |
+
+### 19.4 结论
+
+- 状态所有权、S1–S14、INV-17…29、E1–E25、AC-01…33 的覆盖在 ADR 中完整；19.1 的硬伤已修。
+- 19.2 的 **P-01…P-04** 会改变金额算法、组内部份额或用户承诺，必须在下一轮开发前给口径；未确认前对应 AC 只能标 `[待确认]`，Reviewer 不得判 done。
+- 19.3 可在实现中按默认推进，但验收报告必须列出未确认项。
+- **B-01、B-05 仍未完成**：`availability_json` 不得为 `{}`；AC-30 必须以“系统退款已创建并推进”为通过条件。

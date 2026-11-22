@@ -107,6 +107,28 @@ Role: PO
 - 一笔 commit 只做一件事；**Spec 不与代码同笔提交**（目录首次建立除外）。
 - 反查：`git log --grep 'Thread: T-001'`、`git log --grep 'AC: AC-14'`。
 
+### 5.1 scope 词表（2026-11-22 补充）
+
+scope 按**主产物路径**取，不按作者角色命名；小写，允许连字符。
+
+| scope | 主路径 | 说明 |
+|---|---|---|
+| `docs(spec)` | `docs/specs/**` | 业务规格 |
+| `docs(adr)` | `docs/adr/**` | 设计决策/Amendment |
+| `docs(impl)` | `docs/implementation/**` | 实现偏差登记 |
+| `docs(po)` | `docs/po/**` | PO 记忆区 |
+| `docs(architect)` | `docs/architect/**` | Architect 记忆区 |
+| `docs(collab)` | `docs/collab/**` | 协作约定、线程、索引、闸门台账 |
+| `docs(meta)` | `AGENTS.md`、`README.md`、`docs/*.md`（非上述目录） | 全局说明/索引 |
+
+规则：
+
+1. `docs(po)` 只用于 `docs/po/**`；`docs(collab)` 只用于 `docs/collab/**`；两者不能互代，也不能用 `docs(docs)` 兜底。
+2. 一个 commit 只允许一个主 scope；同时改 ADR 与线程时，**拆成 `docs(adr)` + `docs(collab)` 两笔**，不要用 `docs(collab)` 把 ADR 混进去。
+3. 不可避免的跨产物的机械同步（如回填 commit hash）：scope 取主产物，正文列出次产物，Reviewer 标 `[mixed]`；不得把业务/设计变更塞进 `[mixed]`。
+4. 历史提交不回改；本表只约束新提交。Reviewer 按 §4.3 把混提作为审查项。
+5. `feat`/`fix` 的 scope 仍按服务/模块名（如 `feat(order)`），不适用本表。
+
 ---
 
 ## 6. 偏差与兼容（防止 shim 变永久债）

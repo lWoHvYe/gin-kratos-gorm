@@ -125,6 +125,10 @@ func TestAC20AutoConfirmT1(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(`UPDATE shipments SET delivered_at = DATE_SUB(NOW(3), INTERVAL 25 HOUR)
+		WHERE shipment_no = 'SHIP-T1'`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(`UPDATE delivery_auto_confirm_jobs SET due_at = DATE_SUB(NOW(3), INTERVAL 1 MINUTE)
 		WHERE shipment_no = 'SHIP-T1'`); err != nil {
 		t.Fatal(err)
@@ -203,6 +207,10 @@ func TestAC22ReceiptDisputeFreezesAutoConfirm(t *testing.T) {
 	if dispute.GetStatus() != disputeOpen {
 		t.Fatalf("dispute = %+v", dispute)
 	}
+	now := time.Now().Unix()
+	if dispute.GetDeadlineAtUnix() <= now+2*24*3600 || dispute.GetDeadlineAtUnix() > now+5*24*3600 {
+		t.Fatalf("3-business-day dispute deadline = %d (now %d)", dispute.GetDeadlineAtUnix(), now)
+	}
 	if _, err := db.Exec(`UPDATE delivery_auto_confirm_jobs SET state = 'PENDING',
 		due_at = DATE_SUB(NOW(3), INTERVAL 1 MINUTE) WHERE shipment_no = 'SHIP-DIS'`); err != nil {
 		t.Fatal(err)
@@ -275,6 +283,10 @@ func TestAC35AppealGraceBeforeAutoConfirm(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(`UPDATE shipments SET delivered_at = DATE_SUB(NOW(3), INTERVAL 25 HOUR)
+		WHERE shipment_no = 'SHIP-GRACE'`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(`UPDATE delivery_auto_confirm_jobs SET due_at = DATE_SUB(NOW(3), INTERVAL 30 SECOND)
 		WHERE shipment_no = 'SHIP-GRACE'`); err != nil {
 		t.Fatal(err)
@@ -317,6 +329,10 @@ func TestAC36PostReceiptDisputeDoesNotRollback(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(`UPDATE shipments SET delivered_at = DATE_SUB(NOW(3), INTERVAL 25 HOUR)
+		WHERE shipment_no = 'SHIP-36'`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(`UPDATE delivery_auto_confirm_jobs SET due_at = DATE_SUB(NOW(3), INTERVAL 2 MINUTE)
 		WHERE shipment_no = 'SHIP-36'`); err != nil {
 		t.Fatal(err)
@@ -332,6 +348,10 @@ func TestAC36PostReceiptDisputeDoesNotRollback(t *testing.T) {
 	}
 	if dispute.GetStatus() != disputeOpen {
 		t.Fatalf("dispute = %+v", dispute)
+	}
+	now := time.Now().Unix()
+	if dispute.GetDeadlineAtUnix() <= now+2*24*3600 || dispute.GetDeadlineAtUnix() > now+5*24*3600 {
+		t.Fatalf("3-business-day dispute deadline = %d (now %d)", dispute.GetDeadlineAtUnix(), now)
 	}
 	if _, err := svc.ResolveReceiptDispute(ctx, &pb.ResolveReceiptDisputeRequest{
 		DisputeId: dispute.GetId(), Resolution: disputeUpheld, Reason: "proof invalid", Operator: "cs-2",
@@ -387,5 +407,50 @@ func TestAC23DirectReceiveRejected(t *testing.T) {
 	_, err := svc.Receive(context.Background(), &pb.ReceiveRequest{ShipmentNo: "SHIP-NO-RECEIVE"})
 	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
 		t.Fatalf("direct receive err = %v", err)
+	}
+}
+
+// AC-20 anomaly: a replayed/older DELIVERED must not shrink the 24h window or
+// auto-confirm before delivered_at+24h.
+func TestAC20DuplicateDeliveredDoesNotShrinkWindow(t *testing.T) {
+	db := fulfillmentTestDB(t)
+	seedDeliveryShipment(t, db, "SHIP-REPLAY", "ORD-REPLAY", statusShipped, trackShipped)
+	svc := deliveryService(db, nil, Options{DeliveryAutoConfirmEnabled: true})
+	ctx := context.Background()
+	if _, err := svc.RecordTrackingEvent(ctx, &pb.RecordTrackingEventRequest{
+		ShipmentNo: "SHIP-REPLAY", CarrierCode: "SF", TrackingNo: "TN-SHIP-REPLAY", EventId: "D1", Status: trackDelivered,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var due time.Time
+	if err := db.QueryRow(`SELECT due_at FROM delivery_auto_confirm_jobs WHERE shipment_no = 'SHIP-REPLAY'`).Scan(&due); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RecordTrackingEvent(ctx, &pb.RecordTrackingEventRequest{
+		ShipmentNo: "SHIP-REPLAY", CarrierCode: "SF", TrackingNo: "TN-SHIP-REPLAY", EventId: "D2",
+		Status: trackDelivered, OccurredAtUnix: time.Now().Add(-48 * time.Hour).Unix(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var after time.Time
+	if err := db.QueryRow(`SELECT due_at FROM delivery_auto_confirm_jobs WHERE shipment_no = 'SHIP-REPLAY'`).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if !after.Equal(due) {
+		t.Fatalf("replayed DELIVERED moved due_at: %v -> %v", due, after)
+	}
+	if _, err := db.Exec(`UPDATE delivery_auto_confirm_jobs SET due_at = DATE_SUB(NOW(3), INTERVAL 1 MINUTE)
+		WHERE shipment_no = 'SHIP-REPLAY'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.processAutoConfirmJob(ctx, "SHIP-REPLAY"); err != nil {
+		t.Fatal(err)
+	}
+	var receipts int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM shipment_receipts WHERE shipment_no = 'SHIP-REPLAY'`).Scan(&receipts); err != nil {
+		t.Fatal(err)
+	}
+	if receipts != 0 {
+		t.Fatalf("auto confirmed before delivered_at+24h: %d", receipts)
 	}
 }

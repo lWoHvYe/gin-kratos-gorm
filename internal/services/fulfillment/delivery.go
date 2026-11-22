@@ -111,13 +111,38 @@ func (s *Service) enabledCarrierCodes(ctx context.Context) []string {
 }
 
 func (s *Service) upsertAutoConfirmJobTx(ctx context.Context, tx *sql.Tx, shipmentNo, reason string, dueAt time.Time) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO delivery_auto_confirm_jobs (shipment_no, reason, due_at, state)
-		VALUES (?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE reason = VALUES(reason), due_at = LEAST(due_at, VALUES(due_at)),
-			state = IF(state = 'DONE', state, 'PENDING'), updated_at = NOW(3)`,
-		shipmentNo, reason, dueAt, autoConfirmPending)
+	var (
+		state     string
+		oldReason string
+		oldDue    time.Time
+	)
+	err := tx.QueryRowContext(ctx, `SELECT state, reason, due_at FROM delivery_auto_confirm_jobs
+		WHERE shipment_no = ? FOR UPDATE`, shipmentNo).Scan(&state, &oldReason, &oldDue)
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = tx.ExecContext(ctx, `INSERT INTO delivery_auto_confirm_jobs (shipment_no, reason, due_at, state)
+			VALUES (?, ?, ?, ?)`, shipmentNo, reason, dueAt, autoConfirmPending)
+		if err != nil {
+			return apperr.Internal("insert auto confirm job", err)
+		}
+		return nil
+	}
 	if err != nil {
-		return apperr.Internal("upsert auto confirm job", err)
+		return apperr.Internal("load auto confirm job", err)
+	}
+	// DONE/CANCELLED jobs are terminal for this shipment; a replayed DELIVERED
+	// must not resurrect auto confirm. A same-reason replay may only move the
+	// deadline later; an older occurred_at must never shrink the 24h window.
+	if state != autoConfirmPending {
+		return nil
+	}
+	nextDue := dueAt
+	if oldReason == reason && oldDue.After(dueAt) {
+		nextDue = oldDue
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE delivery_auto_confirm_jobs
+		SET reason = ?, due_at = ?, lease_owner = '', lease_until = NULL, updated_at = NOW(3)
+		WHERE shipment_no = ? AND state = ?`, reason, nextDue, shipmentNo, autoConfirmPending); err != nil {
+		return apperr.Internal("update auto confirm job", err)
 	}
 	return nil
 }
@@ -548,6 +573,15 @@ func (s *Service) evaluateAutoConfirmJob(ctx context.Context, shipmentNo, reason
 	confirm := false
 	switch reason {
 	case autoConfirmT1:
+		if deliveredAt.Valid && s.now().Before(deliveredAt.Time.Add(24*time.Hour).Add(appealGrace)) {
+			_, err = tx.ExecContext(ctx, `UPDATE delivery_auto_confirm_jobs
+				SET state = ?, lease_owner = '', lease_until = NULL, updated_at = NOW(3)
+				WHERE shipment_no = ?`, autoConfirmPending, shipmentNo)
+			if err != nil {
+				return err
+			}
+			return tx.Commit()
+		}
 		confirm = deliveredAt.Valid
 	case autoConfirmT7:
 		if trackStatus == trackCreated || trackStatus == trackShipped {

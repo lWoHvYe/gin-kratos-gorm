@@ -56,13 +56,14 @@ rollout is still gated.
 | Split after-sale without items defaulted to G1 | split orders require explicit after-sale items |
 | `REFUND_ONLY` was rejected before shipment because the group status check was shared with returns | refund-only is allowed for an unshipped group; only RETURN_REFUND requires SHIPPED/RECEIVED |
 | An unshipped refunded group kept the order in ALLOCATED | a REVOKED permit makes the group closed for aggregate/projection purposes |
+| Group refund progress was only implicit in permits | `order_fulfillment_groups.refund_state` is projected from permit blocking and `aftersale.completed` |
 | Refunded draft parcels stayed CREATED | Fulfillment consumes `aftersale.refund_requested` and moves CREATED -> CANCELLED |
 | Race tests across packages shared one MySQL database | `test-race -p 1` |
 | Split E2E used Bash's readonly `GROUPS` array | renamed to `GROUP_COUNT` |
 
 ## Verification executed
 
-- `make verify` -> `verify: OK`, proto baseline 734.
+- `make verify` -> `verify: OK`, proto baseline 741.
 - `make test-integration` -> all listed MySQL/NATS suites `ok`.
 - `go test -race -p 1` on order/fulfillment/after-sales/admin -> `ok`.
 - `scripts/e2e-phase15.sh` -> `phase15 e2e passed`.

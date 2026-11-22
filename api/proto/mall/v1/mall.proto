@@ -501,6 +501,7 @@ message OrderFulfillmentGroup {
   int64 warehouse_id = 2;
   int64 freight_cent = 3;
   string status = 4;
+  string refund_state = 5;
 }
 message CreateOrderInnerRequest {
   int64 user_id = 1;
@@ -597,7 +598,14 @@ message CallbackRequest {
   string signature = 6;
 }
 message CallbackReply { bool ok = 1; }
-message RefundOrderRequest { string order_no = 1; int64 amount_cent = 2; string reason = 3; string idempotency_key = 4; }
+message RefundOrderRequest {
+  string order_no = 1;
+  int64 amount_cent = 2;
+  string reason = 3;
+  string idempotency_key = 4;
+  string group_no = 5;
+  string after_sale_no = 6;
+}
 message RefundOrderReply { string refund_no = 1; string payment_no = 2; int64 refunded_cent = 3; string status = 4; }
 message VerifyPaymentRequest { string payment_no = 1; }
 message VerifyPaymentReply {

@@ -162,6 +162,8 @@ Consumers:
   a `CREATED` parcel to `CANCELLED`.
 - Split orders expose typed `Order.group_actions` (group_no + action) in
   addition to the legacy `available_actions` strings.
+- `OrderFulfillmentGroup.refund_state` is projected from a blocked permit and
+  `shop.aftersale.completed.v1` (which carries `group_no`).
 
 ## Settlement model (transaction refactor A)
 

@@ -19,6 +19,7 @@ type fulfillmentGroup struct {
 	Seq              int
 	WarehouseID      int64
 	Status           string
+	RefundState      string
 	ReservationState string
 	PermitState      string
 	FreightCent      int64
@@ -50,8 +51,8 @@ func insertFulfillmentGroups(ctx context.Context, tx *sql.Tx, orderNo string, gr
 		seenGroup[groupNo] = struct{}{}
 		seenWarehouse[warehouseID] = struct{}{}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO order_fulfillment_groups
-			(group_no, order_no, seq, warehouse_id, status, reservation_state, freight_cent, version)
-			VALUES (?, ?, ?, ?, 'PENDING', 'HELD', ?, 1)`,
+			(group_no, order_no, seq, warehouse_id, status, refund_state, reservation_state, freight_cent, version)
+			VALUES (?, ?, ?, ?, 'PENDING', 'NONE', 'HELD', ?, 1)`,
 			groupNo, orderNo, i+1, warehouseID, group.GetFreightCent()); err != nil {
 			return err
 		}
@@ -78,7 +79,7 @@ func loadFulfillmentGroupsTx(ctx context.Context, tx *sql.Tx, orderNo string) ([
 
 func loadFulfillmentGroups(ctx context.Context, q querier, orderNo string) ([]*fulfillmentGroup, error) {
 	rows, err := q.QueryContext(ctx, `SELECT g.group_no, g.order_no, g.seq, g.warehouse_id, g.status,
-		g.reservation_state, COALESCE(p.state, 'NONE'), g.freight_cent
+		g.refund_state, g.reservation_state, COALESCE(p.state, 'NONE'), g.freight_cent
 		FROM order_fulfillment_groups g
 		LEFT JOIN order_shipping_permits p
 		  ON p.order_no = g.order_no AND p.fulfillment_group_no = g.group_no
@@ -91,7 +92,7 @@ func loadFulfillmentGroups(ctx context.Context, q querier, orderNo string) ([]*f
 	for rows.Next() {
 		var g fulfillmentGroup
 		if err := rows.Scan(&g.GroupNo, &g.OrderNo, &g.Seq, &g.WarehouseID, &g.Status,
-			&g.ReservationState, &g.PermitState, &g.FreightCent); err != nil {
+			&g.RefundState, &g.ReservationState, &g.PermitState, &g.FreightCent); err != nil {
 			return nil, err
 		}
 		groups = append(groups, &g)

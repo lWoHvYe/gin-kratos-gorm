@@ -2186,6 +2186,7 @@ export interface components {
                 /** Format: int64 */
                 freight_cent?: number;
                 status?: string;
+                refund_state?: string;
             }[];
             group_actions?: {
                 group_no?: string;

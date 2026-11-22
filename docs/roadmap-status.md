@@ -25,7 +25,7 @@ money, inventory, recovery or production operation.
 |---|---|---|
 | P1.1 `GroupFulfillmentView` | done | `Order.group_actions`, effective `CANCELLED` group status and closed-group projection are the read model; `orderActionPolicy` is the single action path |
 | P1.2 typed action policy | done | proto `OrderGroupAction`; `orderActionPolicy.groupActions/legacyActions` replaces the duplicated action functions; UI reads `group_actions` |
-| P1.3 explicit group refund state | rejected by design | `orders.refund_state` is the aggregate projection; group refund admission/isolation uses the authoritative permit state plus the after-sale amount ledger. A second group refund projection would duplicate state without an action consumer |
+| P1.3 explicit group refund state | done | `order_fulfillment_groups.refund_state` is projected from `BlockShipmentForRefund` (`REFUNDING`) and `aftersale.completed.v1` (`REFUNDED`); permit remains the shipping authority and `orders.refund_state` remains the aggregate projection |
 | P1.4 shipment void + draft cleanup | done | `CancelCreatedShipment`, `shop.aftersale.refund_requested.v1` consumer, `CREATED -> CANCELLED`, auto-shipment action guard |
 | P1.5 `WAREHOUSE_MODE` | done | config + chart single switch; legacy booleans remain compatible; conflicts fail closed |
 | P1.6 test DB isolation + split fixture | done | `scripts/test-dsn.sh` gives each integration package its own DB; `scripts/create-split-fixture.sh` creates and publishes two fresh SKUs stocked in different warehouses |
@@ -67,13 +67,13 @@ A task may be marked done only when all of the following hold:
 5. UAT with dev secrets/mock payment is labelled UAT, never production.
 
 Under this definition, P0.2 (worker restart), P0.4 (live alert firing), P2
-replay/events/contracts/#38 and all P3 remain open. P1.1/P1.2/P1.6 and P2
-payment aggregation are done; P1.3 is rejected by design.
+replay/events/contracts/#38 and all P3 remain open. P1.1/P1.2/P1.3/P1.6 and P2
+payment aggregation are done.
 
 ## Verification snapshot
 
 ```text
-make verify                 OK, proto baseline 734
+make verify                 OK, proto baseline 741
 make test-integration       per-package DBs, all listed suites ok
 go test -race -p 1          order/fulfillment/aftersales/admin ok
 dev Playwright              9 passed

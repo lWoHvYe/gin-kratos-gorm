@@ -1,6 +1,6 @@
 <script setup lang="ts">
 interface Item { sku_id: number; name: string; price_cent: number; quantity: number; discount_cent: number; warehouse_id?: number; group_no?: string }
-interface FulfillmentGroup { group_no: string; warehouse_id: number; freight_cent: number; status: string }
+interface FulfillmentGroup { group_no: string; warehouse_id: number; freight_cent: number; status: string; refund_state?: string }
 interface OrderGroupAction { group_no: string; action: string }
 interface Shipment { shipment_no: string; order_no: string; fulfillment_group_no?: string; warehouse_id?: number; status: string; carrier: string; tracking_no: string }
 interface Order { order_no: string; status: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; freight_cent: number; pay_cent: number; paid_cent: number; refunded_cent: number; refund_status: string; refund_state: string; available_actions: string[]; shipment_status: string; fulfillment_groups?: FulfillmentGroup[]; group_actions?: OrderGroupAction[]; receiver_name: string; receiver_phone: string; receiver_address: string; items: Item[]; created_at_unix: number; expire_at_unix: number }
@@ -68,7 +68,7 @@ function afterSaleLink(groupNo: string): string {
       <template v-if="order.fulfillment_groups?.length">
         <h3>履约分组</h3>
         <div v-for="group in order.fulfillment_groups" :key="group.group_no" class="group">
-          <div class="group-head"><strong>{{ group.group_no }}</strong><span>仓库 {{ group.warehouse_id }}</span><van-tag>{{ group.status }}</van-tag></div>
+          <div class="group-head"><strong>{{ group.group_no }}</strong><span>仓库 {{ group.warehouse_id }}</span><van-tag>{{ group.status }}</van-tag><van-tag v-if="group.refund_state && group.refund_state !== 'NONE'" type="warning">{{ group.refund_state }}</van-tag></div>
           <div class="muted">运费 ¥{{ ((group.freight_cent ?? 0) / 100).toFixed(2) }}</div>
           <div v-if="shipmentFor(group.group_no)" class="muted">{{ shipmentFor(group.group_no)?.carrier }} {{ shipmentFor(group.group_no)?.tracking_no }} · {{ shipmentFor(group.group_no)?.status }}</div>
           <div class="group-actions">

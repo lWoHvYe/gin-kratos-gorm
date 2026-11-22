@@ -11,7 +11,7 @@ Cross-warehouse C adds schema and data backfills across five services:
 
 | Service | Migrations |
 |---|---|
-| Order | `0010_settlement_protocol.sql`, `0011_fulfillment_groups.sql`, `0012_group_shipping_permits.sql` |
+| Order | `0010_settlement_protocol.sql`, `0011_fulfillment_groups.sql`, `0012_group_shipping_permits.sql`, `0013_group_refund_state.sql` |
 | Inventory | `0016_reservation_warehouse_keys.sql` |
 | Pricing | `0010_quote_warehouse.sql` |
 | After-sales | `0010_settlement_protocol.sql`, `0011_group_items.sql` |

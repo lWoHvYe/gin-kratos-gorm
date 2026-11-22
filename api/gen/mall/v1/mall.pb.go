@@ -5353,6 +5353,7 @@ type OrderFulfillmentGroup struct {
 	WarehouseId   int64                  `protobuf:"varint,2,opt,name=warehouse_id,json=warehouseId,proto3" json:"warehouse_id,omitempty"`
 	FreightCent   int64                  `protobuf:"varint,3,opt,name=freight_cent,json=freightCent,proto3" json:"freight_cent,omitempty"`
 	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	RefundState   string                 `protobuf:"bytes,5,opt,name=refund_state,json=refundState,proto3" json:"refund_state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5411,6 +5412,13 @@ func (x *OrderFulfillmentGroup) GetFreightCent() int64 {
 func (x *OrderFulfillmentGroup) GetStatus() string {
 	if x != nil {
 		return x.Status
+	}
+	return ""
+}
+
+func (x *OrderFulfillmentGroup) GetRefundState() string {
+	if x != nil {
+		return x.RefundState
 	}
 	return ""
 }
@@ -6565,6 +6573,8 @@ type RefundOrderRequest struct {
 	AmountCent     int64                  `protobuf:"varint,2,opt,name=amount_cent,json=amountCent,proto3" json:"amount_cent,omitempty"`
 	Reason         string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	GroupNo        string                 `protobuf:"bytes,5,opt,name=group_no,json=groupNo,proto3" json:"group_no,omitempty"`
+	AfterSaleNo    string                 `protobuf:"bytes,6,opt,name=after_sale_no,json=afterSaleNo,proto3" json:"after_sale_no,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -6623,6 +6633,20 @@ func (x *RefundOrderRequest) GetReason() string {
 func (x *RefundOrderRequest) GetIdempotencyKey() string {
 	if x != nil {
 		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *RefundOrderRequest) GetGroupNo() string {
+	if x != nil {
+		return x.GroupNo
+	}
+	return ""
+}
+
+func (x *RefundOrderRequest) GetAfterSaleNo() string {
+	if x != nil {
+		return x.AfterSaleNo
 	}
 	return ""
 }
@@ -13663,12 +13687,13 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x11client_request_id\x18\x04 \x01(\tR\x0fclientRequestId\x12#\n" +
 	"\rreceiver_name\x18\x05 \x01(\tR\freceiverName\x12%\n" +
 	"\x0ereceiver_phone\x18\x06 \x01(\tR\rreceiverPhone\x12)\n" +
-	"\x10receiver_address\x18\a \x01(\tR\x0freceiverAddress\"\x90\x01\n" +
+	"\x10receiver_address\x18\a \x01(\tR\x0freceiverAddress\"\xb3\x01\n" +
 	"\x15OrderFulfillmentGroup\x12\x19\n" +
 	"\bgroup_no\x18\x01 \x01(\tR\agroupNo\x12!\n" +
 	"\fwarehouse_id\x18\x02 \x01(\x03R\vwarehouseId\x12!\n" +
 	"\ffreight_cent\x18\x03 \x01(\x03R\vfreightCent\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\tR\x06status\"\x8f\x05\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12!\n" +
+	"\frefund_state\x18\x05 \x01(\tR\vrefundState\"\x8f\x05\n" +
 	"\x17CreateOrderInnerRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x19\n" +
 	"\border_no\x18\x02 \x01(\tR\aorderNo\x12\x19\n" +
@@ -13769,13 +13794,15 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1c\n" +
 	"\tsignature\x18\x06 \x01(\tR\tsignature\"\x1f\n" +
 	"\rCallbackReply\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x91\x01\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\xd0\x01\n" +
 	"\x12RefundOrderRequest\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x1f\n" +
 	"\vamount_cent\x18\x02 \x01(\x03R\n" +
 	"amountCent\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12'\n" +
-	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"\x8b\x01\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12\x19\n" +
+	"\bgroup_no\x18\x05 \x01(\tR\agroupNo\x12\"\n" +
+	"\rafter_sale_no\x18\x06 \x01(\tR\vafterSaleNo\"\x8b\x01\n" +
 	"\x10RefundOrderReply\x12\x1b\n" +
 	"\trefund_no\x18\x01 \x01(\tR\brefundNo\x12\x1d\n" +
 	"\n" +

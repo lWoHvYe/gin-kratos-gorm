@@ -87,6 +87,7 @@ export interface FulfillmentGroup {
   warehouse_id: number
   freight_cent: number
   status: string
+  refund_state?: string
 }
 
 export interface OrderGroupAction {

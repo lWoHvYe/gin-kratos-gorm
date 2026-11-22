@@ -336,9 +336,15 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 		return err
 	}
+	groupNo, err := s.groupForAfterSale(ctx, afterSaleNo)
+	if err != nil {
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return err
+	}
 	reply, err := s.payments.RefundOrder(ctx, &pb.RefundOrderRequest{
 		OrderNo: row.orderNo, AmountCent: row.effectiveAmountCent,
 		Reason: "after-sale " + afterSaleNo, IdempotencyKey: afterSaleNo,
+		GroupNo: groupNo, AfterSaleNo: afterSaleNo,
 	})
 	if err != nil {
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
@@ -388,7 +394,7 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		AfterSaleNo: afterSaleNo, OrderNo: current.orderNo, UserID: current.userID,
 		Type: current.typ, Status: statusRefunded, AmountCent: current.amountCent,
 		EffectiveAmountCent: current.effectiveAmountCent, AmountState: amountConsumed,
-		RestockState: current.restockState, Reason: current.reason,
+		RestockState: current.restockState, Reason: current.reason, GroupNo: groupNo,
 	})
 	if err := outbox.Append(ctx, tx, outbox.Event{
 		Topic: topicAfterSaleCompleted, AggregateType: aggregateAfterSale,

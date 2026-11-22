@@ -20,10 +20,11 @@ const (
 	refundStatePartial   = "PARTIAL"
 	refundStateFull      = "FULL"
 
-	permitNone     = "NONE"
-	permitGranted  = "GRANTED"
-	permitConsumed = "CONSUMED"
-	permitRevoked  = "REVOKED"
+	permitNone               = "NONE"
+	permitGranted            = "GRANTED"
+	permitConsumed           = "CONSUMED"
+	permitRevoked            = "REVOKED"
+	groupRefundStateRefunded = "REFUNDED"
 
 	actionPay                 = "pay"
 	actionCancel              = "cancel"
@@ -373,6 +374,12 @@ func (s *Service) BlockShipmentForRefund(ctx context.Context, req *pb.ShipmentPe
 			SET state = ?, after_sale_no = ?, version = version + 1, updated_at = NOW(3)
 			WHERE order_no = ? AND fulfillment_group_no = ?`, nextState, afterSaleNo, orderNo, groupNo); err != nil {
 			return apperr.Internal("block shipping permit", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE order_fulfillment_groups
+			SET refund_state = ?, version = version + 1, updated_at = NOW(3)
+			WHERE order_no = ? AND group_no = ? AND refund_state <> ?`,
+			refundStateRefunding, orderNo, groupNo, groupRefundStateRefunded); err != nil {
+			return apperr.Internal("mark group refunding", err)
 		}
 		if record.RefundState != refundStateFull {
 			if _, err := tx.ExecContext(ctx, `UPDATE orders

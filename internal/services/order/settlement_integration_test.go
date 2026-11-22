@@ -73,7 +73,8 @@ func orderTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE IF NOT EXISTS order_fulfillment_groups (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, group_no VARCHAR(64) NOT NULL,
 			order_no VARCHAR(64) NOT NULL, seq INT NOT NULL DEFAULT 1, warehouse_id BIGINT NOT NULL DEFAULT 1,
-			status VARCHAR(24) NOT NULL DEFAULT 'PENDING', reservation_state VARCHAR(16) NOT NULL DEFAULT 'HELD',
+			status VARCHAR(24) NOT NULL DEFAULT 'PENDING', refund_state VARCHAR(16) NOT NULL DEFAULT 'NONE',
+			reservation_state VARCHAR(16) NOT NULL DEFAULT 'HELD',
 			freight_cent BIGINT NOT NULL DEFAULT 0, version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -526,5 +527,48 @@ func TestGroupShipmentProjectionIsPartialUntilAllGroups(t *testing.T) {
 		if group.Status != "RECEIVED" {
 			t.Fatalf("group %s = %s", group.GroupNo, group.Status)
 		}
+	}
+}
+
+func TestGroupRefundStateProjection(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	ctx := context.Background()
+	seedSettlementOrder(t, db, "ORD-GROUP-REFUND", statusAllocated, 1000, 0, refundStateNone)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := insertFulfillmentGroups(ctx, tx, "ORD-GROUP-REFUND", []*pb.OrderFulfillmentGroup{
+		{GroupNo: "G1", WarehouseId: 1, FreightCent: 0},
+	}, 0); err != nil {
+		_ = tx.Rollback()
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.BlockShipmentForRefund(ctx, &pb.ShipmentPermitRequest{
+		OrderNo: "ORD-GROUP-REFUND", AfterSaleNo: "AS-GROUP", FulfillmentGroupNo: "G1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	if err := db.QueryRow(`SELECT refund_state FROM order_fulfillment_groups WHERE order_no='ORD-GROUP-REFUND' AND group_no='G1'`).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != refundStateRefunding {
+		t.Fatalf("blocked group refund state = %s", state)
+	}
+	if err := applyAfterSaleCompleted(ctx, svc, afterSaleCompletedEvent{
+		OrderNo: "ORD-GROUP-REFUND", GroupNo: "G1", AfterSaleNo: "AS-GROUP",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT refund_state FROM order_fulfillment_groups WHERE order_no='ORD-GROUP-REFUND' AND group_no='G1'`).Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != groupRefundStateRefunded {
+		t.Fatalf("completed group refund state = %s", state)
 	}
 }

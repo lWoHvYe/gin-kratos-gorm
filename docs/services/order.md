@@ -68,6 +68,8 @@ DTM uses direct `host:port` branch URLs. The old Kratos discovery resolver and
 - `0011_fulfillment_groups.sql` – creates `order_fulfillment_groups`, adds
   `line_no/warehouse_id/fulfillment_group_no` to `order_items`, and backfills
   every order as one `G1`/warehouse-1 group.
+- `0013_group_refund_state.sql` – adds explicit group `refund_state` and marks
+  groups whose permit was already revoked as `REFUNDING`.
 
 ## Statuses and settlement
 

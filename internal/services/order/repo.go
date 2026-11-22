@@ -107,6 +107,7 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 			out.FulfillmentGroups = append(out.FulfillmentGroups, &pb.OrderFulfillmentGroup{
 				GroupNo: group.GroupNo, WarehouseId: group.WarehouseID,
 				FreightCent: group.FreightCent, Status: effectiveGroupStatus(group),
+				RefundState: group.RefundState,
 			})
 		}
 		policy := newOrderActionPolicy(o, groups)

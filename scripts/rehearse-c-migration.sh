@@ -77,6 +77,7 @@ while IFS='|' read -r db name; do
 done <<'MAP'
 mall_order|order/0011_fulfillment_groups.sql
 mall_order|order/0012_group_shipping_permits.sql
+mall_order|order/0013_group_refund_state.sql
 mall_inventory|inventory/0016_reservation_warehouse_keys.sql
 mall_pricing|pricing/0010_quote_warehouse.sql
 mall_aftersales|aftersales/0011_group_items.sql
@@ -87,6 +88,7 @@ echo "== order invariants =="
 assert_eq "orders without group" 0 "$(q "$N1" mall_order "SELECT COUNT(*) FROM orders o LEFT JOIN order_fulfillment_groups g ON g.order_no=o.order_no WHERE g.id IS NULL")"
 assert_eq "items without matching group/warehouse" 0 "$(q "$N1" mall_order "SELECT COUNT(*) FROM order_items i LEFT JOIN order_fulfillment_groups g ON g.order_no=i.order_no AND g.group_no=i.fulfillment_group_no WHERE g.id IS NULL OR g.warehouse_id<>i.warehouse_id")"
 assert_eq "orphan permits" 0 "$(q "$N1" mall_order "SELECT COUNT(*) FROM order_shipping_permits p LEFT JOIN order_fulfillment_groups g ON g.order_no=p.order_no AND g.group_no=p.fulfillment_group_no WHERE g.id IS NULL")"
+assert_eq "invalid group refund states" 0 "$(q "$N1" mall_order "SELECT COUNT(*) FROM order_fulfillment_groups WHERE refund_state NOT IN ('NONE','REFUNDING','REFUNDED')")"
 
 echo "== after-sales/pricing/fulfillment invariants =="
 assert_eq "after-sale items missing group" 0 "$(q "$N1" mall_aftersales "SELECT COUNT(*) FROM after_sale_items WHERE warehouse_id IS NULL OR group_no=''")"
@@ -104,7 +106,7 @@ restore "$N2"
 assert_eq "rollback order_items group column" 0 "$(q "$N2" mall_order "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='mall_order' AND table_name='order_items' AND column_name='fulfillment_group_no'")"
 assert_eq "rollback order groups table" 0 "$(q "$N2" mall_order "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mall_order' AND table_name='order_fulfillment_groups'")"
 for db in mall_order mall_aftersales mall_inventory mall_pricing mall_fulfillment; do
-  assert_eq "rollback C ledger rows ($db)" 0 "$(q "$N2" "$db" "SELECT COUNT(*) FROM schema_migrations WHERE filename IN ('order/0011_fulfillment_groups.sql','order/0012_group_shipping_permits.sql','inventory/0016_reservation_warehouse_keys.sql','pricing/0010_quote_warehouse.sql','aftersales/0011_group_items.sql','fulfillment/0003_group_shipments.sql')")"
+  assert_eq "rollback C ledger rows ($db)" 0 "$(q "$N2" "$db" "SELECT COUNT(*) FROM schema_migrations WHERE filename IN ('order/0011_fulfillment_groups.sql','order/0012_group_shipping_permits.sql','order/0013_group_refund_state.sql','inventory/0016_reservation_warehouse_keys.sql','pricing/0010_quote_warehouse.sql','aftersales/0011_group_items.sql','fulfillment/0003_group_shipments.sql')")"
 done
 
 echo "C migration/rollback rehearsal passed on disposable MySQL"

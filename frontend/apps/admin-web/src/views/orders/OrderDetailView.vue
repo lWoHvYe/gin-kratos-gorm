@@ -90,7 +90,7 @@ function shipmentFor(groupNo: string): Shipment | undefined {
           <h3>履约分组</h3>
           <template v-if="order.data.value.fulfillment_groups?.length">
             <div v-for="group in order.data.value.fulfillment_groups" :key="group.group_no" class="group">
-              <div class="group-head"><strong>{{ group.group_no }}</strong><span>仓库 {{ group.warehouse_id }}</span><el-tag size="small">{{ group.status }}</el-tag></div>
+              <div class="group-head"><strong>{{ group.group_no }}</strong><span>仓库 {{ group.warehouse_id }}</span><el-tag size="small">{{ group.status }}</el-tag><el-tag v-if="group.refund_state && group.refund_state !== 'NONE'" size="small" type="warning">{{ group.refund_state }}</el-tag></div>
               <div class="muted">运费 {{ formatMoney(group.freight_cent) }}</div>
               <div v-if="shipmentFor(group.group_no)" class="muted">{{ shipmentFor(group.group_no)?.carrier }} {{ shipmentFor(group.group_no)?.tracking_no }} · {{ shipmentFor(group.group_no)?.status }}</div>
               <el-button v-if="canShipGroup(group.group_no)" size="small" type="primary" @click="openShip(group.group_no, group.warehouse_id)">发货</el-button>

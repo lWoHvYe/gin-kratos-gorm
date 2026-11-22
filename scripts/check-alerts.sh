@@ -25,3 +25,9 @@ required.each do |name, (expr, duration, severity)|
 end
 puts "[alerts] OK (#{required.length} after-sale backlog rules)"
 RUBY
+
+if command -v docker >/dev/null 2>&1; then
+  docker run --rm --entrypoint promtool     -v "$root/deploy/compose/observability:/work" -w /work     "${PROMTOOL_IMAGE:-prom/prometheus:v3.1.0}" test rules alerts_test.yml
+else
+  echo "[alerts] promtool unavailable; structural check only" >&2
+fi

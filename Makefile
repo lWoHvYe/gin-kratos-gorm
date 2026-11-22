@@ -177,6 +177,9 @@ check-split-concurrency:
 fault-split-uat:
 	./scripts/fault-split-uat.sh
 
+fault-split-worker-uat:
+	./scripts/fault-split-worker-uat.sh
+
 rehearse-c-migration:
 	./scripts/rehearse-c-migration.sh
 

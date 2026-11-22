@@ -104,8 +104,11 @@ pnpm exec playwright test --config=e2e/playwright.config.ts e2e/warehouse-split.
 - `scripts/check-split-concurrency.sh` passed: duplicate payment, concurrent
   G1/G2 ship, unshipped G2 refund cancels its draft parcel, G2 refund/ship race
   leaves G1 shippable;
-- `scripts/fault-split-uat.sh` passed: NATS outage and Fulfillment outage
-  recovered durable order.paid/auto-shipment flow.
+- `scripts/fault-split-uat.sh` passed: Order outage fail-closed, NATS outage
+  and Fulfillment outage recovered durable order.paid/auto-shipment flow;
+- `scripts/fault-split-worker-uat.sh` passed: after-sales restock worker was
+  stopped with a PROCESSING task, restarted, restock converged and G2 reached
+  REFUNDED.
 
 ## Teardown
 

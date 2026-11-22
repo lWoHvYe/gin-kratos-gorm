@@ -1,0 +1,39 @@
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'mall_aftersale_restock_backlog'
+        values: '1x20'
+      - series: 'mall_aftersale_restock_oldest_seconds'
+        values: '301x20'
+      - series: 'mall_aftersale_refund_backlog'
+        values: '1x20'
+      - series: 'mall_aftersale_refund_oldest_seconds'
+        values: '301x20'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: MallAfterSaleRestockBacklog
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: After-sale restock tasks are not draining
+      - eval_time: 6m
+        alertname: MallAfterSaleRestockStalled
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: Oldest after-sale restock task is older than 5 minutes
+      - eval_time: 11m
+        alertname: MallAfterSaleRefundBacklog
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: After-sale refund tasks are not draining
+      - eval_time: 6m
+        alertname: MallAfterSaleRefundStalled
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: Oldest after-sale refund task is older than 5 minutes

@@ -14,9 +14,9 @@ money, inventory, recovery or production operation.
 |---|---|---|
 | P0.1 migration/rollback ADR + rehearsal | done | [ADR 0003](adr/0003-c-production-rollout.md), [runbook](runbooks/c-migration-rollback.md), `scripts/rehearse-c-migration.sh`; six C ledger entries and pre-C restore passed on disposable MySQL |
 | P0.1b migration runner hardening | done | lease + attempt ledger + failure refusal in `deploy/k8s/images/migrate/run.sh`; `scripts/test-migrate-runner.sh` covers failure, repair, replay, concurrency, stale lease |
-| P0.2 split concurrency / fault injection | partial | `check-split-concurrency.sh` covers duplicate payment, concurrent G1/G2 ship, draft cancellation, refund/ship race. `fault-split-uat.sh` covers Order outage fail-closed, NATS outage and Fulfillment outage recovery. Worker restart remains uncovered |
+| P0.2 split concurrency / fault injection | done | `check-split-concurrency.sh` covers duplicate payment, concurrent G1/G2 ship, draft cancellation, refund/ship race. `fault-split-uat.sh` covers Order outage fail-closed, NATS/Fulfillment outage recovery. `fault-split-worker-uat.sh` stops the after-sales worker with a PROCESSING restock task, restarts it, and verifies restock/refund/group state |
 | P0.3 admin group shipment Playwright | done | [admin-split.spec.ts](../frontend/e2e/admin-split.spec.ts) creates a G2 shipment through the admin UI |
-| P0.4 group/permit/restock metrics and alerts | partial | backlog/oldest gauges exist; four alert rules pass `make alerts-check`, but no live Prometheus firing test |
+| P0.4 group/permit/restock metrics and alerts | done | backlog/oldest gauges exist; four alert rules pass structural + `promtool test rules` firing tests via `make alerts-check` |
 | P0.5 production split gate | done (guard) | production values keep split off; dev/UAT use `WAREHOUSE_MODE=split` |
 
 ## P1: fulfillment state/action consolidation
@@ -66,9 +66,8 @@ A task may be marked done only when all of the following hold:
    explicitly labelled "not production-ready" and cannot be counted as done.
 5. UAT with dev secrets/mock payment is labelled UAT, never production.
 
-Under this definition, P0.2 (worker restart), P0.4 (live alert firing), P2
-replay/events/contracts/#38 and all P3 remain open. P1.1/P1.2/P1.3/P1.6 and P2
-payment aggregation are done.
+Under this definition, P2 replay/events/contracts/#38 and all P3 remain open.
+P0.2, P0.4, P1.1/P1.2/P1.3/P1.6 and P2 payment aggregation are done.
 
 ## Verification snapshot
 
@@ -85,8 +84,7 @@ C                           functional dev+UAT; production split off
 ## Recommended next order
 
 1. Add alerts for the after-sale backlog gauges (small).
-2. Add the remaining worker-restart fault injection (P0.2 gap) and a live
-   Prometheus alert-firing test (P0.4 gap).
+2. P2: replay BFF, #38 live 403, typed event/contract gate.
 3. Consolidate `availableActions`/`multiGroupActions` behind one action policy and
    decide whether a per-group refund projection is worth persisting.
 4. Only then consider P2 payment aggregation/replay and P3 product/AI work.

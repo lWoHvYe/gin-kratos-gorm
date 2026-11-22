@@ -97,7 +97,11 @@ the port-forward bases so Node does not need a DNS entry for `uat.mall.local`.
 - split E2E reached `COMPLETED/RECEIVED` with G1/G2;
 - UAT Playwright split UI passed (groups rendered, G2 receive -> PARTIALLY_RECEIVED);
 - UAT group refund: G2 return/restock/refund, then G1 shipped successfully
-  -> `SHIPPED/SHIPPED`, `refund=PARTIAL`.
+  -> `SHIPPED/SHIPPED`, `refund=PARTIAL`;
+- UAT admin G2 shipment Playwright passed;
+- `scripts/check-split-concurrency.sh` passed: duplicate payment, concurrent
+  G1/G2 ship, unshipped G2 refund cancels its draft parcel, G2 refund/ship race
+  leaves G1 shippable.
 
 ## Teardown
 

@@ -153,6 +153,14 @@ components:
               group_no: { type: string }
               warehouse_id: { type: integer, format: int64 }
               freight_cent: { type: integer, format: int64 }
+              status: { type: string }
+        group_actions:
+          type: array
+          items:
+            type: object
+            properties:
+              group_no: { type: string }
+              action: { type: string }
         receiver_name: { type: string }
         receiver_phone: { type: string }
         receiver_address: { type: string }

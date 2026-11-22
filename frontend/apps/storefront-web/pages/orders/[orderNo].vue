@@ -1,8 +1,9 @@
 <script setup lang="ts">
 interface Item { sku_id: number; name: string; price_cent: number; quantity: number; discount_cent: number; warehouse_id?: number; group_no?: string }
 interface FulfillmentGroup { group_no: string; warehouse_id: number; freight_cent: number; status: string }
+interface OrderGroupAction { group_no: string; action: string }
 interface Shipment { shipment_no: string; order_no: string; fulfillment_group_no?: string; warehouse_id?: number; status: string; carrier: string; tracking_no: string }
-interface Order { order_no: string; status: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; freight_cent: number; pay_cent: number; paid_cent: number; refunded_cent: number; refund_status: string; refund_state: string; available_actions: string[]; shipment_status: string; fulfillment_groups?: FulfillmentGroup[]; receiver_name: string; receiver_phone: string; receiver_address: string; items: Item[]; created_at_unix: number; expire_at_unix: number }
+interface Order { order_no: string; status: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; freight_cent: number; pay_cent: number; paid_cent: number; refunded_cent: number; refund_status: string; refund_state: string; available_actions: string[]; shipment_status: string; fulfillment_groups?: FulfillmentGroup[]; group_actions?: OrderGroupAction[]; receiver_name: string; receiver_phone: string; receiver_address: string; items: Item[]; created_at_unix: number; expire_at_unix: number }
 const route = useRoute()
 const orderNo = String(route.params.orderNo)
 const { request, token } = useApi()
@@ -26,8 +27,10 @@ async function act(path: string, body: Record<string, unknown> = {}): Promise<vo
     await refresh(); await refreshShipments()
   } catch (err) { message.value = err instanceof Error ? err.message : '操作失败' }
 }
-function hasGroupAction(prefix: string, groupNo: string): boolean {
-  return order.value?.available_actions?.includes(`${prefix}:${groupNo}`) ?? false
+function hasGroupAction(action: string, groupNo: string): boolean {
+  if (order.value?.group_actions?.some((item) => item.action === action && item.group_no === groupNo)) return true
+  // Compatibility for an older Order service during a rolling deployment.
+  return order.value?.available_actions?.includes(`${action}_group:${groupNo}`) ?? false
 }
 function shipmentFor(groupNo: string): Shipment | undefined {
   return shipments.value?.shipments?.find((shipment) => shipment.fulfillment_group_no === groupNo)
@@ -69,8 +72,8 @@ function afterSaleLink(groupNo: string): string {
           <div class="muted">运费 ¥{{ ((group.freight_cent ?? 0) / 100).toFixed(2) }}</div>
           <div v-if="shipmentFor(group.group_no)" class="muted">{{ shipmentFor(group.group_no)?.carrier }} {{ shipmentFor(group.group_no)?.tracking_no }} · {{ shipmentFor(group.group_no)?.status }}</div>
           <div class="group-actions">
-            <van-button v-if="hasGroupAction('receive_group', group.group_no)" size="small" type="primary" @click="receiveGroup(group.group_no)">确认收货</van-button>
-            <NuxtLink v-if="hasGroupAction('apply_after_sale_group', group.group_no)" :to="afterSaleLink(group.group_no)"><van-button size="small" type="warning" plain>申请售后</van-button></NuxtLink>
+            <van-button v-if="hasGroupAction('receive', group.group_no)" size="small" type="primary" @click="receiveGroup(group.group_no)">确认收货</van-button>
+            <NuxtLink v-if="hasGroupAction('apply_after_sale', group.group_no)" :to="afterSaleLink(group.group_no)"><van-button size="small" type="warning" plain>申请售后</van-button></NuxtLink>
           </div>
         </div>
       </template>

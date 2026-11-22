@@ -157,7 +157,11 @@ Consumers:
 - order consumes shipment created/shipped/delivered to project `ALLOCATED` /
   `SHIPPED` / `COMPLETED`.
 - payment consumes `shop.order.refund_requested.v1`.
-- fulfillment consumes `shop.order.paid.v1` to create a shipment.
+- fulfillment consumes `shop.order.paid.v1` to create a shipment and
+  `shop.aftersale.refund_requested.v1` (payload `order_no`, `group_no`) to move
+  a `CREATED` parcel to `CANCELLED`.
+- Split orders expose typed `Order.group_actions` (group_no + action) in
+  addition to the legacy `available_actions` strings.
 
 ## Settlement model (transaction refactor A)
 

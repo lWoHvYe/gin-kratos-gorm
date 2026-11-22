@@ -8,9 +8,13 @@ const skuA = Number(process.env.SPLIT_SKU_A || 10179)
 const skuB = Number(process.env.SPLIT_SKU_B || 10178)
 
 async function login(request: APIRequestContext, username: string, password: string): Promise<string> {
-  const reply = await request.post(`${gateway}/auth/login`, { data: { username, password } })
-  expect(reply.ok()).toBeTruthy()
-  return (await reply.json()).access_token as string
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const reply = await request.post(`${gateway}/auth/login`, { data: { username, password } })
+    if (reply.ok()) return (await reply.json()).access_token as string
+    if (reply.status() !== 429 && reply.status() !== 401) break
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+  throw new Error(`login failed for ${username}`)
 }
 
 test('split order renders groups and receives one group', async ({ page, request }) => {

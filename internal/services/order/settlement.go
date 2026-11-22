@@ -61,30 +61,58 @@ func shipmentStatus(status string) string {
 	}
 }
 
+// groupIsClosed means the group will never produce a parcel: it was either
+// cancelled or its permit was revoked by a refund before shipment.
+func groupIsClosed(group *fulfillmentGroup) bool {
+	if group == nil {
+		return false
+	}
+	if group.Status == "CANCELLED" {
+		return true
+	}
+	if group.Status == "SHIPPED" || group.Status == "RECEIVED" {
+		return false
+	}
+	return group.PermitState == permitRevoked
+}
+
+// effectiveGroupStatus is the read-model status shown to BFFs/UI. The persisted
+// group status stays ALLOCATED for an unshipped refund; permit REVOKED makes it
+// effectively CANCELLED.
+func effectiveGroupStatus(group *fulfillmentGroup) string {
+	if groupIsClosed(group) && group.Status != "CANCELLED" {
+		return "CANCELLED"
+	}
+	return group.Status
+}
+
 func shipmentStatusForGroups(orderStatus string, groups []*fulfillmentGroup) string {
 	if len(groups) == 0 {
 		return shipmentStatus(orderStatus)
 	}
-	shipped, received, cancelled := 0, 0, 0
+	shipped, received, closed := 0, 0, 0
 	for _, group := range groups {
+		if groupIsClosed(group) {
+			closed++
+			continue
+		}
 		switch group.Status {
 		case "SHIPPED":
 			shipped++
 		case "RECEIVED":
 			shipped++
 			received++
-		case "CANCELLED":
-			cancelled++
 		}
 	}
+	remaining := len(groups) - closed
 	switch {
-	case cancelled == len(groups):
+	case remaining == 0:
 		return "CANCELLED"
-	case received == len(groups):
+	case received == remaining:
 		return "RECEIVED"
 	case received > 0:
 		return "PARTIALLY_RECEIVED"
-	case shipped == len(groups):
+	case shipped == remaining:
 		return "SHIPPED"
 	case shipped > 0:
 		return "PARTIALLY_SHIPPED"
@@ -95,16 +123,22 @@ func shipmentStatusForGroups(orderStatus string, groups []*fulfillmentGroup) str
 	}
 }
 
+// groupAction is the typed, group-scoped action contract. BFFs and UIs use
+// this instead of parsing "ship_group:G1" strings.
+type groupAction struct {
+	GroupNo string
+	Action  string
+}
+
 // multiGroupActions exposes per-group shipping/receiving/after-sale actions.
-// The UI parses the suffix after the first ':' as the group number.
-func multiGroupActions(o *orderRecord, groups []*fulfillmentGroup) []string {
+func multiGroupActions(o *orderRecord, groups []*fulfillmentGroup) []groupAction {
 	if o == nil {
 		return nil
 	}
-	actions := make([]string, 0, len(groups)*2+2)
+	actions := make([]groupAction, 0, len(groups)*2+2)
 	if o.Status == statusPendingPayment {
 		if o.RefundState != refundStateRefunding && o.RefundState != refundStateFull {
-			actions = append(actions, actionPay, actionCancel)
+			actions = append(actions, groupAction{Action: actionPay}, groupAction{Action: actionCancel})
 		}
 		return actions
 	}
@@ -112,25 +146,37 @@ func multiGroupActions(o *orderRecord, groups []*fulfillmentGroup) []string {
 	for _, group := range groups {
 		switch group.Status {
 		case "PENDING", statusAllocated:
-			// A refund for another group only revokes that group's permit; it
-			// must not stop this group from shipping.
 			permitOpen := group.PermitState == "" || group.PermitState == permitNone || group.PermitState == permitGranted
 			if !fullRefund && permitOpen &&
 				(o.Status == statusPaid || o.Status == statusAllocated) {
-				actions = append(actions, actionShipGroup+":"+group.GroupNo)
+				actions = append(actions, groupAction{GroupNo: group.GroupNo, Action: actionShip})
 			}
 		case "SHIPPED":
-			actions = append(actions, actionReceiveGroup+":"+group.GroupNo)
+			actions = append(actions, groupAction{GroupNo: group.GroupNo, Action: actionReceive})
 			if !fullRefund {
-				actions = append(actions, actionApplyAfterSaleGroup+":"+group.GroupNo)
+				actions = append(actions, groupAction{GroupNo: group.GroupNo, Action: actionApplyAfterSale})
 			}
 		case "RECEIVED":
 			if !fullRefund {
-				actions = append(actions, actionApplyAfterSaleGroup+":"+group.GroupNo)
+				actions = append(actions, groupAction{GroupNo: group.GroupNo, Action: actionApplyAfterSale})
 			}
 		}
 	}
 	return actions
+}
+
+// groupActionStrings is the compatibility projection for clients that still
+// read available_actions.
+func groupActionStrings(actions []groupAction) []string {
+	out := make([]string, 0, len(actions))
+	for _, action := range actions {
+		if action.GroupNo == "" {
+			out = append(out, action.Action)
+			continue
+		}
+		out = append(out, action.Action+"_group:"+action.GroupNo)
+	}
+	return out
 }
 
 // availableActions is the single server-owned action list consumed by both BFFs

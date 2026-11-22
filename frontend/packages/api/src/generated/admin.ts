@@ -3050,6 +3050,11 @@ export interface components {
                 warehouse_id?: number;
                 /** Format: int64 */
                 freight_cent?: number;
+                status?: string;
+            }[];
+            group_actions?: {
+                group_no?: string;
+                action?: string;
             }[];
             receiver_name?: string;
             receiver_phone?: string;

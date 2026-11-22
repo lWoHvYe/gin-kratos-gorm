@@ -549,3 +549,26 @@ func TestAfterSaleGroupRefundAndRestock(t *testing.T) {
 		t.Fatalf("blocked groups = %v", order.blockedGroups)
 	}
 }
+
+func TestRefundOnlyBeforeGroupShipment(t *testing.T) {
+	db := afterSaleTestDB(t)
+	order := &fakeOrderService{order: &pb.Order{
+		OrderNo: "ORD-REFUND-EARLY", UserId: 1, Status: "ALLOCATED", PaidCent: 2000, RefundState: "NONE",
+		Items: []*pb.OrderItem{
+			{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1"},
+			{SkuId: 2, Quantity: 1, WarehouseId: 2, GroupNo: "G2"},
+		},
+		FulfillmentGroups: []*pb.OrderFulfillmentGroup{
+			{GroupNo: "G1", WarehouseId: 1, Status: "ALLOCATED"},
+			{GroupNo: "G2", WarehouseId: 2, Status: "ALLOCATED"},
+		},
+	}}
+	svc := New(db, nil, &fakePaymentService{captured: 2000}, &fakeInventoryService{}, order,
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if _, err := svc.CreateAfterSale(context.Background(), &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-REFUND-EARLY", UserId: 1, Type: typeRefundOnly, AmountCent: 1000, Reason: "unshipped",
+		Items: []*pb.AfterSaleItem{{SkuId: 2, Quantity: 1, WarehouseId: 2, GroupNo: "G2"}},
+	}); err != nil {
+		t.Fatalf("refund-only before shipment must be accepted: %v", err)
+	}
+}

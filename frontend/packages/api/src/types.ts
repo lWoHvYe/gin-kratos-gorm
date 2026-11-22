@@ -89,11 +89,17 @@ export interface FulfillmentGroup {
   status: string
 }
 
+export interface OrderGroupAction {
+  group_no: string
+  action: 'ship' | 'receive' | 'apply_after_sale' | string
+}
+
 type GeneratedOrder = components['schemas']['Order']
 
-export interface Order extends Required<Omit<GeneratedOrder, 'items' | 'fulfillment_groups'>> {
+export interface Order extends Required<Omit<GeneratedOrder, 'items' | 'fulfillment_groups' | 'group_actions'>> {
   items: OrderItem[]
   fulfillment_groups?: FulfillmentGroup[]
+  group_actions?: OrderGroupAction[]
   quote_id: string
 }
 

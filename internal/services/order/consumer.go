@@ -165,25 +165,31 @@ func aggregateOrderStatus(orderStatus, target string, groups []*fulfillmentGroup
 		}
 		return target
 	}
-	shipped, received, cancelled := 0, 0, 0
+	shipped, received, closed := 0, 0, 0
 	for _, group := range groups {
+		if groupIsClosed(group) {
+			closed++
+			continue
+		}
 		switch group.Status {
 		case "SHIPPED":
 			shipped++
 		case "RECEIVED":
 			shipped++
 			received++
-		case "CANCELLED":
-			cancelled++
 		}
+	}
+	remaining := len(groups) - closed
+	if remaining == 0 {
+		return ""
 	}
 	switch target {
 	case statusCompleted:
-		if received == len(groups) {
+		if received == remaining {
 			return statusCompleted
 		}
 	case statusShipped:
-		if shipped == len(groups) && received < len(groups) {
+		if shipped == remaining && received < remaining {
 			return statusShipped
 		}
 	case statusAllocated:
@@ -191,7 +197,6 @@ func aggregateOrderStatus(orderStatus, target string, groups []*fulfillmentGroup
 			return statusAllocated
 		}
 	}
-	_ = cancelled
 	return ""
 }
 

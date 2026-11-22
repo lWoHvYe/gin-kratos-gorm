@@ -448,6 +448,13 @@ message OrderItem {
   int64 warehouse_id = 6;
   string group_no = 7;
 }
+message OrderGroupAction {
+  string group_no = 1;
+  // ship | receive | apply_after_sale. Empty group_no means an order-level
+  // action (pay/cancel) on a split order.
+  string action = 2;
+}
+
 message Order {
   string order_no = 1;
   int64 user_id = 2;
@@ -478,6 +485,7 @@ message Order {
   // Per-warehouse fulfillment groups (phase 1+). A single-warehouse order has
   // one G1 group; split orders expose more when the feature is enabled.
   repeated OrderFulfillmentGroup fulfillment_groups = 23;
+  repeated OrderGroupAction group_actions = 24;
 }
 message CreateOrderRequest {
   int64 user_id = 1;

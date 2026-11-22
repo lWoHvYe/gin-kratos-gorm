@@ -24,7 +24,7 @@ const cancel = useMutation({
   onError: (error) => ElMessage.error(error instanceof Error ? error.message : '取消失败'),
 })
 const createShipment = useMutation({
-  mutationFn: () => adminApi.shipments.create(orderNo.value, shipForm.carrier, shipForm.tracking_no, true, shipForm.groupNo),
+  mutationFn: () => adminApi.shipments.create(orderNo.value, shipForm.carrier, shipForm.tracking_no, true, shipForm.groupNo, shipForm.warehouseId),
   onSuccess: async () => { shipDialog.value = false; ElMessage.success('已创建并发货'); await qc.invalidateQueries({ queryKey: ['shipment', orderNo.value] }); await qc.invalidateQueries({ queryKey: ['order', orderNo.value] }) },
   onError: (error) => ElMessage.error(error instanceof ApiError || error instanceof Error ? error.message : '发货失败'),
 })
@@ -35,6 +35,8 @@ function openShip(groupNo = '', warehouseId = 0): void {
   shipDialog.value = true
 }
 function canShipGroup(groupNo: string): boolean {
+  if (order.data.value?.group_actions?.some((action) => action.action === 'ship' && action.group_no === groupNo)) return true
+  // Compatibility for an older Order service during a rolling deployment.
   return order.data.value?.available_actions?.includes(`ship_group:${groupNo}`) ?? false
 }
 function shipmentFor(groupNo: string): Shipment | undefined {

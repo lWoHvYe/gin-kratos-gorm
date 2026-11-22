@@ -16,6 +16,10 @@ warehouseAllocationShadow: false
 # Phase 3b: allow multi-group quotes/orders. Keep false until split
 # shipments/permits (phase 4) are ready.
 warehouseSplitEnabled: false
+# Single switch preferred over the two booleans: off|shadow|split. When set,
+# the chart passes only WAREHOUSE_MODE and config rejects conflicting legacy
+# flags. Empty keeps the legacy booleans for older values files.
+warehouseMode: ""
 
 mysql:
   host: mysql.mall-data.svc.cluster.local

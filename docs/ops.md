@@ -572,7 +572,9 @@ Production order:
    AfterSales code cannot resume new requests after a rollback. The supported
    rollback is restore-from-backup or roll forward; do not invent a down SQL.
 
-`WAREHOUSE_SPLIT_ENABLED` stays `false` in both the dev and production values.
+UAT/dev use the single `WAREHOUSE_MODE=split` switch; the legacy
+`WAREHOUSE_SPLIT_ENABLED`/`WAREHOUSE_ALLOCATION_SHADOW` pair remains supported
+for older values files. The production values keep split off.
 Phase 4/5/6 now have per-group shipments, permits, returns/refunds and
 group-aware storefront/admin UI. The dev single-node values enable split; the
 production defaults keep `WAREHOUSE_SPLIT_ENABLED=false` until the

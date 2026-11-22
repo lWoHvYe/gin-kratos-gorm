@@ -198,3 +198,27 @@ func TestCreateShipmentValidatesGroupWarehouseAndItems(t *testing.T) {
 		t.Fatal("item from another group was accepted")
 	}
 }
+
+func TestCancelCreatedShipmentOnlyVoidsDraft(t *testing.T) {
+	db := fulfillmentTestDB(t)
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	if _, err := db.Exec(`INSERT INTO shipments
+		(shipment_no, order_no, fulfillment_group_no, warehouse_id, status)
+		VALUES ('SHP-CANCEL-G1','ORD-CANCEL','G1',1,'CREATED'),
+		       ('SHP-CANCEL-G2','ORD-CANCEL','G2',2,'SHIPPED')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.CancelCreatedShipment(context.Background(), "ORD-CANCEL", "G1", "AS-1"); err != nil {
+		t.Fatal(err)
+	}
+	var g1, g2 string
+	if err := db.QueryRow(`SELECT status FROM shipments WHERE shipment_no='SHP-CANCEL-G1'`).Scan(&g1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT status FROM shipments WHERE shipment_no='SHP-CANCEL-G2'`).Scan(&g2); err != nil {
+		t.Fatal(err)
+	}
+	if g1 != statusCancelled || g2 != statusShipped {
+		t.Fatalf("cancel statuses = %s/%s", g1, g2)
+	}
+}

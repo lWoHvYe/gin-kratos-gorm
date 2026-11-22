@@ -24,9 +24,10 @@ import (
 //
 //	CREATED -> SHIPPED -> RECEIVED
 const (
-	statusCreated  = "CREATED"
-	statusShipped  = "SHIPPED"
-	statusReceived = "RECEIVED"
+	statusCreated   = "CREATED"
+	statusShipped   = "SHIPPED"
+	statusReceived  = "RECEIVED"
+	statusCancelled = "CANCELLED"
 )
 
 // Outbox subjects, see docs/contracts.md.
@@ -173,6 +174,9 @@ func (s *Service) Ship(ctx context.Context, req *pb.ShipRequest) (*pb.Shipment, 
 	if err != nil {
 		return nil, err
 	}
+	if shipmentStatus == statusCancelled {
+		return nil, apperr.Failed("shipment was cancelled after the group refund")
+	}
 	// Legacy/already-shipped parcels are idempotent: do not require a new
 	// permit for a shipment that already left CREATED.
 	if shipmentStatus != statusCreated {
@@ -187,6 +191,27 @@ func (s *Service) Ship(ctx context.Context, req *pb.ShipRequest) (*pb.Shipment, 
 		return nil, apperr.Failed("shipping permit denied: " + err.Error())
 	}
 	return s.advance(ctx, shipmentNo, topicShipmentShipped, "shipment.shipped", shipOutcome)
+}
+
+// CancelCreatedShipment voids a not-yet-shipped parcel after a group refund.
+// It is idempotent and deliberately does not touch SHIPPED/RECEIVED parcels.
+func (s *Service) CancelCreatedShipment(ctx context.Context, orderNo, groupNo, afterSaleNo string) error {
+	orderNo = strings.TrimSpace(orderNo)
+	groupNo = strings.TrimSpace(groupNo)
+	if groupNo == "" {
+		groupNo = "G1"
+	}
+	if orderNo == "" {
+		return apperr.Invalid("order_no is required")
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE shipments
+		SET status = ?, updated_at = NOW(3)
+		WHERE order_no = ? AND fulfillment_group_no = ? AND status = ?`,
+		statusCancelled, orderNo, groupNo, statusCreated)
+	if err != nil {
+		return apperr.Internal("cancel created shipment", err)
+	}
+	return nil
 }
 
 func (s *Service) shipmentOrder(ctx context.Context, shipmentNo string) (string, string, string, error) {

@@ -269,3 +269,34 @@ func TestPaymentSecretRequiredEvenInDevWhenMockDisabled(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestWarehouseMode(t *testing.T) {
+	t.Setenv("WAREHOUSE_MODE", "split")
+	cfg, err := Load("gateway")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WarehouseMode != "split" || !cfg.WarehouseAllocationShadow || !cfg.WarehouseSplitEnabled {
+		t.Fatalf("split mode = %+v", cfg)
+	}
+
+	t.Setenv("WAREHOUSE_MODE", "shadow")
+	cfg, err = Load("gateway")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WarehouseMode != "shadow" || !cfg.WarehouseAllocationShadow || cfg.WarehouseSplitEnabled {
+		t.Fatalf("shadow mode = %+v", cfg)
+	}
+
+	t.Setenv("WAREHOUSE_MODE", "bogus")
+	if _, err := Load("gateway"); err == nil {
+		t.Fatal("invalid WAREHOUSE_MODE accepted")
+	}
+
+	t.Setenv("WAREHOUSE_MODE", "split")
+	t.Setenv("WAREHOUSE_SPLIT_ENABLED", "false")
+	if _, err := Load("gateway"); err == nil {
+		t.Fatal("conflicting WAREHOUSE_MODE/legacy flag accepted")
+	}
+}

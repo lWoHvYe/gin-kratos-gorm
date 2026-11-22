@@ -70,24 +70,48 @@ func TestBuildCreateOrderInnerCarriesGroups(t *testing.T) {
 	}
 }
 
-func TestMultiGroupActionsExposeGroupSuffix(t *testing.T) {
+func TestMultiGroupActionsExposeTypedGroupActions(t *testing.T) {
 	o := &orderRecord{Status: statusAllocated, RefundState: refundStateNone}
 	groups := []*fulfillmentGroup{
-		{GroupNo: "G1", Status: "SHIPPED"}, {GroupNo: "G2", Status: statusAllocated, PermitState: permitRevoked},
+		{GroupNo: "G1", Status: "SHIPPED"},
+		{GroupNo: "G2", Status: statusAllocated, PermitState: permitRevoked},
 	}
 	actions := multiGroupActions(o, groups)
-	want := map[string]bool{
-		"receive_group:G1": true, "apply_after_sale_group:G1": true,
+	want := map[[2]string]bool{
+		{"G1", "receive"}: true, {"G1", "apply_after_sale"}: true,
 	}
 	for _, action := range actions {
-		delete(want, action)
+		delete(want, [2]string{action.GroupNo, action.Action})
 	}
 	if len(want) != 0 {
-		t.Fatalf("missing actions %v in %v", want, actions)
+		t.Fatalf("missing typed actions %v in %v", want, actions)
 	}
 	for _, action := range actions {
-		if action == "ship" || action == "receive" || action == "apply_after_sale" || action == "ship_group:G2" {
-			t.Fatalf("order-level action leaked for split order: %v", actions)
+		if action.GroupNo == "G2" {
+			t.Fatalf("revoked permit exposed an action: %v", action)
 		}
+	}
+
+	legacy := groupActionStrings(actions)
+	for _, action := range legacy {
+		if action == "ship" || action == "receive" || action == "apply_after_sale" || action == "ship_group:G2" {
+			t.Fatalf("order-level action leaked for split order: %v", legacy)
+		}
+	}
+}
+
+func TestRevokedGroupIsClosedInProjection(t *testing.T) {
+	groups := []*fulfillmentGroup{
+		{GroupNo: "G1", Status: "SHIPPED"},
+		{GroupNo: "G2", Status: statusAllocated, PermitState: permitRevoked},
+	}
+	if got := shipmentStatusForGroups(statusAllocated, groups); got != "SHIPPED" {
+		t.Fatalf("shipment status = %s", got)
+	}
+	if got := aggregateOrderStatus(statusAllocated, statusShipped, groups); got != statusShipped {
+		t.Fatalf("aggregate status = %s", got)
+	}
+	if got := effectiveGroupStatus(groups[1]); got != "CANCELLED" {
+		t.Fatalf("effective group status = %s", got)
 	}
 }

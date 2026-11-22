@@ -46,6 +46,9 @@ type Config struct {
 	// WarehouseSplitEnabled allows Order/Gateway to accept multi-group quotes.
 	// It stays false until the split shipment/permit phases are ready.
 	WarehouseSplitEnabled bool
+	// WarehouseMode is the single off|shadow|split switch. It is derived from
+	// WAREHOUSE_MODE or the legacy booleans and is used for diagnostics.
+	WarehouseMode string
 	// SeckillTokenSecret signs admission tokens; must differ from JWTSecret.
 	SeckillTokenSecret string
 	NATSURL            string
@@ -450,19 +453,52 @@ func applyEnv(c *Config) error {
 			c.RefreshTTL = d
 		}
 	}
+	splitSet := false
 	if v, ok := os.LookupEnv("WAREHOUSE_SPLIT_ENABLED"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
 		if err != nil {
 			return fmt.Errorf("WAREHOUSE_SPLIT_ENABLED must be a boolean (got %q)", v)
 		}
 		c.WarehouseSplitEnabled = parsed
+		splitSet = true
 	}
+	shadowSet := false
 	if v, ok := os.LookupEnv("WAREHOUSE_ALLOCATION_SHADOW"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
 		if err != nil {
 			return fmt.Errorf("WAREHOUSE_ALLOCATION_SHADOW must be a boolean (got %q)", v)
 		}
 		c.WarehouseAllocationShadow = parsed
+		shadowSet = true
+	}
+	if v := strings.TrimSpace(os.Getenv("WAREHOUSE_MODE")); v != "" {
+		var shadow, split bool
+		switch v {
+		case "off":
+		case "shadow":
+			shadow = true
+		case "split":
+			shadow, split = true, true
+		default:
+			return fmt.Errorf("WAREHOUSE_MODE must be off, shadow or split (got %q)", v)
+		}
+		if splitSet && c.WarehouseSplitEnabled != split {
+			return fmt.Errorf("WAREHOUSE_MODE=%s conflicts with WAREHOUSE_SPLIT_ENABLED", v)
+		}
+		if shadowSet && c.WarehouseAllocationShadow != shadow {
+			return fmt.Errorf("WAREHOUSE_MODE=%s conflicts with WAREHOUSE_ALLOCATION_SHADOW", v)
+		}
+		c.WarehouseAllocationShadow, c.WarehouseSplitEnabled = shadow, split
+		c.WarehouseMode = v
+	} else {
+		switch {
+		case c.WarehouseSplitEnabled:
+			c.WarehouseMode = "split"
+		case c.WarehouseAllocationShadow:
+			c.WarehouseMode = "shadow"
+		default:
+			c.WarehouseMode = "off"
+		}
 	}
 	if v, ok := os.LookupEnv("AI_ENABLED"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))

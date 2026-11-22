@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/consumer"
@@ -54,6 +55,11 @@ func RunOrderPaidConsumer(ctx context.Context, client *mq.Client, svc *Service, 
 			groups = []*pb.OrderFulfillmentGroup{{GroupNo: "G1", WarehouseId: 1}}
 		}
 		for _, group := range groups {
+			if !autoShipAllowed(order, group.GetGroupNo()) {
+				logger.Info("order group is not shippable; auto shipment skipped",
+					"order_no", event.OrderNo, "group_no", group.GetGroupNo())
+				continue
+			}
 			items := make([]*pb.ShipmentItem, 0, len(order.GetItems()))
 			for _, item := range order.GetItems() {
 				if item.GetSkuId() <= 0 || item.GetQuantity() <= 0 {
@@ -93,3 +99,17 @@ func (missingOrderClientError) Error() string { return "order client is not conf
 
 var errMissingOrderNo = missingOrderNoError{}
 var errMissingOrderClient = missingOrderClientError{}
+
+func autoShipAllowed(order *pb.Order, groupNo string) bool {
+	for _, action := range order.GetGroupActions() {
+		if action.GetGroupNo() == groupNo && action.GetAction() == "ship" {
+			return true
+		}
+	}
+	for _, action := range order.GetAvailableActions() {
+		if action == "ship_group:"+groupNo || (groupNo == "G1" && strings.TrimSpace(action) == "ship") {
+			return true
+		}
+	}
+	return false
+}

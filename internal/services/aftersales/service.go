@@ -151,7 +151,7 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 			return nil, apperr.Invalid("sku %d in warehouse %d group %s is not part of order %s",
 				item.SkuID, item.WarehouseID, item.GroupNo, orderNo)
 		}
-		if len(groupStatuses) > 0 {
+		if typ == typeReturnRefund && len(groupStatuses) > 0 {
 			status, ok := groupStatuses[item.GroupNo]
 			if !ok || (status != "SHIPPED" && status != "RECEIVED") {
 				return nil, apperr.Failed(fmt.Sprintf("return refund requires group %s to be shipped or received", item.GroupNo))
@@ -518,7 +518,7 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*
 			AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
 			Type: row.typ, Status: statusRefunding, AmountCent: row.amountCent,
 			EffectiveAmountCent: row.effectiveAmountCent, AmountState: row.amountState,
-			RestockState: row.restockState, Reason: row.reason, RefundIntent: true,
+			RestockState: row.restockState, Reason: row.reason, GroupNo: groupNo, RefundIntent: true,
 		})
 		if err := outbox.Append(ctx, tx, outbox.Event{
 			Topic: topicAfterSaleRefundRequested, AggregateType: aggregateAfterSale,
@@ -857,6 +857,7 @@ type afterSaleEvent struct {
 	AmountState         string `json:"amount_state,omitempty"`
 	RestockState        string `json:"restock_state,omitempty"`
 	Reason              string `json:"reason"`
+	GroupNo             string `json:"group_no,omitempty"`
 	RefundIntent        bool   `json:"refund_intent,omitempty"`
 }
 

@@ -144,6 +144,12 @@ spec:
             - name: ORDER_DTM_URL
               value: "order:9006/mall.v1.OrderService"
             {{- end }}
+            {{- if $.Values.warehouseMode }}
+            {{- if or (eq $name "gateway") (eq $name "order") }}
+            - name: WAREHOUSE_MODE
+              value: {{ $.Values.warehouseMode | quote }}
+            {{- end }}
+            {{- else }}
             {{- if eq $name "gateway" }}
             - name: WAREHOUSE_ALLOCATION_SHADOW
               value: {{ $.Values.warehouseAllocationShadow | quote }}
@@ -151,6 +157,7 @@ spec:
             {{- if or (eq $name "gateway") (eq $name "order") }}
             - name: WAREHOUSE_SPLIT_ENABLED
               value: {{ $.Values.warehouseSplitEnabled | quote }}
+            {{- end }}
             {{- end }}
             {{- if or (eq $name "gateway") (eq $name "admin") }}
             - name: AI_ENABLED

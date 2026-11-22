@@ -162,9 +162,10 @@ state change; no consumer infers a group from a SKU.
 6. Extend `shipment_status` and derive per-group `available_actions`.
 
 All migrations are additive first, then constraint swaps after the read/write
-paths are dual-compatible. The feature flag `WAREHOUSE_SPLIT_ENABLED` defaults
-false; with it false, allocation always produces one warehouse-1 group and the
-old behavior is preserved.
+paths are dual-compatible. The single `WAREHOUSE_MODE` switch (`off`, `shadow`,
+`split`) is preferred; the legacy booleans remain accepted during migration.
+With `off`, allocation always produces one warehouse-1 group and the old
+behavior is preserved.
 
 ## Rollout phases
 

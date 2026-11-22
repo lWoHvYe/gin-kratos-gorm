@@ -27,8 +27,7 @@ ai:
   ragBuild:
     enabled: false
 
-warehouseAllocationShadow: true
-warehouseSplitEnabled: true
+warehouseMode: split
 
 payment:
   mockEnabled: "true"

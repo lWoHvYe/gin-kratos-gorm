@@ -54,6 +54,9 @@ rollout is still gated.
 | A refunding G2 could hide/ship-block G1 through order-level `refund_state` | group actions use permit state; authorize blocks only `FULL` |
 | Fulfillment accepted a shipment with the wrong group/warehouse/items | `CreateShipment` validates against Order groups and lines |
 | Split after-sale without items defaulted to G1 | split orders require explicit after-sale items |
+| `REFUND_ONLY` was rejected before shipment because the group status check was shared with returns | refund-only is allowed for an unshipped group; only RETURN_REFUND requires SHIPPED/RECEIVED |
+| An unshipped refunded group kept the order in ALLOCATED | a REVOKED permit makes the group closed for aggregate/projection purposes |
+| Refunded draft parcels stayed CREATED | Fulfillment consumes `aftersale.refund_requested` and moves CREATED -> CANCELLED |
 | Race tests across packages shared one MySQL database | `test-race -p 1` |
 | Split E2E used Bash's readonly `GROUPS` array | renamed to `GROUP_COUNT` |
 

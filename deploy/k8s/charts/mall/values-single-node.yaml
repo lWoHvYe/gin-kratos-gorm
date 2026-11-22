@@ -21,6 +21,5 @@ payment:
   # Local demo only; never use mock payment in a shared environment.
   mockEnabled: "true"
 
-warehouseAllocationShadow: true
-# Phase 6 group-aware UI is in place; dev single-node enables split checkout.
-warehouseSplitEnabled: true
+# Single mode switch; both allocator and split checkout are on in dev.
+warehouseMode: split

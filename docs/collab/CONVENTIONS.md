@@ -88,6 +88,15 @@ Spec（业务） > ADR（设计） > 代码
 - 有 CI 时，路径所有权检查失败即红（由 Architect 出方案、Developer 实现）。
 - Reviewer 复核是否混提、是否越权。
 
+### 4.4 闸门能力边界（T-003，2026-11-23）
+
+- **绿 = 引用存在 + 规则未违反**；**不等于**断言充分，更不等于业务正确。
+- G-3 只证明存在 `TestAC<NN>`/`AC-<NN>` 引用；输出 `AC-REF n/N (references only)`，`DEFERRED` 是债务清单，不是质量证书。
+- G-4 只证明到期项未逾期/状态未关闭；不判断测试深度。
+- `[mixed]` 是历史提示；不证明整条分支干净。
+- 断言深度由 **Reviewer 按 ADR-0005 §14 人工判定**，并在审查线程留证据；`ac-coverage.tsv` 只登记延期，不替代审查。
+- **禁止**：删除 deferred 行、把 `status` 直接改 `closed` 而实际未完成、批量后移 `expiry`（>3 条）来变绿、把 `AC-REF` 改回 `coverage`。
+
 ---
 
 ## 5. Commit 约定
@@ -106,9 +115,10 @@ AC: AC-14, AC-31
 Role: PO
 ```
 
-- trailer 键：`Spec` / `ADR` / `Thread` / `AC` / `Role`。
+- trailer 键：`Spec` / `ADR` / `Thread` / `AC` / `Role` / `Expiry-Renewal`。
 - 一笔 commit 只做一件事；**Spec 不与代码同笔提交**（目录首次建立除外）。
 - 反查：`git log --grep 'Thread: T-001'`、`git log --grep 'AC: AC-14'`。
+- `Expiry-Renewal: <理由>`：仅用于延期 `ac-coverage.tsv` / 偏差登记中的 `expiry`；必须非空，且同一次运行后移不得超过 3 条（G-4 阻断批量续期）。
 
 ### 5.1 scope 词表（2026-11-22 补充）
 
@@ -243,28 +253,34 @@ docs/collab/ac-coverage.tsv。不要直接改代码/Developer 产物；发现问
 
 ---
 
-## 附录 A：闸门可执行化（G-1 / G-2 / G-3）
+## 附录 A：闸门可执行化（G-1 / G-2 / G-3 / G-4）
 
 > 设计依据：[ADR 0006](../adr/0006-collab-gates.md)。本附录只写调用方式与日常规则；检查细节以实现与 ADR 为准。
 
 ### A.1 调用
 
 ```bash
-make gates          # warn：打印违规/覆盖率，不阻断；已并入 make verify
-make gates-strict   # strict：违规即 exit 1；CI 与合并前使用
+make gates          # warn：打印违规/引用数/延期，不阻断；已并入 make verify
+make gates-strict   # strict：违规/到期即 exit 1；CI 与合并前使用
 make gates-test     # 合成仓库自测 A1…A5，不碰真实历史
+
+# 发布/合并必须显式范围（默认 HEAD^..HEAD 仅用于日常）
+./scripts/check-collab-gates.sh --mode=strict --release --range=origin/main..HEAD
 ```
 
-- 默认范围 `HEAD^..HEAD`；可用 `RANGE=origin/main..HEAD make gates-strict`。
+- 输出第一行固定为 `SCAN RANGE <base>..<head>`；staged 为 `SCAN RANGE STAGED`。
+- G-3 输出 `AC-REF n/N (references only)`；strict 另输出 `DEFERRED n` / `OVERDUE n`。
+- 到期项由 **G-4** 阻断：`ac-coverage.tsv` + 偏差登记中 `expiry <= today` 且非 `closed` 即失败，列出条目与 owner。
+- 续期必须用 commit trailer `Expiry-Renewal: <理由>`；同次后移 >3 条直接失败。
 - pre-commit：`scripts/check-collab-gates.sh --staged --role=Developer --mode=strict`。
 - `GATES_MODE` 只切换 warn/strict，**不能跳过**；不存在 `SKIP_GATES`。
 
 ### A.2 两档模式
 
-| 模式 | 场景 | 未覆盖 AC | 违规 |
-|---|---|---|---|
-| warn | 日常 `make verify` | 打印，不阻断 | 打印，不阻断 |
-| strict | CI / 合并 / 发布 | 无有效台账即阻断 | 阻断 |
+| 模式 | 场景 | 未覆盖 AC / 延期 | 到期 G-4 | 违规 |
+|---|---|---|---|---|
+| warn | 日常 `make verify` | 打印，不阻断 | 打印，不阻断 | 打印，不阻断 |
+| strict | CI / 合并 / 发布 | 无有效台账即阻断 | 逾期/未续期即阻断 | 阻断 |
 
 ### A.3 豁免键
 
@@ -279,8 +295,9 @@ make gates-test     # 合成仓库自测 A1…A5，不碰真实历史
 ### A.4 AC 基线/覆盖台账
 
 - `docs/collab/ac-baseline.txt`：AC 编号只增不减；当前 Spec 必须与 baseline 一致。
-- `docs/collab/ac-coverage.tsv`：`ac	owner	expiry	reason	thread`；过期/缺 owner/reason 即 strict 失败。
+- `docs/collab/ac-coverage.tsv`：`ac	owner	expiry	reason	thread	[status]`；`status=closed` 不计数；过期/缺 owner/reason 即 strict 失败。
 - 台账由 Reviewer 维护；Developer 不得改台账来过闸门；不得删 AC/测试/注释。
+- 偏差登记中含 `owner`+`expiry` 的表同样由 G-4 扫描；关闭时把 `status` 置 `closed`，不得用删行/批量延后代替。
 
 ### A.5 Reviewer A1…A5
 

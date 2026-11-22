@@ -2,7 +2,8 @@
 
 - Status: **accepted**（Architect 方案；Developer 实现，Reviewer 跑 A1…A5）
 - Date: 2026-11-22
-- Thread: [T-002](../collab/po-architect/threads/T-002.md)
+- Revision: **1.1 / Amendment 1**（2026-11-23；T-003 闸门有效性补强）
+- Thread: [T-002](../collab/po-architect/threads/T-002.md)；Amendment: [T-003](../collab/po-architect/threads/T-003.md)
 - Related: [`docs/collab/CONVENTIONS.md`](../collab/CONVENTIONS.md) §3/§4/§6、[ADR 0004](0004-p3-0-contract-and-production-scope.md)
 
 ## Context
@@ -187,3 +188,109 @@ A1–A5 的终端输出贴进 T-002 的“验证”段，作为关闭证据。
 - 不做语义级“是否业务变更”判断（A6 人工）。
 - 不把 ADR Amendment 语义机器化（避免误判）。
 - 不引入外部 SaaS、Docker、网络依赖。
+
+
+---
+
+## Amendment 1 — 闸门有效性补强（T-003，2026-11-23）
+
+### Context
+
+T-002 关闭后 `make gates-strict` 输出 `AC coverage: 38/38`，但证明力被高估：
+
+1. **G-3 只证明“存在引用”，不证明“断言充分”**。AC-14 曾缺累计封顶断言，闸门仍是绿的。
+2. **deferred/到期项没有执行者**。`ac-coverage.tsv` 的 6 条 deferred 与偏差登记的 expiry 没有机器拦截，CONVENTIONS §6 的“到期升级 BLOCKING”只活在纸上。
+3. **扫描范围不可见**。默认 `HEAD^..HEAD`，输出看起来像“全分支已验”；历史 `[mixed]` 混提不会被提示。
+
+本 Amendment 不改变 G-1/G-2 的结论，只补强 G-3 表述、新增 G-4、显式化扫描范围，并写清闸门能力边界。
+
+### 1. G-3 措辞与计数
+
+- 输出改为 `AC-REF <covered>/<total> (references only)`；**禁止**再用 `AC coverage` 这类暗示“达标”的词。
+- `strict` 额外输出：
+  - `DEFERRED <n>`：`docs/collab/ac-coverage.tsv` 中 `status` 非 `closed` 的行数；
+  - `OVERDUE <n>`：同上且 `expiry <= today` 的行数。
+- `DEFERRED`/`OVERDUE` 是**计数/债务提示**，不是通过证书；G-3 的失败条件仍是“无引用且无有效 deferral / deferral 过期/缺字段”。
+- `status` 列可选（第 6 列，`open|closed`，缺省 `open`）；`closed` 行不计数，但若该 AC 仍无引用，G-3 仍失败。
+
+### 2. 新增 G-4 到期闸门（strict 阻断）
+
+**输入**
+
+1. `docs/collab/ac-coverage.tsv`（列：`ac owner expiry reason thread [status]`）。
+2. `docs/implementation/*-deviation-register.md` 的 Markdown 表：表头同时含 `owner` 与 `expiry`（可选 `status`）的表；数据行按表头取列。缺 `status` 视为 `open`；ID 取首列，缺失时用 `<file>#<row>`。
+
+**判定**
+
+- 行 `status != closed` 且 `expiry <= today`（Asia/Shanghai）→ `G-4 FAIL <id> owner=<owner> expiry=<date>`；`owner` 为空时输出 `owner=missing`。
+- strict 有任一 FAIL 即 exit 1；warn 只打印。
+- 日期必须 ISO `YYYY-MM-DD`；非法日期 → `G-4 FAIL <id> invalid expiry`。
+
+**续期（不得静默变绿）**
+
+- 相对 base 版本，若某行 `expiry` 后移：
+  - commit range 的 message 必须含 trailer `Expiry-Renewal: <非空理由>`；否则 `G-4 FAIL <id> renewed without Expiry-Renewal`。
+  - 单次运行后移 **超过 3 条** → `G-4 FAIL bulk renewal <n> rows`（必须拆成逐条续期或关闭）。
+- `--staged` 无 commit message：跳过续期校验并打印 `G-4 WARN staged: renewal check skipped`。
+- 关闭项必须把 `status` 置 `closed`（或从 deferred 表移除）；删除行/批量延后不算关闭。
+
+### 3. 扫描范围可见
+
+- 输出**第一行**：`SCAN RANGE <base>..<head>`；默认范围追加 `(default; release use --range origin/main..HEAD)`；`--staged` 输出 `SCAN RANGE STAGED`。
+- 支持 `--range=<base>..<head>`；`origin/main` 不存在时 `G-0 FAIL range base not found`。
+- 新增 `--release`：未显式传 `--range` → `G-0 FAIL release requires explicit --range`；发布/合并必须 `--release --range origin/main..HEAD`。
+- 若范围内包含偏差登记 D.1 列出的 `[mixed]` 提交：输出 `G-1 WARN [mixed] <short>`；**至少提示，不静默**，但不因历史混提阻断 strict。
+- 摘要行增加 G-4：`SUMMARY G-1=<n> G-2=<n> G-3=<n> G-4=<n> mode=<mode> exit=<0|1>`。
+
+### 4. 能力边界（同时写入 CONVENTIONS §4.4）
+
+- **绿 = 引用存在 + 规则未违反**；不等于断言充分，更不等于业务正确。
+- G-3 只核对 `TestAC<NN>`/`AC-<NN>` 引用；`DEFERRED` 是债务清单，不是质量证书。
+- G-4 只核对到期/状态；不判断测试深度。
+- `[mixed]` 是历史提示；不证明整条分支干净。
+- 断言深度由 Reviewer 按 ADR-0005 §14 人工判定，并在审查线程留证据；`ac-coverage.tsv` 只登记延期，不替代审查。
+
+### 5. 禁止
+
+- 删除 `ac-coverage.tsv` 的 deferred 行、把 `status` 直接改 `closed` 而实际未完成。
+- 批量把 `expiry` 后移（>3 条）来变绿。
+- 放宽 G-3 或把 `AC-REF` 改回 `coverage`。
+- 用默认 `HEAD^..HEAD` 冒充全分支验证；发布必须显式 range。
+- 删/改 `[mixed]` 历史登记来消除提示。
+
+## Developer 实现清单（Amendment 1）
+
+1. `scripts/collab_gates.py`：
+   - G-3 输出 `AC-REF ... (references only)`；strict 输出 `DEFERRED/OVERDUE`；
+   - G-4 解析 `ac-coverage.tsv` + 偏差登记表；到期/续期/批量续期判定；
+   - `SCAN RANGE` 首行；`--range`、`--release`；`[mixed]` 提示；
+   - 摘要加 `G-4`。
+2. `docs/collab/ac-coverage.tsv`：表头补可选 `status`；现有 6 行保持 `open`。
+3. `docs/implementation/adr-0005-deviation-register.md`：含 `owner`+`expiry` 的表补 `status` 列（`open|closed`），或确认缺省 `open` 可用。
+4. `scripts/test-collab-gates.sh`：新增 A1…A5 场景（过期、正常计数、range、能力边界存在、<10s）。
+5. `Makefile`：`gates-strict` 支持 `RANGE`/`RELEASE` 透传；`gates-test` 覆盖新场景。
+6. 不联网、不依赖 Docker；strict 仍只读。
+
+## Reviewer 验收（A1…A5，T-003）
+
+| 编号 | 操作 | 期望 |
+|---|---|---|
+| A1 | 把 `ac-coverage.tsv` 某行 `expiry` 改为昨天 | strict FAIL，输出 `G-4 FAIL AC-NN owner=... expiry=...` |
+| A2 | 正常状态 | 输出含 `SCAN RANGE ...`、`AC-REF 38/38 (references only)`、`DEFERRED 6`、`OVERDUE 0`、`SUMMARY ... G-4=0` |
+| A3 | `--release --range origin/main..HEAD` | 输出实际范围；`[mixed]` 提交有 `G-1 WARN [mixed]`；缺 range 时 `G-0 FAIL` |
+| A4 | 检查 CONVENTIONS §4.4 与 Reviewer 审查模板引用 | 能力边界段落存在，模板引用该段 |
+| A5 | `time make gates-strict ...` | < 10s；无网络/Docker |
+
+## 非阻断 follow-ups（R 建议，均 `[TODO]`，不阻塞 T-003/PASS）
+
+1. `[TODO]` P0-7 回归测试目前只断言 Payment 调用次数与 breakdown；建议用有效多组订单断言“商品退款只含商品、hold 只付该组份额”的实际金额序列，防止“次数对、金额错”。
+2. `[TODO]` 长期停在 `REQUESTED/APPROVED` 的售后 hold 不会被 worker 结算，但仍被 `freightCommitted` 计入；建议加到期 `WAIVED` 或排除未批准请求。
+3. `[TODO]` AC-22 三工作日告警 worker、AC-28/29/30/35/37 浏览器断言仍按 `ac-coverage.tsv` 的 `expiry=2026-12-15` 跟踪；到期未清升级 BLOCKING。
+
+以上不进入 T-003 的实现范围；Reviewer 的 PASS 不因它们回退。
+
+### Consequences（Amendment 1）
+
+- 绿的含义被降级为“引用/规则未违反”，减少“38/38 = 全好”的误读。
+- 到期项有了执行者；续期必须留理由，批量续期被阻断。
+- 代价：G-4 增加 Markdown 表解析；`status` 列需要维护；strict 变慢但目标 <10s。

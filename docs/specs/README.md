@@ -96,6 +96,7 @@ draft --提交--> in-review --甲方批准--> approved --被新版取代--> supe
    例：`docs(spec): SPEC-0001 v1.0 多仓按数量拆行与承运商签收`
 4. **变更记录必须与 commit 一致**：commit 涉及的口径变化，必须已写进该 Spec 的「变更记录」并注明影响的 INV / AC。
 5. **回滚以 commit 为单位**：Spec 的撤销/取代通过新 commit 表达，禁止 `git commit --amend` 已批准的历史。
+6. **追溯方式**：`git log --follow --stat docs/specs/<文件>`；文件内**不写** commit hash（会过期），以 git 历史为准。
 
 ---
 

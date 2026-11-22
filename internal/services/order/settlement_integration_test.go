@@ -270,7 +270,7 @@ func TestAuthorizeShipmentDeniedAfterFullRefund(t *testing.T) {
 }
 
 // AC-25: refunds never write a refund/closed value into orders.status.
-func TestRefundProjectionKeepsLifecycle(t *testing.T) {
+func TestAC25RefundProjectionKeepsLifecycle(t *testing.T) {
 	db := orderTestDB(t)
 	svc := settlementService(db)
 	ctx := context.Background()
@@ -501,7 +501,7 @@ func TestMultiGroupShadowAllocatedTogether(t *testing.T) {
 }
 
 // AC-26: per-group shipping produces PARTIALLY_SHIPPED without a new lifecycle.
-func TestGroupShipmentProjectionIsPartialUntilAllGroups(t *testing.T) {
+func TestAC26GroupShipmentProjectionIsPartialUntilAllGroups(t *testing.T) {
 	db := orderTestDB(t)
 	svc := settlementService(db)
 	ctx := context.Background()
@@ -616,7 +616,7 @@ func TestGroupRefundStateProjection(t *testing.T) {
 
 // AC-09 / INV-22: the PAID transition and allocation freeze commit together.
 // A second payment call is idempotent and cannot move the frozen snapshot.
-func TestMarkPaidFreezesAllocationOnce(t *testing.T) {
+func TestAC09MarkPaidFreezesAllocationOnce(t *testing.T) {
 	db := orderTestDB(t)
 	svc := settlementService(db)
 	ctx := context.Background()

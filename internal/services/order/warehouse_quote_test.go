@@ -120,7 +120,7 @@ func TestMultiGroupActionsExposeTypedGroupActions(t *testing.T) {
 
 // AC-27: a refunded unshipped group is closed in the projection and does not
 // block the remaining group.
-func TestRevokedGroupIsClosedInProjection(t *testing.T) {
+func TestAC27RevokedGroupIsClosedInProjection(t *testing.T) {
 	groups := []*fulfillmentGroup{
 		{GroupNo: "G1", Status: "SHIPPED"},
 		{GroupNo: "G2", Status: statusAllocated, PermitState: permitRevoked},

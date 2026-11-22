@@ -33,7 +33,7 @@ func TestExpandQuoteLinesQuantitySplit(t *testing.T) {
 }
 
 // AC-04: freight is computed once on the order total and only shared internally.
-func TestQuoteAllocationsChargeFreightOnce(t *testing.T) {
+func TestAC04QuoteAllocationsChargeFreightOnce(t *testing.T) {
 	items := []quoteLine{
 		{SkuID: 1, PriceCent: 2000, Quantity: 2},
 		{SkuID: 2, PriceCent: 2000, Quantity: 2},
@@ -67,7 +67,7 @@ func TestQuoteAllocationsChargeFreightOnce(t *testing.T) {
 
 // AC-05: the free-shipping threshold is evaluated on the whole order, never per
 // group, so two groups below the threshold still pay zero freight.
-func TestFreeFreightThresholdIsOrderLevel(t *testing.T) {
+func TestAC05FreeFreightThresholdIsOrderLevel(t *testing.T) {
 	items := []quoteLine{
 		{SkuID: 1, PriceCent: 4950, Quantity: 1},
 		{SkuID: 2, PriceCent: 4950, Quantity: 1},

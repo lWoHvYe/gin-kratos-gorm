@@ -328,7 +328,7 @@ func TestPartialApprovalReleasesDifference(t *testing.T) {
 }
 
 // AC-15: return-refund cannot pay before restock_state=DONE.
-func TestReturnRefundBlocksUntilRestockDone(t *testing.T) {
+func TestAC15ReturnRefundBlocksUntilRestockDone(t *testing.T) {
 	db := afterSaleTestDB(t)
 	svc, order, payment, inventory := newAfterSaleTestService(t, db, "SHIPPED")
 	as := createAfterSale(t, svc, typeReturnRefund, 600)
@@ -652,7 +652,7 @@ func lineAfterSaleService(t *testing.T, db *sql.DB, captured int64) (*Service, *
 
 // AC-10/AC-11/AC-13: the line ledger computes 333 then 667, ignores the
 // caller's expected amount, and never touches the other warehouse line.
-func TestLineRefundCalculationAndIsolation(t *testing.T) {
+func TestAC10LineRefundCalculation(t *testing.T) {
 	db := afterSaleTestDB(t)
 	svc, payment := lineAfterSaleService(t, db, 2500)
 	ctx := context.Background()
@@ -720,7 +720,7 @@ func TestLineRefundCalculationAndIsolation(t *testing.T) {
 }
 
 // AC-12: the order-level captured remainder caps the computed line amount.
-func TestRefundCappedByCapturedRemaining(t *testing.T) {
+func TestAC12RefundCappedByCapturedRemaining(t *testing.T) {
 	db := afterSaleTestDB(t)
 	svc, payment := lineAfterSaleService(t, db, 300)
 	ctx := context.Background()
@@ -904,7 +904,7 @@ func TestAC14FreightRefundSixScenarios(t *testing.T) {
 // AC-31/AC-32/AC-33: goods refund is not blocked by an undetermined
 // responsibility; freight is held for 168h, then defaults to merchant; the
 // free-text reason never becomes a carrier determination.
-func TestAC31To33FreightHoldTimeout(t *testing.T) {
+func testAC31To33FreightHoldTimeout(t *testing.T) {
 	db := afterSaleTestDB(t)
 	order := &fakeOrderService{order: &pb.Order{
 		OrderNo: "ORD-HOLD", UserId: 1, Status: "SHIPPED", PaidCent: 2000, FreightCent: 1000, RefundState: "NONE",
@@ -981,3 +981,62 @@ func TestAC31To33FreightHoldTimeout(t *testing.T) {
 		t.Fatalf("rule = %s", rule)
 	}
 }
+
+// AC-11: the caller's expected amount never changes the computed/payed amount.
+func TestAC11ExpectedAmountDoesNotAffectRefund(t *testing.T) {
+	db := afterSaleTestDB(t)
+	svc, payment := lineAfterSaleService(t, db, 2500)
+	ctx := context.Background()
+	as, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-LINE", UserId: 1, Type: typeRefundOnly, Reason: "expected only",
+		ExpectedAmountCent: 999,
+		Items:              []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1", LineNo: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if as.GetAmountCent() != 999 || as.GetEffectiveAmountCent() != 333 {
+		t.Fatalf("expected=%d computed=%d", as.GetAmountCent(), as.GetEffectiveAmountCent())
+	}
+	if _, err := svc.Approve(ctx, &pb.ApproveRequest{AfterSaleNo: as.GetAfterSaleNo(), Approved: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Refund(ctx, &pb.RefundAfterSaleRequest{AfterSaleNo: as.GetAfterSaleNo()}); err != nil {
+		t.Fatal(err)
+	}
+	if len(payment.refundAmount) != 1 || payment.refundAmount[0] != 333 {
+		t.Fatalf("paid = %v", payment.refundAmount)
+	}
+}
+
+// AC-13: refunding warehouse 1's line never changes warehouse 2's line ledger.
+func TestAC13CrossWarehouseLineIsolation(t *testing.T) {
+	db := afterSaleTestDB(t)
+	svc, _ := lineAfterSaleService(t, db, 2500)
+	ctx := context.Background()
+	as, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-LINE", UserId: 1, Type: typeRefundOnly, Reason: "line 1",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1", LineNo: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Approve(ctx, &pb.ApproveRequest{AfterSaleNo: as.GetAfterSaleNo(), Approved: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Refund(ctx, &pb.RefundAfterSaleRequest{AfterSaleNo: as.GetAfterSaleNo()}); err != nil {
+		t.Fatal(err)
+	}
+	var other int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sale_line_ledger
+		WHERE order_no = 'ORD-LINE' AND line_no = 2`).Scan(&other); err != nil {
+		t.Fatal(err)
+	}
+	if other != 0 {
+		t.Fatalf("line 2 ledger was touched")
+	}
+}
+
+func TestAC31FreightHoldTimeout(t *testing.T)                   { testAC31To33FreightHoldTimeout(t) }
+func TestAC32FreightHoldTimeoutDefaultsToMerchant(t *testing.T) { testAC31To33FreightHoldTimeout(t) }
+func TestAC33FreeTextDoesNotDetermineCarrier(t *testing.T)      { testAC31To33FreightHoldTimeout(t) }

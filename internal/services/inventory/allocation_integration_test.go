@@ -24,7 +24,7 @@ func seedAllocationStock(t *testing.T, db *sql.DB, rows ...[3]int64) {
 }
 
 // AC-01: one warehouse can satisfy the whole quantity, so no split happens.
-func TestAllocateOrderSingleWarehouse(t *testing.T) {
+func TestAC01AllocateOrderSingleWarehouse(t *testing.T) {
 	db := seckillTestDB(t)
 	seedAllocationStock(t, db, [3]int64{1, 1, 5}, [3]int64{1, 2, 5})
 	svc := NewWithOptions(db, nil, Options{QuantitySplitEnabled: true})
@@ -52,7 +52,7 @@ func TestAllocateOrderSingleWarehouse(t *testing.T) {
 
 // AC-02 (revised after architect ruling): no single warehouse is enough, but
 // two together are; the quantity is split into at most two rows.
-func TestAllocateOrderQuantitySplit(t *testing.T) {
+func TestAC02AllocateOrderQuantitySplit(t *testing.T) {
 	db := seckillTestDB(t)
 	seedAllocationStock(t, db, [3]int64{1, 1, 2}, [3]int64{1, 2, 2})
 	svc := NewWithOptions(db, nil, Options{QuantitySplitEnabled: true})
@@ -79,7 +79,7 @@ func TestAllocateOrderQuantitySplit(t *testing.T) {
 
 // AC-06: the total is insufficient; the error carries the maximum orderable
 // quantity and no order/preview rows are fabricated.
-func TestAllocateOrderInsufficientTotal(t *testing.T) {
+func TestAC06AllocateOrderInsufficientTotal(t *testing.T) {
 	db := seckillTestDB(t)
 	seedAllocationStock(t, db, [3]int64{1, 1, 1}, [3]int64{1, 2, 1})
 	svc := NewWithOptions(db, nil, Options{QuantitySplitEnabled: true})
@@ -97,7 +97,7 @@ func TestAllocateOrderInsufficientTotal(t *testing.T) {
 
 // AC-07: three warehouses would be required for one SKU; the two-row rule
 // rejects the whole preview instead of returning a 3-package plan.
-func TestAllocateOrderRejectsThirdWarehouse(t *testing.T) {
+func TestAC07AllocateOrderRejectsThirdWarehouse(t *testing.T) {
 	db := seckillTestDB(t)
 	seedAllocationStock(t, db, [3]int64{1, 1, 1}, [3]int64{1, 2, 1}, [3]int64{1, 3, 1})
 	svc := NewWithOptions(db, nil, Options{QuantitySplitEnabled: true})
@@ -154,7 +154,7 @@ func TestAllocateOrderIsDeterministic(t *testing.T) {
 	}
 }
 
-func TestAllocateOrderQuantitySplitDisabledStaysSingleWarehouse(t *testing.T) {
+func TestAC02AllocateOrderQuantitySplitDisabledStaysSingleWarehouse(t *testing.T) {
 	db := seckillTestDB(t)
 	seedAllocationStock(t, db, [3]int64{1, 1, 2}, [3]int64{1, 2, 2})
 	svc := NewWithOptions(db, nil, Options{QuantitySplitEnabled: false})

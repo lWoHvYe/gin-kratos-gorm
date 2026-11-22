@@ -36,7 +36,7 @@ func seedCarrier(t *testing.T, db *sql.DB, code string, enabled bool) {
 }
 
 // AC-17: only an enabled registry carrier can create/ship a parcel.
-func TestCarrierRegistryRejectsUnknownCarrier(t *testing.T) {
+func TestAC17CarrierRegistryRejectsUnknownCarrier(t *testing.T) {
 	db := fulfillmentTestDB(t)
 	seedCarrier(t, db, "SF", true)
 	svc := deliveryService(db, &fakePermitOrder{order: &pb.Order{OrderNo: "ORD-C", UserId: 7}}, Options{CarrierRegistryEnabled: true})
@@ -61,7 +61,7 @@ func TestCarrierRegistryRejectsUnknownCarrier(t *testing.T) {
 }
 
 // AC-18: the generated tracking_key unique index blocks a reused waybill.
-func TestDuplicateTrackingIsRejected(t *testing.T) {
+func TestAC18DuplicateTrackingIsRejected(t *testing.T) {
 	db := fulfillmentTestDB(t)
 	seedCarrier(t, db, "SF", true)
 	svc := deliveryService(db, &fakePermitOrder{order: &pb.Order{OrderNo: "ORD-D"}}, Options{CarrierRegistryEnabled: true})
@@ -82,7 +82,7 @@ func TestDuplicateTrackingIsRejected(t *testing.T) {
 }
 
 // AC-19: DELIVERED is terminal; a later IN_TRANSIT event cannot move it back.
-func TestTrackingIsMonotonic(t *testing.T) {
+func TestAC19TrackingIsMonotonic(t *testing.T) {
 	db := fulfillmentTestDB(t)
 	seedDeliveryShipment(t, db, "SHIP-T", "ORD-T", statusShipped, trackShipped)
 	svc := deliveryService(db, nil, Options{})
@@ -115,7 +115,7 @@ func TestTrackingIsMonotonic(t *testing.T) {
 
 // AC-20: T+1 auto-confirm only works when the carrier DELIVERED evidence
 // exists; it creates a receipt, not a fake delivery source.
-func TestAutoConfirmT1(t *testing.T) {
+func TestAC20AutoConfirmT1(t *testing.T) {
 	db := fulfillmentTestDB(t)
 	seedDeliveryShipment(t, db, "SHIP-T1", "ORD-T1", statusShipped, trackShipped)
 	svc := deliveryService(db, nil, Options{DeliveryAutoConfirmEnabled: true})
@@ -156,7 +156,7 @@ func TestAutoConfirmT1(t *testing.T) {
 
 // AC-21 / AC-37: T+7 confirms parcels with no tracking at all and never claims
 // the parcel was signed for; the UI label is "已自动确认收货（无物流轨迹）".
-func TestAutoConfirmT7DoesNotFakeDelivery(t *testing.T) {
+func testAutoConfirmT7DoesNotFakeDelivery(t *testing.T) {
 	db := fulfillmentTestDB(t)
 	seedDeliveryShipment(t, db, "SHIP-T7", "ORD-T7", statusShipped, trackCreated)
 	if _, err := db.Exec(`INSERT INTO delivery_auto_confirm_jobs (shipment_no, reason, due_at, state)
@@ -183,7 +183,7 @@ func TestAutoConfirmT7DoesNotFakeDelivery(t *testing.T) {
 
 // AC-22/AC-23: a user dispute freezes auto-confirm and only the resolution
 // endpoint can write the final receipt.
-func TestReceiptDisputeFreezesAutoConfirm(t *testing.T) {
+func TestAC22ReceiptDisputeFreezesAutoConfirm(t *testing.T) {
 	db := fulfillmentTestDB(t)
 	order := &pb.Order{OrderNo: "ORD-DIS", UserId: 9}
 	seedDeliveryShipment(t, db, "SHIP-DIS", "ORD-DIS", statusShipped, trackShipped)
@@ -235,7 +235,7 @@ func TestReceiptDisputeFreezesAutoConfirm(t *testing.T) {
 
 // AC-24: an exception only opens an operation case; it does not refund or
 // change the forward tracking status.
-func TestExceptionDoesNotChangeTrackStatusOrRefund(t *testing.T) {
+func TestAC24ExceptionDoesNotChangeTrackStatusOrRefund(t *testing.T) {
 	db := fulfillmentTestDB(t)
 	seedDeliveryShipment(t, db, "SHIP-EX", "ORD-EX", statusShipped, trackShipped)
 	svc := deliveryService(db, nil, Options{})
@@ -370,5 +370,22 @@ func TestAC29GroupShipmentExposesTracking(t *testing.T) {
 	if shipment.GetFulfillmentGroupNo() != "G1" || shipment.GetWarehouseId() != 1 ||
 		shipment.GetCarrierCode() != "SF" || shipment.GetTrackingNo() != "TN-SHIP-29" {
 		t.Fatalf("shipment = %+v", shipment)
+	}
+}
+
+// AC-21: the no-tracking parcel is auto-confirmed at T+7.
+func TestAC21AutoConfirmT7(t *testing.T) { testAutoConfirmT7DoesNotFakeDelivery(t) }
+
+// AC-37: the AUTO_T7 receipt never produces a delivery source and must not be
+// rendered as "已签收".
+func TestAC37AutoT7DoesNotClaimDelivered(t *testing.T) { testAutoConfirmT7DoesNotFakeDelivery(t) }
+
+// AC-23: no operator can directly mark a shipment received.
+func TestAC23DirectReceiveRejected(t *testing.T) {
+	db := fulfillmentTestDB(t)
+	svc := deliveryService(db, nil, Options{})
+	_, err := svc.Receive(context.Background(), &pb.ReceiveRequest{ShipmentNo: "SHIP-NO-RECEIVE"})
+	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("direct receive err = %v", err)
 	}
 }

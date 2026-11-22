@@ -2,7 +2,9 @@
 
 - Status: **accepted**（甲方 2026-11-22 批准；Developer 可开工）
 - Date: 2026-11-22
-- Approved: 2026-11-22（甲方/人类指挥官；OQ-01…OQ-09 按 §15 暂定口径一并批准）
+- Approved: 2026-11-22（甲方/人类指挥官；OQ-01…OQ-10 按 §15 暂定口径一并批准）
+- Revision: **1.1 / Amendment 1**（2026-11-22；吸收 SPEC-0001 v1.1，回应 [偏差登记](../implementation/adr-0005-deviation-register.md) A/B/C）
+- Normative: **§18 是增量契约；与前文冲突时以 §18 为准。**
 - Spec: [SPEC-0001 v1.0](../specs/0001-fulfillment-quantity-split.md)（已冻结）
 - Amends: [ADR 0002](0002-cross-warehouse-split-orders.md) 的 v1「行级拆分」范围；**废止基线 INV-10**
 - Related: [architecture-baseline.md](../architecture-baseline.md)、[ADR 0003](0003-c-production-rollout.md)、[ADR 0004](0004-p3-0-contract-and-production-scope.md)
@@ -828,13 +830,14 @@ CREATE TABLE restock_exception_authorizations (
 
 ## 11. 日终对账（Q5）
 
-### 11.1 三个等式与所有者
+### 11.1 等式与所有者
 
 | 等式 | 所有者 | 计算 | 差异表 |
 |---|---|---|---|
 | ① `Σ line_paid + freight = pay` | Order | 按订单聚合 | `order_reconciliation_diffs` |
 | ② `Σ refunded <= captured`（订单/意图） | Payment | 按 intent/order 聚合 | `payment_reconciliation_diffs` |
 | ③ `Σ group.freight_share = order.freight` | Order | 按订单聚合 | `order_reconciliation_diffs` |
+| ④ `RESOLVED_REFUND` 缺货案 24h 内必须有 `after_sale`（Amendment 1） | Order | 按 case 聚合，联查本地 `refund_after_sale_no` 投影 | `order_reconciliation_diffs` |
 
 ### 11.2 调度与暴露
 
@@ -975,8 +978,9 @@ CREATE TABLE restock_exception_authorizations (
 | OQ-07 | 支付后缺货的“等待补货日期”由谁填写、是否必须为未来日期？ | 暂定运营填写，校验 > now | AC-30 |
 | OQ-08 | 争议裁决“用户胜”后，已自动确认的收货是否回滚？订单如何展示？ | 暂定撤回 receipt，组退回 SHIPPED，订单不回滚生命周期 | AC-22 |
 | OQ-09 | Spec 2.2 把“补发”列为非目标，但 6.6/E9 要求缺货/少发可“同仓补发”。本期是否实现有限补发？ | 暂定**只做部分退款**，补发开关默认关闭，等甲方裁决 | E9/AC-30 |
+| OQ-10 | 部分组退款且商家责任时，“全额退运费”是**该组分摊**还是整单运费？ | 暂定**该组分摊**；最后一组关闭时退剩余订单运费，保证 INV-20 不被突破 | AC-14/AC-30 |
 
-> 甲方于 2026-11-22 批准 ADR 0005 时，上述 OQ-01…OQ-09 按本节“现状假设”一并批准为**暂定执行口径**。任何业务口径变更必须升版 Spec（并同步本 ADR），**不得**在代码或配置默认值里私改；OQ-09 未升版前，补发能力保持关闭，只实现部分退款。
+> 甲方于 2026-11-22 批准 ADR 0005 时，上述 OQ-01…OQ-10 按本节“现状假设”一并批准为**暂定执行口径**。任何业务口径变更必须升版 Spec（并同步本 ADR），**不得**在代码或配置默认值里私改；OQ-09 未升版前，补发能力保持关闭，只实现部分退款。
 
 ---
 
@@ -1006,7 +1010,376 @@ CREATE TABLE restock_exception_authorizations (
 | 角色 | 结论 | 日期 |
 |---|---|---|
 | System Architect | 提交 ADR 0005（proposed） | 2026-11-22 |
-| 甲方/人类指挥官 | **批准 ADR 0005（accepted）**；OQ-01…OQ-09 按 §15 暂定口径一并批准 | 2026-11-22 |
+| 甲方/人类指挥官 | **批准 ADR 0005（accepted）**；OQ-01…OQ-10 按 §15 暂定口径一并批准 | 2026-11-22 |
+| 甲方/PO | 裁决 B-01、B-05 成立且未完成；B-03 由 Spec v1.1 定义 | 2026-11-22 |
+| System Architect | 回写 **Amendment 1（§18）**，补齐 B-01…B-08 / C-01…C-03 | 2026-11-22 |
 | Developer | **可开工**；按 §13 阶段 A→F，且遵守 §12.2 否决清单 | — |
 
 已完成：回填 `docs/specs/0001-fulfillment-quantity-split.md` 的 `adr: [0005]`，并登记 `docs/specs/README.md` 关联 ADR。
+
+---
+
+## 18. Amendment 1 — 实施回写（2026-11-22）
+
+> 触发：SPEC-0001 v1.1（AC-02 修正、6.5.2 责任判定）+ [偏差登记](../implementation/adr-0005-deviation-register.md)。
+> 效力：本节是增量契约；与前文冲突以本节为准；未提及处继续有效。
+> 结论：**B-01、B-05 成立且未完成**。在 §18.2 / §18.6 落地并通过测试前，**INV-28、AC-30 不得判 done**。
+
+### 18.1 裁决总表
+
+| 项 | 裁决 | ADR 落点 | Developer 动作 |
+|---|---|---|---|
+| A-01 AC-02 冲突 | 以 Spec v1.1 修正后的 AC-02 为准（单仓优先） | §18.11 | 测试改为 2+2/3，并补“单仓足够不拆”反向用例 |
+| B-01 可用量缺失 | **成立，未完成**；补 availability 契约 + Order 下单复算并落审计 | §18.2 | 实现 proto/Order 复算/`availability_json`，补 AC |
+| B-02 优先级无来源 | 用配置 `INVENTORY_WAREHOUSE_PRIORITY`，默认按 warehouse_id | §18.3 | 解析配置、排序与 `Priority/Rank` 赋值 |
+| B-03 运费判责无输入 | Spec v1.1 §6.5.2 已定义；本 ADR 落字段、状态与 7 天挂起 | §18.4 | 责任字段、运费挂起 worker、AC-31…33 |
+| B-04 跨仓回库校验落点 | AfterSales 出具授权号，Inventory 调 `VerifyRestockAuthorization` 校验，失败关闭 | §18.5 | 授权号字段、校验 RPC、worker 传参 |
+| B-05 缺货未打款 | **成立，未完成**；AfterSales 消费 `shortage.resolved` 创建系统退款并走 durable task | §18.6 | 消费者、系统退款、幂等、可见性、AC-30 |
+| B-06 超 ADR 字段 | 全部批准（只增不改），见 §18.7 | §18.7 | 保留现有字段号，补契约测试 |
+| B-07 事件 payload | 见 §18.8 必填字段；registry 收紧后 fail-closed | §18.8 | 更新 producer + registry + contracts |
+| B-08 hash 规范 | 定义 `allocation:v1` canonical JSON 与字段顺序 | §18.9 | 加版本字段、golden test |
+| C-01 `freight_cent` 冗余 | 保留只读别名，2026-12-31 前移除 | §18.10 | 新读侧只用 `freight_share_cent` |
+| C-02 legacy 改额 | 仅历史 `line_no=0`，必须授权留痕，2026-12-31 硬移除 | §18.10 | 加审计表/指标，新单拒绝 |
+| C-03 `Receive` | 标记 deprecated，保持 fail-closed，2026-12-31 前移除 | §18.10 | BFF 不再调用，proto 标 deprecated |
+
+### 18.2 B-01：分配可用量契约（INV-28）
+
+**问题**：`order_allocation_decisions.availability_json` 写 `{}`，无法回答“各仓可用量是多少”。这不是可接受的实现细节，是 INV-28 未完成。
+
+**契约（proto，只增）**
+
+```text
+message AllocateOrderAvailability {
+  int64 sku_id = 1;
+  int64 warehouse_id = 2;
+  int64 available = 3;   // on_hand - reserved，决策时快照
+  int32 priority = 4;    // 0 = 业务优先级最高
+  int32 rank = 5;        // 候选排序后的位置，0 起
+}
+message AllocateOrderReply {
+  repeated AllocateOrderAllocation allocations = 1;
+  repeated AllocateOrderAvailability availability = 2;   // 新增
+}
+```
+
+**Order 下单复算（唯一落审计的路径）**
+
+1. `CreateOrder` 在 `getQuote` 之后、锁定优惠之前，调用 `Inventory.AllocateOrder`（`sku+qty` 来自 quote lines，超时 1.5s）。
+2. 将返回的 `allocations` 与 quote lines 做**多重集比较**：`(sku_id, warehouse_id, quantity)` 必须完全一致；不一致返回 `FAILED_PRECONDITION` + `retry_preview=true`（E5）。
+3. 用返回的 `availability` 生成审计 JSON，写入 `order_allocation_decisions.availability_json`。`availability` 必须包含该 SKU 在 `inventory_stocks` 中的**所有仓（含 available=0）**；选仓只用 `available>0` 的候选。这样才能回答“为什么没选某仓”。
+
+```json
+{
+  "captured_at_unix": 1760000000,
+  "source": "ORDER_REVALIDATION",
+  "request": [{"sku_id": 1, "quantity": 3}],
+  "warehouses": [
+    {"sku_id": 1, "warehouse_id": 1, "available": 2, "priority": 0, "rank": 0},
+    {"sku_id": 1, "warehouse_id": 2, "available": 2, "priority": 1, "rank": 1}
+  ]
+}
+```
+
+4. `rule_hits_json` 必须来自实际命中的规则，至少区分：`6.2:single_warehouse`、`6.2:min_warehouses`、`6.2:concentration`、`6.2:priority`、`6.2:available_desc`、`6.2:stable`。禁止硬编码一个固定数组冒充。
+5. `AllocateOrder` 失败时：`FAILED_PRECONDITION` 原样返回并补 `retry_preview`；`UNAVAILABLE`（预算超限）原样返回；**禁止**用 `{}`、空数组或过期快照继续建单。
+
+**接口改动**：`order.inventoryPort` 增加 `AllocateOrder`；`recordAllocationDecision` 增加 availability 入参。
+
+**验收**：
+
+- 任一拆量订单的 `availability_json` 必须非空且包含每个候选仓的 `available/priority/rank`。
+- 下单时库存变化导致方案不一致 → 不建单、返回 `retry_preview`，且不写“成功”的审计。
+- 单测/集成：`TestAllocationDecisionRecordsAvailability`、`TestAllocationRevalidationRejectsChangedPlan`。
+
+### 18.3 B-02：选仓业务优先级来源
+
+**决定**：用配置，不新增表。
+
+- 配置键：`INVENTORY_WAREHOUSE_PRIORITY`，逗号分隔的正整数仓库 ID，例如 `2,1`。
+- 空值默认：按 `warehouse_id` 升序，等价于 `1,2,3...`。
+- 未列入的仓库排在已列仓库之后，按 `warehouse_id` 升序；配置里未知仓库 ID 允许（尚无库存），启动时 warning。
+- 重复 ID、非正整数 → 配置加载失败（fail-closed）。
+- `inventory.New` 增加 `Options.WarehousePriority []int64`；`cmd/inventory` 解析。
+- `loadCandidates` 排序改为 `(priorityRank, -available, warehouse_id)`，`Priority = priorityRank`、`Rank = 排序下标`，候选上限仍为 8。
+- 运行期变更需重启；若甲方要求热更新，另立 ADR 加表，不在本 Amendment 内。
+
+**验收**：仓 2 配置为最高优先级且两仓都够时，选仓 2；同优先级时才按 `-available, warehouse_id`。
+
+### 18.4 B-03：责任判定与运费挂起（Spec v1.1 §6.5.2）
+
+**责任枚举**（全局唯一）：`MERCHANT_WAREHOUSE | CARRIER | CUSTOMER | PLATFORM | UNDETERMINED`。
+
+**`after_sales` 新列**（迁移 `aftersales/0013_responsibility.sql`）：
+
+```sql
+ALTER TABLE after_sales
+  ADD COLUMN responsibility_party VARCHAR(32) NOT NULL DEFAULT 'UNDETERMINED',
+  ADD COLUMN responsibility_source VARCHAR(32) NOT NULL DEFAULT 'SYSTEM',
+  ADD COLUMN responsibility_evidence_ref VARCHAR(128) NOT NULL DEFAULT '',
+  ADD COLUMN responsibility_reason_code VARCHAR(64) NOT NULL DEFAULT '',
+  ADD COLUMN responsibility_determined_by VARCHAR(64) NOT NULL DEFAULT '',
+  ADD COLUMN responsibility_determined_at DATETIME(3) NULL;
+```
+
+**自动落值（只允许这四类，其余 `UNDETERMINED`）**
+
+| 场景 | 责任 | 来源 |
+|---|---|---|
+| 未发货整单取消/退款 | `MERCHANT_WAREHOUSE` | `SYSTEM` |
+| 支付后缺货（6.6） | `MERCHANT_WAREHOUSE` | `SYSTEM` |
+| 用户主动无理由退货 | `CUSTOMER` | `USER_DECLARATION` |
+| 承运商丢失/破损 | **不自动落值**，只写 `CARRIER` 建议 | `CARRIER_EVIDENCE` |
+| 拒收/错发/少发/地址 | `UNDETERMINED` | — |
+
+自由文本 `reason` **不得**参与判责（INV-29/AC-33）。
+
+**判定入口**：新增 `AfterSales.DetermineResponsibility`（Admin 角色）：
+
+```text
+message DetermineResponsibilityRequest {
+  string after_sale_no = 1;
+  string party = 2;             // 五个枚举之一
+  string source = 3;            // AGENT | CARRIER_EVIDENCE | USER_DECLARATION | SYSTEM
+  string evidence_ref = 4;      // 运单号/轨迹节点/照片编号
+  string reason_code = 5;       // 枚举
+  string operator = 6;
+}
+```
+
+必须写 `responsibility_determined_by/at` 与审计日志；`party=UNDETERMINED` 只允许系统初始值，不允许客服回退。
+
+**运费挂起（强制）**
+
+```sql
+CREATE TABLE after_sale_freight_holds (
+  after_sale_no VARCHAR(64) PRIMARY KEY,
+  freight_cent BIGINT NOT NULL DEFAULT 0,
+  status VARCHAR(16) NOT NULL DEFAULT 'HELD',   -- HELD/REFUNDED/WAIVED
+  deadline_at DATETIME(3) NOT NULL,
+  determined_party VARCHAR(32) NOT NULL DEFAULT 'UNDETERMINED',
+  determined_at DATETIME(3) NULL,
+  version BIGINT NOT NULL DEFAULT 1,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+);
+```
+
+- 商品退款**不等待**责任判定：按行台账正常退商品；运费单独进入 `after_sale_freight_holds`。
+- 责任为 `MERCHANT_WAREHOUSE/CARRIER/PLATFORM`：退运费；`CUSTOMER`：不退（`WAIVED`）。
+- 责任为 `UNDETERMINED`：`HELD`，`deadline_at = NOW + 7d`；用户可见“运费待判定”。
+- 7 天到期 worker（AfterSales，durable job）把 `HELD` 置为 `MERCHANT_WAREHOUSE` 并退运费；超期不得继续拖。
+- 运费退款金额：`min(group.freight_share_cent, order.freight_cent - 已退运费)`；若该单已无其他未关闭组，取剩余订单运费。**这是对 6.5.1“全额”的分组解释，见 OQ-10；在甲方澄清前按此默认，保证 INV-20 不被突破。**
+- 运费退款使用独立 Payment 幂等键 `after_sale_no + ":freight"`，避免与商品退款互斥。
+- `after_sale_refund_breakdowns` 增列 `responsibility_party`、`rule_id`、`refund_idempotency_key`。
+
+**`rule_id` 枚举**：`UNSHIPPED_CANCEL_FULL_FREIGHT`、`MERCHANT_FULL_FREIGHT`、`CUSTOMER_NO_FREIGHT`、`FREIGHT_HOLD`、`FREIGHT_HOLD_TIMEOUT_MERCHANT`、`SHORTAGE_MERCHANT_FREIGHT_SHARE`、`LINE_REFUND`。
+
+**`AfterSale` proto 增列**：17 `responsibility_party`、18 `responsibility_source`、19 `responsibility_evidence_ref`、20 `responsibility_reason_code`、21 `responsibility_determined_by`、22 `responsibility_determined_at_unix`、23 `freight_state`、24 `freight_cent`、25 `freight_deadline_unix`。
+
+**AC-31/32/33**：
+
+- AC-31：回库完成、责任 `UNDETERMINED` → 商品退款成功；运费 `freight_state=HELD` 且 `deadline <= 7d`。
+- AC-32：挂起满 7 天 → 自动 `MERCHANT_WAREHOUSE` 补退运费，用户可见。
+- AC-33：`reason` 写“破损” → 责任仍 `UNDETERMINED`（或客服判定值），不得自动 `CARRIER`。
+
+### 18.5 B-04：跨仓回库授权凭证
+
+**问题**：授权表在 AfterSales，Inventory 无法 JOIN；必须定义跨服务凭证。
+
+**契约**：
+
+- `RestockRequest` 增列：8 `restock_auth_no`、9 `origin_warehouse_id`。
+- `restock_exception_authorizations` 增列：`auth_no VARCHAR(64) UNIQUE`、`expires_at DATETIME(3)`、`used_at DATETIME(3) NULL`。
+- AfterSales 新增 `VerifyRestockAuthorization`：
+
+```text
+message VerifyRestockAuthorizationRequest {
+  string restock_auth_no = 1;
+  string after_sale_no = 2;
+  int64 sku_id = 3;
+  int64 from_warehouse_id = 4;
+  int64 to_warehouse_id = 5;
+  int64 quantity = 6;
+}
+message VerifyRestockAuthorizationReply { bool valid = 1; string reason = 2; }
+```
+
+**校验规则**：
+
+1. `warehouse_id == origin_warehouse_id` → 不需要授权，直接回原仓。
+2. 跨仓：必须带 `restock_auth_no`；Inventory 调 `AfterSales.VerifyRestockAuthorization`，字段全部匹配、未过期（24h）才允许。
+3. AfterSales 不可用 / 校验失败 / 过期 → **拒绝**（fail-closed），不得“先收进任意仓”。
+4. 同一 restock key 重试允许重复校验（幂等）；`used_at` 只记录首次成功，不阻止重试。
+5. 所有跨仓成功必须写 `restock_exception_authorizations.used_at` 与审计日志。
+
+**验收**：AC-16 增加“无授权跨仓必失败；有授权且字段匹配才成功；AfterSales 超时必失败”。
+
+### 18.6 B-05：缺货默认退款必须真正发起
+
+**问题**：当前只把 `order_shortage_cases.status` 置 `RESOLVED_REFUND` 并写事件，没有创建售后/退款任务/打款。AC-30 承诺未兑现，**不得判 done**。
+
+**事件契约**：`shop.order.shortage.resolved.v1` 必填：
+
+```json
+{
+  "order_no": "ORD...",
+  "group_no": "G2",
+  "status": "RESOLVED_REFUND",
+  "resolution": "REFUND",
+  "reason_code": "SHORTAGE_DEFAULT | SHORTAGE_USER_CHOICE",
+  "resolved_at": 1760000000,
+  "items": [{"line_no": 1, "sku_id": 10, "quantity": 2}]
+}
+```
+
+`items` 来自 Order 的该组未发货行；不得让 AfterSales 猜行。
+
+**消费者（AfterSales）**：
+
+- subject `shop.order.shortage.resolved.v1`，durable/queue `aftersales-shortage-refund`，`MaxDeliver=10`。
+- `resolution != REFUND` → Ack。
+- 调内部 `createSystemRefund`，成功后 Ack；失败返回错误 → NAK 重试；DLQ 必须告警。
+
+**系统退款单**：
+
+- `after_sales`：`type=REFUND_ONLY`、`status=APPROVED`、`source=SYSTEM`、
+  `client_request_id = "SYS-SHORTAGE:<order_no>:<group_no>"`（唯一键 `(user_id, client_request_id)` 防重）、
+  `responsibility_party=MERCHANT_WAREHOUSE`、`responsibility_source=SYSTEM`、`reason_code=SHORTAGE_*`。
+- 行：该组所有未发货行，数量 = 行数量 − `after_sale_line_ledger.refunded_quantity`；`items` 只用于**定位行**，系统退款按“行剩余全退”执行，不信任事件里的数量。若全部为 0，则不再创建退款，只把 case 标记完成。
+- 金额：商品按 §6.4 计算；运费按 §18.4 的组分摊规则（`SHORTAGE_MERCHANT_FREIGHT_SHARE`）。
+- 额度：`after_sale_amount_ledger` 正常占用；`after_sale_line_ledger` 在退款成功时累加。
+- 任务：`ensureRefundTaskTx` 创建 durable refund task；由现有退款 worker 执行，不在 NATS handler 里直接打款。
+- 执行顺序：先退商品（Payment key = `after_sale_no`），再退运费（key = `after_sale_no:freight`）；运费为 `HELD` 时只退商品并保留 hold；两次调用都幂等，部分成功由 task 重试续跑。
+- 幂等：售后单唯一键 + refund task 主键 + Payment `after_sale_no` 幂等键；重复事件只重放已有任务。
+- 失败：refund task `FAILED_PERMANENT` 必须告警；Admin 可调 `CreateSystemRefund`（`source=ADMIN_REPAIR`）重开，仍走同一幂等键。
+- 组已发货（竞态）：返回永久错误，不退款，告警；缺货上报本身应在发货前，竞态需人工处理。
+
+**可见性**：
+
+- `order_shortage_cases` 增列 `refund_after_sale_no`、`refunded_at`。
+- Order 消费 `shop.aftersale.completed.v1` 时更新对应 case（按 order_no + group_no）。
+- `ShortageCase` proto 增列：8 `refund_after_sale_no`、9 `refunded_at_unix`、10 `refund_state`。
+- BFF 展示：`RESOLVED_REFUND` 且无 `refund_after_sale_no` → “退款处理中”；有 → “已退款”。**不得只显示“已决议”而不显示退款进度。**
+
+**AC-30 通过条件（新）**：
+
+1. 48h 未选择后，`after_sales` 行存在且 `client_request_id=SYS-SHORTAGE:<order>:<group>`；
+2. refund task 存在且被 worker 推进（成功或可重试失败）；
+3. 用户详情页可见“处理中/已退款”；
+4. 集成测试覆盖“事件重复不重复退款”。
+
+**对账**：§11 增加等式 4：`RESOLVED_REFUND` 的 shortage case 在 24h 内必须有对应 `after_sale`；缺失写 `order_reconciliation_diffs` 并告警。
+
+### 18.7 B-06：proto 字段批准
+
+全部为**只增不改**，批准如下：
+
+| 消息 | 字段 | 语义 |
+|---|---|---|
+| `CreateOrderInnerRequest` | 17 `allocation_hash`、18 `package_count`、19 `warehouse_count` | DTM inner 分支携带冻结校验所需快照元数据 |
+| `CreateShipmentRequest` | 7 `carrier_code` | 受控承运商 code |
+| `PreviewRefundQuoteRequest` | 4 `user_id`、5 `type` | 归属校验 + 运费规则 |
+| `ListLineRefundsRequest` | 2 `user_id`、3 `admin` | S14 读模型鉴权 |
+| `AllocateOrderReply` | 2 `availability` | §18.2 |
+| `RestockRequest` | 8 `restock_auth_no`、9 `origin_warehouse_id` | §18.5 |
+| `AfterSale` | 17–25 | §18.4 |
+| `ShortageCase` | 8 `refund_after_sale_no`、9 `refunded_at_unix`、10 `refund_state` | §18.6 |
+| 新 `CreateSystemRefundRequest` | 1 `order_no`、2 `group_no`、3 `source`、4 `idempotency_key`、5 `items`、6 `reason_code` | Admin/系统补退款 |
+| 新 `VerifyRestockAuthorizationRequest/Reply` | 见 §18.5 | 跨仓回库校验 |
+| 新 `DetermineResponsibilityRequest/Reply` | 见 §18.4 | 客服判责 |
+
+约束：改完必须 `make proto`、提交 `api/gen`、更新 baseline，`make contract-check` 通过。
+
+### 18.8 B-07：事件 payload 必填字段
+
+registry 的 `required` 收紧后，缺字段会在 `outbox.Append` fail-closed；`docs/contracts.md` 同步。
+
+| 事件 | 必填字段（除既有） | 生产者 → 消费者 |
+|---|---|---|
+| `order.allocation_frozen` | `order_no, allocation_hash, package_count, warehouse_count, frozen_at` | Order → 审计/BI |
+| `order.shortage_reported` | `order_no, group_no, status, choose_deadline_unix, reason_code` | Order → 通知/BI |
+| `order.shortage_resolved` | `order_no, group_no, status, resolution, reason_code, resolved_at, items[]` | Order → AfterSales（§18.6） |
+| `shipment.tracked` | `shipment_no, order_no, carrier_code, tracking_no, track_status, event_id, occurred_at_unix` | Fulfillment → Order/BI |
+| `shipment.exception` | `shipment_no, order_no, exception_type, occurred_at_unix` | Fulfillment → 运营 |
+| `shipment.received` | `shipment_no, order_no, source, confirmed_at_unix` | Fulfillment → Order |
+| `shipment.dispute_opened` | `shipment_no, order_no, dispute_id, opened_at_unix` | Fulfillment → Order/运营 |
+| `shipment.dispute_resolved` | `shipment_no, order_no, dispute_id, status, resolved_at_unix` | Fulfillment → Order/运营 |
+| `aftersale.line_refunded` | `after_sale_no, order_no, line_no, quantity, refunded_amount_cent` | AfterSales → BI/对账 |
+| `aftersale.completed` | 既有 + `group_no, effective_amount_cent, freight_cent, rule_id` | AfterSales → Order/Pricing/Fulfillment |
+
+### 18.9 B-08：allocation hash v1 canonical 契约
+
+**唯一实现**：`internal/platform/allocation`。Pricing 与 Order 必须调用同一函数。
+
+**canonical JSON**（字段顺序固定，禁止 `omitempty`，禁止额外字段）：
+
+```json
+{
+  "v": 1,
+  "lines": [
+    {"line_no":1,"sku_id":10,"warehouse_id":1,"group_no":"G1","quantity":2,
+     "price_cent":1000,"discount_cent":100,"line_paid_cent":1900,"unit_paid_cent":950}
+  ],
+  "groups": [
+    {"group_no":"G1","warehouse_id":1,"goods_cent":2000,"discount_cent":100,"freight_share_cent":1000}
+  ]
+}
+```
+
+规则：
+
+1. `lines` 按 `line_no` 升序；`groups` 按 `group_no` 升序；不得重复。
+2. 字段集合与顺序固定为上面的结构；`line_no/sku_id/warehouse_id/group_no/quantity/price_cent/discount_cent/line_paid_cent/unit_paid_cent`，组为 `group_no/warehouse_id/goods_cent/discount_cent/freight_share_cent`。
+3. 不含 `name`、`package_count`、`warehouse_count`、时间戳、随机数。
+4. `SHA-256` 小写 hex。
+5. 任何字段/顺序变更 → `v+1`，并在 ADR 记录；旧 quote 一律 `retry_preview`。
+6. 必须加 golden test（固定输入 → 固定 hash）；Pricing/Order 各引同一向量。
+
+### 18.10 C-01 / C-02 / C-03 退役标准
+
+| 项 | 保留条件 | 移除标准 |
+|---|---|---|
+| C-01 `QuoteGroup.freight_cent` | 只读别名，与 `freight_share_cent` 同值；旧 admin/UI/TS 未迁移 | 2026-12-31 前完成读侧迁移；之后新代码禁止写/读 `freight_cent`，下一迁移删列 |
+| C-02 `Approve.amount_cent` legacy | 仅 `line_no=0` 的历史售后单；必须写 `after_sale_legacy_amount_adjustments`（operator/reason/amount/approved_by/时间）并打指标 | **2026-12-31 硬移除**；新单（`line_no>0`）一律 `INVALID_ARGUMENT`；历史单未回填则人工处理 |
+| C-03 `Receive` | 保留 RPC 但 fail-closed；BFF 只调 `ConfirmReceipt` | 2026-12-31 前确认无调用方后删除；proto 标 `deprecated` |
+
+C-02 的审计表与指标必须在移除前上线；不得用日志代替审计。
+
+### 18.11 A-01：AC-02 以 Spec v1.1 为准
+
+- Spec v1.1 AC-02：仓 1=2、仓 2=2、买 3 → 拆 2 行；并新增反向判据：任一仓可单独满足 3 件时必须单仓不拆。
+- ADR §5.2“单仓优先”不变；`TestAllocateOrderQuantitySplit` 必须同时覆盖正向与反向。
+- 本项不需要新的 ADR 条款，仅以 Spec v1.1 为验收基线。
+
+### 18.12 影响清单与 AC 映射
+
+- **INV-28**：由 §18.2 闭环；`availability_json` 非空才可判过。
+- **AC-30**：由 §18.6 闭环；只到 `RESOLVED_REFUND` 不算通过。
+- **INV-29 / AC-31/32/33**：由 §18.4 闭环。
+- **AC-16**：由 §18.5 闭环（无授权跨仓必失败）。
+- **E8**：增加“AfterSales 消费者 + 系统退款 + 可见性”。
+- **E14**：改为“授权号 + Verify RPC + fail-closed”。
+- **Order 收货投影改绑**：`COMPLETED` 只由 `shop.shipment.received.v1` 推进；`shop.shipment.delivered.v1` 只作为签收证据/展示，**不得**再推进 `COMPLETED`（否则 AUTO_T7 与争议语义会被绕过）。
+
+AC-31…33 验证映射：
+
+| AC | 验证 |
+|---|---|
+| AC-31 | AfterSales 集成：回库完成、责任 UNDETERMINED → 商品退款成功、运费 HELD |
+| AC-32 | 把 `deadline_at` 拨到过去，跑 worker → 责任转 MERCHANT、运费退款、用户可见 |
+| AC-33 | 创建售后 reason 含“破损” → `responsibility_party` 仍为 UNDETERMINED 或客服值 |
+
+### 18.13 Developer 交付检查表（Amendment 1）
+
+1. §18.2 availability 契约与 Order 复算审计；`availability_json` 不得为 `{}`。
+2. §18.3 优先级配置与排序；补“仓 2 优先”单测。
+3. §18.4 责任字段、判定 RPC、7 天挂起 worker、AC-31/32/33。
+4. §18.5 跨仓授权号、Verify RPC、fail-closed、AC-16。
+5. §18.6 缺货消费者、系统退款单、幂等、可见性、AC-30；重复事件不重复退款。
+6. §18.7 proto 字段与 `make contract-check`。
+7. §18.8 registry required 收紧 + `docs/contracts.md`。
+8. §18.9 hash v1 + golden test。
+9. §18.10 退役计划与审计/指标。
+10. 以上每条附测试日志；未跑项写 `[未覆盖范围]`。
+
+**否决条件**：`availability_json` 仍为 `{}`、缺货只写事件不打款、自由文本判责、跨仓回库无授权校验 —— 任一条出现，Amendment 1 不通过。

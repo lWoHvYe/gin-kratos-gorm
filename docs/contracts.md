@@ -172,6 +172,41 @@ Consumers:
   refund-requested, after-sale-completed and payment-refunded. Legacy events
   remain map payloads until their consumers are migrated.
 
+### ADR 0005 Amendment 1 events
+
+Required fields (normative: [ADR-0005 §18.8](adr/0005-fulfillment-quantity-split.md)):
+
+- `shop.order.allocation_frozen.v1`: `order_no`, `allocation_hash`,
+  `package_count`, `warehouse_count`, `frozen_at`.
+- `shop.order.shortage.reported.v1`: `order_no`, `group_no`, `status`,
+  `choose_deadline_unix`, `reason_code`.
+- `shop.order.shortage.resolved.v1`: `order_no`, `group_no`, `status`,
+  `resolution`, `reason_code`, `resolved_at`, `items[]` (`line_no`, `sku_id`,
+  `quantity`).
+- `shop.shipment.tracked.v1`: `shipment_no`, `order_no`, `carrier_code`,
+  `tracking_no`, `track_status`, `event_id`, `occurred_at_unix`.
+- `shop.shipment.exception.v1`: `shipment_no`, `order_no`, `exception_type`,
+  `occurred_at_unix`.
+- `shop.shipment.received.v1`: `shipment_no`, `order_no`, `source`,
+  `confirmed_at_unix`.
+- `shop.shipment.dispute.opened.v1` / `.resolved.v1`: `shipment_no`, `order_no`,
+  `dispute_id`, timestamps (resolved adds `status`).
+- `shop.aftersale.line_refunded.v1`: `after_sale_no`, `order_no`, `line_no`,
+  `quantity`, `refunded_amount_cent`.
+- `shop.aftersale.completed.v1`: adds `group_no`, `effective_amount_cent`,
+  `freight_cent`, `rule_id`.
+
+Consumers:
+
+- order consumes `shop.shipment.received.v1` to project a group `RECEIVED`;
+  `shop.shipment.delivered.v1` is delivery evidence only.
+- aftersales consumes `shop.order.shortage.resolved.v1` to create a system
+  refund and durable refund task (`SYS-SHORTAGE:<order_no>:<group_no>`).
+- pricing consumes `shop.aftersale.completed.v1` to release promotional quota
+  proportionally and idempotently.
+- order consumes `shop.aftersale.completed.v1` for group refund state and
+  shortage-case refund visibility.
+
 ## Settlement model (transaction refactor A)
 
 - `orders.status` is the fulfilment lifecycle only:

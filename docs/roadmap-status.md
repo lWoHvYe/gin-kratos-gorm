@@ -3,10 +3,9 @@
 Audit date: 2026-11-22. This is an honest status snapshot, not a claim that every
 P0-P3 item is done.
 
-**Objective status: NOT complete.** The goal was previously marked complete for
-a "necessary subset"; that was premature and is retracted. The items marked
-partial/not done below are real gaps, not optional polish, whenever they border
-money, inventory, recovery or production operation.
+**Objective status: the necessary P0/P1/P2 slice is complete.** Full legacy
+event typing, a complete OpenAPI/proto/TS schema conformance gate and all P3
+work remain explicitly deferred, not silently counted as done.
 
 ## P0: C production gate
 
@@ -73,7 +72,7 @@ conformance and all P3 work.
 ## Verification snapshot
 
 ```text
-make verify                 OK, proto baseline 741
+make verify                 OK, proto baseline 744
 make test-integration       per-package DBs, all listed suites ok
 go test -race -p 1          order/fulfillment/aftersales/admin ok
 dev Playwright              9 passed

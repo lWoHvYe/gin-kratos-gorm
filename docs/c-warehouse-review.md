@@ -63,7 +63,7 @@ rollout is still gated.
 
 ## Verification executed
 
-- `make verify` -> `verify: OK`, proto baseline 741.
+- `make verify` -> `verify: OK`, proto baseline 744.
 - `make test-integration` -> all listed MySQL/NATS suites `ok`.
 - `go test -race -p 1` on order/fulfillment/after-sales/admin -> `ok`.
 - `scripts/e2e-phase15.sh` -> `phase15 e2e passed`.

@@ -1,8 +1,12 @@
 # P0-P3 roadmap status
 
 Audit date: 2026-11-22. This is an honest status snapshot, not a claim that every
-P0-P3 item is done. The "necessary subset" objective is complete; the gaps below
-remain optional/deferred unless a production rollout is approved.
+P0-P3 item is done.
+
+**Objective status: NOT complete.** The goal was previously marked complete for
+a "necessary subset"; that was premature and is retracted. The items marked
+partial/not done below are real gaps, not optional polish, whenever they border
+money, inventory, recovery or production operation.
 
 ## P0: C production gate
 
@@ -48,6 +52,22 @@ Not started:
 - warehouse cost/optimization allocator
 - carrier integration
 - multi-warehouse seckill
+
+## Strict definition of done (for reopening)
+
+A task may be marked done only when all of the following hold:
+
+1. The invariant is stated and tested for success, failure, retry, duplicate and
+   restart paths; a happy-path E2E is not enough.
+2. The code has one authoritative state/action path; compatibility shims are
+   explicitly temporary and have removal criteria.
+3. Recovery is durable and observable: metrics, alerts, replay/repair procedure.
+4. Migration/rollback is rehearsed on a production-like profile, or the item is
+   explicitly labelled "not production-ready" and cannot be counted as done.
+5. UAT with dev secrets/mock payment is labelled UAT, never production.
+
+Under this definition, P0.2, P0.4, P1.1, P1.2, P1.3, P1.6, P2 payment/replay/
+events/contracts and all P3 remain open.
 
 ## Verification snapshot
 

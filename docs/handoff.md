@@ -1,175 +1,108 @@
 # Session handoff
 
 Read this first in a new conversation. It records the current truth, the
-remaining work, and the local environment pitfalls. Do not use an old chat
-transcript as the source of truth.
+remaining work, and local environment pitfalls. Use `git log -1` for the exact
+HEAD; running status remains in `docs/review-tracking.md`.
 
-## Project
+## Snapshot
 
-`gin-kratos-gorm`: Go/Kratos/Gin/GORM/DTM mall with Vue admin, Nuxt storefront,
-a separate seckill service, and a single-node k3s + Istio Ambient dev deployment.
+- Date: 2026-11-22 12:05 CST.
+- Code baseline: `016dd4f`; the handoff update itself is committed after it.
+- Branch `main` was clean and in sync with `origin/main` at `016dd4f` before
+  this handoff commit; the handoff commit is local until pushed.
+- No force push is currently required; the old binary-removal history has
+  already been reconciled.
+- Repository: `/Users/lWoHvYe/IdeaProjects/gin-kratos-gorm`.
+- C is functionally complete and validated in dev + isolated UAT.
+- P3-0 contract prerequisites are complete.
+- P3 **implementation is not started**; it is blocked on product/AI Spec+ADR,
+  not on contract or P0/P1/P2 code.
+- Production split remains **off**. Dev and UAT use `WAREHOUSE_MODE=split`.
+- There is no large-scale production rollout.
 
-Repository:
+## Current architecture state
 
-```text
-/Users/lWoHvYe/IdeaProjects/gin-kratos-gorm
-```
+Core services: identity, catalog, inventory, cart, pricing, order, payment,
+fulfillment, after-sales, seckill; gateway/admin BFFs; optional AI. One schema
+per service; gRPC/events only between services; outbox in the business tx.
 
-Running status lives in `docs/review-tracking.md`. This handoff is a
-session-boundary snapshot: refresh it only when starting a new conversation, not
-after every implementation round. Use `git log -1` for the exact HEAD.
+Recent consolidation:
 
-Local `main` is ahead of `origin/main`. History was rewritten once to remove an
-accidentally committed `ai-pref-eval` binary, so a force push is required when
-the branch is published:
+- `orderActionPolicy` is the single order action authority; `Order.group_actions`
+  is typed and `available_actions` is compatibility projection.
+- `order_fulfillment_groups.refund_state` is explicit (`NONE/REFUNDING/REFUNDED`),
+  projected from permit blocking and `aftersale.completed.v1`.
+- A refunded unshipped group is closed for aggregate shipment projection; it no
+  longer pins the order in `ALLOCATED`.
+- Fulfillment voids `CREATED` parcels on group refund and checks group actions
+  before auto-creating a draft.
+- `WAREHOUSE_MODE=off|shadow|split` is the single switch; legacy booleans remain
+  accepted and conflicting settings fail closed.
+- `Payment.GetPaymentByOrder` aggregates all settled intents; `RefundOrder`
+  allocates refunds across intents with order-level idempotency.
+- Inventory operation replay exists as CLI, gRPC and admin BFF.
+- AI mesh is read-only in practice: AI read succeeds, Catalog write returns
+  `PermissionDenied`; `scripts/check-ai-mesh.sh`.
+- `internal/platform/events/registry.go` holds typed schemas for every current
+  core outbox event type; `outbox.Append` rejects unknown/malformed payloads.
 
-```bash
-git push --force origin main
-```
+## P3-0 contract prerequisites (complete)
 
-## What is actually done
+- [ADR 0004](adr/0004-p3-0-contract-and-production-scope.md):
+  production backup/restore and A/B/C rollback are gates for production
+  enablement, not for P3 design/UAT; P3 must remain behind disabled flags.
+- `make contract-check` covers:
+  - proto evolution baseline;
+  - typed event registry tests;
+  - bidirectional admin/gateway OpenAPI route parity;
+  - TypeScript regeneration with clean-diff check.
+- Event producer maps are still used in places, but every payload is validated
+  against the typed registry at the outbox boundary. Do not describe this as a
+  full producer rewrite.
 
-### Core mall
+## C / split readiness
 
-- Identity/catalog/inventory/cart/pricing/order/payment/fulfillment/after-sales.
-- Seckill Redis Lua admission, durable holds, NATS worker, DLQ/replay, sold-out
-  cache, Playwright flow.
-- HA reference profile, PDB/topology spread, Alertmanager, OTLP egress policy.
+Functional validation is complete on dev and UAT:
 
-### Security small fixes (external review #22/#38)
+- single E2E (`scripts/e2e-phase15.sh`);
+- split E2E (`scripts/e2e-warehouse-split.sh`);
+- split concurrency (`scripts/check-split-concurrency.sh`);
+- split UI Playwright and admin split Playwright;
+- Order/NATS/Fulfillment outage injection (`scripts/fault-split-uat.sh`);
+- after-sales worker restart injection (`scripts/fault-split-worker-uat.sh`);
+- group refund -> origin restock -> G1 remains shippable;
+- group refund state reaches `REFUNDED`;
+- AI mesh read/write check.
 
-- Payment config is fail-closed: an invalid `PAYMENT_MOCK_ENABLED`/`AI_ENABLED`/
-  `AI_RAG_ENABLED` boolean fails `config.Load`; a non-dev environment rejects
-  `PAYMENT_MOCK_ENABLED=true`; `PAYMENT_SECRET` is still required when mock is
-  off. Tests cover all three.
-- AI mesh authorization no longer has wildcard method access. Explicit
-  `*-ai-read` AuthorizationPolicies allow only the read methods AI actually
-  calls: Catalog List/Get, Inventory ListLowStock/GetStock, Promotion
-  EvaluateDraft, Order List/Get/Stats, AfterSales List/Get/Stats. Helm render
-  contains no `ai-sa` wildcard; live 403 verification is pending.
+Production still needs, only when a production rollout is requested:
 
-### P1/P2 handoff fixes
+- production backup/restore and old-image smoke;
+- production migration/rollback rehearsal;
+- production secret/payment profile;
+- capacity/chaos beyond the targeted correctness checks.
 
-- P1#1 closed-bucket release writes exactly one ledger/event; MySQL test.
-- P1#2 `order.cancelled` uses the inventory cancel operation protocol; partial
-  MarkPaid compensation includes the failing SKU; durable confirm consumer
-  retries the confirm operation; NATS confirm/order.cancelled tests.
-- P1#3 `Stock.version` + `cmd/catalog-stock-rebuild`; live dry-run found and
-  fixed 3 projection mismatches.
-- P1#4 HITL full draft hash, fail-closed meta, close failures surfaced.
-- P2#8 public SKU visibility; P2#9 page/cursor semantics + keyset tests on GORM
-  and SQL; P2#10 `BatchGetStock`; P2#11 hidden AI entry; P2#12 exact seed
-  cleanup migrations; P2#13 strict identity on high-risk routes; P2#14 unified
-  integration target; P2#17 RAG versioning/lease/cache/metrics.
-- P2#17 is still **partial** only for cache/rerank quality comparison: the
-  independent build Job/CronJob and load-only follower Pods now exist.
+## P3 start gates
 
-### Transaction refactor B (inventory whole-order operations)
+P3 should start with design artifacts, not code:
 
-- New `inventory_operations` / `inventory_operation_items` (migration `0015`)
-  with deterministic `(order_no, operation_type, scope_hash)` identity.
-- Confirm/Cancel no longer return on the first item error. Non-DTM calls
-  process each pending item in its own transaction + savepoint, persist
-  per-item `DONE`/`FAILED_PERMANENT`/`MISSING` progress, continue other items,
-  and Ack only when every item is terminal. Consumers NAK while any item is
-  retryable; permanent failures emit per-item events instead of retrying the
-  whole batch.
-- DTM confirm/cancel use one `dtm.Branch` transaction for the whole item set.
-  After a branch commit (including a barrier replay) the committed operation is
-  read back so a previous `PARTIAL` cannot be reported as success.
-- Terminal `shop.inventory.operation.completed.v1`/`.failed.v1` events are
-  written in the final item's transaction; `ReplayInventoryOperation` is the
-  explicit recovery path for failed/missing items and refuses DONE items.
-- `cmd/catalog-stock-rebuild` now refuses to overwrite a newer catalog
-  projection (`stock_version` CAS) and reports stale/conflict/missing rows.
+1. **AI Turn/Action**: Spec + ADR. Current AI has session/draft but no canonical
+   `turn_id`/Action lifecycle. Need turn identity, session concurrency,
+   draft/confirm/cancel, recovery, mesh read-only allowlist.
+2. **Quantity split/allocator optimization**: product Spec + ADR. Current
+   allocator (`internal/services/inventory/allocation.go`) deliberately picks
+   one warehouse for the whole line and lowest warehouse id; no quantity split or
+   cost model.
+3. **Carrier integration**: provider/webhook/idempotency contract. Current
+   Fulfillment only stores `carrier`/`tracking_no` strings.
+4. **Multi-warehouse seckill**: blocked on production split and the quantity
+   inventory model.
 
-### Transaction refactor A (order/after-sales/payment/fulfillment)
-
-- `orders.status` is lifecycle-only; `refund_state` and the
-  `refund_status/refunded_cent` projection are orthogonal. The payment refund
-  consumer no longer writes `PARTIALLY_REFUNDED/REFUNDED` into `status`.
-- `order_shipping_permits` + `AuthorizeShipment`/`BlockShipmentForRefund` make
-  Order the shipping/refund race arbiter; Fulfillment `Ship` must authorize
-  first. A permit already `CONSUMED` still allows refund-only after shipment
-  (human decision), while an un-used permit is revoked before refund.
-- `pb.Order` exposes `refund_state`, `shipment_status` and server-owned
-  `available_actions`; storefront/admin actions use that list.
-- After-sales has a per-order lifetime `after_sale_amount_ledger` using Payment
-  `captured_cent` (order snapshot only for legacy), immutable
-  `after_sale_amount_versions`, `RETURN_RECEIVED` semantics, per-SKU
-  `after_sale_restock_tasks`, and durable `after_sale_refund_tasks`.
-  `RETURN_REFUND` cannot enter `REFUNDING` until every restock task is `DONE`;
-  no status scanner remains (old `RunRefundRecovery` deleted).
-- `Payment.GetPaymentByOrder` is the read-only settlement fact source for
-  after-sales. Migrations: orders `0010`, after-sales `0010`; both backfills
-  were preflighted on real-data clones and then applied to the dev cluster.
-- Live dev verification: Helm migration job `Complete`; 17 legacy
-  `RETURN_REFUND` rows converged through idempotent restock tasks to
-  `restock_state=DONE`; multi-SKU live orders produced `CONFIRM SUCCEEDED 2/2`
-  and `CANCEL SUCCEEDED 2/2`; refund-only after shipment kept the order
-  `SHIPPED` with `refund_state=FULL`; a pre-ship refund returned `422` and left
-  the permit `REVOKED`; `make dtm-smoke` passed; `scripts/e2e-phase15.sh`
-  passed; Playwright 7/7 passed.
-
-### AI
-
-- ADK tool-aware streaming is working: cumulative DeepSeek chunks are
-  normalized and tool-call fragments merge by `ToolCall.Index`. Real eval
-  15/15, tool-selection 3/3, normal answer emitted 246 SSE deltas.
-- RAG: versioned index/alias, dual-write, post-build/15m reconciliation,
-  exact/semantic cache, rollback runbook, 3m lease with 1m renewal. Builds are
-  owned by the non-blocking `ai-rag-build-scheduled` CronJob by default
-  (`ai.ragBuild.hook=true` opts into the blocking post-upgrade Job); AI Pods are
-  load-only followers of `ai:rag:current`
-  (`RAG_ALIAS_REFRESH`, default 1m). The build Job skips a fresh version
-  (`RAG_BUILD_MAX_AGE`, default 24h; `RAG_BUILD_FORCE` overrides); a fresh
-  pointer whose index is missing is treated as stale. Compose has a one-shot
-  `ai-rag-build` service.
-- HITL: `INTERRUPTED -> CONFIRMING -> SAVED`, `FAILED` via Abort, admin UI state
-  display, abort button. State changes use one Redis Lua CAS
-  (`hitlStateTransitionCAS`), so concurrent confirms cannot regress SAVED or
-  lose a FAILED reason.
-- Cart: draft tool -> Redis draft -> SSE draft -> storefront card -> Cart
-  `ConfirmCartDraft` transaction + `(user_id,draft_id)` idempotency. Handler
-  tests cover expired/price/stock/Complete-failure.
-- Preferences: user-scoped Redis profile, 180d retention, UI, system injection,
-  per-session attribution key, Redis user-isolation test, A/B 3/3. Chat emits an
-  `attribution` SSE event with the explicit profile fields applied to that
-  answer; the storefront renders it with an "调整偏好" link. Only the owner's
-  profile is attributed (cross-user test).
-- Ops: deterministic daily brief, atomic latest/done, low-stock links, feedback,
-  optional webhook. Delivery requires `OPS_BRIEF_WEBHOOK_SECRET` (>=16 chars),
-  signs `timestamp.body` with HMAC-SHA256 (`X-Mall-Signature`), sends
-  `X-Mall-Timestamp`/`X-Mall-Delivery`/`X-Mall-Event`, and only marks done on
-  2xx. Unsigned configuration is refused, not downgraded.
-
-## Remaining work, in priority order
-
-1. **Real GitHub CI** — local `make test-integration` has passed; Actions was
-   not actually run.
-
-2. **Phase 8 benchmark breadth** — attribution UI and the owner-scoped event are
-   implemented, but the A/B benchmark still uses one prompt family; add a
-   cross-user/no-memory regression set.
-
-3. **Phase 9 richer anomaly explanations** — the signed webhook is implemented;
-   exception explanations are still mostly low-stock links, not
-   cancellation/refund anomalies.
-
-4. **P3 cleanup** — Shipment/Refund/ListReply are still hand-written types; admin
-   split can continue.
-
-5. **Production rollout hardening for A/B** — the dev cluster is migrated and
-   verified, but there is no production rehearsal: backup/restore timing,
-   rolling image order, and rollback behavior after the one-way
-   `RETURN_RECEIVED` rename are not exercised. The aftersales status rename has
-   no automatic down migration; the supported rollback is restore-from-backup
-   or roll forward. Inventory B replay is a CLI; a gRPC/BFF surface is
-   optional.
+RAG hardening can be scoped independently, but existing RAG is still partial for
+cache/rerank quality and release/recovery depth.
 
 ## Verification commands
 
-Go environment in this sandbox (do not use the global Go cache):
+Use the project-local Go caches in this sandbox; do not use the global cache:
 
 ```bash
 cd /Users/lWoHvYe/IdeaProjects/gin-kratos-gorm
@@ -180,103 +113,107 @@ export GOSUMDB=off GOFLAGS=-mod=readonly GOPROXY=off
 make verify
 ```
 
-Targeted tests:
+Contract/alert gates:
 
 ```bash
-go test ./internal/services/ai ./internal/services/gateway \
-  ./internal/services/admin ./internal/services/inventory \
-  ./internal/services/catalog ./internal/services/order \
-  ./internal/services/aftersales ./internal/services/payment \
-  ./internal/services/fulfillment ./internal/platform/bff -count=1
+make contract-check   # proto + event registry + route parity + TS freshness
+make alerts-check     # structural + promtool firing (Docker/prometheus image)
 ```
 
-The HITL CAS, RAG follower/build-due and attribution tests run only with a
-Redis 8 (with Search) address:
+Integration needs port-forwards and env:
 
 ```bash
-TEST_REDIS_ADDR=127.0.0.1:16379 go test ./internal/services/ai \
-  ./internal/services/admin ./internal/platform/bff -count=1
-```
+kubectl -n mall-data port-forward pod/mysql-0 13306:3306 &
+kubectl -n mall-data port-forward pod/nats-0 14222:4222 &
+kubectl -n mall-data port-forward pod/redis-0 16379:6379 &
 
-Frontend changes need `pnpm -C frontend typecheck && pnpm -C frontend build`.
-
-Integration needs port-forwards to MySQL/NATS/Redis and `TEST_*` envs:
-
-```bash
 TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:13306)/mall_integration_test?parseTime=true&loc=UTC' \
 TEST_NATS_URL='nats://127.0.0.1:14222' \
-TEST_REDIS_ADDR='127.0.0.1:16379' make test-integration
+TEST_REDIS_ADDR='127.0.0.1:16379' \
+make test-integration
 ```
 
-The Makefile target includes outbox/consumer, AI RAG + lease + preference
-isolation + RAG follower + HITL CAS + attribution, seckill, inventory
-seckill/compensation/ledger/NATS + whole-order operation protocol, order
-settlement/shipping permits, payment settlement read, after-sales
-amount/restock/refund protocol, fulfillment permit, catalog projection +
-keyset, and pricing cleanup.
+`make test-integration` derives `mall_integration_<package>` via
+`scripts/test-dsn.sh`; packages no longer share one DB.
 
-Live AI:
+Frontend:
 
 ```bash
-make ai-eval       # 15/15 expected
-make ai-rag-eval   # hit@5 5/5 expected
-make ai-pref-eval  # A/B 3/3 expected
+cd frontend
+pnpm typecheck
+pnpm build
+pnpm test:e2e   # 9 tests at last run
 ```
 
-## Live checks this session (2026-11-21)
+## UAT environment
 
-- `bin/ai rag-build` against the dev catalog and Redis built 64 documents into a
-  throwaway `ai_kb_livecheck` index; a second run skipped on freshness
-  (`RAG_BUILD_MAX_AGE=24h`) and `RAG_BUILD_FORCE=true` built v2. The throwaway
-  index, pointer and registry entries were removed afterwards.
-- `ai:rag:current` had drifted to a dropped `ai_kb_test_...` index, written by an
-  older RAG test before pointer keys were namespaced. It was restored to
-  `ai_kb_current` (`ai_kb_v1795208929702651081`, 64 docs). The RAG test now
-  deletes its pointer and dual-write registry entry, and non-default index bases
-  use `<base>:current`.
+Currently running:
+
+- app namespace `mall-uat`, release `uat`;
+- data namespace `mall-uat-data`, release `uat-infra`;
+- host `uat.mall.local`, shared `mall-gateway`;
+- split enabled, optional AI not part of split validation;
+- dev secret/mock payment profile — **not production security**.
+
+Install/access/teardown: [UAT runbook](runbooks/uat-environment.md).
+
+Port-forward examples:
+
+```bash
+kubectl -n mall-uat port-forward svc/gateway 18090:8080 &
+kubectl -n mall-uat port-forward svc/admin 18091:8081 &
+```
+
+UAT-only checks:
+
+```bash
+BASE=http://127.0.0.1:18090 ADMIN=http://127.0.0.1:18091 \
+  ./scripts/create-split-fixture.sh
+. /tmp/split-fixture.env
+BASE=http://127.0.0.1:18090 ADMIN=http://127.0.0.1:18091 \
+  SPLIT_SKU_A=$SPLIT_SKU_A SPLIT_SKU_B=$SPLIT_SKU_B \
+  ./scripts/check-split-concurrency.sh
+```
+
+`check-ai-mesh.sh` needs the grpcurl image imported into k3s; the UAT check
+creates short-lived `ai-mesh-read`/`ai-mesh-write` Pods.
 
 ## Environment caveats
 
-- Cluster is single-node dev only. Do not run 100k/1M RPS.
-- Ambient certificates expire roughly daily; use `make ambient-recover` if
-  ingress/waypoint returns 503.
-- CoreDNS was restored to `forward . /etc/resolv.conf`; host resolver has been
-  flaky. If DNS fails, check CoreDNS upstream before changing config.
-- The embedding/provider endpoint is flaky; AI Pods now start without RAG and
-  wait for the build Job to publish `ai:rag:current`. `rag disabled` at startup
-  is not fatal, and a failed build leaves the previous alias serving.
-- Port-forwards die on restarts; recreate before live tests.
-- Cluster contains accumulated E2E data; do not treat dashboards/stock as clean.
-- Demo credentials are dev-only and must be rotated for real deployments.
-- Migration state: cart `0004` was applied via a manual migrate Job; rebuild the
-  migrate image and rerun the Job when deploying to a new environment.
-- `frontend/pnpm-lock.yaml` is committed; node_modules/.nuxt/.output are ignored.
+- Single-node dev/UAT only; do not run 100k/1M RPS.
+- E2E projections are asynchronous. Wait/poll for promotion reservation
+  `CONFIRMED`, order `ALLOCATED`, shipment projection and group refund state;
+  the tests already do this.
+- Start port-forwards only after deployments report rolled out; an early
+  port-forward can return empty replies.
+- Helm `mall-migrate` uses the hardened lease/attempt ledger in
+  `deploy/k8s/images/migrate/run.sh`.
+- `AGENTS.md` is now the multi-agent role charter; `docs/architecture-baseline.md`
+  and `prompt/` are role artifacts. Review whether they should be committed
+  according to the team workflow.
+- Prometheus is not running in the k3s stack; `promtool` firing tests are local
+  Docker tests, not a live alerting stack.
 
-## First steps in a new chat
+## Useful artifacts
 
-```bash
-cd /Users/lWoHvYe/IdeaProjects/gin-kratos-gorm
-./scripts/bootstrap-context.sh
-git status --short
-git log --oneline -5
-```
+- `docs/roadmap-status.md` — P0/P1/P2/P3-0 status and deferred scope.
+- `docs/review-tracking.md` — canonical running ledger.
+- `docs/c-warehouse-review.md` — C dev/UAT review.
+- `docs/adr/0002-cross-warehouse-split-orders.md` — C design.
+- `docs/adr/0003-c-production-rollout.md` / `runbooks/c-migration-rollback.md`.
+- `docs/adr/0004-p3-0-contract-and-production-scope.md`.
+- `scripts/check-split-concurrency.sh`, `fault-split-uat.sh`,
+  `fault-split-worker-uat.sh`, `create-split-fixture.sh`.
+- `scripts/check-alerts.sh`, `check-contracts.sh`, `check-ai-mesh.sh`.
+- `frontend/e2e/warehouse-split.spec.ts`, `admin-split.spec.ts`.
 
-Then read:
+## Next session
 
-1. [review-tracking.md](review-tracking.md) — current P1/P2/P3/AI truth table.
-2. [ai-hardening-review.md](ai-hardening-review.md) — AI remaining risks.
-3. [ai-roadmap.md](ai-roadmap.md) — Phase 5-10 status.
-4. [ai-rag-rollback.md](ai-rag-rollback.md) — RAG rollback steps.
+Do not resume by implementing P3. First choose one of:
 
-## Bootstrap prompt for a new conversation
+- write the AI Turn/Action Spec + ADR;
+- write the quantity split/allocator/carrier product Spec + ADR;
+- harden RAG release/recovery as an isolated project.
 
-```text
-继续 gin-kratos-gorm。先读 docs/handoff.md、docs/review-tracking.md 和
-docs/ai-hardening-review.md，运行 ./scripts/bootstrap-context.sh 与 git status。
-不要重做已完成的主链路。按 handoff 的 Remaining work 顺序，先做真实 GitHub CI，
-再处理 Phase8/9 与 P3，并补 A/B 的 live DTM/rollout 验证。设计先行，禁止为状态
-组合继续加 if、recovery scanner 或前端特判。每个改动报告文件、检查、未验证项；
-不要在没有证据时标 done。
-```
-
-The durable files are the context; keep the new session small.
+Only then start code. Keep production split off until an explicit production
+rollout decision and the ADR 0003 runbook are executed.

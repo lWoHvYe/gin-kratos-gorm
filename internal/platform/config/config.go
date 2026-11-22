@@ -49,6 +49,18 @@ type Config struct {
 	// WarehouseMode is the single off|shadow|split switch. It is derived from
 	// WAREHOUSE_MODE or the legacy booleans and is used for diagnostics.
 	WarehouseMode string
+	// QuantitySplitEnabled allows one SKU to be split across at most two
+	// warehouses (ADR 0005). It requires multi-group warehouse split.
+	QuantitySplitEnabled bool
+	// CarrierRegistryEnabled makes the controlled carrier list mandatory.
+	CarrierRegistryEnabled bool
+	// DeliveryAutoConfirmEnabled runs the T+1/T+7 receipt job worker.
+	DeliveryAutoConfirmEnabled bool
+	// ShortageCaseEnabled exposes the post-payment shortage choice flow.
+	ShortageCaseEnabled bool
+	// InventoryWarehousePriority is the configured warehouse business priority
+	// order (ADR 0005 §18.3). Empty means warehouse_id ascending.
+	InventoryWarehousePriority []int64
 	// SeckillTokenSecret signs admission tokens; must differ from JWTSecret.
 	SeckillTokenSecret string
 	NATSURL            string
@@ -499,6 +511,55 @@ func applyEnv(c *Config) error {
 		default:
 			c.WarehouseMode = "off"
 		}
+	}
+	if v, ok := os.LookupEnv("QUANTITY_SPLIT_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("QUANTITY_SPLIT_ENABLED must be a boolean (got %q)", v)
+		}
+		c.QuantitySplitEnabled = parsed
+	}
+	if c.QuantitySplitEnabled && !c.WarehouseSplitEnabled {
+		return fmt.Errorf("QUANTITY_SPLIT_ENABLED requires WAREHOUSE_MODE=split")
+	}
+	if raw := strings.TrimSpace(os.Getenv("INVENTORY_WAREHOUSE_PRIORITY")); raw != "" {
+		seen := make(map[int64]struct{})
+		for _, part := range strings.Split(raw, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				return fmt.Errorf("INVENTORY_WAREHOUSE_PRIORITY contains an empty entry")
+			}
+			warehouseID, err := strconv.ParseInt(part, 10, 64)
+			if err != nil || warehouseID <= 0 {
+				return fmt.Errorf("INVENTORY_WAREHOUSE_PRIORITY must contain positive integers (got %q)", part)
+			}
+			if _, dup := seen[warehouseID]; dup {
+				return fmt.Errorf("INVENTORY_WAREHOUSE_PRIORITY contains duplicate warehouse %d", warehouseID)
+			}
+			seen[warehouseID] = struct{}{}
+			c.InventoryWarehousePriority = append(c.InventoryWarehousePriority, warehouseID)
+		}
+	}
+	if v, ok := os.LookupEnv("CARRIER_REGISTRY_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("CARRIER_REGISTRY_ENABLED must be a boolean (got %q)", v)
+		}
+		c.CarrierRegistryEnabled = parsed
+	}
+	if v, ok := os.LookupEnv("DELIVERY_AUTO_CONFIRM_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("DELIVERY_AUTO_CONFIRM_ENABLED must be a boolean (got %q)", v)
+		}
+		c.DeliveryAutoConfirmEnabled = parsed
+	}
+	if v, ok := os.LookupEnv("SHORTAGE_CASE_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("SHORTAGE_CASE_ENABLED must be a boolean (got %q)", v)
+		}
+		c.ShortageCaseEnabled = parsed
 	}
 	if v, ok := os.LookupEnv("AI_ENABLED"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))

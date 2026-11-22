@@ -70,6 +70,10 @@ type orderRecord struct {
 	ReceiverAddress       string
 	QuoteID               string
 	ClientRequestID       string
+	AllocationFrozenAt    sql.NullTime
+	AllocationHash        string
+	PackageCount          int32
+	WarehouseCount        int32
 	CreatedAt             time.Time
 	ExpireAt              time.Time
 }
@@ -95,8 +99,13 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 		ReceiverAddress:       o.ReceiverAddress,
 		Items:                 items,
 		QuoteId:               o.QuoteID,
+		PackageCount:          o.PackageCount,
+		WarehouseCount:        o.WarehouseCount,
 		CreatedAtUnix:         o.CreatedAt.Unix(),
 		ExpireAtUnix:          o.ExpireAt.Unix(),
+	}
+	if o.AllocationFrozenAt.Valid {
+		out.AllocationFrozenAtUnix = o.AllocationFrozenAt.Time.Unix()
 	}
 	if len(groups) == 0 {
 		out.ShipmentStatus = shipmentStatus(o.Status)
@@ -106,8 +115,8 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 		for _, group := range groups {
 			out.FulfillmentGroups = append(out.FulfillmentGroups, &pb.OrderFulfillmentGroup{
 				GroupNo: group.GroupNo, WarehouseId: group.WarehouseID,
-				FreightCent: group.FreightCent, Status: effectiveGroupStatus(group),
-				RefundState: group.RefundState,
+				FreightCent: group.FreightCent, FreightShareCent: group.FreightShareCent,
+				Status: effectiveGroupStatus(group), RefundState: group.RefundState,
 			})
 		}
 		policy := newOrderActionPolicy(o, groups)
@@ -126,14 +135,16 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 }
 
 const orderColumns = `order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent, applied_promotions_json,
-	freight_cent, pay_cent, paid_cent, refunded_cent, refund_status, refund_state, receiver_name, receiver_phone, receiver_address, quote_id, client_request_id, created_at, expire_at`
+	freight_cent, pay_cent, paid_cent, refunded_cent, refund_status, refund_state, receiver_name, receiver_phone, receiver_address,
+	quote_id, client_request_id, allocation_frozen_at, allocation_hash, package_count, warehouse_count, created_at, expire_at`
 
 func scanOrder(row *sql.Row) (*orderRecord, error) {
 	var o orderRecord
 	err := row.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
 		&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.RefundState,
 		&o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
-		&o.ClientRequestID, &o.CreatedAt, &o.ExpireAt)
+		&o.ClientRequestID, &o.AllocationFrozenAt, &o.AllocationHash, &o.PackageCount,
+		&o.WarehouseCount, &o.CreatedAt, &o.ExpireAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -159,12 +170,12 @@ func insertOrder(ctx context.Context, tx *sql.Tx, o *orderRecord, now time.Time)
 		(order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent, applied_promotions_json,
 		 freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
 		 receiver_name, receiver_phone, receiver_address, quote_id, client_request_id,
-		 expire_at, version, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+		 allocation_hash, package_count, warehouse_count, expire_at, version, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
 		o.OrderNo, o.UserID, o.Status, o.TotalCent, o.DiscountCent, o.PromotionDiscountCent, o.AppliedPromotionsJSON,
 		o.FreightCent, o.PayCent, o.PaidCent, o.RefundedCent, o.RefundStatus,
 		o.ReceiverName, o.ReceiverPhone, o.ReceiverAddress, o.QuoteID, o.ClientRequestID,
-		o.ExpireAt, now, now)
+		o.AllocationHash, o.PackageCount, o.WarehouseCount, o.ExpireAt, now, now)
 	return err
 }
 
@@ -178,11 +189,16 @@ func insertOrderItems(ctx context.Context, tx *sql.Tx, orderNo string, items []*
 		if groupNo == "" {
 			groupNo = defaultGroupNo
 		}
+		lineNo := item.GetLineNo()
+		if lineNo <= 0 {
+			lineNo = int32(i + 1)
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO order_items
-			(order_no, line_no, sku_id, name, price_cent, quantity, warehouse_id, fulfillment_group_no, discount_cent)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			orderNo, i+1, item.GetSkuId(), item.GetName(), item.GetPriceCent(), item.GetQuantity(),
-			warehouseID, groupNo, item.GetDiscountCent()); err != nil {
+			(order_no, line_no, sku_id, name, price_cent, quantity, warehouse_id, fulfillment_group_no,
+			 discount_cent, line_paid_cent, unit_paid_cent)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			orderNo, lineNo, item.GetSkuId(), item.GetName(), item.GetPriceCent(), item.GetQuantity(),
+			warehouseID, groupNo, item.GetDiscountCent(), item.GetLinePaidCent(), item.GetUnitPaidCent()); err != nil {
 			return err
 		}
 	}
@@ -191,7 +207,8 @@ func insertOrderItems(ctx context.Context, tx *sql.Tx, orderNo string, items []*
 
 // loadOrderItems loads the items of a single order.
 func loadOrderItems(ctx context.Context, q querier, orderNo string) ([]*pb.OrderItem, error) {
-	rows, err := q.QueryContext(ctx, `SELECT sku_id, name, price_cent, quantity, discount_cent, warehouse_id, fulfillment_group_no
+	rows, err := q.QueryContext(ctx, `SELECT sku_id, name, price_cent, quantity, discount_cent, warehouse_id,
+		fulfillment_group_no, line_no, line_paid_cent, unit_paid_cent
 		FROM order_items WHERE order_no = ? ORDER BY line_no`, orderNo)
 	if err != nil {
 		return nil, err
@@ -201,7 +218,7 @@ func loadOrderItems(ctx context.Context, q querier, orderNo string) ([]*pb.Order
 	for rows.Next() {
 		var item pb.OrderItem
 		if err := rows.Scan(&item.SkuId, &item.Name, &item.PriceCent, &item.Quantity, &item.DiscountCent,
-			&item.WarehouseId, &item.GroupNo); err != nil {
+			&item.WarehouseId, &item.GroupNo, &item.LineNo, &item.LinePaidCent, &item.UnitPaidCent); err != nil {
 			return nil, err
 		}
 		items = append(items, &item)
@@ -220,7 +237,8 @@ func loadOrderItemsByOrder(ctx context.Context, q querier, orderNos []string) (m
 	for _, orderNo := range orderNos {
 		args = append(args, orderNo)
 	}
-	rows, err := q.QueryContext(ctx, `SELECT order_no, sku_id, name, price_cent, quantity, discount_cent, warehouse_id, fulfillment_group_no
+	rows, err := q.QueryContext(ctx, `SELECT order_no, sku_id, name, price_cent, quantity, discount_cent, warehouse_id,
+		fulfillment_group_no, line_no, line_paid_cent, unit_paid_cent
 		FROM order_items WHERE order_no IN (`+placeholders+`) ORDER BY order_no, line_no`, args...)
 	if err != nil {
 		return nil, err
@@ -232,7 +250,7 @@ func loadOrderItemsByOrder(ctx context.Context, q querier, orderNos []string) (m
 			item    pb.OrderItem
 		)
 		if err := rows.Scan(&orderNo, &item.SkuId, &item.Name, &item.PriceCent, &item.Quantity, &item.DiscountCent,
-			&item.WarehouseId, &item.GroupNo); err != nil {
+			&item.WarehouseId, &item.GroupNo, &item.LineNo, &item.LinePaidCent, &item.UnitPaidCent); err != nil {
 			return nil, err
 		}
 		grouped[orderNo] = append(grouped[orderNo], &item)

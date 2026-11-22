@@ -2,8 +2,8 @@
 interface Item { sku_id: number; name: string; price_cent: number; quantity: number; discount_cent: number; warehouse_id?: number; group_no?: string }
 interface FulfillmentGroup { group_no: string; warehouse_id: number; freight_cent: number; status: string; refund_state?: string }
 interface OrderGroupAction { group_no: string; action: string }
-interface Shipment { shipment_no: string; order_no: string; fulfillment_group_no?: string; warehouse_id?: number; status: string; carrier: string; tracking_no: string }
-interface Order { order_no: string; status: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; freight_cent: number; pay_cent: number; paid_cent: number; refunded_cent: number; refund_status: string; refund_state: string; available_actions: string[]; shipment_status: string; fulfillment_groups?: FulfillmentGroup[]; group_actions?: OrderGroupAction[]; receiver_name: string; receiver_phone: string; receiver_address: string; items: Item[]; created_at_unix: number; expire_at_unix: number }
+interface Shipment { shipment_no: string; order_no: string; fulfillment_group_no?: string; warehouse_id?: number; status: string; carrier: string; tracking_no: string; delivery_source?: string; track_status?: string; receipt_state?: string; exception_state?: string }
+interface Order { order_no: string; status: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; freight_cent: number; pay_cent: number; paid_cent: number; refunded_cent: number; refund_status: string; refund_state: string; available_actions: string[]; shipment_status: string; package_count?: number; warehouse_count?: number; fulfillment_groups?: FulfillmentGroup[]; group_actions?: OrderGroupAction[]; receiver_name: string; receiver_phone: string; receiver_address: string; items: Item[]; created_at_unix: number; expire_at_unix: number }
 const route = useRoute()
 const orderNo = String(route.params.orderNo)
 const { request, token } = useApi()
@@ -38,6 +38,14 @@ function hasGroupAction(action: string, groupNo: string): boolean {
 function shipmentFor(groupNo: string): Shipment | undefined {
   return shipments.value?.shipments?.find((shipment) => shipment.fulfillment_group_no === groupNo)
 }
+function shipmentLabel(shipment: Shipment | undefined): string {
+  if (!shipment) return ''
+  if (shipment.exception_state === 'OPEN') return '异常待处理'
+  if (shipment.receipt_state === 'CONFIRMED' && !shipment.delivery_source) return '已自动确认收货（无物流轨迹）'
+  if (shipment.delivery_source === 'CARRIER_DELIVERED') return '已签收'
+  if (shipment.delivery_source === 'USER_CONFIRM') return '已确认收货'
+  return shipment.status
+}
 async function receiveGroup(groupNo: string): Promise<void> {
   const shipment = shipmentFor(groupNo)
   if (!shipment) { message.value = '该组暂无可收货的物流单'; return }
@@ -64,6 +72,7 @@ function afterSaleLink(groupNo: string): string {
         <div><span>促销优惠</span><span>-¥{{ ((order.promotion_discount_cent ?? 0) / 100).toFixed(2) }}</span></div>
         <div><span>总优惠</span><span>-¥{{ ((order.discount_cent ?? 0) / 100).toFixed(2) }}</span></div>
         <div><span>运费</span><span>¥{{ ((order.freight_cent ?? 0) / 100).toFixed(2) }}</span></div>
+        <div v-if="(order.package_count ?? 0) > 1" class="muted">本单共 {{ order.package_count }} 个包裹、来自 {{ order.warehouse_count }} 个仓</div>
         <div class="grand"><span>应付</span><span>¥{{ ((order.pay_cent ?? 0) / 100).toFixed(2) }}</span></div>
         <div v-if="order.refunded_cent"><span>已退款</span><span>¥{{ ((order.refunded_cent ?? 0) / 100).toFixed(2) }}</span></div>
         <div v-if="order.refund_state && order.refund_state !== 'NONE'"><span>退款进度</span><span>{{ order.refund_state }}</span></div>
@@ -72,8 +81,7 @@ function afterSaleLink(groupNo: string): string {
         <h3>履约分组</h3>
         <div v-for="group in order.fulfillment_groups" :key="group.group_no" class="group">
           <div class="group-head"><strong>{{ group.group_no }}</strong><span>仓库 {{ group.warehouse_id }}</span><van-tag>{{ group.status }}</van-tag><van-tag v-if="group.refund_state && group.refund_state !== 'NONE'" type="warning">{{ group.refund_state }}</van-tag></div>
-          <div class="muted">运费 ¥{{ ((group.freight_cent ?? 0) / 100).toFixed(2) }}</div>
-          <div v-if="shipmentFor(group.group_no)" class="muted">{{ shipmentFor(group.group_no)?.carrier }} {{ shipmentFor(group.group_no)?.tracking_no }} · {{ shipmentFor(group.group_no)?.status }}</div>
+          <div v-if="shipmentFor(group.group_no)" class="muted">{{ shipmentFor(group.group_no)?.carrier }} {{ shipmentFor(group.group_no)?.tracking_no }} · {{ shipmentLabel(shipmentFor(group.group_no)) }}</div>
           <div class="group-actions">
             <van-button v-if="hasGroupAction('receive', group.group_no)" size="small" type="primary" @click="receiveGroup(group.group_no)">确认收货</van-button>
             <NuxtLink v-if="hasGroupAction('apply_after_sale', group.group_no)" :to="afterSaleLink(group.group_no)"><van-button size="small" type="warning" plain>申请售后</van-button></NuxtLink>

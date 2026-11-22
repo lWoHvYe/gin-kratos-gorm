@@ -133,7 +133,8 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 		warehouseID int64
 		groupNo     string
 	}
-	ordered := make(map[lineKey]int64, len(order.GetItems()))
+	byLine := make(map[int32]*pb.OrderItem, len(order.GetItems()))
+	byComposite := make(map[lineKey][]*pb.OrderItem, len(order.GetItems()))
 	for _, item := range order.GetItems() {
 		warehouseID := item.GetWarehouseId()
 		if warehouseID <= 0 {
@@ -143,14 +144,36 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 		if groupNo == "" {
 			groupNo = "G1"
 		}
-		ordered[lineKey{skuID: item.GetSkuId(), warehouseID: warehouseID, groupNo: groupNo}] += int64(item.GetQuantity())
+		byLine[item.GetLineNo()] = item
+		key := lineKey{skuID: item.GetSkuId(), warehouseID: warehouseID, groupNo: groupNo}
+		byComposite[key] = append(byComposite[key], item)
 	}
 	var groupNo string
-	for _, item := range items {
+	for index := range items {
+		item := &items[index]
 		key := lineKey{skuID: item.SkuID, warehouseID: item.WarehouseID, groupNo: item.GroupNo}
-		if ordered[key] == 0 {
-			return nil, apperr.Invalid("sku %d in warehouse %d group %s is not part of order %s",
-				item.SkuID, item.WarehouseID, item.GroupNo, orderNo)
+		var line *pb.OrderItem
+		if item.LineNo > 0 {
+			line = byLine[item.LineNo]
+			lineGroup := "G1"
+			if line != nil && line.GetGroupNo() != "" {
+				lineGroup = line.GetGroupNo()
+			}
+			lineWarehouse := int64(1)
+			if line != nil && line.GetWarehouseId() > 0 {
+				lineWarehouse = line.GetWarehouseId()
+			}
+			if line == nil || line.GetSkuId() != item.SkuID ||
+				lineWarehouse != item.WarehouseID || lineGroup != item.GroupNo {
+				return nil, apperr.Invalid("line %d does not match the order item", item.LineNo)
+			}
+		} else {
+			matches := byComposite[key]
+			if len(matches) != 1 {
+				return nil, apperr.Invalid("line_no is required for sku %d: the SKU has multiple split lines", item.SkuID)
+			}
+			line = matches[0]
+			item.LineNo = line.GetLineNo()
 		}
 		if typ == typeReturnRefund && len(groupStatuses) > 0 {
 			status, ok := groupStatuses[item.GroupNo]
@@ -167,14 +190,16 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 		if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(i.quantity), 0)
 			FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id
 			WHERE a.order_no = ? AND a.status <> 'REJECTED'
-			  AND i.sku_id = ? AND i.warehouse_id = ? AND i.group_no = ?`,
-			orderNo, item.SkuID, item.WarehouseID, item.GroupNo).Scan(&existing); err != nil {
-			return nil, apperr.Internal("sum after-sale item quantity", err)
+			  AND i.line_no = ?`,
+			orderNo, item.LineNo).Scan(&existing); err != nil {
+			return nil, apperr.Internal("sum after-sale line quantity", err)
 		}
-		if existing+int64(item.Quantity) > ordered[key] {
-			return nil, apperr.Invalid("return quantity for sku %d in group %s exceeds ordered quantity",
-				item.SkuID, item.GroupNo)
+		if existing+int64(item.Quantity) > int64(line.GetQuantity()) {
+			return nil, apperr.Invalid("return quantity for line %d exceeds the remaining quantity", item.LineNo).
+				WithDetails(map[string]any{"line_no": item.LineNo, "remaining_quantity": int64(line.GetQuantity()) - existing})
 		}
+		item.LinePaidCent = line.GetLinePaidCent()
+		item.UnitPaidCent = line.GetUnitPaidCent()
 	}
 	return order, nil
 }
@@ -182,7 +207,11 @@ func (s *Service) validateAgainstOrder(ctx context.Context, orderNo string, user
 // CreateAfterSale opens a refund only / return-refund request. The request is
 // stored as REQUESTED and an shop.aftersale.created.v1 event is emitted.
 func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRequest) (*pb.AfterSale, error) {
-	input, items, err := validateCreate(req.GetOrderNo(), req.GetUserId(), req.GetType(), req.GetReason(), req.GetAmountCent(), req.GetItems())
+	expectedCent := req.GetExpectedAmountCent()
+	if expectedCent == 0 {
+		expectedCent = req.GetAmountCent()
+	}
+	input, items, err := validateCreate(req.GetOrderNo(), req.GetUserId(), req.GetType(), req.GetReason(), expectedCent, req.GetItems())
 	if err != nil {
 		return nil, err
 	}
@@ -214,16 +243,51 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	party, responsibilitySource, reasonCode := autoResponsibility(input.typ, order)
+	groupNo := "G1"
+	if len(items) > 0 && items[0].GroupNo != "" {
+		groupNo = items[0].GroupNo
+	}
+	computedCent := input.amountCent
+	refunds, goodsCent, _, _, err := s.computeLineRefunds(ctx, tx, order, toProtoItems(items), input.typ, true)
+	if err != nil {
+		return nil, err
+	}
+	freightCent := int64(0)
+	holdFreight := false
+	ruleID := "LINE_REFUND"
+	if goodsCent > 0 {
+		freightCent, holdFreight, ruleID, err = s.freightRefundFor(ctx, tx, order, groupNo, party)
+		if err != nil {
+			return nil, err
+		}
+		computedCent = goodsCent
+		if !holdFreight {
+			computedCent += freightCent
+		}
+	} else {
+		refunds = nil
+	}
+	if goodsCent > 0 && capturedCent > 0 {
+		ledgerPreview, err := s.ensureAmountLedgerTx(ctx, tx, input.orderNo, capturedCent, capturedSource)
+		if err != nil {
+			return nil, err
+		}
+		if available := ledgerPreview.captured - ledgerPreview.consumed; computedCent > available {
+			computedCent = available
+		}
+	}
 	ledger, err := s.ensureAmountLedgerTx(ctx, tx, input.orderNo, capturedCent, capturedSource)
 	if err != nil {
 		return nil, err
 	}
-	if err := reserveAmountTx(ctx, tx, ledger, input.amountCent); err != nil {
+	if err := reserveAmountTx(ctx, tx, ledger, computedCent); err != nil {
 		return nil, err
 	}
 	key := sql.NullString{String: requestID, Valid: requestID != ""}
-	res, err := tx.ExecContext(ctx, "INSERT INTO after_sales (after_sale_no, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, reason, client_request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		afterSaleNo, input.orderNo, input.userID, input.typ, statusRequested, input.amountCent, input.amountCent, amountActive, restockNone, input.reason, key)
+	res, err := tx.ExecContext(ctx, "INSERT INTO after_sales (after_sale_no, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, reason, client_request_id, source, responsibility_party, responsibility_source, responsibility_evidence_ref, responsibility_reason_code, responsibility_determined_by, responsibility_determined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'USER', ?, ?, ?, ?, ?, NOW(3))",
+		afterSaleNo, input.orderNo, input.userID, input.typ, statusRequested, input.amountCent, computedCent, amountActive, restockNone, input.reason, key,
+		party, responsibilitySource, "system:"+reasonCode, reasonCode, "system")
 	if err != nil {
 		if isDuplicateKey(err) && requestID != "" {
 			// Another replica won the race; return its row.
@@ -242,23 +306,35 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	if err != nil {
 		return nil, apperr.Internal("after sale id", err)
 	}
-	if err := appendAmountVersionTx(ctx, tx, afterSaleID, 1, input.amountCent, "CREATE"); err != nil {
+	if err := appendAmountVersionTx(ctx, tx, afterSaleID, 1, computedCent, "CREATE"); err != nil {
 		return nil, err
 	}
 	for _, it := range items {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_items
-			(after_sale_id, sku_id, quantity, warehouse_id, group_no) VALUES (?, ?, ?, ?, ?)`,
-			afterSaleID, it.SkuID, it.Quantity, it.WarehouseID, it.GroupNo); err != nil {
+			(after_sale_id, sku_id, quantity, warehouse_id, group_no, line_no,
+			 line_paid_cent_snapshot, unit_paid_cent_snapshot)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			afterSaleID, it.SkuID, it.Quantity, it.WarehouseID, it.GroupNo, it.LineNo,
+			it.LinePaidCent, it.UnitPaidCent); err != nil {
 			return nil, apperr.Internal("create after sale item", err)
 		}
 	}
 	if err := appendLog(ctx, tx, afterSaleID, "CREATE", "", statusRequested, input.reason); err != nil {
 		return nil, err
 	}
+	if holdFreight && freightCent > 0 {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_freight_holds
+			(after_sale_no, freight_cent, status, deadline_at) VALUES (?, ?, ?, DATE_ADD(NOW(3), INTERVAL 168 HOUR))`,
+			afterSaleNo, freightCent, freightStateHeld); err != nil {
+			return nil, apperr.Internal("create freight hold", err)
+		}
+	}
+	_ = refunds
+	_ = ruleID
 	payload, err := json.Marshal(afterSaleEvent{
 		AfterSaleNo: afterSaleNo, OrderNo: input.orderNo, UserID: input.userID,
 		Type: input.typ, Status: statusRequested, AmountCent: input.amountCent,
-		EffectiveAmountCent: input.amountCent, AmountState: amountActive, RestockState: restockNone,
+		EffectiveAmountCent: computedCent, AmountState: amountActive, RestockState: restockNone,
 		Reason: input.reason,
 	})
 	if err != nil {
@@ -328,14 +404,30 @@ func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.Afte
 		}
 		return s.loadAfterSale(ctx, afterSaleNo)
 	}
-	nextEffective := row.amountCent
+	nextEffective := row.effectiveAmountCent
 	nextAmountState := amountActive
 	if next == statusRejected {
 		nextEffective = row.effectiveAmountCent
 		nextAmountState = amountReleased
 	} else if req.GetAmountCent() > 0 {
+		var newLineCount int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM after_sale_items
+			WHERE after_sale_id = ? AND line_no > 0`, row.id).Scan(&newLineCount); err != nil {
+			return nil, apperr.Internal("check line snapshot for legacy amount", err)
+		}
+		if newLineCount > 0 {
+			return nil, apperr.Invalid("direct amount adjustment is forbidden; adjust quantity instead")
+		}
 		if req.GetAmountCent() > row.amountCent {
 			return nil, apperr.Invalid("approved amount_cent exceeds the requested amount")
+		}
+		if strings.TrimSpace(req.GetReason()) == "" {
+			return nil, apperr.Invalid("legacy amount adjustment requires a reason")
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_legacy_amount_adjustments
+			(after_sale_no, operator, reason, amount_cent, approved_by) VALUES (?, ?, ?, ?, ?)`,
+			afterSaleNo, "admin", cutRunes(req.GetReason(), 255), req.GetAmountCent(), "admin"); err != nil {
+			return nil, apperr.Internal("audit legacy amount adjustment", err)
 		}
 		nextEffective = req.GetAmountCent()
 	}
@@ -765,12 +857,21 @@ type afterSaleRow struct {
 	returnTracking      string
 	refundNo            string
 	refundedCent        int64
+	source              string
+	responsibilityParty string
+	responsibilitySrc   string
+	responsibilityRef   string
+	responsibilityCode  string
+	determinedBy        string
+	determinedAt        sql.NullTime
+	returnCarrierCode   string
 }
 
 func lockAfterSale(ctx context.Context, tx *sql.Tx, afterSaleNo string) (*afterSaleRow, error) {
 	var row afterSaleRow
-	err := tx.QueryRowContext(ctx, "SELECT id, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, version, reason, return_carrier, return_tracking_no, refund_no, refunded_cent FROM after_sales WHERE after_sale_no = ? FOR UPDATE", afterSaleNo).
-		Scan(&row.id, &row.orderNo, &row.userID, &row.typ, &row.status, &row.amountCent, &row.effectiveAmountCent, &row.amountState, &row.restockState, &row.version, &row.reason, &row.returnCarrier, &row.returnTracking, &row.refundNo, &row.refundedCent)
+	err := tx.QueryRowContext(ctx, "SELECT id, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, version, reason, return_carrier, return_tracking_no, refund_no, refunded_cent, source, responsibility_party, responsibility_source, responsibility_evidence_ref, responsibility_reason_code, responsibility_determined_by, responsibility_determined_at, return_carrier_code FROM after_sales WHERE after_sale_no = ? FOR UPDATE", afterSaleNo).
+		Scan(&row.id, &row.orderNo, &row.userID, &row.typ, &row.status, &row.amountCent, &row.effectiveAmountCent, &row.amountState, &row.restockState, &row.version, &row.reason, &row.returnCarrier, &row.returnTracking, &row.refundNo, &row.refundedCent, &row.source,
+			&row.responsibilityParty, &row.responsibilitySrc, &row.responsibilityRef, &row.responsibilityCode, &row.determinedBy, &row.determinedAt, &row.returnCarrierCode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("after sale not found")
 	}
@@ -785,8 +886,11 @@ func (s *Service) loadAfterSale(ctx context.Context, afterSaleNo string) (*pb.Af
 		as        pb.AfterSale
 		createdAt time.Time
 	)
-	err := s.db.QueryRowContext(ctx, "SELECT after_sale_no, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, reason, return_carrier, return_tracking_no, refund_no, refunded_cent, created_at FROM after_sales WHERE after_sale_no = ?", afterSaleNo).
-		Scan(&as.AfterSaleNo, &as.OrderNo, &as.UserId, &as.Type, &as.Status, &as.AmountCent, &as.EffectiveAmountCent, &as.AmountState, &as.RestockState, &as.Reason, &as.ReturnCarrier, &as.ReturnTrackingNo, &as.RefundNo, &as.RefundedCent, &createdAt)
+	var responsibilityDeterminedAt, freightDeadline sql.NullTime
+	err := s.db.QueryRowContext(ctx, "SELECT a.after_sale_no, a.order_no, a.user_id, a.`type`, a.status, a.amount_cent, a.effective_amount_cent, a.amount_state, a.restock_state, a.reason, a.return_carrier, a.return_tracking_no, a.refund_no, a.refunded_cent, a.created_at, a.responsibility_party, a.responsibility_source, a.responsibility_evidence_ref, a.responsibility_reason_code, a.responsibility_determined_by, a.responsibility_determined_at, a.return_carrier_code, COALESCE(h.status, 'NONE'), COALESCE(h.freight_cent, 0), h.deadline_at FROM after_sales a LEFT JOIN after_sale_freight_holds h ON h.after_sale_no = a.after_sale_no WHERE a.after_sale_no = ?", afterSaleNo).
+		Scan(&as.AfterSaleNo, &as.OrderNo, &as.UserId, &as.Type, &as.Status, &as.AmountCent, &as.EffectiveAmountCent, &as.AmountState, &as.RestockState, &as.Reason, &as.ReturnCarrier, &as.ReturnTrackingNo, &as.RefundNo, &as.RefundedCent, &createdAt,
+			&as.ResponsibilityParty, &as.ResponsibilitySource, &as.ResponsibilityEvidenceRef, &as.ResponsibilityReasonCode, &as.ResponsibilityDeterminedBy, &responsibilityDeterminedAt, &as.ReturnCarrierCode,
+			&as.FreightState, &as.FreightCent, &freightDeadline)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("after sale not found")
 	}
@@ -794,6 +898,12 @@ func (s *Service) loadAfterSale(ctx context.Context, afterSaleNo string) (*pb.Af
 		return nil, apperr.Internal("get after sale", err)
 	}
 	as.CreatedAtUnix = createdAt.Unix()
+	if responsibilityDeterminedAt.Valid {
+		as.ResponsibilityDeterminedAtUnix = responsibilityDeterminedAt.Time.Unix()
+	}
+	if freightDeadline.Valid {
+		as.FreightDeadlineUnix = freightDeadline.Time.Unix()
+	}
 	as.Items, err = s.loadItems(ctx, afterSaleNo)
 	if err != nil {
 		return nil, err
@@ -802,9 +912,10 @@ func (s *Service) loadAfterSale(ctx context.Context, afterSaleNo string) (*pb.Af
 }
 
 func (s *Service) loadItems(ctx context.Context, afterSaleNo string) ([]*pb.AfterSaleItem, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT i.sku_id, i.quantity, i.warehouse_id, i.group_no
+	rows, err := s.db.QueryContext(ctx, `SELECT i.sku_id, i.quantity, i.warehouse_id, i.group_no,
+		i.line_no, i.line_paid_cent_snapshot, i.unit_paid_cent_snapshot
 		FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id
-		WHERE a.after_sale_no = ? ORDER BY i.id`, afterSaleNo)
+		WHERE a.after_sale_no = ? ORDER BY i.line_no, i.id`, afterSaleNo)
 	if err != nil {
 		return nil, apperr.Internal("load after sale items", err)
 	}
@@ -812,7 +923,8 @@ func (s *Service) loadItems(ctx context.Context, afterSaleNo string) ([]*pb.Afte
 	var items []*pb.AfterSaleItem
 	for rows.Next() {
 		var item pb.AfterSaleItem
-		if err := rows.Scan(&item.SkuId, &item.Quantity, &item.WarehouseId, &item.GroupNo); err != nil {
+		if err := rows.Scan(&item.SkuId, &item.Quantity, &item.WarehouseId, &item.GroupNo,
+			&item.LineNo, &item.LinePaidCent, &item.UnitPaidCent); err != nil {
 			return nil, apperr.Internal("scan after sale item", err)
 		}
 		items = append(items, &item)
@@ -840,10 +952,13 @@ type afterSaleInput struct {
 
 // afterSaleItem is the persisted view of an after-sale line.
 type afterSaleItem struct {
-	SkuID       int64  `json:"sku_id"`
-	Quantity    int32  `json:"quantity"`
-	WarehouseID int64  `json:"warehouse_id,omitempty"`
-	GroupNo     string `json:"group_no,omitempty"`
+	SkuID        int64  `json:"sku_id"`
+	Quantity     int32  `json:"quantity"`
+	WarehouseID  int64  `json:"warehouse_id,omitempty"`
+	GroupNo      string `json:"group_no,omitempty"`
+	LineNo       int32  `json:"line_no,omitempty"`
+	LinePaidCent int64  `json:"line_paid_cent,omitempty"`
+	UnitPaidCent int64  `json:"unit_paid_cent,omitempty"`
 }
 
 // afterSaleEvent is the outbox payload for shop.aftersale.* events.
@@ -878,17 +993,19 @@ func validateCreate(orderNo string, userID int64, typ, reason string, amountCent
 	if in.typ != typeRefundOnly && in.typ != typeReturnRefund {
 		return afterSaleInput{}, nil, apperr.Invalid("type must be REFUND_ONLY or RETURN_REFUND")
 	}
-	if amountCent <= 0 {
-		return afterSaleInput{}, nil, apperr.Invalid("amount_cent must be positive")
+	if amountCent < 0 {
+		return afterSaleInput{}, nil, apperr.Invalid("amount_cent must not be negative")
+	}
+	if amountCent == 0 && len(items) == 0 {
+		return afterSaleInput{}, nil, apperr.Invalid("amount_cent or after-sale items are required")
 	}
 	in.amountCent = amountCent
 	in.reason = cutRunes(strings.TrimSpace(reason), 512)
 
 	merged := make([]afterSaleItem, 0, len(items))
 	type itemKey struct {
-		skuID       int64
-		warehouseID int64
-		groupNo     string
+		lineNo int32
+		skuID  int64
 	}
 	index := make(map[itemKey]int, len(items))
 	for _, item := range items {
@@ -910,7 +1027,16 @@ func validateCreate(orderNo string, userID int64, typ, reason string, amountCent
 		if groupNo == "" {
 			groupNo = "G1"
 		}
-		key := itemKey{skuID: skuID, warehouseID: warehouseID, groupNo: groupNo}
+		lineNo := item.GetLineNo()
+		if lineNo < 0 {
+			return afterSaleInput{}, nil, apperr.Invalid("line_no must not be negative")
+		}
+		key := itemKey{lineNo: lineNo, skuID: skuID}
+		if lineNo == 0 {
+			// Legacy callers did not send line_no; merge by SKU so one line per
+			// SKU remains. validateAgainstOrder resolves the actual line.
+			key = itemKey{skuID: skuID}
+		}
 		if pos, ok := index[key]; ok {
 			sum := int64(merged[pos].Quantity) + int64(item.GetQuantity())
 			if sum > math.MaxInt32 {
@@ -920,7 +1046,7 @@ func validateCreate(orderNo string, userID int64, typ, reason string, amountCent
 			continue
 		}
 		index[key] = len(merged)
-		merged = append(merged, afterSaleItem{SkuID: skuID, Quantity: item.GetQuantity(), WarehouseID: warehouseID, GroupNo: groupNo})
+		merged = append(merged, afterSaleItem{SkuID: skuID, Quantity: item.GetQuantity(), WarehouseID: warehouseID, GroupNo: groupNo, LineNo: lineNo})
 	}
 	return in, merged, nil
 }
@@ -1014,4 +1140,11 @@ func (s *Service) findByClientRequest(ctx context.Context, userID int64, request
 
 func isDuplicateKey(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "duplicate entry")
+}
+
+func autoResponsibility(typ string, order *pb.Order) (party, source, code string) {
+	if typ == typeRefundOnly && orderUnshipped(order) {
+		return partyMerchant, sourceSystemValue, "OUT_OF_STOCK"
+	}
+	return partyUndetermined, sourceSystemValue, "PENDING_REVIEW"
 }

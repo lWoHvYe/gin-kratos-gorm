@@ -34,13 +34,37 @@ type Service struct {
 	pb.UnimplementedInventoryServiceServer
 	db  *sql.DB
 	log *slog.Logger
+	// quantitySplitEnabled gates ADR 0005 quantity splitting. Off keeps the
+	// legacy one-warehouse-per-SKU allocator (C behavior).
+	quantitySplitEnabled bool
+	warehousePriority    []int64
+	aftersales           pb.AfterSalesServiceClient
+}
+
+// Options gates ADR 0005 behavior.
+type Options struct {
+	QuantitySplitEnabled bool
+	WarehousePriority    []int64
 }
 
 func New(database *sql.DB, logger *slog.Logger) *Service {
+	return NewWithOptions(database, logger, Options{})
+}
+
+func NewWithOptions(database *sql.DB, logger *slog.Logger, opts Options) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{db: database, log: logger}
+	return &Service{
+		db: database, log: logger, quantitySplitEnabled: opts.QuantitySplitEnabled,
+		warehousePriority: append([]int64(nil), opts.WarehousePriority...),
+	}
+}
+
+// SetAfterSalesClient wires the cross-warehouse restock authorization check.
+// Without it, cross-warehouse restock fails closed.
+func (s *Service) SetAfterSalesClient(client pb.AfterSalesServiceClient) {
+	s.aftersales = client
 }
 
 var _ pb.InventoryServiceServer = (*Service)(nil)

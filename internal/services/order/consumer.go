@@ -57,7 +57,9 @@ func RunShipmentConsumer(ctx context.Context, client *mq.Client, svc *Service, l
 	}
 	bind("shop.shipment.created.v1", "order-shipment-created", statusAllocated, statusPaid)
 	bind("shop.shipment.shipped.v1", "order-shipment-shipped", statusShipped, statusPaid, statusAllocated)
-	bind("shop.shipment.delivered.v1", "order-shipment-delivered", statusCompleted, statusShipped)
+	// Delivery is evidence, not receipt. Only the receipt fact advances the
+	// order lifecycle (ADR 0005 A-08).
+	bind("shop.shipment.received.v1", "order-shipment-received", statusCompleted, statusShipped)
 }
 
 func (s *Service) applyShipmentStatus(ctx context.Context, orderNo, target string, from ...string) error {

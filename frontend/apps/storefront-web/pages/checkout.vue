@@ -1,7 +1,7 @@
 <script setup lang="ts">
 interface Address { id: number; receiver: string; phone: string; detail: string }
 interface QuoteLine { sku_id: number; name: string; price_cent: number; quantity: number; discount_cent: number }
-interface Quote { quote_id: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; coupon_discount_cent: number; freight_cent: number; pay_cent: number; lines: QuoteLine[] }
+interface Quote { quote_id: string; total_cent: number; discount_cent: number; promotion_discount_cent: number; coupon_discount_cent: number; freight_cent: number; pay_cent: number; package_count?: number; warehouse_count?: number; lines: QuoteLine[] }
 interface PlaceReply { order: { order_no: string }; payment: { payment_no: string; amount_cent: number } }
 const { request, token } = useApi()
 const addresses = ref<Address[]>([])
@@ -93,6 +93,7 @@ async function place(): Promise<void> {
           <div><span>促销优惠</span><span>-¥{{ ((quote.promotion_discount_cent ?? 0) / 100).toFixed(2) }}</span></div>
           <div><span>优惠券</span><span>-¥{{ ((quote.coupon_discount_cent ?? 0) / 100).toFixed(2) }}</span></div>
           <div><span>运费</span><span>¥{{ (quote.freight_cent / 100).toFixed(2) }}</span></div>
+          <div v-if="(quote.package_count ?? 0) > 0" class="muted">本单将分 {{ quote.package_count }} 个包裹、来自 {{ quote.warehouse_count }} 个仓，商品与运费一次结算，不额外加收。</div>
           <div class="grand"><span>应付</span><span>¥{{ (quote.pay_cent / 100).toFixed(2) }}</span></div>
         </div>
       </template>

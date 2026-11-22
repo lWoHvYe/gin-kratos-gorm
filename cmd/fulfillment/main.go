@@ -57,9 +57,15 @@ func main() {
 	}
 	defer orderConn.Close()
 	gs := grpcx.NewServer(cfg, logger)
-	svc := fulfillment.New(database, client, logger, pb.NewOrderServiceClient(orderConn))
+	svc := fulfillment.NewWithOptions(database, client, logger, pb.NewOrderServiceClient(orderConn), fulfillment.Options{
+		CarrierRegistryEnabled:     cfg.CarrierRegistryEnabled,
+		DeliveryAutoConfirmEnabled: cfg.DeliveryAutoConfirmEnabled,
+	})
 	workers.Go(func(ctx context.Context) { fulfillment.RunOrderPaidConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { fulfillment.RunAfterSaleRefundConsumer(ctx, client, svc, logger) })
+	workers.Go(func(ctx context.Context) {
+		fulfillment.RunDeliveryAutoConfirmWorker(ctx, svc, logger, 15*time.Second)
+	})
 	pb.RegisterFulfillmentServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger, client.Healthy))
 	if err := app.Run(); err != nil {

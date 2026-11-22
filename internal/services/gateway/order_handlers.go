@@ -137,7 +137,9 @@ func (h *handlers) receiveOrder(c *gin.Context) {
 		return
 	}
 	shipmentNo = shipment.GetShipmentNo()
-	received, err := h.clients.Fulfillment.Receive(c.Request.Context(), &pb.ReceiveRequest{ShipmentNo: shipmentNo})
+	received, err := h.clients.Fulfillment.ConfirmReceipt(c.Request.Context(), &pb.ConfirmReceiptRequest{
+		ShipmentNo: shipmentNo, UserId: uid,
+	})
 	if err != nil {
 		httpx.Error(c, bff.RemoteError(err))
 		return

@@ -73,6 +73,27 @@ func (s *Service) Restock(ctx context.Context, req *pb.RestockRequest) (*pb.Stoc
 	if condition != "SELLABLE" && condition != "DAMAGED" {
 		return nil, apperr.Invalid("condition must be SELLABLE or DAMAGED")
 	}
+	originWarehouseID := req.GetOriginWarehouseId()
+	if originWarehouseID <= 0 {
+		// Legacy callers did not send origin; treat the target as origin. New
+		// AfterSales calls always send origin_warehouse_id.
+		originWarehouseID = warehouseID
+	}
+	if warehouseID != originWarehouseID {
+		authNo := strings.TrimSpace(req.GetRestockAuthNo())
+		if authNo == "" || s.aftersales == nil {
+			return nil, apperr.Failed("cross-warehouse restock requires a valid authorization")
+		}
+		verifyCtx, cancel := context.WithTimeout(ctx, time.Second)
+		reply, verifyErr := s.aftersales.VerifyRestockAuthorization(verifyCtx, &pb.VerifyRestockAuthorizationRequest{
+			RestockAuthNo: authNo, AfterSaleNo: restockNo, SkuId: skuID,
+			FromWarehouseId: originWarehouseID, ToWarehouseId: warehouseID, Quantity: quantity,
+		})
+		cancel()
+		if verifyErr != nil || reply == nil || !reply.GetValid() {
+			return nil, apperr.Failed("cross-warehouse restock authorization rejected")
+		}
+	}
 	returnOrder := "RET:" + truncateString(restockNo, 56)
 	var result *stock
 	err := s.write(ctx, func(tx *sql.Tx) error {

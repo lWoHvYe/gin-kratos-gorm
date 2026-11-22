@@ -46,10 +46,33 @@ type Service struct {
 	mq     *mq.Client
 	log    *slog.Logger
 	orders pb.OrderServiceClient
+
+	carrierRegistryEnabled bool
+	autoConfirmEnabled     bool
+	now                    func() time.Time
+}
+
+// Options gates the ADR 0005 capabilities. Both default to false so deployment
+// rollback is a configuration change, not a code change.
+type Options struct {
+	CarrierRegistryEnabled     bool
+	DeliveryAutoConfirmEnabled bool
 }
 
 func New(db *sql.DB, client *mq.Client, logger *slog.Logger, orders pb.OrderServiceClient) *Service {
-	return &Service{db: db, mq: client, log: logger, orders: orders}
+	return NewWithOptions(db, client, logger, orders, Options{})
+}
+
+func NewWithOptions(db *sql.DB, client *mq.Client, logger *slog.Logger, orders pb.OrderServiceClient, opts Options) *Service {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Service{
+		db: db, mq: client, log: logger, orders: orders,
+		carrierRegistryEnabled: opts.CarrierRegistryEnabled,
+		autoConfirmEnabled:     opts.DeliveryAutoConfirmEnabled,
+		now:                    time.Now,
+	}
 }
 
 // CreateShipment registers a parcel for an order. It is idempotent by order_no:
@@ -67,7 +90,17 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 		return nil, err
 	}
 	carrier := cutFulfillmentRunes(strings.TrimSpace(req.GetCarrier()), 64)
+	carrierCode := cutFulfillmentRunes(strings.TrimSpace(req.GetCarrierCode()), 32)
 	trackingNo := cutFulfillmentRunes(strings.TrimSpace(req.GetTrackingNo()), 128)
+	if s.carrierRegistryEnabled {
+		name, err := s.validateCarrier(ctx, carrierCode)
+		if err != nil {
+			return nil, err
+		}
+		if carrier == "" {
+			carrier = name
+		}
+	}
 	warehouseID := req.GetWarehouseId()
 	if order, err := s.orderForGroup(ctx, orderNo, groupNo); err != nil {
 		return nil, err
@@ -96,10 +129,16 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 		if carrier != "" || trackingNo != "" {
 			if _, err := s.db.ExecContext(ctx, `UPDATE shipments
 				SET carrier = CASE WHEN ? <> '' THEN ? ELSE carrier END,
+				    carrier_code = CASE WHEN ? <> '' THEN ? ELSE carrier_code END,
 				    tracking_no = CASE WHEN ? <> '' THEN ? ELSE tracking_no END,
 				    warehouse_id = ?, version = version + 1, updated_at = ?
 				WHERE shipment_no = ? AND status = ?`,
-				carrier, carrier, trackingNo, trackingNo, warehouseID, time.Now(), existing, statusCreated); err != nil {
+				carrier, carrier, carrierCode, carrierCode, trackingNo, trackingNo,
+				warehouseID, time.Now(), existing, statusCreated); err != nil {
+				if isDuplicateTracking(err) {
+					return nil, apperr.Conflict("carrier tracking number is already used").
+						WithDetails(map[string]any{"carrier_code": carrierCode, "tracking_no": trackingNo})
+				}
 				return nil, apperr.Internal("update pending shipment", err)
 			}
 		}
@@ -114,10 +153,14 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.ExecContext(ctx, `INSERT INTO shipments
-		(shipment_no, order_no, fulfillment_group_no, warehouse_id, carrier, tracking_no, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, shipmentNo, orderNo, groupNo, warehouseID, carrier, trackingNo, statusCreated)
+		(shipment_no, order_no, fulfillment_group_no, warehouse_id, carrier, carrier_code, tracking_no, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, shipmentNo, orderNo, groupNo, warehouseID, carrier, carrierCode, trackingNo, statusCreated)
 	if err != nil {
 		var me *mysql.MySQLError
+		if errors.As(err, &me) && me.Number == 1062 && isDuplicateTracking(err) {
+			return nil, apperr.Conflict("carrier tracking number is already used").
+				WithDetails(map[string]any{"carrier_code": carrierCode, "tracking_no": trackingNo})
+		}
 		if errors.As(err, &me) && me.Number == 1062 {
 			// Concurrent create for the same order: release our transaction and
 			// return the shipment that won the race.
@@ -145,7 +188,7 @@ func (s *Service) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequ
 	}
 	payload, err := json.Marshal(shipmentEvent{
 		ShipmentNo: shipmentNo, OrderNo: orderNo, FulfillmentGroupNo: groupNo, WarehouseID: warehouseID,
-		Carrier: carrier, TrackingNo: trackingNo, Status: statusCreated, Items: items,
+		Carrier: carrier, CarrierCode: carrierCode, TrackingNo: trackingNo, Status: statusCreated, Items: items,
 	})
 	if err != nil {
 		return nil, apperr.Internal("marshal shipment event", err)
@@ -181,6 +224,19 @@ func (s *Service) Ship(ctx context.Context, req *pb.ShipRequest) (*pb.Shipment, 
 	// permit for a shipment that already left CREATED.
 	if shipmentStatus != statusCreated {
 		return s.advance(ctx, shipmentNo, topicShipmentShipped, "shipment.shipped", shipOutcome)
+	}
+	if s.carrierRegistryEnabled {
+		var carrierCode, trackingNo string
+		if err := s.db.QueryRowContext(ctx, `SELECT carrier_code, tracking_no FROM shipments WHERE shipment_no = ?`, shipmentNo).
+			Scan(&carrierCode, &trackingNo); err != nil {
+			return nil, apperr.Internal("load shipment carrier", err)
+		}
+		if _, err := s.validateCarrier(ctx, carrierCode); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(trackingNo) == "" {
+			return nil, apperr.Failed("tracking_no is required before shipping")
+		}
 	}
 	if s.orders == nil {
 		return nil, apperr.Unavailable("order client is not configured for shipping permits", nil)
@@ -227,11 +283,11 @@ func (s *Service) shipmentOrder(ctx context.Context, shipmentNo string) (string,
 	return orderNo, status, groupNo, nil
 }
 
-// Receive moves a shipment from SHIPPED to RECEIVED and emits
-// shop.shipment.delivered.v1. Repeating the call on a received shipment is a
-// no-op that returns the current aggregate.
+// Receive is retired: receipt must come from a user confirmation, the T+1/T+7
+// job or a dispute resolution (ADR 0005 S7/E20). Keeping this RPC would let an
+// operator forge receipt, so it fails closed and points at the allowed paths.
 func (s *Service) Receive(ctx context.Context, req *pb.ReceiveRequest) (*pb.Shipment, error) {
-	return s.advance(ctx, strings.TrimSpace(req.GetShipmentNo()), topicShipmentDelivered, "shipment.delivered", receiveOutcome)
+	return nil, apperr.Failed("direct receipt is not allowed; use ConfirmReceipt, auto-confirm or dispute resolution")
 }
 
 func (s *Service) GetShipment(ctx context.Context, req *pb.GetShipmentRequest) (*pb.Shipment, error) {
@@ -311,9 +367,14 @@ func (s *Service) advance(
 		if err != nil {
 			return nil, err
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE shipments SET status = ?, version = version + 1 WHERE id = ?`,
-			next, shipmentID); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE shipments SET status = ?, track_status = ?, shipped_at = CASE WHEN ? <> '' THEN COALESCE(shipped_at, NOW(3)) ELSE shipped_at END, version = version + 1 WHERE id = ?`,
+			next, trackStatusFor(next), next, shipmentID); err != nil {
 			return nil, apperr.Internal("update shipment status", err)
+		}
+		if next == statusShipped {
+			if err := s.upsertAutoConfirmJobTx(ctx, tx, shipmentNo, autoConfirmT7, s.now().Add(7*24*time.Hour)); err != nil {
+				return nil, err
+			}
 		}
 		payload, err := json.Marshal(shipmentEvent{
 			ShipmentNo: shipmentNo, OrderNo: orderNo, FulfillmentGroupNo: groupNo, WarehouseID: warehouseID,
@@ -364,9 +425,18 @@ func (s *Service) loadShipment(ctx context.Context, shipmentNo string) (*pb.Ship
 		sh        pb.Shipment
 		createdAt time.Time
 	)
-	err := s.db.QueryRowContext(ctx, `SELECT shipment_no, order_no, fulfillment_group_no, warehouse_id, status, carrier, tracking_no, created_at
-		FROM shipments WHERE shipment_no = ?`, shipmentNo).
-		Scan(&sh.ShipmentNo, &sh.OrderNo, &sh.FulfillmentGroupNo, &sh.WarehouseId, &sh.Status, &sh.Carrier, &sh.TrackingNo, &createdAt)
+	var (
+		shippedAt, deliveredAt sql.NullTime
+		receiptSource          sql.NullString
+	)
+	err := s.db.QueryRowContext(ctx, `SELECT s.shipment_no, s.order_no, s.fulfillment_group_no, s.warehouse_id,
+		s.status, s.carrier, s.tracking_no, s.created_at, s.carrier_code, s.track_status,
+		s.shipped_at, s.delivered_at, s.delivery_source, s.exception_state, r.source
+		FROM shipments s LEFT JOIN shipment_receipts r ON r.shipment_no = s.shipment_no
+		WHERE s.shipment_no = ?`, shipmentNo).
+		Scan(&sh.ShipmentNo, &sh.OrderNo, &sh.FulfillmentGroupNo, &sh.WarehouseId, &sh.Status,
+			&sh.Carrier, &sh.TrackingNo, &createdAt, &sh.CarrierCode, &sh.TrackStatus,
+			&shippedAt, &deliveredAt, &sh.DeliverySource, &sh.ExceptionState, &receiptSource)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("shipment not found")
 	}
@@ -374,6 +444,15 @@ func (s *Service) loadShipment(ctx context.Context, shipmentNo string) (*pb.Ship
 		return nil, apperr.Internal("get shipment", err)
 	}
 	sh.CreatedAtUnix = createdAt.Unix()
+	if shippedAt.Valid {
+		sh.ShippedAtUnix = shippedAt.Time.Unix()
+	}
+	if deliveredAt.Valid {
+		sh.DeliveredAtUnix = deliveredAt.Time.Unix()
+	}
+	if receiptSource.Valid {
+		sh.ReceiptState = "CONFIRMED"
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT sku_id, quantity FROM shipment_items WHERE shipment_id =
 		(SELECT id FROM shipments WHERE shipment_no = ?) ORDER BY id`, shipmentNo)
 	if err != nil {
@@ -455,6 +534,7 @@ type shipmentEvent struct {
 	FulfillmentGroupNo string         `json:"fulfillment_group_no"`
 	WarehouseID        int64          `json:"warehouse_id"`
 	Carrier            string         `json:"carrier"`
+	CarrierCode        string         `json:"carrier_code,omitempty"`
 	TrackingNo         string         `json:"tracking_no"`
 	Status             string         `json:"status"`
 	Items              []shipmentItem `json:"items"`

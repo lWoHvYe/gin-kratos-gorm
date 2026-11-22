@@ -46,5 +46,12 @@ func applyAfterSaleCompleted(ctx context.Context, svc *Service, event afterSaleC
 		groupRefundStateRefunded, event.OrderNo, event.GroupNo, groupRefundStateRefunded); err != nil {
 		return apperr.Internal("project group refund state", err)
 	}
+	if _, err := svc.db.ExecContext(ctx, `UPDATE order_shortage_cases
+		SET refund_after_sale_no = ?, refunded_at = NOW(3), refund_state = 'REFUNDED',
+		    version = version + 1, updated_at = NOW(3)
+		WHERE order_no = ? AND group_no = ? AND status = ?`,
+		event.AfterSaleNo, event.OrderNo, event.GroupNo, shortageResolvedRefund); err != nil {
+		return apperr.Internal("project shortage refund state", err)
+	}
 	return nil
 }

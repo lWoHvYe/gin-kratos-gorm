@@ -155,11 +155,15 @@ func (s *Service) getAfterSaleRow(ctx context.Context, afterSaleNo string) (*aft
 	var row afterSaleRow
 	err := s.db.QueryRowContext(ctx, `SELECT id, order_no, user_id, `+"`type`"+`, status, amount_cent,
 		effective_amount_cent, amount_state, restock_state, version, reason, return_carrier,
-		return_tracking_no, refund_no, refunded_cent
+		return_tracking_no, refund_no, refunded_cent, source, responsibility_party,
+		responsibility_source, responsibility_evidence_ref, responsibility_reason_code,
+		responsibility_determined_by, responsibility_determined_at, return_carrier_code
 		FROM after_sales WHERE after_sale_no = ?`, afterSaleNo).
 		Scan(&row.id, &row.orderNo, &row.userID, &row.typ, &row.status, &row.amountCent,
 			&row.effectiveAmountCent, &row.amountState, &row.restockState, &row.version, &row.reason,
-			&row.returnCarrier, &row.returnTracking, &row.refundNo, &row.refundedCent)
+			&row.returnCarrier, &row.returnTracking, &row.refundNo, &row.refundedCent, &row.source,
+			&row.responsibilityParty, &row.responsibilitySrc, &row.responsibilityRef, &row.responsibilityCode,
+			&row.determinedBy, &row.determinedAt, &row.returnCarrierCode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, apperr.NotFound("after sale not found")
 	}

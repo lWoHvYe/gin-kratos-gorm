@@ -59,7 +59,20 @@ func main() {
 	defer workers.Stop()
 	workers.Go(func(ctx context.Context) { outbox.Relay(ctx, database, client, logger, time.Second) })
 	gs := grpcx.NewServer(cfg, logger)
-	svc := inventory.New(database, logger)
+	svc := inventory.NewWithOptions(database, logger, inventory.Options{
+		QuantitySplitEnabled: cfg.QuantitySplitEnabled,
+		WarehousePriority:    cfg.InventoryWarehousePriority,
+	})
+	aftersalesAddr := os.Getenv("AFTERSALES_ADDR")
+	if aftersalesAddr == "" {
+		aftersalesAddr = "aftersales:9009"
+	}
+	if aftersalesConn, derr := grpcx.Dial(context.Background(), aftersalesAddr); derr != nil {
+		logger.Warn("dial aftersales for restock auth; cross-warehouse restock will fail closed", "error", derr)
+	} else {
+		defer aftersalesConn.Close()
+		svc.SetAfterSalesClient(pb.NewAfterSalesServiceClient(aftersalesConn))
+	}
 	workers.Go(func(ctx context.Context) { inventory.RunExpiry(ctx, database, svc, logger, time.Minute) })
 	workers.Go(func(ctx context.Context) { inventory.RunOrderCancelledConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { inventory.RunCompensationConsumer(ctx, client, svc, logger) })
@@ -110,7 +123,20 @@ func runOperationReplay(cfg *config.Config, logger *slog.Logger) {
 		os.Exit(1)
 	}
 	defer database.Close()
-	svc := inventory.New(database, logger)
+	svc := inventory.NewWithOptions(database, logger, inventory.Options{
+		QuantitySplitEnabled: cfg.QuantitySplitEnabled,
+		WarehousePriority:    cfg.InventoryWarehousePriority,
+	})
+	aftersalesAddr := os.Getenv("AFTERSALES_ADDR")
+	if aftersalesAddr == "" {
+		aftersalesAddr = "aftersales:9009"
+	}
+	if aftersalesConn, derr := grpcx.Dial(context.Background(), aftersalesAddr); derr != nil {
+		logger.Warn("dial aftersales for restock auth; cross-warehouse restock will fail closed", "error", derr)
+	} else {
+		defer aftersalesConn.Close()
+		svc.SetAfterSalesClient(pb.NewAfterSalesServiceClient(aftersalesConn))
+	}
 	if err := svc.ReplayInventoryOperationForCLI(ctx, *operationID, skus); err != nil {
 		logger.Error("op-replay failed", "operation", *operationID, "error", err)
 		os.Exit(1)

@@ -17,6 +17,7 @@ import (
 	"gin-kratos-gorm/internal/platform/httpx"
 
 	"github.com/gin-gonic/gin"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -38,6 +39,7 @@ func RemoteError(err error) error {
 	if !ok {
 		return apperr.Unavailable("downstream call failed", err)
 	}
+	details := remoteDetails(st)
 	switch st.Code() {
 	case codes.InvalidArgument:
 		return apperr.Invalid("%s", st.Message())
@@ -50,7 +52,11 @@ func RemoteError(err error) error {
 	case codes.AlreadyExists, codes.Aborted:
 		return apperr.Conflict(st.Message())
 	case codes.FailedPrecondition, codes.OutOfRange:
-		return apperr.Failed(st.Message())
+		ae := apperr.Failed(st.Message())
+		if details != nil {
+			ae.Details = details
+		}
+		return ae
 	case codes.ResourceExhausted:
 		return apperr.RateLimited(st.Message())
 	case codes.Unavailable, codes.DeadlineExceeded, codes.Canceled:
@@ -58,6 +64,27 @@ func RemoteError(err error) error {
 	default:
 		return apperr.Internal("downstream error", err)
 	}
+}
+
+func remoteDetails(st *status.Status) map[string]any {
+	for _, detail := range st.Details() {
+		info, ok := detail.(*errdetails.ErrorInfo)
+		if !ok || len(info.GetMetadata()) == 0 {
+			continue
+		}
+		details := make(map[string]any, len(info.GetMetadata()))
+		for key, value := range info.GetMetadata() {
+			if value == "true" {
+				details[key] = true
+			} else if value == "false" {
+				details[key] = false
+			} else {
+				details[key] = value
+			}
+		}
+		return details
+	}
+	return nil
 }
 
 // Recovery converts a panic into the regular JSON error envelope.

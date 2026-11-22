@@ -18,22 +18,33 @@ type OrderItem struct {
 }
 
 type orderEvent struct {
-	OrderNo   string      `json:"order_no"`
-	UserID    int64       `json:"user_id"`
-	QuoteID   string      `json:"quote_id,omitempty"`
-	PayCent   int64       `json:"pay_cent,omitempty"`
-	PaidCent  int64       `json:"paid_cent,omitempty"`
-	PaymentNo string      `json:"payment_no,omitempty"`
-	Status    string      `json:"status,omitempty"`
-	Reason    string      `json:"reason,omitempty"`
-	Operator  string      `json:"operator,omitempty"`
-	ExpireAt  int64       `json:"expire_at,omitempty"`
-	PaidAt    int64       `json:"paid_at,omitempty"`
-	Cancelled int64       `json:"cancelled_at,omitempty"`
-	Created   int64       `json:"created_at,omitempty"`
-	Items     []OrderItem `json:"items,omitempty"`
-	ChangedAt int64       `json:"changed_at,omitempty"`
-	GroupNo   string      `json:"group_no,omitempty"`
+	OrderNo        string      `json:"order_no"`
+	UserID         int64       `json:"user_id"`
+	QuoteID        string      `json:"quote_id,omitempty"`
+	PayCent        int64       `json:"pay_cent,omitempty"`
+	PaidCent       int64       `json:"paid_cent,omitempty"`
+	PaymentNo      string      `json:"payment_no,omitempty"`
+	Status         string      `json:"status,omitempty"`
+	Reason         string      `json:"reason,omitempty"`
+	Operator       string      `json:"operator,omitempty"`
+	ExpireAt       int64       `json:"expire_at,omitempty"`
+	PaidAt         int64       `json:"paid_at,omitempty"`
+	Cancelled      int64       `json:"cancelled_at,omitempty"`
+	Created        int64       `json:"created_at,omitempty"`
+	Items          []OrderItem `json:"items,omitempty"`
+	ChangedAt      int64       `json:"changed_at,omitempty"`
+	GroupNo        string      `json:"group_no,omitempty"`
+	AllocationHash string      `json:"allocation_hash,omitempty"`
+	PackageCount   int32       `json:"package_count,omitempty"`
+	WarehouseCount int32       `json:"warehouse_count,omitempty"`
+	FrozenAt       int64       `json:"frozen_at,omitempty"`
+	Resolution     string      `json:"resolution,omitempty"`
+	ChooseDeadline int64       `json:"choose_deadline_unix,omitempty"`
+	ReasonCode     string      `json:"reason_code,omitempty"`
+	DetectedAt     int64       `json:"detected_at_unix,omitempty"`
+	NotifyDeadline int64       `json:"notify_deadline_unix,omitempty"`
+	NotifiedAt     int64       `json:"notified_at_unix,omitempty"`
+	ResolvedAt     int64       `json:"resolved_at,omitempty"`
 }
 
 type inventoryItem struct {
@@ -79,14 +90,19 @@ type paymentEvent struct {
 }
 
 type shipmentEvent struct {
-	ShipmentNo string `json:"shipment_no"`
-	OrderNo    string `json:"order_no"`
-	GroupNo    string `json:"fulfillment_group_no,omitempty"`
-	Warehouse  int64  `json:"warehouse_id,omitempty"`
-	Carrier    string `json:"carrier,omitempty"`
-	TrackingNo string `json:"tracking_no,omitempty"`
-	Status     string `json:"status,omitempty"`
-	Items      []struct {
+	ShipmentNo    string `json:"shipment_no"`
+	OrderNo       string `json:"order_no"`
+	GroupNo       string `json:"fulfillment_group_no,omitempty"`
+	Warehouse     int64  `json:"warehouse_id,omitempty"`
+	Carrier       string `json:"carrier,omitempty"`
+	CarrierCode   string `json:"carrier_code,omitempty"`
+	TrackingNo    string `json:"tracking_no,omitempty"`
+	Status        string `json:"status,omitempty"`
+	TrackStatus   string `json:"track_status,omitempty"`
+	ExceptionType string `json:"exception_type,omitempty"`
+	EventID       string `json:"event_id,omitempty"`
+	Source        string `json:"source,omitempty"`
+	Items         []struct {
 		SkuID    int64 `json:"sku_id"`
 		Quantity int32 `json:"quantity"`
 	} `json:"items,omitempty"`
@@ -101,6 +117,9 @@ type afterSale struct {
 	Amount      int64  `json:"amount_cent"`
 	Reason      string `json:"reason,omitempty"`
 	GroupNo     string `json:"group_no,omitempty"`
+	LineNo      int32  `json:"line_no,omitempty"`
+	Quantity    int64  `json:"quantity,omitempty"`
+	Refunded    int64  `json:"refunded_amount_cent,omitempty"`
 }
 
 type couponEvent struct {
@@ -134,6 +153,9 @@ var schemas = map[string]schema{
 	"order.created":                    {orderEvent{}, []string{"order_no", "user_id", "items"}},
 	"order.cancelled":                  {orderEvent{}, []string{"order_no", "user_id", "status", "cancelled_at", "items"}},
 	"order.paid":                       {orderEvent{}, []string{"order_no", "user_id", "payment_no", "paid_cent", "status", "paid_at", "items"}},
+	"order.allocation_frozen":          {orderEvent{}, []string{"order_no", "allocation_hash", "package_count", "warehouse_count", "frozen_at"}},
+	"order.shortage_reported":          {orderEvent{}, []string{"order_no", "group_no", "status", "detected_at_unix", "notify_deadline_unix", "notified_at_unix", "choose_deadline_unix", "reason_code"}},
+	"order.shortage_resolved":          {orderEvent{}, []string{"order_no", "group_no", "status", "resolution", "reason_code", "resolved_at", "items"}},
 	"order.allocated":                  {orderEvent{}, []string{"order_no", "status"}},
 	"order.shipped":                    {orderEvent{}, []string{"order_no", "status"}},
 	"order.completed":                  {orderEvent{}, []string{"order_no", "status"}},
@@ -155,6 +177,11 @@ var schemas = map[string]schema{
 	"shipment.created":                 {shipmentEvent{}, []string{"shipment_no", "order_no", "status"}},
 	"shipment.shipped":                 {shipmentEvent{}, []string{"shipment_no", "order_no", "status"}},
 	"shipment.delivered":               {shipmentEvent{}, []string{"shipment_no", "order_no", "status"}},
+	"shipment.tracked":                 {shipmentEvent{}, []string{"shipment_no", "order_no", "status"}},
+	"shipment.exception":               {shipmentEvent{}, []string{"shipment_no", "order_no", "exception_type"}},
+	"shipment.received":                {shipmentEvent{}, []string{"shipment_no", "order_no", "source"}},
+	"shipment.dispute_opened":          {shipmentEvent{}, []string{"shipment_no", "order_no"}},
+	"shipment.dispute_resolved":        {shipmentEvent{}, []string{"shipment_no", "order_no"}},
 	"aftersale.created":                {afterSale{}, []string{"after_sale_no", "order_no", "user_id", "type", "status", "amount_cent"}},
 	"aftersale.approved":               {afterSale{}, []string{"after_sale_no", "order_no", "user_id", "type", "status", "amount_cent"}},
 	"aftersale.rejected":               {afterSale{}, []string{"after_sale_no", "order_no", "user_id", "type", "status", "amount_cent"}},
@@ -165,6 +192,7 @@ var schemas = map[string]schema{
 	"aftersale.restock_failed":         {afterSale{}, []string{"after_sale_no", "order_no", "user_id", "type", "status", "amount_cent"}},
 	"aftersale.refund_requested":       {afterSale{}, []string{"after_sale_no", "order_no", "user_id", "type", "status", "amount_cent"}},
 	"aftersale.completed":              {afterSale{}, []string{"after_sale_no", "order_no", "user_id", "type", "status", "amount_cent"}},
+	"aftersale.line_refunded":          {afterSale{}, []string{"after_sale_no", "order_no", "line_no", "quantity", "refunded_amount_cent"}},
 	"coupon.locked":                    {couponEvent{}, []string{"quote_id", "coupon_id", "amount_cent"}},
 	"coupon.unlocked":                  {couponEvent{}, []string{"quote_id", "coupon_id", "amount_cent"}},
 	"coupon.used":                      {couponEvent{}, []string{"quote_id", "coupon_id", "amount_cent"}},

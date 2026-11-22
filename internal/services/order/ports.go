@@ -12,6 +12,7 @@ import (
 // Kratos clients satisfy them, while unit tests can provide small fakes instead
 // of a full pb client.
 type inventoryPort interface {
+	AllocateOrder(ctx context.Context, in *pb.AllocateOrderRequest, opts ...grpc.CallOption) (*pb.AllocateOrderReply, error)
 	Confirm(ctx context.Context, in *pb.ReserveRequest, opts ...grpc.CallOption) (*pb.Empty, error)
 	Release(ctx context.Context, in *pb.ReserveRequest, opts ...grpc.CallOption) (*pb.Empty, error)
 	CreateSeckillReservation(ctx context.Context, in *pb.CreateSeckillReservationRequest, opts ...grpc.CallOption) (*pb.ReserveReply, error)

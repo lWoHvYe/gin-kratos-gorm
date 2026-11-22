@@ -47,12 +47,12 @@ func refundStateFor(refundedCent, paidCent int64) string {
 	}
 }
 
-// shipmentStatus maps the lifecycle to the logistics projection. The shipment
-// service remains the source of carrier/tracking details.
+// shipmentStatus maps the lifecycle to the five-value fulfillment projection.
+// CREATED is a shipment state, never an order projection (ADR 0005 §3.2.1).
 func shipmentStatus(status string) string {
 	switch status {
-	case statusAllocated:
-		return "CREATED"
+	case statusPaid, statusAllocated:
+		return "UNSHIPPED"
 	case statusShipped:
 		return "SHIPPED"
 	case statusCompleted:
@@ -108,7 +108,7 @@ func shipmentStatusForGroups(orderStatus string, groups []*fulfillmentGroup) str
 	remaining := len(groups) - closed
 	switch {
 	case remaining == 0:
-		return "CANCELLED"
+		return "UNSHIPPED"
 	case received == remaining:
 		return "RECEIVED"
 	case received > 0:
@@ -118,7 +118,7 @@ func shipmentStatusForGroups(orderStatus string, groups []*fulfillmentGroup) str
 	case shipped > 0:
 		return "PARTIALLY_SHIPPED"
 	case orderStatus == statusPaid || orderStatus == statusAllocated:
-		return "CREATED"
+		return "UNSHIPPED"
 	default:
 		return ""
 	}

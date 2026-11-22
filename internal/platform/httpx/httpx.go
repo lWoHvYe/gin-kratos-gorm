@@ -84,7 +84,11 @@ func Error(c *gin.Context, err error) {
 	if ae.Code == apperr.CodeInternal {
 		msg = "internal server error"
 	}
-	c.AbortWithStatusJSON(apperr.HTTPStatus(err), gin.H{"code": code, "message": msg, "request_id": RequestIDFrom(c)})
+	body := gin.H{"code": code, "message": msg, "request_id": RequestIDFrom(c)}
+	if len(ae.Details) > 0 {
+		body["details"] = ae.Details
+	}
+	c.AbortWithStatusJSON(apperr.HTTPStatus(err), body)
 }
 
 // OK and Created serialize protobuf replies through ProtoToMap so the contract

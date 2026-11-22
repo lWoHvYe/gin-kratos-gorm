@@ -3,14 +3,17 @@ package order
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/events"
 
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
@@ -40,7 +43,9 @@ func orderTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	for _, table := range []string{"order_shipping_permits", "order_fulfillment_groups", "order_items"} {
+	for _, table := range []string{"order_shipping_permits", "order_fulfillment_groups", "order_items",
+		"order_allocation_snapshots", "order_allocation_decisions", "order_shortage_cases",
+		"order_reconciliation_diffs", "order_status_logs", "orders", "outbox_events"} {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
 			t.Fatal(err)
 		}
@@ -58,6 +63,8 @@ func orderTestDB(t *testing.T) *sql.DB {
 			receiver_name VARCHAR(64) NOT NULL DEFAULT '', receiver_phone VARCHAR(32) NOT NULL DEFAULT '',
 			receiver_address VARCHAR(255) NOT NULL DEFAULT '', quote_id VARCHAR(64) NOT NULL DEFAULT '',
 			client_request_id VARCHAR(64) NOT NULL DEFAULT '', expire_at DATETIME(3) NOT NULL,
+			allocation_frozen_at DATETIME(3) NULL, allocation_hash CHAR(64) NOT NULL DEFAULT '',
+			package_count INT NOT NULL DEFAULT 1, warehouse_count INT NOT NULL DEFAULT 1,
 			version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -68,6 +75,7 @@ func orderTestDB(t *testing.T) *sql.DB {
 			price_cent BIGINT NOT NULL DEFAULT 0, quantity INT NOT NULL DEFAULT 0,
 			warehouse_id BIGINT NOT NULL DEFAULT 1, fulfillment_group_no VARCHAR(64) NOT NULL DEFAULT 'G1',
 			discount_cent BIGINT NOT NULL DEFAULT 0,
+			line_paid_cent BIGINT NOT NULL DEFAULT 0, unit_paid_cent BIGINT NOT NULL DEFAULT 0,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_order_items_line (order_no, line_no))`,
 		`CREATE TABLE IF NOT EXISTS order_fulfillment_groups (
@@ -75,7 +83,8 @@ func orderTestDB(t *testing.T) *sql.DB {
 			order_no VARCHAR(64) NOT NULL, seq INT NOT NULL DEFAULT 1, warehouse_id BIGINT NOT NULL DEFAULT 1,
 			status VARCHAR(24) NOT NULL DEFAULT 'PENDING', refund_state VARCHAR(16) NOT NULL DEFAULT 'NONE',
 			reservation_state VARCHAR(16) NOT NULL DEFAULT 'HELD',
-			freight_cent BIGINT NOT NULL DEFAULT 0, version BIGINT NOT NULL DEFAULT 1,
+			freight_cent BIGINT NOT NULL DEFAULT 0, freight_share_cent BIGINT NOT NULL DEFAULT 0,
+			version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_order_fulfillment_group_no (order_no, group_no),
@@ -93,6 +102,34 @@ func orderTestDB(t *testing.T) *sql.DB {
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
 			PRIMARY KEY (order_no, fulfillment_group_no))`,
+		`CREATE TABLE IF NOT EXISTS order_allocation_snapshots (
+			order_no VARCHAR(64) NOT NULL PRIMARY KEY, allocation_hash CHAR(64) NOT NULL DEFAULT '',
+			lines_json JSON NOT NULL, groups_json JSON NOT NULL, frozen_at DATETIME(3) NULL,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS order_allocation_decisions (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL DEFAULT '',
+			quote_id VARCHAR(64) NOT NULL DEFAULT '', request_json JSON NOT NULL,
+			availability_json JSON NOT NULL, chosen_json JSON NOT NULL, rule_hits_json JSON NOT NULL,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS order_shortage_cases (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL,
+			group_no VARCHAR(64) NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'OPEN',
+			resolution VARCHAR(24) NOT NULL DEFAULT '', reason VARCHAR(255) NOT NULL DEFAULT '',
+			restock_eta DATE NULL, notified_at DATETIME(3) NULL, choose_deadline_at DATETIME(3) NULL,
+			detected_at DATETIME(3) NULL, notify_deadline_at DATETIME(3) NULL,
+			refund_after_sale_no VARCHAR(64) NOT NULL DEFAULT '', refunded_at DATETIME(3) NULL,
+			refund_state VARCHAR(24) NOT NULL DEFAULT 'NONE',
+			version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+			UNIQUE KEY uk_order_shortage_group (order_no, group_no))`,
+		`CREATE TABLE IF NOT EXISTS order_reconciliation_diffs (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, run_date DATE NOT NULL,
+			equation VARCHAR(32) NOT NULL, order_no VARCHAR(64) NOT NULL,
+			expected_cent BIGINT NOT NULL DEFAULT 0, actual_cent BIGINT NOT NULL DEFAULT 0,
+			diff_cent BIGINT NOT NULL DEFAULT 0,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			UNIQUE KEY uk_order_reconciliation_diff (run_date, equation, order_no))`,
 		`CREATE TABLE IF NOT EXISTS outbox_events (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, event_id VARCHAR(64) NOT NULL,
 			topic VARCHAR(128) NOT NULL, aggregate_type VARCHAR(64) NOT NULL,
@@ -108,7 +145,9 @@ func orderTestDB(t *testing.T) *sql.DB {
 			t.Fatalf("create order test table: %v", err)
 		}
 	}
-	for _, table := range []string{"order_fulfillment_groups", "order_items", "order_shipping_permits", "order_status_logs", "orders", "outbox_events"} {
+	for _, table := range []string{"order_allocation_decisions", "order_allocation_snapshots", "order_shortage_cases",
+		"order_reconciliation_diffs", "order_fulfillment_groups", "order_items", "order_shipping_permits",
+		"order_status_logs", "orders", "outbox_events"} {
 		if _, err := db.Exec("DELETE FROM " + table); err != nil {
 			t.Fatal(err)
 		}
@@ -130,7 +169,7 @@ func seedSettlementOrder(t *testing.T, db *sql.DB, orderNo, status string, paid,
 }
 
 func settlementService(db *sql.DB) *Service {
-	return &Service{db: db, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	return &Service{db: db, log: slog.New(slog.NewTextHandler(io.Discard, nil)), now: time.Now}
 }
 
 func TestShippingPermitAndRefundRace(t *testing.T) {
@@ -230,6 +269,7 @@ func TestAuthorizeShipmentDeniedAfterFullRefund(t *testing.T) {
 	}
 }
 
+// AC-25: refunds never write a refund/closed value into orders.status.
 func TestRefundProjectionKeepsLifecycle(t *testing.T) {
 	db := orderTestDB(t)
 	svc := settlementService(db)
@@ -460,6 +500,7 @@ func TestMultiGroupShadowAllocatedTogether(t *testing.T) {
 	}
 }
 
+// AC-26: per-group shipping produces PARTIALLY_SHIPPED without a new lifecycle.
 func TestGroupShipmentProjectionIsPartialUntilAllGroups(t *testing.T) {
 	db := orderTestDB(t)
 	svc := settlementService(db)
@@ -570,5 +611,243 @@ func TestGroupRefundStateProjection(t *testing.T) {
 	}
 	if state != groupRefundStateRefunded {
 		t.Fatalf("completed group refund state = %s", state)
+	}
+}
+
+// AC-09 / INV-22: the PAID transition and allocation freeze commit together.
+// A second payment call is idempotent and cannot move the frozen snapshot.
+func TestMarkPaidFreezesAllocationOnce(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	ctx := context.Background()
+	const orderNo = "ORD-FREEZE"
+	if _, err := db.Exec(`INSERT INTO orders
+		(order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent,
+		 applied_promotions_json, freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
+		 refund_state, receiver_name, receiver_phone, receiver_address, quote_id, client_request_id,
+		 allocation_hash, package_count, warehouse_count, expire_at, version)
+		VALUES (?, 1, ?, 1000, 0, 0, '', 0, 1000, 0, 0, '', 'NONE', 'R', '13800000000',
+		 'Shanghai', 'Q', '', 'hash-1', 1, 1, DATE_ADD(NOW(3), INTERVAL 1 HOUR), 1)`,
+		orderNo, statusPendingPayment); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no, line_no, sku_id, name, price_cent, quantity, warehouse_id, fulfillment_group_no,
+		 discount_cent, line_paid_cent, unit_paid_cent)
+		VALUES (?, 1, 1, 'A', 1000, 1, 1, 'G1', 0, 1000, 1000)`, orderNo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO order_fulfillment_groups
+		(group_no, order_no, seq, warehouse_id, status, refund_state, reservation_state, freight_cent, freight_share_cent)
+		VALUES ('G1', ?, 1, 1, 'PENDING', 'NONE', 'HELD', 0, 0)`, orderNo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO order_allocation_snapshots (order_no, allocation_hash, lines_json, groups_json)
+		VALUES (?, 'hash-1', '[]', '[]')`, orderNo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.MarkPaid(ctx, &pb.MarkPaidRequest{OrderNo: orderNo, PaymentNo: "PAY-1", PaidCent: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	var frozen sql.NullTime
+	if err := db.QueryRow(`SELECT status, allocation_frozen_at FROM orders WHERE order_no = ?`, orderNo).
+		Scan(&status, &frozen); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusPaid || !frozen.Valid {
+		t.Fatalf("status=%s frozen=%v", status, frozen)
+	}
+	var snapshotFrozen sql.NullTime
+	if err := db.QueryRow(`SELECT frozen_at FROM order_allocation_snapshots WHERE order_no = ?`, orderNo).
+		Scan(&snapshotFrozen); err != nil {
+		t.Fatal(err)
+	}
+	if !snapshotFrozen.Valid {
+		t.Fatal("snapshot was not sealed with the PAID transition")
+	}
+	firstFrozen := frozen.Time
+	// Retry must not rewrite the freeze timestamp or create a second event.
+	if _, err := svc.MarkPaid(ctx, &pb.MarkPaidRequest{OrderNo: orderNo, PaymentNo: "PAY-1", PaidCent: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT allocation_frozen_at FROM orders WHERE order_no = ?`, orderNo).Scan(&frozen); err != nil {
+		t.Fatal(err)
+	}
+	if !frozen.Valid || !frozen.Time.Equal(firstFrozen) {
+		t.Fatalf("freeze moved: %v -> %v", firstFrozen, frozen.Time)
+	}
+	var events int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM outbox_events WHERE event_type = 'order.allocation_frozen'`).Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if events != 1 {
+		t.Fatalf("allocation_frozen events = %d", events)
+	}
+}
+
+func TestConcurrentMarkPaidFreezesOnce(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	ctx := context.Background()
+	const orderNo = "ORD-FREEZE-RACE"
+	if _, err := db.Exec(`INSERT INTO orders
+		(order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent,
+		 applied_promotions_json, freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
+		 refund_state, receiver_name, receiver_phone, receiver_address, quote_id, client_request_id,
+		 expire_at, version)
+		VALUES (?, 1, ?, 1000, 0, 0, '', 0, 1000, 0, 0, '', 'NONE', 'R', '13800000000',
+		 'Shanghai', 'Q', '', DATE_ADD(NOW(3), INTERVAL 1 HOUR), 1)`,
+		orderNo, statusPendingPayment); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no, line_no, sku_id, name, price_cent, quantity, warehouse_id, fulfillment_group_no,
+		 discount_cent, line_paid_cent, unit_paid_cent)
+		VALUES (?, 1, 1, 'A', 1000, 1, 1, 'G1', 0, 1000, 1000)`, orderNo); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, 6)
+	for i := 0; i < len(errs); i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			_, errs[index] = svc.MarkPaid(ctx, &pb.MarkPaidRequest{OrderNo: orderNo, PaymentNo: "PAY-RACE", PaidCent: 1000})
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent MarkPaid %d: %v", i, err)
+		}
+	}
+	var status string
+	var frozen sql.NullTime
+	if err := db.QueryRow(`SELECT status, allocation_frozen_at FROM orders WHERE order_no = ?`, orderNo).
+		Scan(&status, &frozen); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusPaid || !frozen.Valid {
+		t.Fatalf("status=%s frozen=%v", status, frozen)
+	}
+	var events int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM outbox_events WHERE event_type = 'order.allocation_frozen'`).Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if events != 1 {
+		t.Fatalf("allocation_frozen events = %d", events)
+	}
+}
+
+// AC-30/E8: a paid group shortage becomes an explicit case with a 48h choice
+// deadline; the group warehouse is never changed.
+func TestGroupShortageChoiceAndDefaultRefund(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	svc.shortageCaseEnabled = true
+	ctx := context.Background()
+	const orderNo = "ORD-SHORT"
+	seedSettlementOrder(t, db, orderNo, statusPaid, 1000, 0, refundStateNone)
+	if _, err := db.Exec(`INSERT INTO order_fulfillment_groups
+		(group_no, order_no, seq, warehouse_id, status, refund_state, reservation_state, freight_cent, freight_share_cent)
+		VALUES ('G1', ?, 1, 1, 'ALLOCATED', 'NONE', 'HELD', 0, 0)`, orderNo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no, line_no, sku_id, name, price_cent, quantity, warehouse_id, fulfillment_group_no,
+		 discount_cent, line_paid_cent, unit_paid_cent)
+		VALUES (?, 1, 1, 'A', 1000, 1, 1, 'G1', 0, 1000, 1000)`, orderNo); err != nil {
+		t.Fatal(err)
+	}
+	shortage, err := svc.ReportGroupShortage(ctx, &pb.ReportGroupShortageRequest{
+		OrderNo: orderNo, GroupNo: "G1", Reason: "physical count short", RestockEta: time.Now().AddDate(0, 0, 3).Format("2006-01-02"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shortage.GetStatus() != shortageNotified || shortage.GetChooseDeadlineUnix() == 0 {
+		t.Fatalf("shortage = %+v", shortage)
+	}
+	if _, err := svc.ChooseShortageResolution(ctx, &pb.ChooseShortageResolutionRequest{
+		OrderNo: orderNo, GroupNo: "G1", UserId: 1, Resolution: "REFUND",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var warehouse int64
+	if err := db.QueryRow(`SELECT warehouse_id FROM order_fulfillment_groups WHERE order_no = ?`, orderNo).Scan(&warehouse); err != nil {
+		t.Fatal(err)
+	}
+	if warehouse != 1 {
+		t.Fatalf("shortage reallocated the warehouse to %d", warehouse)
+	}
+
+	const expiredOrder = "ORD-SHORT-48H"
+	seedSettlementOrder(t, db, expiredOrder, statusPaid, 1000, 0, refundStateNone)
+	if _, err := db.Exec(`INSERT INTO order_fulfillment_groups
+		(group_no, order_no, seq, warehouse_id, status, refund_state, reservation_state, freight_cent, freight_share_cent)
+		VALUES ('G1', ?, 1, 2, 'ALLOCATED', 'NONE', 'HELD', 0, 0)`, expiredOrder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no, line_no, sku_id, name, price_cent, quantity, warehouse_id, fulfillment_group_no,
+		 discount_cent, line_paid_cent, unit_paid_cent)
+		VALUES (?, 1, 1, 'A', 1000, 1, 2, 'G1', 0, 1000, 1000)`, expiredOrder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ReportGroupShortage(ctx, &pb.ReportGroupShortageRequest{
+		OrderNo: expiredOrder, GroupNo: "G1", Reason: "short",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE order_shortage_cases SET choose_deadline_at = DATE_SUB(NOW(3), INTERVAL 1 MINUTE)
+		WHERE order_no = ?`, expiredOrder); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.resolveExpiredShortages(ctx); err != nil {
+		t.Fatal(err)
+	}
+	caseOut, err := svc.GetShortageCase(ctx, &pb.GetShortageCaseRequest{OrderNo: expiredOrder, GroupNo: "G1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if caseOut.GetStatus() != shortageResolvedRefund {
+		t.Fatalf("default resolution = %s", caseOut.GetStatus())
+	}
+	var payload []byte
+	if err := db.QueryRow(`SELECT payload FROM outbox_events WHERE event_type = 'order.shortage_resolved'
+		AND aggregate_id = ? ORDER BY id DESC LIMIT 1`, expiredOrder).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	var event struct {
+		ReasonCode string `json:"reason_code"`
+		ResolvedAt int64  `json:"resolved_at"`
+		Items      []struct {
+			LineNo int32 `json:"line_no"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		t.Fatal(err)
+	}
+	if event.ReasonCode != shortageReasonDefault || event.ResolvedAt == 0 || len(event.Items) != 1 || event.Items[0].LineNo != 1 {
+		t.Fatalf("shortage resolved payload = %s", payload)
+	}
+	if err := applyAfterSaleCompleted(ctx, svc, events.AfterSaleCompleted{
+		AfterSaleNo: "AS-SYS", OrderNo: expiredOrder, GroupNo: "G1", Status: statusRefunded,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	caseOut, err = svc.GetShortageCase(ctx, &pb.GetShortageCaseRequest{OrderNo: expiredOrder, GroupNo: "G1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if caseOut.GetRefundAfterSaleNo() != "AS-SYS" || caseOut.GetRefundState() != "REFUNDED" || caseOut.GetRefundedAtUnix() == 0 {
+		t.Fatalf("shortage refund visibility = %+v", caseOut)
+	}
+	if err := db.QueryRow(`SELECT warehouse_id FROM order_fulfillment_groups WHERE order_no = ?`, expiredOrder).Scan(&warehouse); err != nil {
+		t.Fatal(err)
+	}
+	if warehouse != 2 {
+		t.Fatalf("default refund reallocated warehouse to %d", warehouse)
 	}
 }

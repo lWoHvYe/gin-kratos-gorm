@@ -39,25 +39,95 @@ func fulfillmentTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if _, err := db.Exec(`DROP TABLE IF EXISTS shipments`); err != nil {
-		t.Fatal(err)
+	for _, table := range []string{"shipment_items", "shipment_track_events", "delivery_evidence", "shipment_receipts",
+		"delivery_auto_confirm_jobs", "delivery_disputes", "shipment_operation_cases", "shipment_change_logs",
+		"carrier_audit_logs", "carriers", "shipments"} {
+		if _, err := db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, stmt := range []string{
 		`CREATE TABLE IF NOT EXISTS shipments (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_no VARCHAR(64) NOT NULL,
 			order_no VARCHAR(64) NOT NULL, fulfillment_group_no VARCHAR(64) NOT NULL DEFAULT 'G1',
 			warehouse_id BIGINT NOT NULL DEFAULT 0,
-			carrier VARCHAR(64) NOT NULL DEFAULT '', tracking_no VARCHAR(128) NOT NULL DEFAULT '',
+			carrier VARCHAR(64) NOT NULL DEFAULT '', carrier_code VARCHAR(32) NOT NULL DEFAULT '',
+			tracking_no VARCHAR(128) NOT NULL DEFAULT '',
+			track_status VARCHAR(24) NOT NULL DEFAULT 'CREATED',
+			shipped_at DATETIME(3) NULL, delivered_at DATETIME(3) NULL,
+			delivery_source VARCHAR(24) NOT NULL DEFAULT '', exception_state VARCHAR(16) NOT NULL DEFAULT 'NONE',
+			tracking_key VARCHAR(192) GENERATED ALWAYS AS (
+				IF(tracking_no = '' OR carrier_code = '', NULL, CONCAT(carrier_code, ':', tracking_no))
+			) STORED,
 			status VARCHAR(16) NOT NULL DEFAULT 'CREATED', version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_shipments_no (shipment_no),
+			UNIQUE KEY uk_shipments_tracking (tracking_key),
 			UNIQUE KEY uk_shipments_order_group (order_no, fulfillment_group_no))`,
 		`CREATE TABLE IF NOT EXISTS shipment_items (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_id BIGINT NOT NULL,
 			sku_id BIGINT NOT NULL, quantity INT NOT NULL,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_shipment_items_sku (shipment_id, sku_id))`,
+		`CREATE TABLE IF NOT EXISTS carriers (
+			code VARCHAR(32) NOT NULL PRIMARY KEY, name VARCHAR(64) NOT NULL,
+			enabled TINYINT(1) NOT NULL DEFAULT 0, sort_order INT NOT NULL DEFAULT 0,
+			webhook_secret_ref VARCHAR(128) NOT NULL DEFAULT '', version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS shipment_track_events (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_no VARCHAR(64) NOT NULL,
+			carrier_code VARCHAR(32) NOT NULL, tracking_no VARCHAR(128) NOT NULL,
+			event_id VARCHAR(128) NOT NULL, status VARCHAR(24) NOT NULL DEFAULT '',
+			exception_type VARCHAR(24) NOT NULL DEFAULT '', occurred_at DATETIME(3) NOT NULL,
+			received_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), raw_json JSON NULL,
+			UNIQUE KEY uk_shipment_track_event (carrier_code, tracking_no, event_id))`,
+		`CREATE TABLE IF NOT EXISTS delivery_evidence (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_no VARCHAR(64) NOT NULL,
+			source VARCHAR(24) NOT NULL, evidence_ref VARCHAR(128) NOT NULL,
+			occurred_at DATETIME(3) NOT NULL,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			UNIQUE KEY uk_delivery_evidence (shipment_no, source, evidence_ref))`,
+		`CREATE TABLE IF NOT EXISTS shipment_receipts (
+			shipment_no VARCHAR(64) NOT NULL PRIMARY KEY, source VARCHAR(24) NOT NULL,
+			evidence_ref VARCHAR(128) NOT NULL DEFAULT '', confirmed_at DATETIME(3) NOT NULL,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS delivery_auto_confirm_jobs (
+			shipment_no VARCHAR(64) NOT NULL PRIMARY KEY, reason VARCHAR(24) NOT NULL,
+			due_at DATETIME(3) NOT NULL, state VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+			lease_owner VARCHAR(64) NOT NULL DEFAULT '', lease_until DATETIME(3) NULL,
+			attempts INT NOT NULL DEFAULT 0, last_error VARCHAR(1024) NOT NULL DEFAULT '',
+			version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS delivery_disputes (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_no VARCHAR(64) NOT NULL,
+			order_no VARCHAR(64) NOT NULL, user_id BIGINT NOT NULL,
+			status VARCHAR(24) NOT NULL DEFAULT 'OPEN', reason VARCHAR(512) NOT NULL DEFAULT '',
+			resolution_reason VARCHAR(512) NOT NULL DEFAULT '', resolved_by VARCHAR(64) NOT NULL DEFAULT '',
+			deadline_at DATETIME(3) NOT NULL, opened_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			resolved_at DATETIME(3) NULL, version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS shipment_operation_cases (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_no VARCHAR(64) NOT NULL,
+			exception_type VARCHAR(24) NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'OPEN',
+			responsibility VARCHAR(24) NOT NULL DEFAULT '', resolved_by VARCHAR(64) NOT NULL DEFAULT '',
+			resolution VARCHAR(512) NOT NULL DEFAULT '', version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3), resolved_at DATETIME(3) NULL,
+			UNIQUE KEY uk_shipment_operation_case (shipment_no, exception_type))`,
+		`CREATE TABLE IF NOT EXISTS shipment_change_logs (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, shipment_no VARCHAR(64) NOT NULL,
+			field VARCHAR(32) NOT NULL, old_value VARCHAR(255) NOT NULL DEFAULT '',
+			new_value VARCHAR(255) NOT NULL DEFAULT '', reason VARCHAR(255) NOT NULL DEFAULT '',
+			operator VARCHAR(64) NOT NULL DEFAULT '',
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS carrier_audit_logs (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, carrier_code VARCHAR(32) NOT NULL,
+			action VARCHAR(32) NOT NULL, operator VARCHAR(64) NOT NULL DEFAULT '',
+			reason VARCHAR(255) NOT NULL DEFAULT '',
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))`,
 		`CREATE TABLE IF NOT EXISTS outbox_events (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, event_id VARCHAR(64) NOT NULL,
 			topic VARCHAR(128) NOT NULL, aggregate_type VARCHAR(64) NOT NULL,
@@ -73,7 +143,9 @@ func fulfillmentTestDB(t *testing.T) *sql.DB {
 			t.Fatalf("create fulfillment test table: %v", err)
 		}
 	}
-	for _, table := range []string{"shipment_items", "shipments", "outbox_events"} {
+	for _, table := range []string{"shipment_items", "shipment_track_events", "delivery_evidence", "shipment_receipts",
+		"delivery_auto_confirm_jobs", "delivery_disputes", "shipment_operation_cases", "shipment_change_logs",
+		"carrier_audit_logs", "carriers", "shipments", "outbox_events"} {
 		if _, err := db.Exec("DELETE FROM " + table); err != nil {
 			t.Fatal(err)
 		}

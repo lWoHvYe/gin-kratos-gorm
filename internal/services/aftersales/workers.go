@@ -317,7 +317,7 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 	if row.status == statusRefunded {
 		return s.completeRefundTask(ctx, afterSaleNo, owner)
 	}
-	if row.status != statusRefunding {
+	if row.status != statusRefunding && !(row.status == statusApproved && row.source == sourceSystem) {
 		err := apperr.Conflict(fmt.Sprintf("after sale is %s, not REFUNDING", row.status))
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 		return err
@@ -332,29 +332,24 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 		return err
 	}
-	if row.effectiveAmountCent <= 0 {
-		err := apperr.Failed("after sale has no positive effective amount")
-		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
-		return err
-	}
 	groupNo, err := s.groupForAfterSale(ctx, afterSaleNo)
 	if err != nil {
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 		return err
 	}
-	reply, err := s.payments.RefundOrder(ctx, &pb.RefundOrderRequest{
-		OrderNo: row.orderNo, AmountCent: row.effectiveAmountCent,
-		Reason: "after-sale " + afterSaleNo, IdempotencyKey: afterSaleNo,
-		GroupNo: groupNo, AfterSaleNo: afterSaleNo,
-	})
+	order, err := s.loadOrder(ctx, row.orderNo, row.userID)
 	if err != nil {
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
-		return apperr.Unavailable("payment refund failed; retry is safe", err)
+		return err
 	}
-	refundNo := ""
-	if reply != nil {
-		refundNo = reply.GetRefundNo()
+	items, err := s.loadItems(ctx, afterSaleNo)
+	if err != nil {
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return err
 	}
+	// Hold the line ledger row locks across the idempotent Payment call. This
+	// serializes concurrent after-sales on the same line; a timeout rolls back
+	// and the durable task retries with the same after_sale_no.
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		s.releaseRefundTask(ctx, afterSaleNo, owner, apperr.Internal("begin refund completion", err))
@@ -368,20 +363,122 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		return err
 	}
 	if current.status == statusRefunded {
-		if _, err := tx.ExecContext(ctx, `UPDATE after_sale_refund_tasks
-			SET status = ?, lease_owner = '', lease_until = NULL, updated_at = NOW(3)
-			WHERE after_sale_no = ?`, taskDone, afterSaleNo); err != nil {
-			return apperr.Internal("complete refund task", err)
+		_ = tx.Rollback()
+		return s.completeRefundTask(ctx, afterSaleNo, owner)
+	}
+	if current.status == statusApproved && current.source == sourceSystem {
+		if _, err := tx.ExecContext(ctx, `UPDATE after_sales SET status = ?, version = version + 1 WHERE id = ?`,
+			statusRefunding, current.id); err != nil {
+			return apperr.Internal("system refund to REFUNDING", err)
 		}
-		return tx.Commit()
+		current.status = statusRefunding
 	}
 	if current.status != statusRefunding {
 		return apperr.Conflict(fmt.Sprintf("after sale is %s, not REFUNDING", current.status))
 	}
+	refunds, goodsCent, freightCent, ruleID, err := s.computeLineRefunds(ctx, tx, order, items, current.typ, true)
+	if err != nil {
+		return err
+	}
+	if current.source == sourceSystem {
+		share := groupFreightShare(order, groupNo)
+		freightCent, err = s.systemFreightRefund(ctx, tx, order, groupNo, share)
+		if err != nil {
+			return err
+		}
+		ruleID = shortageFreightRule
+	} else if len(items) > 0 && goodsCent > 0 {
+		policyFreight, hold, policyRule, ferr := s.freightRefundFor(ctx, tx, order, groupNo, current.responsibilityParty)
+		if ferr != nil {
+			return ferr
+		}
+		if hold {
+			freightCent = 0
+			ruleID = "FREIGHT_HOLD"
+		} else {
+			freightCent = policyFreight
+			ruleID = policyRule
+		}
+	}
+	refundCent := goodsCent + freightCent
+	if refundCent == 0 {
+		// Legacy row without line snapshots keeps the approved effective amount.
+		refundCent = current.effectiveAmountCent
+		ruleID = "LEGACY"
+	}
+	if current.effectiveAmountCent > 0 && refundCent > current.effectiveAmountCent {
+		refundCent = current.effectiveAmountCent
+	}
+	if refundCent <= 0 {
+		return apperr.Failed("after sale has no positive refund amount")
+	}
+	// If the captured/approved cap is below the line formula, cap the line
+	// amounts deterministically in line order and keep the breakdown equal to
+	// the amount actually paid. Otherwise the ledger would record more than
+	// Payment refunded.
+	if goodsCent+freightCent > refundCent {
+		remaining := refundCent
+		var cappedGoods int64
+		for i := range refunds {
+			if refunds[i].AmountCent > remaining {
+				refunds[i].AmountCent = remaining
+			}
+			if refunds[i].AmountCent < 0 {
+				refunds[i].AmountCent = 0
+			}
+			remaining -= refunds[i].AmountCent
+			cappedGoods += refunds[i].AmountCent
+		}
+		goodsCent = cappedGoods
+		freightCent = refundCent - goodsCent
+		if freightCent < 0 {
+			freightCent = 0
+		}
+	}
+	reply, err := s.payments.RefundOrder(ctx, &pb.RefundOrderRequest{
+		OrderNo: current.orderNo, AmountCent: refundCent, Reason: "after-sale " + afterSaleNo,
+		IdempotencyKey: afterSaleNo, GroupNo: groupNo, AfterSaleNo: afterSaleNo,
+		GoodsCent: goodsCent, FreightCent: freightCent, RuleId: ruleID,
+	})
+	if err != nil {
+		_ = tx.Rollback()
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return apperr.Unavailable("payment refund failed; retry is safe", err)
+	}
+	refundNo := ""
+	if reply != nil {
+		refundNo = reply.GetRefundNo()
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE after_sales
-		SET status = ?, refund_no = ?, refunded_cent = ?, amount_state = ?, version = version + 1
-		WHERE id = ?`, statusRefunded, refundNo, current.effectiveAmountCent, amountConsumed, current.id); err != nil {
+		SET status = ?, effective_amount_cent = ?, refund_no = ?, refunded_cent = ?, amount_state = ?, version = version + 1
+		WHERE id = ?`, statusRefunded, refundCent, refundNo, refundCent, amountConsumed, current.id); err != nil {
 		return apperr.Internal("mark after sale refunded", err)
+	}
+	for _, item := range items {
+		if err := s.clearPendingLineTx(ctx, tx, current.orderNo, item.GetLineNo(), int64(item.GetQuantity())); err != nil {
+			return err
+		}
+	}
+	for _, refund := range refunds {
+		if refund.LineNo <= 0 {
+			continue
+		}
+		if err := s.recordLineRefundTx(ctx, tx, current.orderNo, refund); err != nil {
+			return err
+		}
+		payload, _ := json.Marshal(map[string]any{
+			"after_sale_no": afterSaleNo, "order_no": current.orderNo, "line_no": refund.LineNo,
+			"quantity": refund.Quantity, "refunded_amount_cent": refund.AmountCent,
+		})
+		if err := outbox.Append(ctx, tx, outbox.Event{
+			Topic: "shop.aftersale.line_refunded.v1", AggregateType: aggregateAfterSale,
+			AggregateID: afterSaleNo, EventType: "aftersale.line_refunded", Payload: payload,
+		}); err != nil {
+			return apperr.Internal("append line refunded", err)
+		}
+	}
+	if err := s.recordRefundBreakdownTx(ctx, tx, afterSaleNo, goodsCent, freightCent, ruleID); err != nil {
+		return err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE after_sale_refund_tasks
 		SET status = ?, last_error = '', lease_owner = '', lease_until = NULL, updated_at = NOW(3)
@@ -394,7 +491,7 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 	payload, _ := json.Marshal(events.AfterSaleCompleted{
 		AfterSaleNo: afterSaleNo, OrderNo: current.orderNo, GroupNo: groupNo, UserID: current.userID,
 		Type: current.typ, Status: statusRefunded, AmountCent: current.amountCent,
-		EffectiveAmountCent: current.effectiveAmountCent, AmountState: amountConsumed,
+		EffectiveAmountCent: refundCent, AmountState: amountConsumed,
 		RestockState: current.restockState, Reason: current.reason,
 	})
 	if err := outbox.Append(ctx, tx, outbox.Event{
@@ -518,4 +615,27 @@ func observeTaskBacklog(ctx context.Context, database *sql.DB) {
 		metrics.AfterSaleRefundBacklog.Set(float64(refund))
 		metrics.AfterSaleRefundOldestSeconds.Set(refundOldest)
 	}
+}
+
+func groupFreightShare(order *pb.Order, groupNo string) int64 {
+	for _, group := range order.GetFulfillmentGroups() {
+		if group.GetGroupNo() == groupNo {
+			return group.GetFreightShareCent()
+		}
+	}
+	return 0
+}
+
+func (s *Service) clearPendingLineTx(ctx context.Context, tx *sql.Tx, orderNo string, lineNo int32, quantity int64) error {
+	if lineNo <= 0 || quantity <= 0 {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE after_sale_line_ledger
+		SET pending_quantity = GREATEST(pending_quantity - ?, 0),
+		    pending_amount_cent = GREATEST(pending_amount_cent - 0, 0),
+		    version = version + 1, updated_at = NOW(3)
+		WHERE order_no = ? AND line_no = ?`, quantity, orderNo, lineNo); err != nil {
+		return apperr.Internal("clear pending line quantity", err)
+	}
+	return nil
 }

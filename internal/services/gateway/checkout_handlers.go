@@ -148,7 +148,18 @@ func (h *handlers) placeOrder(c *gin.Context) {
 		ReceiverAddress: receiverAddress,
 	})
 	if err != nil {
-		httpx.Error(c, bff.RemoteError(err))
+		remote := apperr.From(bff.RemoteError(err))
+		if remote != nil && remote.Code == apperr.CodeFailedPrecondition && remote.Details["stock_changed"] == true {
+			if next, perr := h.rebuildNextPreview(c.Request.Context(), uid, strings.TrimSpace(in.QuoteID), in.AddressID); perr == nil {
+				c.AbortWithStatusJSON(apperr.HTTPStatus(remote), gin.H{
+					"code": string(remote.Code), "message": remote.Message,
+					"request_id": httpx.RequestIDFrom(c),
+					"details":    gin.H{"stock_changed": true, "next_preview": httpx.ProtoToMap(next)},
+				})
+				return
+			}
+		}
+		httpx.Error(c, remote)
 		return
 	}
 	intent, err := h.clients.Payment.CreateIntent(c.Request.Context(), &pb.CreateIntentRequest{
@@ -200,6 +211,35 @@ func joinAddress(address *pb.Address) string {
 	return strings.Join(out, " ")
 }
 
+// rebuildNextPreview returns the complete repriced plan in the same response
+// when stock changed between preview and order creation (P-17).
+func (h *handlers) rebuildNextPreview(ctx context.Context, uid int64, quoteID string, addressID int64) (*pb.Quote, error) {
+	if quoteID == "" || h.clients == nil || h.clients.Pricing == nil {
+		return nil, apperr.Invalid("quote_id is required for next preview")
+	}
+	old, err := h.clients.Pricing.GetQuote(ctx, &pb.GetQuoteRequest{QuoteId: quoteID})
+	if err != nil {
+		return nil, bff.RemoteError(err)
+	}
+	items := make([]*pb.QuoteItem, 0, len(old.GetLines()))
+	index := make(map[int64]int, len(old.GetLines()))
+	for _, line := range old.GetLines() {
+		if pos, ok := index[line.GetSkuId()]; ok {
+			items[pos].Quantity += line.GetQuantity()
+			continue
+		}
+		index[line.GetSkuId()] = len(items)
+		items = append(items, &pb.QuoteItem{SkuId: line.GetSkuId(), Quantity: line.GetQuantity()})
+	}
+	var allocations []*pb.QuoteAllocation
+	if h.warehouseShadow || h.warehouseSplit {
+		allocations = h.shadowAllocations(ctx, items)
+	}
+	return h.clients.Pricing.CreateQuote(ctx, &pb.QuoteRequest{
+		UserId: uid, Items: items, AddressId: addressID, CouponId: old.GetCouponId(), Allocations: allocations,
+	})
+}
+
 // shadowAllocations is the phase-2a/2b dual-read: it asks Inventory for a
 // warehouse preview and returns quote allocations only when the split is still
 // the single warehouse-1 group. Multi-warehouse results are logged and fall
@@ -212,7 +252,13 @@ func (h *handlers) shadowAllocations(ctx context.Context, items []*pb.QuoteItem)
 	for _, item := range items {
 		lines = append(lines, &pb.AllocateOrderLine{SkuId: item.GetSkuId(), Quantity: item.GetQuantity()})
 	}
-	callCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	timeout := 500 * time.Millisecond
+	if h.warehouseSplit {
+		// ADR 0005 §5.1 grants the allocator a 1.5s budget; the legacy shadow
+		// path keeps its short log-only timeout.
+		timeout = 1500 * time.Millisecond
+	}
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	reply, err := h.clients.Inventory.AllocateOrder(callCtx, &pb.AllocateOrderRequest{Lines: lines})
 	if err != nil {
@@ -229,7 +275,8 @@ func (h *handlers) shadowAllocations(ctx context.Context, items []*pb.QuoteItem)
 		}
 		allocations = append(allocations, &pb.QuoteAllocation{
 			LineNo: allocation.GetLineNo(), SkuId: allocation.GetSkuId(),
-			WarehouseId: allocation.GetWarehouseId(),
+			WarehouseId: allocation.GetWarehouseId(), Quantity: allocation.GetQuantity(),
+			SplitSeq: allocation.GetSplitSeq(),
 		})
 	}
 	h.log.Debug("warehouse allocation shadow prepared quote allocations", "lines", len(allocations),

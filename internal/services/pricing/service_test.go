@@ -58,7 +58,7 @@ func TestAllocateDiscount(t *testing.T) {
 	}
 	allocateDiscount(lines, 6000, 1000)
 
-	want := []int64{166, 334, 500}
+	want := []int64{167, 333, 500}
 	var sum int64
 	for i, line := range lines {
 		if line.DiscountCent != want[i] {
@@ -76,21 +76,6 @@ func TestAllocateDiscountNoCoupon(t *testing.T) {
 	allocateDiscount(lines, 2000, 0)
 	if lines[0].DiscountCent != 0 {
 		t.Fatalf("discount = %d, want 0", lines[0].DiscountCent)
-	}
-}
-
-func TestMulDivFloor(t *testing.T) {
-	cases := []struct{ x, y, z, want int64 }{
-		{10, 5, 10, 5},
-		{0, 5, 10, 0},
-		{1, 1, 3, 0},
-		{2, 1, 3, 0},
-		{math.MaxInt64, math.MaxInt64, math.MaxInt64, math.MaxInt64},
-	}
-	for _, tc := range cases {
-		if got := mulDivFloor(tc.x, tc.y, tc.z); got != tc.want {
-			t.Fatalf("mulDivFloor(%d, %d, %d) = %d, want %d", tc.x, tc.y, tc.z, got, tc.want)
-		}
 	}
 }
 

@@ -8,47 +8,64 @@ import (
 	"gin-kratos-gorm/internal/platform/apperr"
 )
 
-func TestValidateSingleWarehouseQuote(t *testing.T) {
-	if err := validateSingleWarehouseQuote(&pb.Quote{}); err != nil {
-		t.Fatalf("legacy quote rejected: %v", err)
-	}
-	if err := validateSingleWarehouseQuote(&pb.Quote{
-		Groups: []*pb.QuoteGroup{{GroupNo: "G1", WarehouseId: 1}},
-		Lines:  []*pb.QuoteLine{{WarehouseId: 1, GroupNo: "G1"}},
-	}); err != nil {
-		t.Fatalf("single group rejected: %v", err)
-	}
-	for _, quote := range []*pb.Quote{
-		{Groups: []*pb.QuoteGroup{{GroupNo: "G1"}, {GroupNo: "G2"}}},
-		{Lines: []*pb.QuoteLine{{WarehouseId: 2}}},
-		{Lines: []*pb.QuoteLine{{WarehouseId: 1, GroupNo: "G2"}}},
-	} {
-		if err := validateSingleWarehouseQuote(quote); !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
-			t.Fatalf("split quote accepted: %+v err=%v", quote, err)
-		}
-	}
-}
-
-func TestValidateSplitQuote(t *testing.T) {
-	valid := &pb.Quote{
-		Groups: []*pb.QuoteGroup{{GroupNo: "G1", WarehouseId: 1}, {GroupNo: "G2", WarehouseId: 2}},
+func validSplitQuote() *pb.Quote {
+	quote := &pb.Quote{
+		QuoteId: "QTE-1", TotalCent: 2000, DiscountCent: 0, FreightCent: 2000, PayCent: 4000,
+		PackageCount: 2, WarehouseCount: 2,
+		Groups: []*pb.QuoteGroup{
+			{GroupNo: "G1", WarehouseId: 1, GoodsCent: 1000, FreightShareCent: 1000},
+			{GroupNo: "G2", WarehouseId: 2, GoodsCent: 1000, FreightShareCent: 1000},
+		},
 		Lines: []*pb.QuoteLine{
-			{WarehouseId: 1, GroupNo: "G1"},
-			{WarehouseId: 2, GroupNo: "G2"},
+			{LineNo: 1, SkuId: 1, Name: "a", PriceCent: 1000, Quantity: 1, WarehouseId: 1, GroupNo: "G1",
+				LinePaidCent: 1000, UnitPaidCent: 1000},
+			{LineNo: 2, SkuId: 2, Name: "b", PriceCent: 1000, Quantity: 1, WarehouseId: 2, GroupNo: "G2",
+				LinePaidCent: 1000, UnitPaidCent: 1000},
 		},
 	}
-	if err := validateSplitQuote(valid); err != nil {
+	quote.AllocationHash = quoteAllocationHash(quote)
+	return quote
+}
+
+func TestValidateQuoteForOrderSplit(t *testing.T) {
+	if err := validateQuoteForOrder(validSplitQuote(), true); err != nil {
 		t.Fatalf("valid split quote rejected: %v", err)
 	}
-	for _, quote := range []*pb.Quote{
-		{Groups: []*pb.QuoteGroup{{GroupNo: "", WarehouseId: 1}}},
-		{Groups: []*pb.QuoteGroup{{GroupNo: "G1", WarehouseId: 1}, {GroupNo: "G1", WarehouseId: 2}}},
-		{Lines: []*pb.QuoteLine{{WarehouseId: 0, GroupNo: "G1"}}},
-		{Groups: []*pb.QuoteGroup{{GroupNo: "G1", WarehouseId: 1}}, Lines: []*pb.QuoteLine{{WarehouseId: 2, GroupNo: "G1"}}},
-	} {
-		if err := validateSplitQuote(quote); err == nil {
-			t.Fatalf("invalid split quote accepted: %+v", quote)
-		}
+	if err := validateQuoteForOrder(validSplitQuote(), false); !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("split quote accepted with split disabled: %v", err)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*pb.Quote)
+	}{
+		{"missing group", func(q *pb.Quote) { q.Groups = nil }},
+		{"duplicate group", func(q *pb.Quote) { q.Groups[1].GroupNo = "G1" }},
+		{"line group mismatch", func(q *pb.Quote) { q.Lines[0].GroupNo = "G2" }},
+		{"line paid mismatch", func(q *pb.Quote) { q.Lines[0].LinePaidCent = 900 }},
+		{"discount sum mismatch", func(q *pb.Quote) { q.DiscountCent = 1; q.Lines[0].DiscountCent = 1; q.Lines[0].LinePaidCent = 999 }},
+		{"freight share mismatch", func(q *pb.Quote) { q.Groups[0].FreightShareCent = 500; q.Groups[1].FreightShareCent = 500 }},
+		{"pay mismatch", func(q *pb.Quote) { q.PayCent = 3999 }},
+		{"too many groups", func(q *pb.Quote) {
+			q.Groups = append(q.Groups, &pb.QuoteGroup{GroupNo: "G3", WarehouseId: 3})
+			q.Lines = append(q.Lines, &pb.QuoteLine{LineNo: 3, SkuId: 3, PriceCent: 1000, Quantity: 1,
+				WarehouseId: 3, GroupNo: "G3", LinePaidCent: 1000, UnitPaidCent: 1000})
+			q.TotalCent, q.FreightCent, q.PayCent = 3000, 3000, 6000
+			q.Groups[0].FreightShareCent, q.Groups[1].FreightShareCent, q.Groups[2].FreightShareCent = 1000, 1000, 1000
+			q.PackageCount, q.WarehouseCount = 3, 3
+		}},
+		{"too many lines per sku", func(q *pb.Quote) {
+			q.Lines[1].SkuId = 1
+		}},
+		{"hash drift", func(q *pb.Quote) { q.AllocationHash = "deadbeef" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			quote := validSplitQuote()
+			tc.mutate(quote)
+			if err := validateQuoteForOrder(quote, true); err == nil {
+				t.Fatalf("invalid quote accepted: %+v", quote)
+			}
+		})
 	}
 }
 
@@ -101,6 +118,8 @@ func TestMultiGroupActionsExposeTypedGroupActions(t *testing.T) {
 	}
 }
 
+// AC-27: a refunded unshipped group is closed in the projection and does not
+// block the remaining group.
 func TestRevokedGroupIsClosedInProjection(t *testing.T) {
 	groups := []*fulfillmentGroup{
 		{GroupNo: "G1", Status: "SHIPPED"},

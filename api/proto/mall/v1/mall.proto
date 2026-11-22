@@ -279,8 +279,20 @@ message AllocateOrderAllocation {
   int32 quantity = 2;
   int64 warehouse_id = 3;
   int32 line_no = 4;
+  // split_seq is the deterministic order of the same-SKU split rows.
+  int32 split_seq = 5;
 }
-message AllocateOrderReply { repeated AllocateOrderAllocation allocations = 1; }
+message AllocateOrderAvailability {
+  int64 sku_id = 1;
+  int64 warehouse_id = 2;
+  int64 available = 3;
+  int32 priority = 4;
+  int32 rank = 5;
+}
+message AllocateOrderReply {
+  repeated AllocateOrderAllocation allocations = 1;
+  repeated AllocateOrderAvailability availability = 2;
+}
 message BatchGetStockRequest { repeated int64 sku_ids = 1; int64 warehouse_id = 2; }
 message ReserveRequest {
   string order_no = 1;
@@ -320,6 +332,8 @@ message RestockRequest {
   string condition = 5;
   string reason = 6;
   string restock_no = 7;
+  string restock_auth_no = 8;
+  int64 origin_warehouse_id = 9;
 }
 
 
@@ -368,6 +382,10 @@ message QuoteAllocation {
   int32 line_no = 1;
   int64 sku_id = 2;
   int64 warehouse_id = 3;
+  // Quantity assigned to this allocation. Zero means "the whole quote item"
+  // for legacy callers; split allocations always carry a positive quantity.
+  int32 quantity = 5;
+  int32 split_seq = 6;
 }
 message QuoteRequest {
   int64 user_id = 1;
@@ -387,6 +405,9 @@ message QuoteLine {
   int32 line_no = 6;
   int64 warehouse_id = 7;
   string group_no = 8;
+  int64 line_paid_cent = 9;
+  int64 unit_paid_cent = 10;
+  int32 split_seq = 11;
 }
 message QuoteGroup {
   string group_no = 1;
@@ -394,6 +415,7 @@ message QuoteGroup {
   int64 freight_cent = 3;
   int64 goods_cent = 4;
   int64 discount_cent = 5;
+  int64 freight_share_cent = 6;
 }
 message Quote {
   string quote_id = 1;
@@ -409,6 +431,9 @@ message Quote {
   int64 promotion_version = 11;
   int64 coupon_discount_cent = 12;
   repeated QuoteGroup groups = 13;
+  int32 package_count = 14;
+  int32 warehouse_count = 15;
+  string allocation_hash = 16;
 }
 message GetQuoteRequest { string quote_id = 1; }
 message LockCouponRequest { string quote_id = 1; string coupon_id = 2; int64 user_id = 3; }
@@ -434,6 +459,10 @@ service OrderService {
   // BlockShipmentForRefund records refund admission on the same permit row. A
   // permit already CONSUMED still allows refund-only after shipment.
   rpc BlockShipmentForRefund (ShipmentPermitRequest) returns (Empty);
+  // Post-payment shortage: explicit wait/refund choice, never silent re-route.
+  rpc ReportGroupShortage (ReportGroupShortageRequest) returns (ShortageCase);
+  rpc ChooseShortageResolution (ChooseShortageResolutionRequest) returns (ShortageCase);
+  rpc GetShortageCase (GetShortageCaseRequest) returns (ShortageCase);
 }
 message TccPaymentRequest {
   string order_no = 1;
@@ -453,6 +482,9 @@ message OrderItem {
   int64 discount_cent = 5;
   int64 warehouse_id = 6;
   string group_no = 7;
+  int32 line_no = 8;
+  int64 line_paid_cent = 9;
+  int64 unit_paid_cent = 10;
 }
 message OrderGroupAction {
   string group_no = 1;
@@ -486,12 +518,16 @@ message Order {
   string refund_state = 20;
   // available_actions is the server-owned action list for BFF/frontend.
   repeated string available_actions = 21;
-  // shipment_status is derived from the lifecycle (CREATED/SHIPPED/RECEIVED).
+  // shipment_status is the five-value fulfillment projection
+  // (UNSHIPPED/PARTIALLY_SHIPPED/SHIPPED/PARTIALLY_RECEIVED/RECEIVED).
   string shipment_status = 22;
   // Per-warehouse fulfillment groups (phase 1+). A single-warehouse order has
   // one G1 group; split orders expose more when the feature is enabled.
   repeated OrderFulfillmentGroup fulfillment_groups = 23;
   repeated OrderGroupAction group_actions = 24;
+  int32 package_count = 25;
+  int32 warehouse_count = 26;
+  int64 allocation_frozen_at_unix = 27;
 }
 message CreateOrderRequest {
   int64 user_id = 1;
@@ -508,6 +544,7 @@ message OrderFulfillmentGroup {
   int64 freight_cent = 3;
   string status = 4;
   string refund_state = 5;
+  int64 freight_share_cent = 6;
 }
 message CreateOrderInnerRequest {
   int64 user_id = 1;
@@ -526,6 +563,9 @@ message CreateOrderInnerRequest {
   int64 promotion_discount_cent = 14;
   string applied_promotions_json = 15;
   repeated OrderFulfillmentGroup fulfillment_groups = 16;
+  string allocation_hash = 17;
+  int32 package_count = 18;
+  int32 warehouse_count = 19;
 }
 message CancelOrderRequest { string order_no = 1; int64 user_id = 2; string reason = 3; bool admin = 4; }
 message ShipmentPermitRequest {
@@ -534,6 +574,36 @@ message ShipmentPermitRequest {
   string after_sale_no = 3;
   string fulfillment_group_no = 4;
 }
+
+message ShortageCase {
+  string order_no = 1;
+  string group_no = 2;
+  // OPEN / NOTIFIED / RESOLVED_WAIT / RESOLVED_REFUND
+  string status = 3;
+  string resolution = 4;
+  int64 notified_at_unix = 5;
+  int64 choose_deadline_unix = 6;
+  string restock_eta = 7;
+  string refund_after_sale_no = 8;
+  int64 refunded_at_unix = 9;
+  string refund_state = 10;
+  int64 detected_at_unix = 11;
+  int64 notify_deadline_unix = 12;
+}
+message ReportGroupShortageRequest {
+  string order_no = 1;
+  string group_no = 2;
+  string reason = 3;
+  string restock_eta = 4;
+}
+message ChooseShortageResolutionRequest {
+  string order_no = 1;
+  string group_no = 2;
+  // WAIT or REFUND
+  string resolution = 3;
+  int64 user_id = 4;
+}
+message GetShortageCaseRequest { string order_no = 1; string group_no = 2; }
 
 message CancelOrderInnerRequest { string order_no = 1; string reason = 2; }
 message MarkPaidRequest { string order_no = 1; string payment_no = 2; int64 paid_cent = 3; }
@@ -611,6 +681,9 @@ message RefundOrderRequest {
   string idempotency_key = 4;
   string group_no = 5;
   string after_sale_no = 6;
+  int64 goods_cent = 7;
+  int64 freight_cent = 8;
+  string rule_id = 9;
 }
 message RefundOrderReply { string refund_no = 1; string payment_no = 2; int64 refunded_cent = 3; string status = 4; }
 message VerifyPaymentRequest { string payment_no = 1; }
@@ -780,6 +853,15 @@ service FulfillmentService {
   rpc GetShipment (GetShipmentRequest) returns (Shipment);
   rpc GetShipmentByOrder (GetShipmentByOrderRequest) returns (Shipment);
   rpc ListShipments (ListShipmentsRequest) returns (ShipmentList);
+  rpc RecordTrackingEvent (RecordTrackingEventRequest) returns (Shipment);
+  rpc ConfirmReceipt (ConfirmReceiptRequest) returns (Shipment);
+  rpc OpenReceiptDispute (OpenReceiptDisputeRequest) returns (ReceiptDispute);
+  rpc ResolveReceiptDispute (ResolveReceiptDisputeRequest) returns (ReceiptDispute);
+  rpc ListTrackingEvents (ListTrackingEventsRequest) returns (TrackingEventList);
+  rpc CreateCarrier (Carrier) returns (Carrier);
+  rpc UpdateCarrier (Carrier) returns (Carrier);
+  rpc SetCarrierStatus (SetCarrierStatusRequest) returns (Carrier);
+  rpc ListCarriers (Empty) returns (CarrierList);
 }
 message ShipmentItem { int64 sku_id = 1; int32 quantity = 2; }
 message Shipment {
@@ -792,6 +874,13 @@ message Shipment {
   int64 created_at_unix = 7;
   string fulfillment_group_no = 8;
   int64 warehouse_id = 9;
+  string carrier_code = 10;
+  string track_status = 11;
+  int64 shipped_at_unix = 12;
+  int64 delivered_at_unix = 13;
+  string delivery_source = 14;
+  string exception_state = 15;
+  string receipt_state = 16;
 }
 message CreateShipmentRequest {
   string order_no = 1;
@@ -800,6 +889,8 @@ message CreateShipmentRequest {
   string tracking_no = 4;
   repeated ShipmentItem items = 5;
   string fulfillment_group_no = 6;
+  // carrier_code is the controlled registry key; carrier stays display text.
+  string carrier_code = 7;
 }
 message ShipRequest { string shipment_no = 1; }
 message ReceiveRequest { string shipment_no = 1; }
@@ -807,6 +898,61 @@ message GetShipmentRequest { string shipment_no = 1; }
 message GetShipmentByOrderRequest { string order_no = 1; }
 message ListShipmentsRequest { int32 page = 1; int32 page_size = 2; string status = 3; string order_no = 4; }
 message ShipmentList { repeated Shipment shipments = 1; int64 total = 2; }
+
+message Carrier {
+  string code = 1;
+  string name = 2;
+  bool enabled = 3;
+  int32 sort_order = 4;
+  int64 version = 5;
+}
+message CarrierList { repeated Carrier carriers = 1; }
+message SetCarrierStatusRequest { string code = 1; bool enabled = 2; string operator = 3; string reason = 4; }
+message RecordTrackingEventRequest {
+  string shipment_no = 1;
+  string carrier_code = 2;
+  string tracking_no = 3;
+  string event_id = 4;
+  string status = 5;
+  string exception_type = 6;
+  int64 occurred_at_unix = 7;
+  string raw_json = 8;
+}
+message TrackingEvent {
+  int64 id = 1;
+  string shipment_no = 2;
+  string carrier_code = 3;
+  string tracking_no = 4;
+  string event_id = 5;
+  string status = 6;
+  string exception_type = 7;
+  int64 occurred_at_unix = 8;
+  int64 received_at_unix = 9;
+}
+message TrackingEventList { repeated TrackingEvent events = 1; }
+message ListTrackingEventsRequest { string shipment_no = 1; }
+message ConfirmReceiptRequest { string shipment_no = 1; int64 user_id = 2; }
+message OpenReceiptDisputeRequest { string shipment_no = 1; int64 user_id = 2; string reason = 3; }
+message ResolveReceiptDisputeRequest {
+  int64 dispute_id = 1;
+  // RESOLVED_UPHELD (user wins) or RESOLVED_REJECTED (user loses).
+  string resolution = 2;
+  string reason = 3;
+  string operator = 4;
+}
+message ReceiptDispute {
+  int64 id = 1;
+  string shipment_no = 2;
+  string order_no = 3;
+  int64 user_id = 4;
+  string status = 5;
+  string reason = 6;
+  string resolution_reason = 7;
+  string resolved_by = 8;
+  int64 deadline_at_unix = 9;
+  int64 opened_at_unix = 10;
+  int64 resolved_at_unix = 11;
+}
 
 // ---------------------------------------------------------------- aftersales
 service AfterSalesService {
@@ -818,12 +964,20 @@ service AfterSalesService {
   rpc Refund (RefundAfterSaleRequest) returns (AfterSale);
   rpc ListAfterSales (ListAfterSalesRequest) returns (AfterSaleList);
   rpc GetAfterSaleStats (StatsRequest) returns (AfterSaleStats);
+  rpc PreviewRefundQuote (PreviewRefundQuoteRequest) returns (RefundQuote);
+  rpc ListLineRefunds (ListLineRefundsRequest) returns (LineRefundList);
+  rpc AuthorizeCrossWarehouseRestock (AuthorizeCrossWarehouseRestockRequest) returns (Empty);
+  rpc DetermineResponsibility (DetermineResponsibilityRequest) returns (AfterSale);
+  rpc VerifyRestockAuthorization (VerifyRestockAuthorizationRequest) returns (VerifyRestockAuthorizationReply);
 }
 message AfterSaleItem {
   int64 sku_id = 1;
   int32 quantity = 2;
   int64 warehouse_id = 3;
   string group_no = 4;
+  int32 line_no = 5;
+  int64 unit_paid_cent = 6;
+  int64 line_paid_cent = 7;
 }
 message AfterSale {
   string after_sale_no = 1;
@@ -847,6 +1001,16 @@ message AfterSale {
   string amount_state = 15;
   // NONE/PENDING/DONE/FAILED_PERMANENT. RETURN_REFUND refunding requires DONE.
   string restock_state = 16;
+  string responsibility_party = 17;
+  string responsibility_source = 18;
+  string responsibility_evidence_ref = 19;
+  string responsibility_reason_code = 20;
+  string responsibility_determined_by = 21;
+  int64 responsibility_determined_at_unix = 22;
+  string freight_state = 23;
+  int64 freight_cent = 24;
+  int64 freight_deadline_unix = 25;
+  string return_carrier_code = 26;
 }
 message AfterSaleList { repeated AfterSale after_sales = 1; int64 total = 2; }
 
@@ -864,8 +1028,11 @@ message CreateAfterSaleRequest {
   int64 user_id = 2;
   string type = 3;
   string reason = 4;
-  int64 amount_cent = 5;
+  int64 amount_cent = 5 [deprecated = true];
   repeated AfterSaleItem items = 6;
+  // expected_amount_cent is the caller's expectation only; the refund amount is
+  // always computed by AfterSales and never taken from this field.
+  int64 expected_amount_cent = 7;
 }
 message GetAfterSaleRequest { string after_sale_no = 1; }
 message SubmitReturnTrackingRequest { string after_sale_no = 1; string carrier = 2; string tracking_no = 3; }
@@ -873,6 +1040,59 @@ message ReceiveReturnRequest { string after_sale_no = 1; string condition = 2; }
 message ListAfterSalesRequest { int64 user_id = 1; bool admin = 2; int32 page = 3; int32 page_size = 4; string status = 5; }
 message ApproveRequest { string after_sale_no = 1; bool approved = 2; int64 amount_cent = 3; string reason = 4; }
 message RefundAfterSaleRequest { string after_sale_no = 1; }
+
+message RefundQuote {
+  string order_no = 1;
+  int32 line_no = 2;
+  int64 line_paid_cent = 3;
+  int64 unit_paid_cent = 4;
+  int64 requested_quantity = 5;
+  int64 remaining_quantity = 6;
+  int64 remaining_amount_cent = 7;
+  int64 computed_amount_cent = 8;
+  int64 goods_cent = 9;
+  int64 freight_cent = 10;
+  string freight_rule_id = 11;
+}
+message PreviewRefundQuoteRequest { string order_no = 1; int32 line_no = 2; int64 quantity = 3; int64 user_id = 4; string type = 5; }
+message LineRefund {
+  string order_no = 1;
+  int32 line_no = 2;
+  int64 ordered_quantity = 3;
+  int64 refunded_quantity = 4;
+  int64 line_paid_cent = 5;
+  int64 refunded_amount_cent = 6;
+  int64 remaining_quantity = 7;
+  int64 remaining_amount_cent = 8;
+  int64 version = 9;
+}
+message LineRefundList { repeated LineRefund lines = 1; }
+message ListLineRefundsRequest { string order_no = 1; int64 user_id = 2; bool admin = 3; }
+message AuthorizeCrossWarehouseRestockRequest {
+  string after_sale_no = 1;
+  int64 sku_id = 2;
+  int64 from_warehouse_id = 3;
+  int64 to_warehouse_id = 4;
+  string operator = 5;
+  string reason = 6;
+}
+message DetermineResponsibilityRequest {
+  string after_sale_no = 1;
+  string party = 2;
+  string source = 3;
+  string evidence_ref = 4;
+  string reason_code = 5;
+  string operator = 6;
+}
+message VerifyRestockAuthorizationRequest {
+  string restock_auth_no = 1;
+  string after_sale_no = 2;
+  int64 sku_id = 3;
+  int64 from_warehouse_id = 4;
+  int64 to_warehouse_id = 5;
+  int64 quantity = 6;
+}
+message VerifyRestockAuthorizationReply { bool valid = 1; string reason = 2; }
 
 
 // ---------------------------------------------------------------- seckill

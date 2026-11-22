@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"math/bits"
 	"strings"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/allocation"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/db"
 	"gin-kratos-gorm/internal/platform/dtm"
@@ -156,10 +156,11 @@ func (s *Service) CreateQuote(ctx context.Context, req *pb.QuoteRequest) (*pb.Qu
 			couponDiscountCent = discountCent - promotionDiscountCent
 		}
 	}
-	allocateDiscount(lines, totalCent, discountCent)
-	if err := applyQuoteAllocations(lines, req.GetAllocations()); err != nil {
+	lines, err = expandQuoteLines(lines, req.GetAllocations())
+	if err != nil {
 		return nil, err
 	}
+	allocateDiscount(lines, totalCent, discountCent)
 	groups, freight := buildQuoteGroups(lines, shippingDiscountCent)
 	q := &quote{
 		QuoteID:               id.New("QTE"),
@@ -173,9 +174,12 @@ func (s *Service) CreateQuote(ctx context.Context, req *pb.QuoteRequest) (*pb.Qu
 		AppliedPromotionsJSON: appliedJSON,
 		PromotionVersion:      promotionVersion,
 		ExpiresAt:             now.Add(quoteTTL),
+		PackageCount:          int32(len(groups)),
+		WarehouseCount:        warehouseCount(groups),
 		Lines:                 lines,
 		Groups:                groups,
 	}
+	q.AllocationHash = allocationHash(lines, groups)
 	q.PayCent = payFor(totalCent, discountCent, q.FreightCent)
 
 	if err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
@@ -463,45 +467,6 @@ func payFor(totalCent, discountCent, freightCent int64) int64 {
 	return totalCent - discountCent + freightCent
 }
 
-// allocateDiscount spreads the quote-level discount over the lines
-// proportionally to their amounts using cumulative rounding, so the line
-// discounts always add up to discountCent exactly.
-func allocateDiscount(lines []quoteLine, totalCent, discountCent int64) {
-	if discountCent <= 0 || totalCent <= 0 || len(lines) == 0 {
-		return
-	}
-	var (
-		cumulative int64
-		allocated  int64
-	)
-	for i := range lines {
-		cumulative += lines[i].PriceCent * int64(lines[i].Quantity)
-		target := mulDivFloor(cumulative, discountCent, totalCent)
-		lines[i].DiscountCent = target - allocated
-		allocated = target
-	}
-	// Guard against rounding drift on malformed input.
-	if allocated != discountCent && len(lines) > 0 {
-		lines[len(lines)-1].DiscountCent += discountCent - allocated
-	}
-}
-
-// mulDivFloor returns x*y/z without overflowing int64. x and y must be
-// non-negative and z must be positive; y is expected to be at most z.
-func mulDivFloor(x, y, z int64) int64 {
-	if x <= 0 || y <= 0 || z <= 0 {
-		return 0
-	}
-	hi, lo := bits.Mul64(uint64(x), uint64(y))
-	if hi >= uint64(z) {
-		// Fall back to a float estimate; this is unreachable for valid quotes
-		// because x, y <= z < 2^63 keeps the high word below z.
-		return int64(float64(x) * float64(y) / float64(z))
-	}
-	q, _ := bits.Div64(hi, lo, uint64(z))
-	return int64(q)
-}
-
 func skuName(sku *pb.Sku) string {
 	if name := strings.TrimSpace(sku.GetSkuCode()); name != "" {
 		return name
@@ -531,6 +496,34 @@ func validateCoupon(c *coupon, userID, totalCent int64, now time.Time) error {
 	return nil
 }
 
+func warehouseCount(groups []quoteGroup) int32 {
+	seen := make(map[int64]struct{}, len(groups))
+	for _, group := range groups {
+		seen[group.WarehouseID] = struct{}{}
+	}
+	return int32(len(seen))
+}
+
+// allocationHash is the canonical serialization shared with Order.
+func allocationHash(lines []quoteLine, groups []quoteGroup) string {
+	hashLines := make([]allocation.Line, 0, len(lines))
+	for _, line := range lines {
+		hashLines = append(hashLines, allocation.Line{
+			LineNo: line.LineNo, SkuID: line.SkuID, WarehouseID: line.WarehouseID, GroupNo: line.GroupNo,
+			Quantity: line.Quantity, PriceCent: line.PriceCent, DiscountCent: line.DiscountCent,
+			LinePaidCent: line.LinePaidCent, UnitPaidCent: line.UnitPaidCent,
+		})
+	}
+	hashGroups := make([]allocation.Group, 0, len(groups))
+	for _, group := range groups {
+		hashGroups = append(hashGroups, allocation.Group{
+			GroupNo: group.GroupNo, WarehouseID: group.WarehouseID, GoodsCent: group.GoodsCent,
+			DiscountCent: group.DiscountCent, FreightShareCent: group.FreightShareCent,
+		})
+	}
+	return allocation.Hash(hashLines, hashGroups)
+}
+
 func (q *quote) toProto() *pb.Quote {
 	out := &pb.Quote{
 		QuoteId:               q.QuoteID,
@@ -544,6 +537,9 @@ func (q *quote) toProto() *pb.Quote {
 		AppliedPromotionsJson: q.AppliedPromotionsJSON,
 		PromotionVersion:      q.PromotionVersion,
 		ExpiresAtUnix:         q.ExpiresAt.Unix(),
+		PackageCount:          q.PackageCount,
+		WarehouseCount:        q.WarehouseCount,
+		AllocationHash:        q.AllocationHash,
 	}
 	out.Lines = make([]*pb.QuoteLine, 0, len(q.Lines))
 	for _, line := range q.Lines {
@@ -556,6 +552,9 @@ func (q *quote) toProto() *pb.Quote {
 			LineNo:       line.LineNo,
 			WarehouseId:  line.WarehouseID,
 			GroupNo:      line.GroupNo,
+			LinePaidCent: line.LinePaidCent,
+			UnitPaidCent: line.UnitPaidCent,
+			SplitSeq:     line.SplitSeq,
 		})
 	}
 	out.Groups = make([]*pb.QuoteGroup, 0, len(q.Groups))
@@ -563,7 +562,7 @@ func (q *quote) toProto() *pb.Quote {
 		out.Groups = append(out.Groups, &pb.QuoteGroup{
 			GroupNo: group.GroupNo, WarehouseId: group.WarehouseID,
 			FreightCent: group.FreightCent, GoodsCent: group.GoodsCent,
-			DiscountCent: group.DiscountCent,
+			DiscountCent: group.DiscountCent, FreightShareCent: group.FreightShareCent,
 		})
 	}
 	return out

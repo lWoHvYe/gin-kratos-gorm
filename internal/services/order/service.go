@@ -69,6 +69,8 @@ type Service struct {
 	inventoryDTM          string
 	orderDTM              string
 	warehouseSplitEnabled bool
+	shortageCaseEnabled   bool
+	now                   func() time.Time
 }
 
 // New builds the order service. pricing and inventory may be nil in tests that
@@ -77,6 +79,8 @@ type Options struct {
 	// WarehouseSplitEnabled allows multi-group quotes and per-warehouse
 	// reservations. It stays false until split shipments/permits are ready.
 	WarehouseSplitEnabled bool
+	// ShortageCaseEnabled runs the 48h fail-safe shortage worker.
+	ShortageCaseEnabled bool
 }
 
 func New(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client,
@@ -91,6 +95,7 @@ func NewWithOptions(database *sql.DB, client *mq.Client, logger *slog.Logger, dt
 	}
 	return &Service{
 		warehouseSplitEnabled: opts.WarehouseSplitEnabled,
+		shortageCaseEnabled:   opts.ShortageCaseEnabled,
 		db:                    database,
 		mq:                    client,
 		log:                   logger,
@@ -100,6 +105,7 @@ func NewWithOptions(database *sql.DB, client *mq.Client, logger *slog.Logger, dt
 		promotion:             promotion,
 		inventoryDTM:          strings.TrimRight(env("INVENTORY_DTM_URL", defaultInventoryDTMURL), "/"),
 		orderDTM:              strings.TrimRight(env("ORDER_DTM_URL", defaultOrderDTMURL), "/"),
+		now:                   time.Now,
 	}
 }
 
@@ -131,6 +137,13 @@ func (s *Service) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (
 		return nil, err
 	}
 	orderNo := id.Order()
+	allocation, err := s.revalidateAllocation(ctx, quote)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.recordAllocationDecision(ctx, orderNo, quote, allocation); err != nil {
+		return nil, err
+	}
 	couponLocked := false
 	if quote.GetCouponId() != "" {
 		if _, err := s.pricing.LockCoupon(ctx, &pb.LockCouponRequest{QuoteId: quote.GetQuoteId(), CouponId: quote.GetCouponId(), UserId: in.UserID}); err != nil {
@@ -250,6 +263,9 @@ func (s *Service) CreateOrderInner(ctx context.Context, req *pb.CreateOrderInner
 			return err
 		}
 		if err := insertFulfillmentGroups(ctx, tx, orderNo, req.GetFulfillmentGroups(), record.FreightCent); err != nil {
+			return err
+		}
+		if err := insertAllocationSnapshotTx(ctx, tx, req); err != nil {
 			return err
 		}
 		if err := insertStatusLog(ctx, tx, orderNo, "", statusPendingPayment, "order created", "system"); err != nil {
@@ -631,7 +647,10 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	}
 	paid := false
 	err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		affected, err := updateOrderStatus(ctx, tx, orderNo, statusPendingPayment, statusPaid, paidCent)
+		if err := ensureAllocationSnapshotTx(ctx, tx, record); err != nil {
+			return err
+		}
+		affected, err := freezeAllocationTx(ctx, tx, orderNo, paidCent)
 		if err != nil {
 			return err
 		}
@@ -643,6 +662,9 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 			return err
 		}
 		if err := setFulfillmentGroupStatus(ctx, tx, orderNo, statusAllocated); err != nil {
+			return err
+		}
+		if err := appendAllocationFrozenEvent(ctx, tx, orderNo, record.AllocationHash, record.PackageCount, record.WarehouseCount); err != nil {
 			return err
 		}
 		return outbox.Append(ctx, tx, outbox.Event{
@@ -845,56 +867,10 @@ func (s *Service) getQuote(ctx context.Context, quoteID string) (*pb.Quote, erro
 			return nil, apperr.Internal("pricing returned negative quote amounts", nil)
 		}
 	}
-	if s.warehouseSplitEnabled {
-		if err := validateSplitQuote(quote); err != nil {
-			return nil, err
-		}
-	} else if err := validateSingleWarehouseQuote(quote); err != nil {
+	if err := validateQuoteForOrder(quote, s.warehouseSplitEnabled); err != nil {
 		return nil, err
 	}
 	return quote, nil
-}
-
-// validateSplitQuote is enabled only after the split shipment/permit phase. It
-// checks that lines and groups agree; it does not create shipments itself.
-func validateSplitQuote(quote *pb.Quote) error {
-	groups := make(map[string]int64, len(quote.GetGroups()))
-	for _, group := range quote.GetGroups() {
-		if group.GetGroupNo() == "" || group.GetWarehouseId() <= 0 {
-			return apperr.Internal("pricing returned an invalid fulfillment group", nil)
-		}
-		if _, exists := groups[group.GetGroupNo()]; exists {
-			return apperr.Internal("pricing returned a duplicate fulfillment group", nil)
-		}
-		groups[group.GetGroupNo()] = group.GetWarehouseId()
-	}
-	for _, line := range quote.GetLines() {
-		if line.GetWarehouseId() <= 0 || line.GetGroupNo() == "" {
-			return apperr.Internal("pricing returned a split line without group/warehouse", nil)
-		}
-		if warehouseID, ok := groups[line.GetGroupNo()]; ok && warehouseID != line.GetWarehouseId() {
-			return apperr.Internal("pricing returned a line/group warehouse mismatch", nil)
-		}
-	}
-	return nil
-}
-
-// validateSingleWarehouseQuote is the phase-2b gate: pricing can now store
-// warehouse groups, but Order must not accept a split quote until the
-// reservation/permit/shipment phases are enabled.
-func validateSingleWarehouseQuote(quote *pb.Quote) error {
-	if len(quote.GetGroups()) > 1 {
-		return apperr.Failed("cross-warehouse split is not enabled")
-	}
-	for _, line := range quote.GetLines() {
-		if line.GetWarehouseId() > 1 {
-			return apperr.Failed("cross-warehouse split is not enabled")
-		}
-		if group := line.GetGroupNo(); group != "" && group != defaultGroupNo {
-			return apperr.Failed("cross-warehouse split is not enabled")
-		}
-	}
-	return nil
 }
 
 // replyFor loads the order items and converts a record to its protobuf form.
@@ -996,6 +972,29 @@ func validateCreateOrderInner(req *pb.CreateOrderInnerRequest) error {
 	if len(req.GetItems()) == 0 {
 		return apperr.Invalid("order must contain at least one item")
 	}
+	groups := make(map[string]int64, len(req.GetFulfillmentGroups()))
+	warehouses := make(map[int64]struct{}, len(req.GetFulfillmentGroups()))
+	var groupFreight int64
+	for _, group := range req.GetFulfillmentGroups() {
+		if group.GetGroupNo() == "" || group.GetWarehouseId() <= 0 {
+			return apperr.Invalid("fulfillment groups need group_no and warehouse_id")
+		}
+		if _, exists := groups[group.GetGroupNo()]; exists {
+			return apperr.Invalid("duplicate fulfillment group %s", group.GetGroupNo())
+		}
+		if _, exists := warehouses[group.GetWarehouseId()]; exists {
+			return apperr.Invalid("one warehouse cannot have two fulfillment groups")
+		}
+		groups[group.GetGroupNo()] = group.GetWarehouseId()
+		warehouses[group.GetWarehouseId()] = struct{}{}
+		groupFreight += group.GetFreightCent()
+	}
+	if len(groups) == 0 || len(groups) > maxOrderGroups {
+		return apperr.Invalid("order must contain between one and three fulfillment groups")
+	}
+	lineNos := make(map[int32]struct{}, len(req.GetItems()))
+	perSKU := make(map[int64]int, len(req.GetItems()))
+	var sumPaid int64
 	for _, item := range req.GetItems() {
 		if item.GetSkuId() <= 0 {
 			return apperr.Invalid("order item sku_id is required")
@@ -1003,12 +1002,51 @@ func validateCreateOrderInner(req *pb.CreateOrderInnerRequest) error {
 		if item.GetQuantity() <= 0 {
 			return apperr.Invalid("order item quantity must be positive")
 		}
-		if item.GetPriceCent() < 0 || item.GetDiscountCent() < 0 {
+		if item.GetPriceCent() < 0 || item.GetDiscountCent() < 0 ||
+			item.GetLinePaidCent() < 0 || item.GetUnitPaidCent() < 0 {
 			return apperr.Invalid("order item amounts must not be negative")
 		}
+		lineNo := item.GetLineNo()
+		if lineNo <= 0 {
+			return apperr.Invalid("order item line_no is required")
+		}
+		if _, exists := lineNos[lineNo]; exists {
+			return apperr.Invalid("duplicate order item line_no %d", lineNo)
+		}
+		lineNos[lineNo] = struct{}{}
+		perSKU[item.GetSkuId()]++
+		if perSKU[item.GetSkuId()] > maxLinesPerSKU {
+			return apperr.Invalid("sku %d has more than %d order lines", item.GetSkuId(), maxLinesPerSKU)
+		}
+		if _, ok := groups[item.GetGroupNo()]; !ok {
+			return apperr.Invalid("order item references unknown group %s", item.GetGroupNo())
+		}
+		if groups[item.GetGroupNo()] != item.GetWarehouseId() {
+			return apperr.Invalid("order item warehouse does not match its group")
+		}
+		goods := item.GetPriceCent() * int64(item.GetQuantity())
+		if item.GetLinePaidCent() != goods-item.GetDiscountCent() {
+			return apperr.Invalid("order item line_paid_cent does not match price minus discount")
+		}
+		if item.GetUnitPaidCent() != item.GetLinePaidCent()/int64(item.GetQuantity()) {
+			return apperr.Invalid("order item unit_paid_cent does not match the floor rule")
+		}
+		sumPaid += item.GetLinePaidCent()
+	}
+	if sumPaid+req.GetFreightCent() != req.GetPayCent() {
+		return apperr.Invalid("order pay_cent does not equal line paid plus freight")
+	}
+	if groupFreight != req.GetFreightCent() {
+		return apperr.Invalid("group freight does not add up to the order freight")
 	}
 	if req.GetTotalCent() < 0 || req.GetDiscountCent() < 0 || req.GetFreightCent() < 0 || req.GetPayCent() < 0 {
 		return apperr.Invalid("order amounts must not be negative")
+	}
+	if req.GetPackageCount() != 0 && int(req.GetPackageCount()) != len(groups) {
+		return apperr.Invalid("package_count does not match fulfillment groups")
+	}
+	if req.GetWarehouseCount() != 0 && int(req.GetWarehouseCount()) != len(warehouses) {
+		return apperr.Invalid("warehouse_count does not match fulfillment groups")
 	}
 	return nil
 }
@@ -1027,6 +1065,10 @@ func buildCreateOrderInner(orderNo string, in createOrderInput, quote *pb.Quote,
 		if groupNo == "" {
 			groupNo = defaultGroupNo
 		}
+		lineNo := line.GetLineNo()
+		if lineNo <= 0 {
+			lineNo = int32(len(items) + 1)
+		}
 		items = append(items, &pb.OrderItem{
 			SkuId:        line.GetSkuId(),
 			Name:         line.GetName(),
@@ -1035,12 +1077,16 @@ func buildCreateOrderInner(orderNo string, in createOrderInput, quote *pb.Quote,
 			DiscountCent: line.GetDiscountCent(),
 			WarehouseId:  warehouseID,
 			GroupNo:      groupNo,
+			LineNo:       lineNo,
+			LinePaidCent: line.GetLinePaidCent(),
+			UnitPaidCent: line.GetUnitPaidCent(),
 		})
 	}
 	groups := make([]*pb.OrderFulfillmentGroup, 0, len(quote.GetGroups()))
 	for _, group := range quote.GetGroups() {
 		groups = append(groups, &pb.OrderFulfillmentGroup{
-			GroupNo: group.GetGroupNo(), WarehouseId: group.GetWarehouseId(), FreightCent: group.GetFreightCent(),
+			GroupNo: group.GetGroupNo(), WarehouseId: group.GetWarehouseId(),
+			FreightCent: group.GetFreightCent(), FreightShareCent: group.GetFreightShareCent(),
 		})
 	}
 	return &pb.CreateOrderInnerRequest{
@@ -1060,6 +1106,9 @@ func buildCreateOrderInner(orderNo string, in createOrderInput, quote *pb.Quote,
 		Items:                 items,
 		ExpireAtUnix:          expireAt.Unix(),
 		FulfillmentGroups:     groups,
+		AllocationHash:        quote.GetAllocationHash(),
+		PackageCount:          quote.GetPackageCount(),
+		WarehouseCount:        quote.GetWarehouseCount(),
 	}
 }
 
@@ -1084,6 +1133,9 @@ func recordFromInner(ctx context.Context, req *pb.CreateOrderInnerRequest) *orde
 		ReceiverAddress:       req.GetReceiverAddress(),
 		QuoteID:               strings.TrimSpace(req.GetQuoteId()),
 		ClientRequestID:       clientRequestIDFromContext(ctx, req.GetOrderNo()),
+		AllocationHash:        req.GetAllocationHash(),
+		PackageCount:          req.GetPackageCount(),
+		WarehouseCount:        req.GetWarehouseCount(),
 		ExpireAt:              expireAt,
 	}
 }

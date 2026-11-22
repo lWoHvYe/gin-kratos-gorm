@@ -40,14 +40,18 @@ type quoteLine struct {
 	WarehouseID  int64
 	GroupNo      string
 	DiscountCent int64
+	LinePaidCent int64
+	UnitPaidCent int64
+	SplitSeq     int32
 }
 
 type quoteGroup struct {
-	GroupNo      string
-	WarehouseID  int64
-	GoodsCent    int64
-	DiscountCent int64
-	FreightCent  int64
+	GroupNo          string
+	WarehouseID      int64
+	GoodsCent        int64
+	DiscountCent     int64
+	FreightCent      int64
+	FreightShareCent int64
 }
 
 // quote is a priced basket with a fixed lifetime.
@@ -64,6 +68,9 @@ type quote struct {
 	AppliedPromotionsJSON string
 	PromotionVersion      int64
 	ExpiresAt             time.Time
+	PackageCount          int32
+	WarehouseCount        int32
+	AllocationHash        string
 	Lines                 []quoteLine
 	Groups                []quoteGroup
 }
@@ -157,18 +164,20 @@ func insertQuote(ctx context.Context, tx *sql.Tx, q *quote) error {
 func insertQuoteLines(ctx context.Context, tx *sql.Tx, q *quote) error {
 	for _, line := range q.Lines {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO quote_lines
-			(quote_id, line_no, sku_id, name, price_cent, quantity, warehouse_id, group_no, discount_cent)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(quote_id, line_no, sku_id, name, price_cent, quantity, warehouse_id, group_no, discount_cent,
+			 line_paid_cent, unit_paid_cent, split_seq)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			q.QuoteID, line.LineNo, line.SkuID, line.Name, line.PriceCent, line.Quantity,
-			line.WarehouseID, line.GroupNo, line.DiscountCent); err != nil {
+			line.WarehouseID, line.GroupNo, line.DiscountCent, line.LinePaidCent, line.UnitPaidCent, line.SplitSeq); err != nil {
 			return apperr.Internal("insert quote line", err)
 		}
 	}
 	for _, group := range q.Groups {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO quote_groups
-			(quote_id, group_no, warehouse_id, goods_cent, discount_cent, freight_cent)
-			VALUES (?, ?, ?, ?, ?, ?)`,
-			q.QuoteID, group.GroupNo, group.WarehouseID, group.GoodsCent, group.DiscountCent, group.FreightCent); err != nil {
+			(quote_id, group_no, warehouse_id, goods_cent, discount_cent, freight_cent, freight_share_cent)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			q.QuoteID, group.GroupNo, group.WarehouseID, group.GoodsCent, group.DiscountCent,
+			group.FreightCent, group.FreightShareCent); err != nil {
 			return apperr.Internal("insert quote group", err)
 		}
 	}
@@ -202,7 +211,8 @@ func loadQuote(ctx context.Context, q querier, quoteID string) (*quote, error) {
 }
 
 func loadQuoteLines(ctx context.Context, q querier, quoteID string) ([]quoteLine, error) {
-	rows, err := q.QueryContext(ctx, `SELECT line_no, sku_id, name, price_cent, quantity, warehouse_id, group_no, discount_cent
+	rows, err := q.QueryContext(ctx, `SELECT line_no, sku_id, name, price_cent, quantity, warehouse_id, group_no,
+		discount_cent, line_paid_cent, unit_paid_cent, split_seq
 		FROM quote_lines WHERE quote_id = ? ORDER BY line_no`, quoteID)
 	if err != nil {
 		return nil, apperr.Internal("load quote lines", err)
@@ -212,7 +222,8 @@ func loadQuoteLines(ctx context.Context, q querier, quoteID string) ([]quoteLine
 	for rows.Next() {
 		var line quoteLine
 		if err := rows.Scan(&line.LineNo, &line.SkuID, &line.Name, &line.PriceCent, &line.Quantity,
-			&line.WarehouseID, &line.GroupNo, &line.DiscountCent); err != nil {
+			&line.WarehouseID, &line.GroupNo, &line.DiscountCent, &line.LinePaidCent,
+			&line.UnitPaidCent, &line.SplitSeq); err != nil {
 			return nil, apperr.Internal("scan quote line", err)
 		}
 		lines = append(lines, line)
@@ -327,8 +338,8 @@ func consumeCoupon(ctx context.Context, tx *sql.Tx, couponID int64, orderNo stri
 }
 
 func loadQuoteGroups(ctx context.Context, q querier, quoteID string) ([]quoteGroup, error) {
-	rows, err := q.QueryContext(ctx, `SELECT group_no, warehouse_id, goods_cent, discount_cent, freight_cent
-		FROM quote_groups WHERE quote_id = ? ORDER BY group_no`, quoteID)
+	rows, err := q.QueryContext(ctx, `SELECT group_no, warehouse_id, goods_cent, discount_cent, freight_cent,
+		freight_share_cent FROM quote_groups WHERE quote_id = ? ORDER BY group_no`, quoteID)
 	if err != nil {
 		return nil, apperr.Internal("load quote groups", err)
 	}
@@ -336,7 +347,8 @@ func loadQuoteGroups(ctx context.Context, q querier, quoteID string) ([]quoteGro
 	groups := make([]quoteGroup, 0, 1)
 	for rows.Next() {
 		var group quoteGroup
-		if err := rows.Scan(&group.GroupNo, &group.WarehouseID, &group.GoodsCent, &group.DiscountCent, &group.FreightCent); err != nil {
+		if err := rows.Scan(&group.GroupNo, &group.WarehouseID, &group.GoodsCent, &group.DiscountCent,
+			&group.FreightCent, &group.FreightShareCent); err != nil {
 			return nil, apperr.Internal("scan quote group", err)
 		}
 		groups = append(groups, group)

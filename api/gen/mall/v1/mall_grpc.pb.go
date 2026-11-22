@@ -3031,21 +3031,24 @@ var PricingService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	OrderService_CreateOrder_FullMethodName            = "/mall.v1.OrderService/CreateOrder"
-	OrderService_CreateSeckillOrder_FullMethodName     = "/mall.v1.OrderService/CreateSeckillOrder"
-	OrderService_CreateOrderInner_FullMethodName       = "/mall.v1.OrderService/CreateOrderInner"
-	OrderService_CancelOrder_FullMethodName            = "/mall.v1.OrderService/CancelOrder"
-	OrderService_CancelOrderInner_FullMethodName       = "/mall.v1.OrderService/CancelOrderInner"
-	OrderService_MarkPaid_FullMethodName               = "/mall.v1.OrderService/MarkPaid"
-	OrderService_GetOrder_FullMethodName               = "/mall.v1.OrderService/GetOrder"
-	OrderService_ListOrders_FullMethodName             = "/mall.v1.OrderService/ListOrders"
-	OrderService_GetOrderStats_FullMethodName          = "/mall.v1.OrderService/GetOrderStats"
-	OrderService_TccTryMarkPaid_FullMethodName         = "/mall.v1.OrderService/TccTryMarkPaid"
-	OrderService_TccConfirmMarkPaid_FullMethodName     = "/mall.v1.OrderService/TccConfirmMarkPaid"
-	OrderService_TccCancelMarkPaid_FullMethodName      = "/mall.v1.OrderService/TccCancelMarkPaid"
-	OrderService_TccQueryMarkPaid_FullMethodName       = "/mall.v1.OrderService/TccQueryMarkPaid"
-	OrderService_AuthorizeShipment_FullMethodName      = "/mall.v1.OrderService/AuthorizeShipment"
-	OrderService_BlockShipmentForRefund_FullMethodName = "/mall.v1.OrderService/BlockShipmentForRefund"
+	OrderService_CreateOrder_FullMethodName              = "/mall.v1.OrderService/CreateOrder"
+	OrderService_CreateSeckillOrder_FullMethodName       = "/mall.v1.OrderService/CreateSeckillOrder"
+	OrderService_CreateOrderInner_FullMethodName         = "/mall.v1.OrderService/CreateOrderInner"
+	OrderService_CancelOrder_FullMethodName              = "/mall.v1.OrderService/CancelOrder"
+	OrderService_CancelOrderInner_FullMethodName         = "/mall.v1.OrderService/CancelOrderInner"
+	OrderService_MarkPaid_FullMethodName                 = "/mall.v1.OrderService/MarkPaid"
+	OrderService_GetOrder_FullMethodName                 = "/mall.v1.OrderService/GetOrder"
+	OrderService_ListOrders_FullMethodName               = "/mall.v1.OrderService/ListOrders"
+	OrderService_GetOrderStats_FullMethodName            = "/mall.v1.OrderService/GetOrderStats"
+	OrderService_TccTryMarkPaid_FullMethodName           = "/mall.v1.OrderService/TccTryMarkPaid"
+	OrderService_TccConfirmMarkPaid_FullMethodName       = "/mall.v1.OrderService/TccConfirmMarkPaid"
+	OrderService_TccCancelMarkPaid_FullMethodName        = "/mall.v1.OrderService/TccCancelMarkPaid"
+	OrderService_TccQueryMarkPaid_FullMethodName         = "/mall.v1.OrderService/TccQueryMarkPaid"
+	OrderService_AuthorizeShipment_FullMethodName        = "/mall.v1.OrderService/AuthorizeShipment"
+	OrderService_BlockShipmentForRefund_FullMethodName   = "/mall.v1.OrderService/BlockShipmentForRefund"
+	OrderService_ReportGroupShortage_FullMethodName      = "/mall.v1.OrderService/ReportGroupShortage"
+	OrderService_ChooseShortageResolution_FullMethodName = "/mall.v1.OrderService/ChooseShortageResolution"
+	OrderService_GetShortageCase_FullMethodName          = "/mall.v1.OrderService/GetShortageCase"
 )
 
 // OrderServiceClient is the client API for OrderService service.
@@ -3073,6 +3076,10 @@ type OrderServiceClient interface {
 	// BlockShipmentForRefund records refund admission on the same permit row. A
 	// permit already CONSUMED still allows refund-only after shipment.
 	BlockShipmentForRefund(ctx context.Context, in *ShipmentPermitRequest, opts ...grpc.CallOption) (*Empty, error)
+	// Post-payment shortage: explicit wait/refund choice, never silent re-route.
+	ReportGroupShortage(ctx context.Context, in *ReportGroupShortageRequest, opts ...grpc.CallOption) (*ShortageCase, error)
+	ChooseShortageResolution(ctx context.Context, in *ChooseShortageResolutionRequest, opts ...grpc.CallOption) (*ShortageCase, error)
+	GetShortageCase(ctx context.Context, in *GetShortageCaseRequest, opts ...grpc.CallOption) (*ShortageCase, error)
 }
 
 type orderServiceClient struct {
@@ -3233,6 +3240,36 @@ func (c *orderServiceClient) BlockShipmentForRefund(ctx context.Context, in *Shi
 	return out, nil
 }
 
+func (c *orderServiceClient) ReportGroupShortage(ctx context.Context, in *ReportGroupShortageRequest, opts ...grpc.CallOption) (*ShortageCase, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ShortageCase)
+	err := c.cc.Invoke(ctx, OrderService_ReportGroupShortage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orderServiceClient) ChooseShortageResolution(ctx context.Context, in *ChooseShortageResolutionRequest, opts ...grpc.CallOption) (*ShortageCase, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ShortageCase)
+	err := c.cc.Invoke(ctx, OrderService_ChooseShortageResolution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orderServiceClient) GetShortageCase(ctx context.Context, in *GetShortageCaseRequest, opts ...grpc.CallOption) (*ShortageCase, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ShortageCase)
+	err := c.cc.Invoke(ctx, OrderService_GetShortageCase_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrderServiceServer is the server API for OrderService service.
 // All implementations must embed UnimplementedOrderServiceServer
 // for forward compatibility.
@@ -3258,6 +3295,10 @@ type OrderServiceServer interface {
 	// BlockShipmentForRefund records refund admission on the same permit row. A
 	// permit already CONSUMED still allows refund-only after shipment.
 	BlockShipmentForRefund(context.Context, *ShipmentPermitRequest) (*Empty, error)
+	// Post-payment shortage: explicit wait/refund choice, never silent re-route.
+	ReportGroupShortage(context.Context, *ReportGroupShortageRequest) (*ShortageCase, error)
+	ChooseShortageResolution(context.Context, *ChooseShortageResolutionRequest) (*ShortageCase, error)
+	GetShortageCase(context.Context, *GetShortageCaseRequest) (*ShortageCase, error)
 	mustEmbedUnimplementedOrderServiceServer()
 }
 
@@ -3312,6 +3353,15 @@ func (UnimplementedOrderServiceServer) AuthorizeShipment(context.Context, *Shipm
 }
 func (UnimplementedOrderServiceServer) BlockShipmentForRefund(context.Context, *ShipmentPermitRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BlockShipmentForRefund not implemented")
+}
+func (UnimplementedOrderServiceServer) ReportGroupShortage(context.Context, *ReportGroupShortageRequest) (*ShortageCase, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReportGroupShortage not implemented")
+}
+func (UnimplementedOrderServiceServer) ChooseShortageResolution(context.Context, *ChooseShortageResolutionRequest) (*ShortageCase, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChooseShortageResolution not implemented")
+}
+func (UnimplementedOrderServiceServer) GetShortageCase(context.Context, *GetShortageCaseRequest) (*ShortageCase, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetShortageCase not implemented")
 }
 func (UnimplementedOrderServiceServer) mustEmbedUnimplementedOrderServiceServer() {}
 func (UnimplementedOrderServiceServer) testEmbeddedByValue()                      {}
@@ -3604,6 +3654,60 @@ func _OrderService_BlockShipmentForRefund_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrderService_ReportGroupShortage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportGroupShortageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).ReportGroupShortage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_ReportGroupShortage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).ReportGroupShortage(ctx, req.(*ReportGroupShortageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OrderService_ChooseShortageResolution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChooseShortageResolutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).ChooseShortageResolution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_ChooseShortageResolution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).ChooseShortageResolution(ctx, req.(*ChooseShortageResolutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OrderService_GetShortageCase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetShortageCaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).GetShortageCase(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_GetShortageCase_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).GetShortageCase(ctx, req.(*GetShortageCaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // OrderService_ServiceDesc is the grpc.ServiceDesc for OrderService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3670,6 +3774,18 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BlockShipmentForRefund",
 			Handler:    _OrderService_BlockShipmentForRefund_Handler,
+		},
+		{
+			MethodName: "ReportGroupShortage",
+			Handler:    _OrderService_ReportGroupShortage_Handler,
+		},
+		{
+			MethodName: "ChooseShortageResolution",
+			Handler:    _OrderService_ChooseShortageResolution_Handler,
+		},
+		{
+			MethodName: "GetShortageCase",
+			Handler:    _OrderService_GetShortageCase_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -4727,12 +4843,21 @@ var PromotionService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	FulfillmentService_CreateShipment_FullMethodName     = "/mall.v1.FulfillmentService/CreateShipment"
-	FulfillmentService_Ship_FullMethodName               = "/mall.v1.FulfillmentService/Ship"
-	FulfillmentService_Receive_FullMethodName            = "/mall.v1.FulfillmentService/Receive"
-	FulfillmentService_GetShipment_FullMethodName        = "/mall.v1.FulfillmentService/GetShipment"
-	FulfillmentService_GetShipmentByOrder_FullMethodName = "/mall.v1.FulfillmentService/GetShipmentByOrder"
-	FulfillmentService_ListShipments_FullMethodName      = "/mall.v1.FulfillmentService/ListShipments"
+	FulfillmentService_CreateShipment_FullMethodName        = "/mall.v1.FulfillmentService/CreateShipment"
+	FulfillmentService_Ship_FullMethodName                  = "/mall.v1.FulfillmentService/Ship"
+	FulfillmentService_Receive_FullMethodName               = "/mall.v1.FulfillmentService/Receive"
+	FulfillmentService_GetShipment_FullMethodName           = "/mall.v1.FulfillmentService/GetShipment"
+	FulfillmentService_GetShipmentByOrder_FullMethodName    = "/mall.v1.FulfillmentService/GetShipmentByOrder"
+	FulfillmentService_ListShipments_FullMethodName         = "/mall.v1.FulfillmentService/ListShipments"
+	FulfillmentService_RecordTrackingEvent_FullMethodName   = "/mall.v1.FulfillmentService/RecordTrackingEvent"
+	FulfillmentService_ConfirmReceipt_FullMethodName        = "/mall.v1.FulfillmentService/ConfirmReceipt"
+	FulfillmentService_OpenReceiptDispute_FullMethodName    = "/mall.v1.FulfillmentService/OpenReceiptDispute"
+	FulfillmentService_ResolveReceiptDispute_FullMethodName = "/mall.v1.FulfillmentService/ResolveReceiptDispute"
+	FulfillmentService_ListTrackingEvents_FullMethodName    = "/mall.v1.FulfillmentService/ListTrackingEvents"
+	FulfillmentService_CreateCarrier_FullMethodName         = "/mall.v1.FulfillmentService/CreateCarrier"
+	FulfillmentService_UpdateCarrier_FullMethodName         = "/mall.v1.FulfillmentService/UpdateCarrier"
+	FulfillmentService_SetCarrierStatus_FullMethodName      = "/mall.v1.FulfillmentService/SetCarrierStatus"
+	FulfillmentService_ListCarriers_FullMethodName          = "/mall.v1.FulfillmentService/ListCarriers"
 )
 
 // FulfillmentServiceClient is the client API for FulfillmentService service.
@@ -4747,6 +4872,15 @@ type FulfillmentServiceClient interface {
 	GetShipment(ctx context.Context, in *GetShipmentRequest, opts ...grpc.CallOption) (*Shipment, error)
 	GetShipmentByOrder(ctx context.Context, in *GetShipmentByOrderRequest, opts ...grpc.CallOption) (*Shipment, error)
 	ListShipments(ctx context.Context, in *ListShipmentsRequest, opts ...grpc.CallOption) (*ShipmentList, error)
+	RecordTrackingEvent(ctx context.Context, in *RecordTrackingEventRequest, opts ...grpc.CallOption) (*Shipment, error)
+	ConfirmReceipt(ctx context.Context, in *ConfirmReceiptRequest, opts ...grpc.CallOption) (*Shipment, error)
+	OpenReceiptDispute(ctx context.Context, in *OpenReceiptDisputeRequest, opts ...grpc.CallOption) (*ReceiptDispute, error)
+	ResolveReceiptDispute(ctx context.Context, in *ResolveReceiptDisputeRequest, opts ...grpc.CallOption) (*ReceiptDispute, error)
+	ListTrackingEvents(ctx context.Context, in *ListTrackingEventsRequest, opts ...grpc.CallOption) (*TrackingEventList, error)
+	CreateCarrier(ctx context.Context, in *Carrier, opts ...grpc.CallOption) (*Carrier, error)
+	UpdateCarrier(ctx context.Context, in *Carrier, opts ...grpc.CallOption) (*Carrier, error)
+	SetCarrierStatus(ctx context.Context, in *SetCarrierStatusRequest, opts ...grpc.CallOption) (*Carrier, error)
+	ListCarriers(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*CarrierList, error)
 }
 
 type fulfillmentServiceClient struct {
@@ -4817,6 +4951,96 @@ func (c *fulfillmentServiceClient) ListShipments(ctx context.Context, in *ListSh
 	return out, nil
 }
 
+func (c *fulfillmentServiceClient) RecordTrackingEvent(ctx context.Context, in *RecordTrackingEventRequest, opts ...grpc.CallOption) (*Shipment, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Shipment)
+	err := c.cc.Invoke(ctx, FulfillmentService_RecordTrackingEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) ConfirmReceipt(ctx context.Context, in *ConfirmReceiptRequest, opts ...grpc.CallOption) (*Shipment, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Shipment)
+	err := c.cc.Invoke(ctx, FulfillmentService_ConfirmReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) OpenReceiptDispute(ctx context.Context, in *OpenReceiptDisputeRequest, opts ...grpc.CallOption) (*ReceiptDispute, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReceiptDispute)
+	err := c.cc.Invoke(ctx, FulfillmentService_OpenReceiptDispute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) ResolveReceiptDispute(ctx context.Context, in *ResolveReceiptDisputeRequest, opts ...grpc.CallOption) (*ReceiptDispute, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReceiptDispute)
+	err := c.cc.Invoke(ctx, FulfillmentService_ResolveReceiptDispute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) ListTrackingEvents(ctx context.Context, in *ListTrackingEventsRequest, opts ...grpc.CallOption) (*TrackingEventList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TrackingEventList)
+	err := c.cc.Invoke(ctx, FulfillmentService_ListTrackingEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) CreateCarrier(ctx context.Context, in *Carrier, opts ...grpc.CallOption) (*Carrier, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Carrier)
+	err := c.cc.Invoke(ctx, FulfillmentService_CreateCarrier_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) UpdateCarrier(ctx context.Context, in *Carrier, opts ...grpc.CallOption) (*Carrier, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Carrier)
+	err := c.cc.Invoke(ctx, FulfillmentService_UpdateCarrier_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) SetCarrierStatus(ctx context.Context, in *SetCarrierStatusRequest, opts ...grpc.CallOption) (*Carrier, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Carrier)
+	err := c.cc.Invoke(ctx, FulfillmentService_SetCarrierStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) ListCarriers(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*CarrierList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CarrierList)
+	err := c.cc.Invoke(ctx, FulfillmentService_ListCarriers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FulfillmentServiceServer is the server API for FulfillmentService service.
 // All implementations must embed UnimplementedFulfillmentServiceServer
 // for forward compatibility.
@@ -4829,6 +5053,15 @@ type FulfillmentServiceServer interface {
 	GetShipment(context.Context, *GetShipmentRequest) (*Shipment, error)
 	GetShipmentByOrder(context.Context, *GetShipmentByOrderRequest) (*Shipment, error)
 	ListShipments(context.Context, *ListShipmentsRequest) (*ShipmentList, error)
+	RecordTrackingEvent(context.Context, *RecordTrackingEventRequest) (*Shipment, error)
+	ConfirmReceipt(context.Context, *ConfirmReceiptRequest) (*Shipment, error)
+	OpenReceiptDispute(context.Context, *OpenReceiptDisputeRequest) (*ReceiptDispute, error)
+	ResolveReceiptDispute(context.Context, *ResolveReceiptDisputeRequest) (*ReceiptDispute, error)
+	ListTrackingEvents(context.Context, *ListTrackingEventsRequest) (*TrackingEventList, error)
+	CreateCarrier(context.Context, *Carrier) (*Carrier, error)
+	UpdateCarrier(context.Context, *Carrier) (*Carrier, error)
+	SetCarrierStatus(context.Context, *SetCarrierStatusRequest) (*Carrier, error)
+	ListCarriers(context.Context, *Empty) (*CarrierList, error)
 	mustEmbedUnimplementedFulfillmentServiceServer()
 }
 
@@ -4856,6 +5089,33 @@ func (UnimplementedFulfillmentServiceServer) GetShipmentByOrder(context.Context,
 }
 func (UnimplementedFulfillmentServiceServer) ListShipments(context.Context, *ListShipmentsRequest) (*ShipmentList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListShipments not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) RecordTrackingEvent(context.Context, *RecordTrackingEventRequest) (*Shipment, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RecordTrackingEvent not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) ConfirmReceipt(context.Context, *ConfirmReceiptRequest) (*Shipment, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmReceipt not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) OpenReceiptDispute(context.Context, *OpenReceiptDisputeRequest) (*ReceiptDispute, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OpenReceiptDispute not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) ResolveReceiptDispute(context.Context, *ResolveReceiptDisputeRequest) (*ReceiptDispute, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResolveReceiptDispute not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) ListTrackingEvents(context.Context, *ListTrackingEventsRequest) (*TrackingEventList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListTrackingEvents not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) CreateCarrier(context.Context, *Carrier) (*Carrier, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateCarrier not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) UpdateCarrier(context.Context, *Carrier) (*Carrier, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateCarrier not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) SetCarrierStatus(context.Context, *SetCarrierStatusRequest) (*Carrier, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetCarrierStatus not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) ListCarriers(context.Context, *Empty) (*CarrierList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListCarriers not implemented")
 }
 func (UnimplementedFulfillmentServiceServer) mustEmbedUnimplementedFulfillmentServiceServer() {}
 func (UnimplementedFulfillmentServiceServer) testEmbeddedByValue()                            {}
@@ -4986,6 +5246,168 @@ func _FulfillmentService_ListShipments_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FulfillmentService_RecordTrackingEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordTrackingEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).RecordTrackingEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_RecordTrackingEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).RecordTrackingEvent(ctx, req.(*RecordTrackingEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_ConfirmReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmReceiptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).ConfirmReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_ConfirmReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).ConfirmReceipt(ctx, req.(*ConfirmReceiptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_OpenReceiptDispute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenReceiptDisputeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).OpenReceiptDispute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_OpenReceiptDispute_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).OpenReceiptDispute(ctx, req.(*OpenReceiptDisputeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_ResolveReceiptDispute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveReceiptDisputeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).ResolveReceiptDispute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_ResolveReceiptDispute_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).ResolveReceiptDispute(ctx, req.(*ResolveReceiptDisputeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_ListTrackingEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTrackingEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).ListTrackingEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_ListTrackingEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).ListTrackingEvents(ctx, req.(*ListTrackingEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_CreateCarrier_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Carrier)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).CreateCarrier(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_CreateCarrier_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).CreateCarrier(ctx, req.(*Carrier))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_UpdateCarrier_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Carrier)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).UpdateCarrier(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_UpdateCarrier_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).UpdateCarrier(ctx, req.(*Carrier))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_SetCarrierStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetCarrierStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).SetCarrierStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_SetCarrierStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).SetCarrierStatus(ctx, req.(*SetCarrierStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_ListCarriers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).ListCarriers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_ListCarriers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).ListCarriers(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FulfillmentService_ServiceDesc is the grpc.ServiceDesc for FulfillmentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5017,20 +5439,61 @@ var FulfillmentService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListShipments",
 			Handler:    _FulfillmentService_ListShipments_Handler,
 		},
+		{
+			MethodName: "RecordTrackingEvent",
+			Handler:    _FulfillmentService_RecordTrackingEvent_Handler,
+		},
+		{
+			MethodName: "ConfirmReceipt",
+			Handler:    _FulfillmentService_ConfirmReceipt_Handler,
+		},
+		{
+			MethodName: "OpenReceiptDispute",
+			Handler:    _FulfillmentService_OpenReceiptDispute_Handler,
+		},
+		{
+			MethodName: "ResolveReceiptDispute",
+			Handler:    _FulfillmentService_ResolveReceiptDispute_Handler,
+		},
+		{
+			MethodName: "ListTrackingEvents",
+			Handler:    _FulfillmentService_ListTrackingEvents_Handler,
+		},
+		{
+			MethodName: "CreateCarrier",
+			Handler:    _FulfillmentService_CreateCarrier_Handler,
+		},
+		{
+			MethodName: "UpdateCarrier",
+			Handler:    _FulfillmentService_UpdateCarrier_Handler,
+		},
+		{
+			MethodName: "SetCarrierStatus",
+			Handler:    _FulfillmentService_SetCarrierStatus_Handler,
+		},
+		{
+			MethodName: "ListCarriers",
+			Handler:    _FulfillmentService_ListCarriers_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "mall/v1/mall.proto",
 }
 
 const (
-	AfterSalesService_CreateAfterSale_FullMethodName      = "/mall.v1.AfterSalesService/CreateAfterSale"
-	AfterSalesService_GetAfterSale_FullMethodName         = "/mall.v1.AfterSalesService/GetAfterSale"
-	AfterSalesService_Approve_FullMethodName              = "/mall.v1.AfterSalesService/Approve"
-	AfterSalesService_SubmitReturnTracking_FullMethodName = "/mall.v1.AfterSalesService/SubmitReturnTracking"
-	AfterSalesService_ReceiveReturn_FullMethodName        = "/mall.v1.AfterSalesService/ReceiveReturn"
-	AfterSalesService_Refund_FullMethodName               = "/mall.v1.AfterSalesService/Refund"
-	AfterSalesService_ListAfterSales_FullMethodName       = "/mall.v1.AfterSalesService/ListAfterSales"
-	AfterSalesService_GetAfterSaleStats_FullMethodName    = "/mall.v1.AfterSalesService/GetAfterSaleStats"
+	AfterSalesService_CreateAfterSale_FullMethodName                = "/mall.v1.AfterSalesService/CreateAfterSale"
+	AfterSalesService_GetAfterSale_FullMethodName                   = "/mall.v1.AfterSalesService/GetAfterSale"
+	AfterSalesService_Approve_FullMethodName                        = "/mall.v1.AfterSalesService/Approve"
+	AfterSalesService_SubmitReturnTracking_FullMethodName           = "/mall.v1.AfterSalesService/SubmitReturnTracking"
+	AfterSalesService_ReceiveReturn_FullMethodName                  = "/mall.v1.AfterSalesService/ReceiveReturn"
+	AfterSalesService_Refund_FullMethodName                         = "/mall.v1.AfterSalesService/Refund"
+	AfterSalesService_ListAfterSales_FullMethodName                 = "/mall.v1.AfterSalesService/ListAfterSales"
+	AfterSalesService_GetAfterSaleStats_FullMethodName              = "/mall.v1.AfterSalesService/GetAfterSaleStats"
+	AfterSalesService_PreviewRefundQuote_FullMethodName             = "/mall.v1.AfterSalesService/PreviewRefundQuote"
+	AfterSalesService_ListLineRefunds_FullMethodName                = "/mall.v1.AfterSalesService/ListLineRefunds"
+	AfterSalesService_AuthorizeCrossWarehouseRestock_FullMethodName = "/mall.v1.AfterSalesService/AuthorizeCrossWarehouseRestock"
+	AfterSalesService_DetermineResponsibility_FullMethodName        = "/mall.v1.AfterSalesService/DetermineResponsibility"
+	AfterSalesService_VerifyRestockAuthorization_FullMethodName     = "/mall.v1.AfterSalesService/VerifyRestockAuthorization"
 )
 
 // AfterSalesServiceClient is the client API for AfterSalesService service.
@@ -5047,6 +5510,11 @@ type AfterSalesServiceClient interface {
 	Refund(ctx context.Context, in *RefundAfterSaleRequest, opts ...grpc.CallOption) (*AfterSale, error)
 	ListAfterSales(ctx context.Context, in *ListAfterSalesRequest, opts ...grpc.CallOption) (*AfterSaleList, error)
 	GetAfterSaleStats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*AfterSaleStats, error)
+	PreviewRefundQuote(ctx context.Context, in *PreviewRefundQuoteRequest, opts ...grpc.CallOption) (*RefundQuote, error)
+	ListLineRefunds(ctx context.Context, in *ListLineRefundsRequest, opts ...grpc.CallOption) (*LineRefundList, error)
+	AuthorizeCrossWarehouseRestock(ctx context.Context, in *AuthorizeCrossWarehouseRestockRequest, opts ...grpc.CallOption) (*Empty, error)
+	DetermineResponsibility(ctx context.Context, in *DetermineResponsibilityRequest, opts ...grpc.CallOption) (*AfterSale, error)
+	VerifyRestockAuthorization(ctx context.Context, in *VerifyRestockAuthorizationRequest, opts ...grpc.CallOption) (*VerifyRestockAuthorizationReply, error)
 }
 
 type afterSalesServiceClient struct {
@@ -5137,6 +5605,56 @@ func (c *afterSalesServiceClient) GetAfterSaleStats(ctx context.Context, in *Sta
 	return out, nil
 }
 
+func (c *afterSalesServiceClient) PreviewRefundQuote(ctx context.Context, in *PreviewRefundQuoteRequest, opts ...grpc.CallOption) (*RefundQuote, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefundQuote)
+	err := c.cc.Invoke(ctx, AfterSalesService_PreviewRefundQuote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *afterSalesServiceClient) ListLineRefunds(ctx context.Context, in *ListLineRefundsRequest, opts ...grpc.CallOption) (*LineRefundList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LineRefundList)
+	err := c.cc.Invoke(ctx, AfterSalesService_ListLineRefunds_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *afterSalesServiceClient) AuthorizeCrossWarehouseRestock(ctx context.Context, in *AuthorizeCrossWarehouseRestockRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, AfterSalesService_AuthorizeCrossWarehouseRestock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *afterSalesServiceClient) DetermineResponsibility(ctx context.Context, in *DetermineResponsibilityRequest, opts ...grpc.CallOption) (*AfterSale, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AfterSale)
+	err := c.cc.Invoke(ctx, AfterSalesService_DetermineResponsibility_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *afterSalesServiceClient) VerifyRestockAuthorization(ctx context.Context, in *VerifyRestockAuthorizationRequest, opts ...grpc.CallOption) (*VerifyRestockAuthorizationReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyRestockAuthorizationReply)
+	err := c.cc.Invoke(ctx, AfterSalesService_VerifyRestockAuthorization_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AfterSalesServiceServer is the server API for AfterSalesService service.
 // All implementations must embed UnimplementedAfterSalesServiceServer
 // for forward compatibility.
@@ -5151,6 +5669,11 @@ type AfterSalesServiceServer interface {
 	Refund(context.Context, *RefundAfterSaleRequest) (*AfterSale, error)
 	ListAfterSales(context.Context, *ListAfterSalesRequest) (*AfterSaleList, error)
 	GetAfterSaleStats(context.Context, *StatsRequest) (*AfterSaleStats, error)
+	PreviewRefundQuote(context.Context, *PreviewRefundQuoteRequest) (*RefundQuote, error)
+	ListLineRefunds(context.Context, *ListLineRefundsRequest) (*LineRefundList, error)
+	AuthorizeCrossWarehouseRestock(context.Context, *AuthorizeCrossWarehouseRestockRequest) (*Empty, error)
+	DetermineResponsibility(context.Context, *DetermineResponsibilityRequest) (*AfterSale, error)
+	VerifyRestockAuthorization(context.Context, *VerifyRestockAuthorizationRequest) (*VerifyRestockAuthorizationReply, error)
 	mustEmbedUnimplementedAfterSalesServiceServer()
 }
 
@@ -5184,6 +5707,21 @@ func (UnimplementedAfterSalesServiceServer) ListAfterSales(context.Context, *Lis
 }
 func (UnimplementedAfterSalesServiceServer) GetAfterSaleStats(context.Context, *StatsRequest) (*AfterSaleStats, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAfterSaleStats not implemented")
+}
+func (UnimplementedAfterSalesServiceServer) PreviewRefundQuote(context.Context, *PreviewRefundQuoteRequest) (*RefundQuote, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PreviewRefundQuote not implemented")
+}
+func (UnimplementedAfterSalesServiceServer) ListLineRefunds(context.Context, *ListLineRefundsRequest) (*LineRefundList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListLineRefunds not implemented")
+}
+func (UnimplementedAfterSalesServiceServer) AuthorizeCrossWarehouseRestock(context.Context, *AuthorizeCrossWarehouseRestockRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AuthorizeCrossWarehouseRestock not implemented")
+}
+func (UnimplementedAfterSalesServiceServer) DetermineResponsibility(context.Context, *DetermineResponsibilityRequest) (*AfterSale, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DetermineResponsibility not implemented")
+}
+func (UnimplementedAfterSalesServiceServer) VerifyRestockAuthorization(context.Context, *VerifyRestockAuthorizationRequest) (*VerifyRestockAuthorizationReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifyRestockAuthorization not implemented")
 }
 func (UnimplementedAfterSalesServiceServer) mustEmbedUnimplementedAfterSalesServiceServer() {}
 func (UnimplementedAfterSalesServiceServer) testEmbeddedByValue()                           {}
@@ -5350,6 +5888,96 @@ func _AfterSalesService_GetAfterSaleStats_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AfterSalesService_PreviewRefundQuote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreviewRefundQuoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AfterSalesServiceServer).PreviewRefundQuote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AfterSalesService_PreviewRefundQuote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AfterSalesServiceServer).PreviewRefundQuote(ctx, req.(*PreviewRefundQuoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AfterSalesService_ListLineRefunds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLineRefundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AfterSalesServiceServer).ListLineRefunds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AfterSalesService_ListLineRefunds_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AfterSalesServiceServer).ListLineRefunds(ctx, req.(*ListLineRefundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AfterSalesService_AuthorizeCrossWarehouseRestock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeCrossWarehouseRestockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AfterSalesServiceServer).AuthorizeCrossWarehouseRestock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AfterSalesService_AuthorizeCrossWarehouseRestock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AfterSalesServiceServer).AuthorizeCrossWarehouseRestock(ctx, req.(*AuthorizeCrossWarehouseRestockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AfterSalesService_DetermineResponsibility_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetermineResponsibilityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AfterSalesServiceServer).DetermineResponsibility(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AfterSalesService_DetermineResponsibility_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AfterSalesServiceServer).DetermineResponsibility(ctx, req.(*DetermineResponsibilityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AfterSalesService_VerifyRestockAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyRestockAuthorizationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AfterSalesServiceServer).VerifyRestockAuthorization(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AfterSalesService_VerifyRestockAuthorization_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AfterSalesServiceServer).VerifyRestockAuthorization(ctx, req.(*VerifyRestockAuthorizationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AfterSalesService_ServiceDesc is the grpc.ServiceDesc for AfterSalesService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -5388,6 +6016,26 @@ var AfterSalesService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAfterSaleStats",
 			Handler:    _AfterSalesService_GetAfterSaleStats_Handler,
+		},
+		{
+			MethodName: "PreviewRefundQuote",
+			Handler:    _AfterSalesService_PreviewRefundQuote_Handler,
+		},
+		{
+			MethodName: "ListLineRefunds",
+			Handler:    _AfterSalesService_ListLineRefunds_Handler,
+		},
+		{
+			MethodName: "AuthorizeCrossWarehouseRestock",
+			Handler:    _AfterSalesService_AuthorizeCrossWarehouseRestock_Handler,
+		},
+		{
+			MethodName: "DetermineResponsibility",
+			Handler:    _AfterSalesService_DetermineResponsibility_Handler,
+		},
+		{
+			MethodName: "VerifyRestockAuthorization",
+			Handler:    _AfterSalesService_VerifyRestockAuthorization_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

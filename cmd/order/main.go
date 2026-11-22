@@ -35,6 +35,9 @@ func main() {
 	workers.Go(func(ctx context.Context) { order.RunShipmentConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger) })
 	workers.Go(func(ctx context.Context) { order.RunRefundConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger) })
 	workers.Go(func(ctx context.Context) { order.RunAfterSaleConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger) })
+	workers.Go(func(ctx context.Context) {
+		order.RunShortageWorker(ctx, bundle.DB, bundle.Service, bundle.Logger, time.Minute)
+	})
 	if err := bundle.App.Run(); err != nil {
 		panic(err)
 	}

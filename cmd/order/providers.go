@@ -94,6 +94,7 @@ func provideDTMClient(cfg *config.Config) *dtm.Client {
 func provideOrderService(cfg *config.Config, database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client, pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient, promotion pb.PromotionServiceClient) *order.Service {
 	return order.NewWithOptions(database, client, logger, dtmClient, pricing, inventory, promotion, order.Options{
 		WarehouseSplitEnabled: cfg.WarehouseSplitEnabled,
+		ShortageCaseEnabled:   cfg.ShortageCaseEnabled,
 	})
 }
 

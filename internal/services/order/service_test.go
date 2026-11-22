@@ -205,7 +205,11 @@ func TestValidateCreateOrderInner(t *testing.T) {
 			ReceiverName:    "Alice",
 			ReceiverPhone:   "13800000000",
 			ReceiverAddress: "Somewhere 1",
-			Items:           []*pb.OrderItem{{SkuId: 1, Name: "x", PriceCent: 100, Quantity: 1}},
+			Items: []*pb.OrderItem{{SkuId: 1, Name: "x", PriceCent: 100, Quantity: 1,
+				LineNo: 1, LinePaidCent: 100, UnitPaidCent: 100, WarehouseId: 1, GroupNo: "G1"}},
+			FulfillmentGroups: []*pb.OrderFulfillmentGroup{{GroupNo: "G1", WarehouseId: 1}},
+			PackageCount:      1,
+			WarehouseCount:    1,
 		}
 	}
 	if err := validateCreateOrderInner(valid()); err != nil {

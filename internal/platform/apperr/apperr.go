@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -27,6 +28,9 @@ type Error struct {
 	Code    Code
 	Message string
 	Err     error
+	// Details carries machine-readable context for gRPC ErrorInfo metadata and
+	// HTTP clients (for example max_orderable_quantity or retry_preview).
+	Details map[string]any
 }
 
 func (e *Error) Error() string {
@@ -36,6 +40,15 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 func (e *Error) Unwrap() error { return e.Err }
+
+// WithDetails attaches machine-readable context without changing the code or
+// message. It returns the same error so callers can wrap in one expression.
+func (e *Error) WithDetails(details map[string]any) *Error {
+	if e != nil {
+		e.Details = details
+	}
+	return e
+}
 
 func New(code Code, msg string) *Error             { return &Error{Code: code, Message: msg} }
 func Wrap(code Code, msg string, err error) *Error { return &Error{Code: code, Message: msg, Err: err} }
@@ -117,5 +130,15 @@ func GRPC(err error) error {
 	default:
 		c = codes.Internal
 	}
-	return status.Error(c, ae.Message)
+	st := status.New(c, ae.Message)
+	if len(ae.Details) > 0 {
+		info := &errdetails.ErrorInfo{Domain: "mall", Reason: string(ae.Code), Metadata: map[string]string{}}
+		for key, value := range ae.Details {
+			info.Metadata[key] = fmt.Sprint(value)
+		}
+		if withDetails, derr := st.WithDetails(info); derr == nil {
+			return withDetails.Err()
+		}
+	}
+	return st.Err()
 }

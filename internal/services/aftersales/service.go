@@ -443,6 +443,12 @@ func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.Afte
 		if err := s.releasePendingForAfterSaleTx(ctx, tx, afterSaleNo); err != nil {
 			return nil, err
 		}
+		if _, err := tx.ExecContext(ctx, `UPDATE after_sale_freight_holds
+			SET status = ?, determined_party = ?, determined_at = NOW(3), version = version + 1
+			WHERE after_sale_no = ? AND status = ?`,
+			freightStateWaived, partyCustomer, afterSaleNo, freightStateHeld); err != nil {
+			return nil, apperr.Internal("waive rejected freight hold", err)
+		}
 	} else if req.GetAmountCent() > 0 {
 		var newLineCount int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM after_sale_items

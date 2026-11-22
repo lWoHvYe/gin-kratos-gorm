@@ -147,6 +147,13 @@ func (s *Service) applyFreightHold(ctx context.Context, afterSaleNo, party, code
 			WHERE after_sale_no = ? AND status = ?`, freightStateWaived, party, afterSaleNo, freightStateHeld)
 		return err
 	case partyMerchant, partyCarrier, partyPlatform:
+		// Record the determination first. Payment waits until the goods refund
+		// has actually completed (P0-7), then the worker settles it.
+		if _, err := s.db.ExecContext(ctx, `UPDATE after_sale_freight_holds
+			SET determined_party = ?, determined_at = NOW(3), version = version + 1
+			WHERE after_sale_no = ? AND status = ?`, party, afterSaleNo, freightStateHeld); err != nil {
+			return apperr.Internal("record freight determination", err)
+		}
 		return s.refundFreightHold(ctx, afterSaleNo, party, code)
 	default:
 		return nil
@@ -159,6 +166,10 @@ func (s *Service) refundFreightHold(ctx context.Context, afterSaleNo, party, cod
 	row, err := s.getAfterSaleRow(ctx, afterSaleNo)
 	if err != nil {
 		return err
+	}
+	if row.status != statusRefunded {
+		// Goods refund is not complete yet; P0-7 forbids paying freight first.
+		return nil
 	}
 	var freight int64
 	var status string
@@ -206,12 +217,16 @@ func (s *Service) refundFreightHold(ctx context.Context, afterSaleNo, party, cod
 		WHERE after_sale_no = ? AND status = ?`, freightStateRefunded, party, afterSaleNo, freightStateHeld); err != nil {
 		return apperr.Internal("mark freight hold refunded", err)
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE after_sale_refund_breakdowns
-		SET freight_cent = ?, total_cent = goods_cent + ?, rule_id = ?, responsibility_party = ?,
-		    refund_idempotency_key = ?
-		WHERE after_sale_no = ?`,
-		freight, freight, rule, party, afterSaleNo+":freight", afterSaleNo); err != nil {
-		return apperr.Internal("update freight breakdown", err)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO after_sale_refund_breakdowns
+		(after_sale_no, goods_cent, freight_cent, total_cent, rule_id, responsibility_party, refund_idempotency_key)
+		VALUES (?, 0, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+		  freight_cent = VALUES(freight_cent),
+		  total_cent = goods_cent + VALUES(freight_cent),
+		  rule_id = VALUES(rule_id), responsibility_party = VALUES(responsibility_party),
+		  refund_idempotency_key = VALUES(refund_idempotency_key)`,
+		afterSaleNo, freight, freight, rule, party, afterSaleNo+":freight"); err != nil {
+		return apperr.Internal("upsert freight breakdown", err)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE after_sales SET refund_no = COALESCE(NULLIF(refund_no, ''), ?), version = version + 1 WHERE id = ?`,
 		refundNo, row.id); err != nil {
@@ -295,8 +310,11 @@ func RunFreightHoldWorker(ctx context.Context, database *sql.DB, svc *Service, l
 }
 
 func (s *Service) processExpiredFreightHolds(ctx context.Context, logger *slog.Logger) {
-	rows, err := s.db.QueryContext(ctx, `SELECT after_sale_no FROM after_sale_freight_holds
-		WHERE status = ? AND deadline_at <= NOW(3) LIMIT 50`, freightStateHeld)
+	rows, err := s.db.QueryContext(ctx, `SELECT h.after_sale_no FROM after_sale_freight_holds h
+		JOIN after_sales a ON a.after_sale_no = h.after_sale_no
+		WHERE h.status = ? AND a.status = ?
+		  AND (h.deadline_at <= NOW(3) OR h.determined_party IN (?, ?, ?))
+		LIMIT 50`, freightStateHeld, statusRefunded, partyMerchant, partyCarrier, partyPlatform)
 	if err != nil {
 		if logger != nil {
 			logger.Error("scan expired freight holds", "error", err)
@@ -331,7 +349,8 @@ func (s *Service) freightCommitted(ctx context.Context, q lineQuery, orderNo str
 	var held int64
 	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(h.freight_cent), 0)
 		FROM after_sale_freight_holds h JOIN after_sales a ON a.after_sale_no = h.after_sale_no
-		WHERE a.order_no = ? AND h.status = ?`, orderNo, freightStateHeld).Scan(&held); err != nil {
+		WHERE a.order_no = ? AND h.status = ? AND a.status NOT IN ('REJECTED', 'CANCELLED')`,
+		orderNo, freightStateHeld).Scan(&held); err != nil {
 		return 0, apperr.Internal("load held freight", err)
 	}
 	return refunded + held, nil

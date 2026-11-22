@@ -1229,3 +1229,106 @@ func TestPermanentRefundFailureReleasesReservations(t *testing.T) {
 		t.Fatalf("leak pending=%d/%d consumed=%d state=%s", pendingQty, pendingCent, consumed, amountState)
 	}
 }
+
+func holdAfterSaleService(t *testing.T, db *sql.DB) (*Service, *fakePaymentService) {
+	t.Helper()
+	order := &fakeOrderService{order: &pb.Order{
+		OrderNo: "ORD-HOLD7", UserId: 1, Status: "SHIPPED", PaidCent: 2000, FreightCent: 1000, RefundState: "NONE",
+		FulfillmentGroups: []*pb.OrderFulfillmentGroup{
+			{GroupNo: "G1", WarehouseId: 1, Status: "SHIPPED", RefundState: "NONE", FreightShareCent: 500},
+		},
+		Items: []*pb.OrderItem{
+			{LineNo: 1, SkuId: 1, PriceCent: 1000, Quantity: 1, WarehouseId: 1, GroupNo: "G1",
+				LinePaidCent: 1000, UnitPaidCent: 1000},
+		},
+	}}
+	payment := &fakePaymentService{captured: 2000}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	svc := NewWithOptions(db, nil, payment, &fakeInventoryService{}, order, logger, Options{FreightResponsibilityEnabled: true})
+	return svc, payment
+}
+
+func createHoldAfterSale(t *testing.T, svc *Service) *pb.AfterSale {
+	t.Helper()
+	as, err := svc.CreateAfterSale(context.Background(), &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-HOLD7", UserId: 1, Type: typeReturnRefund, Reason: "包裹破损",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1", LineNo: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return as
+}
+
+// P0-7: a rejected after-sale waives its freight hold and the worker must not
+// pay freight without a product refund.
+func TestFreightHoldNotPaidForRejectedAfterSale(t *testing.T) {
+	db := afterSaleTestDB(t)
+	svc, payment := holdAfterSaleService(t, db)
+	as := createHoldAfterSale(t, svc)
+	if _, err := svc.Approve(context.Background(), &pb.ApproveRequest{
+		AfterSaleNo: as.GetAfterSaleNo(), Approved: false, Reason: "rejected",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var state string
+	if err := db.QueryRow(`SELECT status FROM after_sale_freight_holds WHERE after_sale_no = ?`, as.GetAfterSaleNo()).
+		Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != freightStateWaived {
+		t.Fatalf("hold after reject = %s", state)
+	}
+	if _, err := db.Exec(`UPDATE after_sale_freight_holds SET deadline_at = DATE_SUB(NOW(3), INTERVAL 1 MINUTE)
+		WHERE after_sale_no = ?`, as.GetAfterSaleNo()); err != nil {
+		t.Fatal(err)
+	}
+	svc.processExpiredFreightHolds(context.Background(), nil)
+	if len(payment.refundAmount) != 0 {
+		t.Fatalf("rejected after-sale paid freight: %v", payment.refundAmount)
+	}
+}
+
+// P0-7: determination before the goods refund must not pay freight early; after
+// the goods refund the worker pays it and records it in the breakdown.
+func TestFreightHoldBeforeGoodsRefundIsRecordedInBreakdown(t *testing.T) {
+	db := afterSaleTestDB(t)
+	svc, payment := holdAfterSaleService(t, db)
+	as := createHoldAfterSale(t, svc)
+	if _, err := svc.DetermineResponsibility(context.Background(), &pb.DetermineResponsibilityRequest{
+		AfterSaleNo: as.GetAfterSaleNo(), Party: partyMerchant, Source: sourceAgent,
+		EvidenceRef: "photo-1", ReasonCode: "OUT_OF_STOCK", Operator: "cs-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(payment.refundAmount) != 0 {
+		t.Fatalf("freight paid before goods refund: %v", payment.refundAmount)
+	}
+	if _, err := db.Exec(`UPDATE after_sales SET status = ?, restock_state = ? WHERE after_sale_no = ?`,
+		statusReturnReceived, restockDone, as.GetAfterSaleNo()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Refund(context.Background(), &pb.RefundAfterSaleRequest{AfterSaleNo: as.GetAfterSaleNo()}); err != nil {
+		t.Fatal(err)
+	}
+	svc.processExpiredFreightHolds(context.Background(), nil)
+	if len(payment.refundAmount) != 2 {
+		t.Fatalf("refund calls = %v", payment.refundAmount)
+	}
+	var freight, total int64
+	if err := db.QueryRow(`SELECT freight_cent, total_cent FROM after_sale_refund_breakdowns
+		WHERE after_sale_no = ?`, as.GetAfterSaleNo()).Scan(&freight, &total); err != nil {
+		t.Fatal(err)
+	}
+	if freight != 500 || total != 1500 {
+		t.Fatalf("breakdown = freight %d total %d", freight, total)
+	}
+	var state string
+	if err := db.QueryRow(`SELECT status FROM after_sale_freight_holds WHERE after_sale_no = ?`, as.GetAfterSaleNo()).
+		Scan(&state); err != nil {
+		t.Fatal(err)
+	}
+	if state != freightStateRefunded {
+		t.Fatalf("hold = %s", state)
+	}
+}

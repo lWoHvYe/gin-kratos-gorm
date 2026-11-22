@@ -37,3 +37,27 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: BFF 5xx rate is elevated
+      - alert: MallAfterSaleRestockBacklog
+        expr: mall_aftersale_restock_backlog > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: After-sale restock tasks are not draining
+      - alert: MallAfterSaleRestockStalled
+        expr: mall_aftersale_restock_oldest_seconds > 300
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Oldest after-sale restock task is older than 5 minutes
+      - alert: MallAfterSaleRefundBacklog
+        expr: mall_aftersale_refund_backlog > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: After-sale refund tasks are not draining
+      - alert: MallAfterSaleRefundStalled
+        expr: mall_aftersale_refund_oldest_seconds > 300
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Oldest after-sale refund task is older than 5 minutes

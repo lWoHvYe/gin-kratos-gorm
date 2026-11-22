@@ -58,22 +58,27 @@ BASE_URL=http://127.0.0.1:18090 ADMIN_URL=http://127.0.0.1:18091 \
 
 ## Split validation
 
-The demo catalog uses SKUs `10001`/`10002`. For a dedicated-warehouse split
-fixture (UAT data only):
-
-```sql
-INSERT INTO mall_inventory.inventory_stocks
-  (sku_id,warehouse_id,on_hand,reserved,version)
-VALUES (10001,1,5,0,1),(10001,2,0,0,1),
-       (10002,1,0,0,1),(10002,2,5,0,1)
-ON DUPLICATE KEY UPDATE on_hand=VALUES(on_hand), reserved=VALUES(reserved);
-```
-
-Then:
+Create two fresh SKUs instead of relying on demo seed:
 
 ```bash
 BASE=http://127.0.0.1:18090 ADMIN=http://127.0.0.1:18091 \
-  SPLIT_SKU_A=10001 SPLIT_SKU_B=10002 ./scripts/e2e-warehouse-split.sh
+  FIXTURE_ENV=/tmp/uat-split-fixture.env ./scripts/create-split-fixture.sh
+. /tmp/uat-split-fixture.env
+```
+
+`create-split-fixture.sh` creates product A stocked in warehouse 1 and product B
+stocked in warehouse 2, then publishes both. Publishing now checks available
+stock across all warehouses, not only warehouse 1.
+
+Then run the split checks:
+
+```bash
+BASE=http://127.0.0.1:18090 ADMIN=http://127.0.0.1:18091 \
+  SPLIT_SKU_A=$SPLIT_SKU_A SPLIT_SKU_B=$SPLIT_SKU_B \
+  ./scripts/e2e-warehouse-split.sh
+BASE=http://127.0.0.1:18090 ADMIN=http://127.0.0.1:18091 \
+  SPLIT_SKU_A=$SPLIT_SKU_A SPLIT_SKU_B=$SPLIT_SKU_B \
+  ./scripts/check-split-concurrency.sh
 ```
 
 Browser:
@@ -83,12 +88,9 @@ cd frontend
 WEB_BASE_URL=http://uat.mall.local \
 API_BASE_URL=http://127.0.0.1:18090 \
 ADMIN_API_BASE_URL=http://127.0.0.1:18091 \
-SPLIT_SKU_A=10001 SPLIT_SKU_B=10002 \
+SPLIT_SKU_A=$SPLIT_SKU_A SPLIT_SKU_B=$SPLIT_SKU_B \
 pnpm exec playwright test --config=e2e/playwright.config.ts e2e/warehouse-split.spec.ts
 ```
-
-The Playwright config maps the base hostname to `10.211.55.29`; API setup uses
-the port-forward bases so Node does not need a DNS entry for `uat.mall.local`.
 
 ## UAT evidence (2026-11-22)
 
@@ -101,7 +103,9 @@ the port-forward bases so Node does not need a DNS entry for `uat.mall.local`.
 - UAT admin G2 shipment Playwright passed;
 - `scripts/check-split-concurrency.sh` passed: duplicate payment, concurrent
   G1/G2 ship, unshipped G2 refund cancels its draft parcel, G2 refund/ship race
-  leaves G1 shippable.
+  leaves G1 shippable;
+- `scripts/fault-split-uat.sh` passed: NATS outage and Fulfillment outage
+  recovered durable order.paid/auto-shipment flow.
 
 ## Teardown
 

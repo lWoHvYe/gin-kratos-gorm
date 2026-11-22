@@ -76,7 +76,8 @@ func TestMultiGroupActionsExposeTypedGroupActions(t *testing.T) {
 		{GroupNo: "G1", Status: "SHIPPED"},
 		{GroupNo: "G2", Status: statusAllocated, PermitState: permitRevoked},
 	}
-	actions := multiGroupActions(o, groups)
+	policy := newOrderActionPolicy(o, groups)
+	actions := policy.groupActions()
 	want := map[[2]string]bool{
 		{"G1", "receive"}: true, {"G1", "apply_after_sale"}: true,
 	}
@@ -92,7 +93,7 @@ func TestMultiGroupActionsExposeTypedGroupActions(t *testing.T) {
 		}
 	}
 
-	legacy := groupActionStrings(actions)
+	legacy := policy.legacyActions()
 	for _, action := range legacy {
 		if action == "ship" || action == "receive" || action == "apply_after_sale" || action == "ship_group:G2" {
 			t.Fatalf("order-level action leaked for split order: %v", legacy)

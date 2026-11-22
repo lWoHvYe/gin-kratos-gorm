@@ -165,14 +165,35 @@ func (s *Service) GetPaymentByOrder(ctx context.Context, req *pb.GetPaymentByOrd
 	if orderNo == "" {
 		return nil, apperr.Invalid("order_no is required")
 	}
-	in, err := newRepo(s.db).intentByOrder(ctx, s.db, orderNo)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, apperr.NotFound("settled payment not found for order")
-	}
+	intents, err := newRepo(s.db).intentsByOrder(ctx, s.db, orderNo)
 	if err != nil {
 		return nil, apperr.Internal("get payment by order", err)
 	}
-	return in.toPB(), nil
+	if len(intents) == 0 {
+		return nil, apperr.NotFound("settled payment not found for order")
+	}
+	latest := intents[len(intents)-1]
+	aggregate := &pb.Intent{
+		PaymentNo: latest.PaymentNo, OrderNo: orderNo,
+		Status: latest.Status, Channel: latest.Channel, PayUrl: latest.PayURL,
+		ExpiresAtUnix: latest.ExpiresAt.Unix(), PaymentMethod: latest.PaymentMethod,
+	}
+	for _, in := range intents {
+		captured := in.CapturedCent
+		if captured <= 0 {
+			captured = in.AmountCent
+		}
+		aggregate.AmountCent += in.AmountCent
+		aggregate.CapturedCent += captured
+		aggregate.RefundedCent += in.RefundedCent
+	}
+	switch {
+	case aggregate.CapturedCent > 0 && aggregate.RefundedCent >= aggregate.CapturedCent:
+		aggregate.Status = statusRefunded
+	case aggregate.RefundedCent > 0:
+		aggregate.Status = statusPartiallyRefunded
+	}
+	return aggregate, nil
 }
 
 // Callback applies a channel event to an intent. A (channel, event_id) pair is
@@ -343,23 +364,29 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 			return err
 		}
 		refundNo = ref.RefundNo
+		var orderRefunded int64
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(refunded_cent), 0)
+			FROM payment_intents WHERE order_no = ?`, in.OrderNo).Scan(&orderRefunded); err != nil {
+			return apperr.Internal("sum order refunds", err)
+		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic:         topicPaymentRefunded,
 			AggregateType: aggregatePayment,
 			AggregateID:   in.PaymentNo,
 			EventType:     eventRefunded,
 			Payload: map[string]any{
-				"refund_no":       ref.RefundNo,
-				"payment_no":      in.PaymentNo,
-				"order_no":        in.OrderNo,
-				"user_id":         in.UserID,
-				"amount_cent":     amount,
-				"refunded_cent":   totalRefunded,
-				"captured_cent":   captured,
-				"reason":          reason,
-				"channel":         in.Channel,
-				"status":          nextStatus,
-				"idempotency_key": idempotencyKey,
+				"refund_no":           ref.RefundNo,
+				"payment_no":          in.PaymentNo,
+				"order_no":            in.OrderNo,
+				"user_id":             in.UserID,
+				"amount_cent":         amount,
+				"refunded_cent":       totalRefunded,
+				"order_refunded_cent": orderRefunded,
+				"captured_cent":       captured,
+				"reason":              reason,
+				"channel":             in.Channel,
+				"status":              nextStatus,
+				"idempotency_key":     idempotencyKey,
 			},
 		})
 	})
@@ -513,31 +540,74 @@ func (s *Service) RefundOrder(ctx context.Context, req *pb.RefundOrderRequest) (
 	}
 	reason = truncateReason(reason)
 	r := newRepo(s.db)
-	in, err := r.intentByOrder(ctx, s.db, orderNo)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, apperr.NotFound("settled payment not found for order")
-	}
+	intents, err := r.intentsByOrder(ctx, s.db, orderNo)
 	if err != nil {
 		return nil, apperr.Internal("query payment for order", err)
 	}
-	key := refundKey(in.PaymentNo, amount, reason, req.GetIdempotencyKey())
-	if _, err := s.Refund(ctx, &pb.RefundRequest{
-		PaymentNo:      in.PaymentNo,
-		AmountCent:     amount,
-		Reason:         reason,
-		IdempotencyKey: key,
-	}); err != nil {
-		return nil, err
+	if len(intents) == 0 {
+		return nil, apperr.NotFound("settled payment not found for order")
 	}
-	ref, err := newRepo(s.db).refundByKey(ctx, s.db, in.PaymentNo, key)
-	if err != nil {
-		return nil, apperr.Internal("load refund result", err)
+	// The per-payment Refund key is stable; the order-level key lets a retry
+	// resume a partially allocated multi-intent refund without double-paying.
+	already := int64(0)
+	if key := strings.TrimSpace(req.GetIdempotencyKey()); key != "" {
+		if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(amount_cent), 0)
+			FROM refunds WHERE order_no = ? AND idempotency_key = ?`, orderNo, key).Scan(&already); err != nil {
+			return nil, apperr.Internal("sum order refunds", err)
+		}
+	}
+	if already >= amount {
+		var paymentNo, refundNo, status string
+		if err := s.db.QueryRowContext(ctx, `SELECT payment_no, refund_no, status FROM refunds
+			WHERE order_no = ? AND idempotency_key = ? ORDER BY id LIMIT 1`, orderNo, strings.TrimSpace(req.GetIdempotencyKey())).
+			Scan(&paymentNo, &refundNo, &status); err != nil {
+			return nil, apperr.Internal("load existing order refund", err)
+		}
+		return &pb.RefundOrderReply{RefundNo: refundNo, PaymentNo: paymentNo, RefundedCent: amount, Status: status}, nil
+	}
+	remaining := amount - already
+	refunded := already
+	var firstRefund *refund
+	for _, in := range intents {
+		if remaining <= 0 {
+			break
+		}
+		captured := in.CapturedCent
+		if captured <= 0 {
+			captured = in.AmountCent
+		}
+		available := captured - in.RefundedCent
+		if available <= 0 {
+			continue
+		}
+		take := available
+		if take > remaining {
+			take = remaining
+		}
+		key := refundKey(in.PaymentNo, take, reason, req.GetIdempotencyKey())
+		if _, err := s.Refund(ctx, &pb.RefundRequest{
+			PaymentNo: in.PaymentNo, AmountCent: take, Reason: reason, IdempotencyKey: key,
+		}); err != nil {
+			return nil, err
+		}
+		ref, err := r.refundByKey(ctx, s.db, in.PaymentNo, key)
+		if err != nil {
+			return nil, apperr.Internal("load refund result", err)
+		}
+		if firstRefund == nil {
+			firstRefund = ref
+		}
+		refunded += take
+		remaining -= take
+	}
+	if remaining != 0 || firstRefund == nil {
+		return nil, apperr.Failed("refund amount exceeds captured payments")
 	}
 	return &pb.RefundOrderReply{
-		RefundNo:     ref.RefundNo,
-		PaymentNo:    ref.PaymentNo,
-		RefundedCent: ref.AmountCent,
-		Status:       ref.Status,
+		RefundNo:     firstRefund.RefundNo,
+		PaymentNo:    firstRefund.PaymentNo,
+		RefundedCent: refunded,
+		Status:       statusRefunded,
 	}, nil
 }
 

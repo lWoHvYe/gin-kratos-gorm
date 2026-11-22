@@ -14,28 +14,28 @@ money, inventory, recovery or production operation.
 |---|---|---|
 | P0.1 migration/rollback ADR + rehearsal | done | [ADR 0003](adr/0003-c-production-rollout.md), [runbook](runbooks/c-migration-rollback.md), `scripts/rehearse-c-migration.sh`; six C ledger entries and pre-C restore passed on disposable MySQL |
 | P0.1b migration runner hardening | done | lease + attempt ledger + failure refusal in `deploy/k8s/images/migrate/run.sh`; `scripts/test-migrate-runner.sh` covers failure, repair, replay, concurrency, stale lease |
-| P0.2 split concurrency / fault injection | partial | `scripts/check-split-concurrency.sh` covers duplicate payment, concurrent G1/G2 ship, draft cancellation, refund/ship race on dev and UAT. NATS/Order outage and worker-restart fault injection are not covered |
+| P0.2 split concurrency / fault injection | partial | `check-split-concurrency.sh` covers duplicate payment, concurrent G1/G2 ship, draft cancellation, refund/ship race. `fault-split-uat.sh` covers Order outage fail-closed, NATS outage and Fulfillment outage recovery. Worker restart remains uncovered |
 | P0.3 admin group shipment Playwright | done | [admin-split.spec.ts](../frontend/e2e/admin-split.spec.ts) creates a G2 shipment through the admin UI |
-| P0.4 group/permit/restock metrics and alerts | partial | backlog/oldest gauges exist for restock/refund and `/metrics` was checked. No Prometheus alert rules for them yet |
+| P0.4 group/permit/restock metrics and alerts | partial | backlog/oldest gauges exist; four alert rules pass `make alerts-check`, but no live Prometheus firing test |
 | P0.5 production split gate | done (guard) | production values keep split off; dev/UAT use `WAREHOUSE_MODE=split` |
 
 ## P1: fulfillment state/action consolidation
 
 | Item | Status | Evidence / gap |
 |---|---|---|
-| P1.1 `GroupFulfillmentView` | partial | `Order.group_actions`, effective `CANCELLED` status and closed-group projection exist; there is no single named `GroupFulfillmentView` type yet |
-| P1.2 typed action policy | partial | proto `OrderGroupAction`, typed `groupAction`, UI reads `group_actions`; `availableActions` and `multiGroupActions` are still two functions |
-| P1.3 explicit group refund state | not done | `orders.refund_state` remains order-level. Group isolation is enforced via permit state and effective status; no per-group refund projection column |
+| P1.1 `GroupFulfillmentView` | done | `Order.group_actions`, effective `CANCELLED` group status and closed-group projection are the read model; `orderActionPolicy` is the single action path |
+| P1.2 typed action policy | done | proto `OrderGroupAction`; `orderActionPolicy.groupActions/legacyActions` replaces the duplicated action functions; UI reads `group_actions` |
+| P1.3 explicit group refund state | rejected by design | `orders.refund_state` is the aggregate projection; group refund admission/isolation uses the authoritative permit state plus the after-sale amount ledger. A second group refund projection would duplicate state without an action consumer |
 | P1.4 shipment void + draft cleanup | done | `CancelCreatedShipment`, `shop.aftersale.refund_requested.v1` consumer, `CREATED -> CANCELLED`, auto-shipment action guard |
 | P1.5 `WAREHOUSE_MODE` | done | config + chart single switch; legacy booleans remain compatible; conflicts fail closed |
-| P1.6 test DB isolation + split fixture | partial | `scripts/test-dsn.sh` gives each integration package its own DB. Split Playwright/shell still relies on prepared demo SKUs/stock, not a self-seeding fixture |
+| P1.6 test DB isolation + split fixture | done | `scripts/test-dsn.sh` gives each integration package its own DB; `scripts/create-split-fixture.sh` creates and publishes two fresh SKUs stocked in different warehouses |
 
 ## P2: production/contracts
 
 | Item | Status | Evidence / gap |
 |---|---|---|
 | Production backup/restore, A/B/C rollback | deferred | C fixture/UAT migration and restore rehearsed; no production-sized backup or A/B production rollback because there is no large-scale production |
-| Multi payment intent captured aggregation | not done | `intentByOrder` returns the latest settled intent (`ORDER BY id DESC LIMIT 1`); multiple captured intents are not summed |
+| Multi payment intent captured aggregation | done | `GetPaymentByOrder` sums settled intents; `RefundOrder` allocates across captured intents with order-level idempotency; `order_refunded_cent` keeps the Order projection correct; integration tests cover aggregation and retry |
 | B inventory replay gRPC/BFF | partial | `cmd/inventory op-replay` CLI exists; no gRPC/BFF replay surface |
 | #38 AI mesh live 403 | partial | Helm render has read-only AI policies; live 403 verification was not run |
 | Typed outbox event schema | partial | core refund/shipment consumers have local structs including `group_no`; many outbox payloads remain `map[string]any`/JSON |
@@ -66,8 +66,9 @@ A task may be marked done only when all of the following hold:
    explicitly labelled "not production-ready" and cannot be counted as done.
 5. UAT with dev secrets/mock payment is labelled UAT, never production.
 
-Under this definition, P0.2, P0.4, P1.1, P1.2, P1.3, P1.6, P2 payment/replay/
-events/contracts and all P3 remain open.
+Under this definition, P0.2 (worker restart), P0.4 (live alert firing), P2
+replay/events/contracts/#38 and all P3 remain open. P1.1/P1.2/P1.6 and P2
+payment aggregation are done; P1.3 is rejected by design.
 
 ## Verification snapshot
 
@@ -84,7 +85,8 @@ C                           functional dev+UAT; production split off
 ## Recommended next order
 
 1. Add alerts for the after-sale backlog gauges (small).
-2. Add split fault injection for NATS/Order outage and worker restart (P0.2 gap).
+2. Add the remaining worker-restart fault injection (P0.2 gap) and a live
+   Prometheus alert-firing test (P0.4 gap).
 3. Consolidate `availableActions`/`multiGroupActions` behind one action policy and
    decide whether a per-group refund projection is worth persisting.
 4. Only then consider P2 payment aggregation/replay and P3 product/AI work.

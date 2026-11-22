@@ -75,17 +75,21 @@ func (h *handlers) setProductStatus(c *gin.Context) {
 			if sku.GetStatus() != "ENABLED" {
 				continue
 			}
-			stock, err := h.clients.Inventory.GetStock(c.Request.Context(), &pb.GetStockRequest{SkuId: sku.GetId(), WarehouseId: 1})
+			// Publishing must work when the only stock is in a non-default
+			// warehouse for a split listing; sum all warehouse rows.
+			stocks, err := h.clients.Inventory.ListStocks(c.Request.Context(), &pb.ListStocksRequest{
+				SkuId: sku.GetId(), Page: 1, PageSize: 200,
+			})
 			if err != nil {
-				if apperr.IsCode(err, apperr.CodeNotFound) {
-					httpx.Error(c, apperr.Failed(fmt.Sprintf("sku %d has no initialized inventory; adjust stock before publishing", sku.GetId())))
-					return
-				}
 				httpx.Error(c, bff.RemoteError(err))
 				return
 			}
-			if stock.GetAvailable() <= 0 {
-				httpx.Error(c, apperr.Failed(fmt.Sprintf("sku %d has no available stock", sku.GetId())))
+			var available int64
+			for _, stock := range stocks.GetStocks() {
+				available += stock.GetAvailable()
+			}
+			if available <= 0 {
+				httpx.Error(c, apperr.Failed(fmt.Sprintf("sku %d has no available stock in any warehouse", sku.GetId())))
 				return
 			}
 		}

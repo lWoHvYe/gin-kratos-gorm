@@ -18,11 +18,12 @@ import (
 )
 
 type paymentRefundedEvent struct {
-	PaymentNo    string `json:"payment_no"`
-	OrderNo      string `json:"order_no"`
-	AmountCent   int64  `json:"amount_cent"`
-	RefundedCent int64  `json:"refunded_cent"`
-	CapturedCent int64  `json:"captured_cent"`
+	PaymentNo         string `json:"payment_no"`
+	OrderNo           string `json:"order_no"`
+	AmountCent        int64  `json:"amount_cent"`
+	RefundedCent      int64  `json:"refunded_cent"`
+	OrderRefundedCent int64  `json:"order_refunded_cent"`
+	CapturedCent      int64  `json:"captured_cent"`
 }
 
 // RunRefundConsumer projects payment refunds onto the order aggregate. The
@@ -56,18 +57,22 @@ func applyPaymentRefunded(ctx context.Context, svc *Service, event paymentRefund
 		if err := tx.QueryRowContext(ctx, `SELECT refunded_cent, status, refund_status FROM orders WHERE order_no = ? FOR UPDATE`, event.OrderNo).Scan(&current, &status, &refundStatus); err != nil {
 			return err
 		}
-		if event.RefundedCent <= current {
+		totalRefunded := event.OrderRefundedCent
+		if totalRefunded <= 0 {
+			totalRefunded = event.RefundedCent
+		}
+		if totalRefunded <= current {
 			return nil
 		}
 		refundStatus = statusPartiallyRefunded
-		if event.CapturedCent > 0 && event.RefundedCent >= event.CapturedCent {
+		if event.CapturedCent > 0 && totalRefunded >= event.CapturedCent {
 			refundStatus = statusRefunded
 		}
-		refundState := refundStateFor(event.RefundedCent, event.CapturedCent)
+		refundState := refundStateFor(totalRefunded, event.CapturedCent)
 		if _, err := tx.ExecContext(ctx, `UPDATE orders
 			SET refunded_cent = ?, refund_status = ?, refund_state = ?, version = version + 1, updated_at = ?
 			WHERE order_no = ?`,
-			event.RefundedCent, refundStatus, refundState, time.Now(), event.OrderNo); err != nil {
+			totalRefunded, refundStatus, refundState, time.Now(), event.OrderNo); err != nil {
 			return err
 		}
 		if err := insertStatusLog(ctx, tx, event.OrderNo, status, status, "payment refund "+refundStatus, "payment"); err != nil {
@@ -77,7 +82,7 @@ func applyPaymentRefunded(ctx context.Context, svc *Service, event paymentRefund
 			Topic: "shop.order.refund_projected.v1", AggregateType: "order", AggregateID: event.OrderNo,
 			EventType: "order.refund_projected",
 			Payload: map[string]any{"order_no": event.OrderNo, "payment_no": event.PaymentNo,
-				"refunded_cent": event.RefundedCent, "captured_cent": event.CapturedCent,
+				"refunded_cent": totalRefunded, "captured_cent": event.CapturedCent,
 				"refund_status": refundStatus, "refund_state": refundState, "order_status": status},
 		})
 	})

@@ -75,6 +75,8 @@ rollout is still gated.
   receive, admin G2 shipment.
 - `scripts/check-split-concurrency.sh`: duplicate payment, concurrent G1/G2
   ship, draft cancellation, refund/ship race.
+- `scripts/fault-split-uat.sh`: NATS and Fulfillment outage recovery.
+- `make alerts-check`: four after-sale backlog rules.
 - `make test-integration` now derives `mall_integration_<package>`; packages no
   longer share one test database.
 

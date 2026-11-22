@@ -109,15 +109,16 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 				FreightCent: group.FreightCent, Status: effectiveGroupStatus(group),
 			})
 		}
+		policy := newOrderActionPolicy(o, groups)
+		out.AvailableActions = policy.legacyActions()
 		if len(groups) > 1 {
-			actions := multiGroupActions(o, groups)
+			actions := policy.groupActions()
 			out.GroupActions = make([]*pb.OrderGroupAction, 0, len(actions))
 			for _, action := range actions {
 				out.GroupActions = append(out.GroupActions, &pb.OrderGroupAction{
 					GroupNo: action.GroupNo, Action: action.Action,
 				})
 			}
-			out.AvailableActions = groupActionStrings(actions)
 		}
 	}
 	return out

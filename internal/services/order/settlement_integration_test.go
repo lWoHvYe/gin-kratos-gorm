@@ -273,6 +273,26 @@ func TestRefundProjectionKeepsLifecycle(t *testing.T) {
 	}
 }
 
+func TestRefundProjectionUsesOrderAggregate(t *testing.T) {
+	db := orderTestDB(t)
+	svc := settlementService(db)
+	ctx := context.Background()
+	seedSettlementOrder(t, db, "ORD-PROJ-MULTI", statusShipped, 1000, 0, refundStateNone)
+	if err := applyPaymentRefunded(ctx, svc, paymentRefundedEvent{
+		PaymentNo: "PAY-1", OrderNo: "ORD-PROJ-MULTI", AmountCent: 100,
+		RefundedCent: 100, OrderRefundedCent: 300, CapturedCent: 1000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var refunded int64
+	if err := db.QueryRow(`SELECT refunded_cent FROM orders WHERE order_no='ORD-PROJ-MULTI'`).Scan(&refunded); err != nil {
+		t.Fatal(err)
+	}
+	if refunded != 300 {
+		t.Fatalf("order aggregate = %d", refunded)
+	}
+}
+
 func TestAvailableActionsUseRefundState(t *testing.T) {
 	paid := &orderRecord{Status: statusPaid, RefundState: refundStateNone}
 	if actions := availableActions(paid); !containsAction(actions, actionShip) || !containsAction(actions, actionApplyAfterSale) {

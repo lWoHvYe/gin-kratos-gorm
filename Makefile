@@ -27,7 +27,7 @@ K8S_INFRA_HA_VALUES := $(K8S_DIR)/charts/infra/values-ha.yaml
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract e2e-phase15 e2e-warehouse-split check-split-concurrency rehearse-c-migration test-migrate-runner concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo ai-eval clean \
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract alerts-check e2e-phase15 e2e-warehouse-split create-split-fixture check-split-concurrency fault-split-uat rehearse-c-migration test-migrate-runner concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo ai-eval clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-render-ha k8s-lint-ha k8s-ha-verify k8s-deploy mesh-smoke \
 	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration status
 
@@ -168,8 +168,14 @@ e2e-phase15:
 e2e-warehouse-split:
 	./scripts/e2e-warehouse-split.sh
 
+create-split-fixture:
+	./scripts/create-split-fixture.sh
+
 check-split-concurrency:
 	./scripts/check-split-concurrency.sh
+
+fault-split-uat:
+	./scripts/fault-split-uat.sh
 
 rehearse-c-migration:
 	./scripts/rehearse-c-migration.sh
@@ -182,6 +188,9 @@ concurrency-phase15:
 
 dtm-contract:
 	./scripts/check-dtm-contract.sh
+
+alerts-check:
+	./scripts/check-alerts.sh
 
 chaos:
 	./scripts/chaos-nats.sh
@@ -225,7 +234,7 @@ test-integration:
 	@echo ">> order settlement + shipping permits (MySQL)"
 	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" order)" $(GO) test ./internal/services/order -run 'TestShippingPermit|TestBlockShipment|TestAuthorizeShipment|TestRefundProjection|TestAvailableActions|TestTccCancelKeepsLifecycle|TestFulfillmentGroupShadow|TestMultiGroupShadow|TestGroupShipmentProjection' -count=1
 	@echo ">> payment settlement read (MySQL)"
-	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" payment)" $(GO) test ./internal/services/payment -run 'TestGetPaymentByOrder' -count=1
+	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" payment)" $(GO) test ./internal/services/payment -run 'TestGetPaymentByOrder|TestRefundOrderAllocatesAcrossCapturedIntents' -count=1
 	@echo ">> after-sales amount/restock/refund protocol (MySQL)"
 	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" aftersales)" $(GO) test ./internal/services/aftersales -run 'TestAfterSaleAmount|TestPartialApproval|TestReturnRefund|TestRestockFailure|TestRestockPermanentFailureEmitsEvent|TestAfterSaleGroupRefundAndRestock|TestRefundOnlyBeforeGroupShipment|TestRefundTaskRetries|TestConcurrentAfterSale' -count=1
 	@echo ">> fulfillment shipping permit (MySQL)"

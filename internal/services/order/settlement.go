@@ -130,25 +130,36 @@ type groupAction struct {
 	Action  string
 }
 
-// multiGroupActions exposes per-group shipping/receiving/after-sale actions.
-func multiGroupActions(o *orderRecord, groups []*fulfillmentGroup) []groupAction {
-	if o == nil {
+// orderActionPolicy is the single authority for lifecycle actions. It combines
+// group status, permit state and the order-level refund projection; callers
+// must not re-derive actions from status.
+type orderActionPolicy struct {
+	order  *orderRecord
+	groups []*fulfillmentGroup
+}
+
+func newOrderActionPolicy(o *orderRecord, groups []*fulfillmentGroup) orderActionPolicy {
+	return orderActionPolicy{order: o, groups: groups}
+}
+
+func (p orderActionPolicy) groupActions() []groupAction {
+	if p.order == nil {
 		return nil
 	}
-	actions := make([]groupAction, 0, len(groups)*2+2)
-	if o.Status == statusPendingPayment {
-		if o.RefundState != refundStateRefunding && o.RefundState != refundStateFull {
+	actions := make([]groupAction, 0, len(p.groups)*2+2)
+	if p.order.Status == statusPendingPayment {
+		if p.order.RefundState != refundStateRefunding && p.order.RefundState != refundStateFull {
 			actions = append(actions, groupAction{Action: actionPay}, groupAction{Action: actionCancel})
 		}
 		return actions
 	}
-	fullRefund := o.RefundState == refundStateFull
-	for _, group := range groups {
+	fullRefund := p.order.RefundState == refundStateFull
+	for _, group := range p.groups {
 		switch group.Status {
 		case "PENDING", statusAllocated:
 			permitOpen := group.PermitState == "" || group.PermitState == permitNone || group.PermitState == permitGranted
 			if !fullRefund && permitOpen &&
-				(o.Status == statusPaid || o.Status == statusAllocated) {
+				(p.order.Status == statusPaid || p.order.Status == statusAllocated) {
 				actions = append(actions, groupAction{GroupNo: group.GroupNo, Action: actionShip})
 			}
 		case "SHIPPED":
@@ -165,9 +176,13 @@ func multiGroupActions(o *orderRecord, groups []*fulfillmentGroup) []groupAction
 	return actions
 }
 
-// groupActionStrings is the compatibility projection for clients that still
-// read available_actions.
-func groupActionStrings(actions []groupAction) []string {
+// legacyActions is the compatibility projection. Single-group orders keep the
+// historical unsuffixed actions; split orders expose suffixed group actions.
+func (p orderActionPolicy) legacyActions() []string {
+	if len(p.groups) <= 1 {
+		return availableActions(p.order)
+	}
+	actions := p.groupActions()
 	out := make([]string, 0, len(actions))
 	for _, action := range actions {
 		if action.GroupNo == "" {

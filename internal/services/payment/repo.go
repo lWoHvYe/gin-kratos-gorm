@@ -86,7 +86,11 @@ func newRepo(database *sql.DB) *repo {
 
 const intentColumns = `payment_no, order_no, user_id, amount_cent, captured_cent, refunded_cent, channel, payment_method, status, pay_url, expires_at`
 
-func scanIntent(row *sql.Row) (*intent, error) {
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanIntent(row rowScanner) (*intent, error) {
 	var in intent
 	if err := row.Scan(&in.PaymentNo, &in.OrderNo, &in.UserID, &in.AmountCent,
 		&in.CapturedCent, &in.RefundedCent, &in.Channel, &in.PaymentMethod,
@@ -213,7 +217,34 @@ func isDuplicateKey(err error) bool {
 // intentByOrder returns the latest settled intent for an order. Aftersales
 // refunds are order-keyed and do not need the payment number.
 func (r *repo) intentByOrder(ctx context.Context, q querier, orderNo string) (*intent, error) {
-	return scanIntent(q.QueryRowContext(ctx, `SELECT `+intentColumns+` FROM payment_intents
-		WHERE order_no = ? AND status IN (?, ?, ?) ORDER BY id DESC LIMIT 1`,
-		orderNo, statusSucceeded, statusPartiallyRefunded, statusRefunded))
+	rows, err := r.intentsByOrder(ctx, q, orderNo)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	return rows[len(rows)-1], nil
+}
+
+// intentsByOrder returns every settled intent for an order in deterministic
+// creation order. A single order may have multiple captured intents (retries or
+// channel fallbacks); refund allocation and captured facts must aggregate them.
+func (r *repo) intentsByOrder(ctx context.Context, q querier, orderNo string) ([]*intent, error) {
+	rows, err := q.QueryContext(ctx, `SELECT `+intentColumns+` FROM payment_intents
+		WHERE order_no = ? AND status IN (?, ?, ?) ORDER BY id ASC`,
+		orderNo, statusSucceeded, statusPartiallyRefunded, statusRefunded)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]*intent, 0, 2)
+	for rows.Next() {
+		in, err := scanIntent(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, in)
+	}
+	return out, rows.Err()
 }

@@ -341,8 +341,11 @@ make e2e-phase15  # opt-in B-end/C-end/return E2E; running stack required
 make e2e-warehouse-split # opt-in split E2E; two SKUs stocked in two warehouses
 make rehearse-c-migration # disposable MySQL: pre-C dumps -> migrate -> restore
 make test-migrate-runner # disposable MySQL: FAILED refusal + concurrent lease
+make fault-split-uat # UAT only: NATS/Fulfillment outage recovery
+make alerts-check # structural check for after-sale backlog rules
 # UAT install/validation: docs/runbooks/uat-environment.md
 make concurrency-phase15 # opt-in one-unit oversell race check
+make create-split-fixture # self-seeding two-SKU split fixture (admin API)
 make test-integration # per-package DBs derived from TEST_MYSQL_DSN
 # base DSN must contain /mall_integration_test; target uses
 # mall_integration_<package> via scripts/test-dsn.sh
@@ -552,8 +555,10 @@ The after-sales worker exports:
 - `mall_aftersale_refund_oldest_seconds`
 
 Alert when backlog is non-zero for longer than the restock/refund SLO or when
-the oldest task age grows without draining. These are durable task queues, not
-status scanners.
+the oldest task age grows without draining. The four rules live in
+`deploy/compose/observability/alerts.yml` and are structurally checked by
+`make alerts-check`; a live Prometheus firing test is not available in the
+current dev/UAT stack. These are durable task queues, not status scanners.
 
 ## Integration checks
 

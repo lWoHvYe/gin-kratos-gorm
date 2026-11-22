@@ -3,6 +3,7 @@ package aftersales
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -1183,5 +1184,48 @@ func TestRejectedAfterSaleReleasesLinePending(t *testing.T) {
 	}
 	if pendingQty != 0 || pendingCent != 0 {
 		t.Fatalf("pending after reject = %d/%d", pendingQty, pendingCent)
+	}
+}
+
+// P0-2: a permanently failed refund task releases line pending and order
+// amount reservations so the quota is not leaked.
+func TestPermanentRefundFailureReleasesReservations(t *testing.T) {
+	db := afterSaleTestDB(t)
+	svc, _ := lineAfterSaleService(t, db, 2500)
+	ctx := context.Background()
+	as, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-LINE", UserId: 1, Type: typeRefundOnly, Reason: "permanent failure",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1", LineNo: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Approve(ctx, &pb.ApproveRequest{AfterSaleNo: as.GetAfterSaleNo(), Approved: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE after_sales SET status = ? WHERE after_sale_no = ?`, statusRefunding, as.GetAfterSaleNo()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO after_sale_refund_tasks
+		(after_sale_no, status, attempts, last_error, lease_owner, lease_until)
+		VALUES (?, 'PROCESSING', ?, '', 'owner', DATE_ADD(NOW(3), INTERVAL 1 MINUTE))`,
+		as.GetAfterSaleNo(), maxTaskAttempts); err != nil {
+		t.Fatal(err)
+	}
+	svc.releaseRefundTask(ctx, as.GetAfterSaleNo(), "owner", errors.New("permanent"))
+	var pendingQty, pendingCent, consumed int64
+	if err := db.QueryRow(`SELECT pending_quantity, pending_amount_cent FROM after_sale_line_ledger
+		WHERE order_no = 'ORD-LINE' AND line_no = 1`).Scan(&pendingQty, &pendingCent); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT consumed_cent FROM after_sale_amount_ledger WHERE order_no = 'ORD-LINE'`).Scan(&consumed); err != nil {
+		t.Fatal(err)
+	}
+	var amountState string
+	if err := db.QueryRow(`SELECT amount_state FROM after_sales WHERE after_sale_no = ?`, as.GetAfterSaleNo()).Scan(&amountState); err != nil {
+		t.Fatal(err)
+	}
+	if pendingQty != 0 || pendingCent != 0 || consumed != 0 || amountState != amountReleased {
+		t.Fatalf("leak pending=%d/%d consumed=%d state=%s", pendingQty, pendingCent, consumed, amountState)
 	}
 }

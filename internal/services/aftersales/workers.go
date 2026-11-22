@@ -571,6 +571,25 @@ func (s *Service) releaseRefundTask(ctx context.Context, afterSaleNo, owner stri
 		if err := s.releasePendingForAfterSaleTx(ctx, tx, afterSaleNo); err != nil {
 			return
 		}
+		var orderNo, amountState string
+		var effective int64
+		if err := tx.QueryRowContext(ctx, `SELECT order_no, effective_amount_cent, amount_state
+			FROM after_sales WHERE after_sale_no = ? FOR UPDATE`, afterSaleNo).
+			Scan(&orderNo, &effective, &amountState); err != nil {
+			return
+		}
+		if amountState != amountReleased && effective > 0 {
+			if _, err := tx.ExecContext(ctx, `UPDATE after_sale_amount_ledger
+				SET consumed_cent = GREATEST(consumed_cent - ?, 0), version = version + 1, updated_at = NOW(3)
+				WHERE order_no = ?`, effective, orderNo); err != nil {
+				return
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE after_sales
+				SET amount_state = ?, version = version + 1 WHERE after_sale_no = ?`,
+				amountReleased, afterSaleNo); err != nil {
+				return
+			}
+		}
 	}
 	_ = tx.Commit()
 }

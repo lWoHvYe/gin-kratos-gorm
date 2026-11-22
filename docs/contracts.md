@@ -164,7 +164,11 @@ Consumers:
   addition to the legacy `available_actions` strings.
 - `OrderFulfillmentGroup.refund_state` is projected from a blocked permit and
   `shop.aftersale.completed.v1` (which carries `group_no`).
-- Core new event payloads are typed in `internal/platform/events`:
+- Every current core outbox event type is registered in
+  `internal/platform/events`; `outbox.Append` validates payloads and rejects
+  unregistered event types. Add a schema for every new event and keep optional
+  fields `omitempty` (see ADR 0004).
+- Core refund/fulfillment event payloads are typed in `internal/platform/events`:
   refund-requested, after-sale-completed and payment-refunded. Legacy events
   remain map payloads until their consumers are migrated.
 

@@ -3,9 +3,8 @@
 Audit date: 2026-11-22. This is an honest status snapshot, not a claim that every
 P0-P3 item is done.
 
-**Objective status: the necessary P0/P1/P2 slice is complete.** Full legacy
-event typing, a complete OpenAPI/proto/TS schema conformance gate and all P3
-work remain explicitly deferred, not silently counted as done.
+**Objective status: P3-0 prerequisites are complete.** P3 implementation is
+still gated by product/AI Spec+ADR; see [ADR 0004](adr/0004-p3-0-contract-and-production-scope.md).
 
 ## P0: C production gate
 
@@ -37,9 +36,18 @@ work remain explicitly deferred, not silently counted as done.
 | Multi payment intent captured aggregation | done | `GetPaymentByOrder` sums settled intents; `RefundOrder` allocates across captured intents with order-level idempotency; `order_refunded_cent` keeps the Order projection correct; integration tests cover aggregation and retry |
 | B inventory replay gRPC/BFF | done | CLI plus `ReplayInventoryOperation` gRPC and admin `POST /inventory/operations/:id/replay`; integration test and live 404 route check |
 | #38 AI mesh live 403 | done | live UAT check: AI-sa ListProducts succeeds, CreateProduct returns PermissionDenied; `scripts/check-ai-mesh.sh` |
-| Typed outbox event schema | partial | new refund-requested/completed/payment-refunded payloads use typed `internal/platform/events` structs and a contract test; legacy events remain maps. This is the necessary group/refund/payment subset; full legacy migration is deferred |
-| OpenAPI/proto/TS consistency | partial | `make contract-check` runs proto guard, typed event tests and admin/gateway OpenAPI route tests; generated TS still has hand-written overlays and no full schema conformance |
+| Typed outbox event schema | done | every current core outbox event type has a typed schema in `internal/platform/events`; `outbox.Append` validates payloads and rejects unknown event types; registry-completeness test included |
+| OpenAPI/proto/TS consistency | done | `make contract-check` runs proto guard, typed event tests, bidirectional admin/gateway route parity and regenerates TS with a clean-diff check |
 | Migration runner lock/failure marking | done | see P0.1b |
+
+## P3-0: prerequisites
+
+| Item | Status | Evidence |
+|---|---|---|
+| Full core outbox event typed registry | done | `internal/platform/events/registry.go`; `outbox.Append` validates every payload; unknown event types fail closed |
+| OpenAPI/proto/TS contract gate | done | `make contract-check` runs proto guard, event schema tests, admin/gateway route parity and generated TS freshness |
+| Production backup/rollback scope | decided | [ADR 0004](adr/0004-p3-0-contract-and-production-scope.md): production backup/rollback is a gate for production enablement, not for P3 design/UAT; split stays off |
+| P3 implementation | blocked by P3 Spec/ADR | AI Turn/Action, quantity split/cost, carrier provider, multi-warehouse seckill |
 
 ## P3: deferred product/AI work
 
@@ -65,9 +73,10 @@ A task may be marked done only when all of the following hold:
    explicitly labelled "not production-ready" and cannot be counted as done.
 5. UAT with dev secrets/mock payment is labelled UAT, never production.
 
-Under this definition, the necessary P0/P1/P2 slice is complete. Remaining
-explicitly deferred: full legacy-event typing, complete OpenAPI/proto/TS schema
-conformance and all P3 work.
+Under this definition P3-0 is complete: core events are schema-validated, the
+contract gate is enforced, and production backup/rollback scope is explicitly
+decided in ADR 0004. P3 implementation remains blocked by the product/AI
+Spec+ADR gates, not by contract or code prerequisites.
 
 ## Verification snapshot
 

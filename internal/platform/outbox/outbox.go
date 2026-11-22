@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/mq"
@@ -35,6 +36,9 @@ func Append(ctx context.Context, tx *sql.Tx, e Event) error {
 	payload, err := encodePayload(e.Payload)
 	if err != nil {
 		return err
+	}
+	if err := events.ValidateJSON(e.EventType, payload); err != nil {
+		return fmt.Errorf("validate outbox event: %w", err)
 	}
 	if e.ID == "" {
 		e.ID = id.Event()

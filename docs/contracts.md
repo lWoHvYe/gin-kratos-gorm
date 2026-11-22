@@ -179,6 +179,7 @@ Required fields (normative: [ADR-0005 §18.8](adr/0005-fulfillment-quantity-spli
 - `shop.order.allocation_frozen.v1`: `order_no`, `allocation_hash`,
   `package_count`, `warehouse_count`, `frozen_at`.
 - `shop.order.shortage.reported.v1`: `order_no`, `group_no`, `status`,
+  `detected_at_unix`, `notify_deadline_unix`, `notified_at_unix`,
   `choose_deadline_unix`, `reason_code`.
 - `shop.order.shortage.resolved.v1`: `order_no`, `group_no`, `status`,
   `resolution`, `reason_code`, `resolved_at`, `items[]` (`line_no`, `sku_id`,
@@ -194,7 +195,7 @@ Required fields (normative: [ADR-0005 §18.8](adr/0005-fulfillment-quantity-spli
 - `shop.aftersale.line_refunded.v1`: `after_sale_no`, `order_no`, `line_no`,
   `quantity`, `refunded_amount_cent`.
 - `shop.aftersale.completed.v1`: adds `group_no`, `effective_amount_cent`,
-  `freight_cent`, `rule_id`.
+  `freight_cent`, `rule_id`, `responsibility_party`.
 
 Consumers:
 

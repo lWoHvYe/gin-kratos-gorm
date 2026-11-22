@@ -18,17 +18,18 @@
 |---|---|
 | Spec | SPEC-0001 **v1.2**（approved，`docs/specs/0001-fulfillment-quantity-split.md`） |
 | ADR | ADR-0005 **v1.2 / Amendment 2**（accepted，T-001 已回写） |
-| 流程 ADR | ADR-0006 协作闸门可执行化（accepted，待 Developer 实现） |
-| 线程（PO↔Arch） | T-001 **CLOSED**；T-002 **ANSWERED**（等实现 + A1…A5） |
-| 线程（Arch↔Dev） | `docs/collab/architect-developer/T-001` **OPEN**（实施交接） |
+| 流程 ADR | ADR-0006 协作闸门可执行化（accepted；Developer 已实现，待 Reviewer 独立复跑 A1…A5） |
+| 线程（PO↔Arch） | T-001 **CLOSED**；T-002 **ANSWERED**（等 Reviewer A1…A5 独立复跑） |
+| 线程（Arch↔Dev） | T-001 **CLOSED**（实施交接）；T-002 **CLOSED**（scope 追认） |
+| Reviewer 门禁 | `docs/collab/developer-reviewer/T-001` **OPEN**（P0 修复后待复跑） |
 | 生产开关 | `QUANTITY_SPLIT_ENABLED` / `CARRIER_REGISTRY_ENABLED` / `DELIVERY_AUTO_CONFIRM_ENABLED` / `SHORTAGE_CASE_ENABLED` / `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false |
 
 ## 未完成项（不能判 done）
 
-- **B-01**：`order_allocation_decisions.availability_json` 仍为 `{}`；Order 下单复算 + `single_warehouse_max` + 审计未完成。
-- **B-05**：缺货只到 `RESOLVED_REFUND`，AfterSales 消费者/系统退款/可见性未完成；AC-30 不得通过。
-- **T-002**：闸门脚本、baseline、coverage 台账、自测、CI 未实现；Reviewer A1…A5 未跑。
-- AC-31…38 的测试需按 v1.2 补齐；AC-14 六场景。
+- **B-01/B-05**：Developer 已交付（availability 审计、缺货系统退款、pending 预占），但 Reviewer P0 复跑未完成；**复跑通过前不得报 done**。
+- **T-002**：闸门脚本/self-test 已实现，Developer 自测 A1…A5 通过；独立 Reviewer 复跑未完成。
+- **残余**：B-06a（change_reason/return_carrier_code）、C-01…C-03 shim、D-01/D-02（缺货 BFF、日终对账/故障注入），owner+expiry 见偏差登记。
+- AC-31…38 已有 `TestAC` 引用；AC-14 累计封顶、AC-22 SLA、AC-28/29/30/35/37 浏览器级深度缺口见 `ac-coverage.tsv`。
 
 ## 易漂移点（每次改 ADR 先看）
 
@@ -53,6 +54,12 @@
 
 - PO↔Arch：`docs/collab/po-architect/`
 - Arch↔Dev：`docs/collab/architect-developer/`（实施交接/契约提问；trailer 用 `Thread: architect-developer/T-NNN`）
+
+## 最近裁决（2026-11-22）
+
+- Arch↔Dev T-002：scope 词表**追认（选项 B）**——`gates` 不含 `ac-baseline.txt`/`ac-coverage.tsv`（Reviewer 所有）；闸门自测用 `ci(gates)`，不用 `test(collab)`。
+- `be11508` 由 Developer 直改 CONVENTIONS 属越权；内容追认，历史不回改；后续改 CONVENTIONS 必须开 `architect-developer/T-NNN`。
+- B-07a：`docs/contracts.md` 已补 `shortage.reported` 时间字段与 `aftersale.completed.responsibility_party`。
 
 ## 常用命令
 

@@ -121,4 +121,4 @@ else
   exit 1
 fi
 
-echo "gates-test: $pass/5 PASS"
+echo "gates-test: A1-A5 PASS (${pass} assertions)"

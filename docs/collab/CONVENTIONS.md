@@ -21,6 +21,8 @@
 | 协作线程 | `docs/collab/*/threads/**` | 双方各自追加 | 不改对方已写内容 |
 | 代码与测试 | `internal/**`、`cmd/**`、`api/**`… | Developer | Reviewer 只提议，不直接改 |
 | PO 记忆 | `docs/po/**` | Product Owner | 只读 |
+| Architect 记忆 | `docs/architect/**` | System Architect | 只读 |
+| 闸门基线/覆盖台账 | `docs/collab/ac-baseline.txt`、`docs/collab/ac-coverage.tsv` | Reviewer | 只读（变更需 Reviewer 记录） |
 
 **禁止**：任何角色直接编辑他人产物。需要对方改，只能开线程。
 
@@ -181,3 +183,53 @@ docs/implementation/ 偏差登记。每条 AC 至少一个测试且测试名含 
 - 偏差无 owner、无到期日。
 - Spec 与代码同一笔提交。
 - 用"技术上难"作为简化业务规则的理由。
+
+
+---
+
+## 附录 A：闸门可执行化（G-1 / G-2 / G-3）
+
+> 设计依据：[ADR 0006](../adr/0006-collab-gates.md)。本附录只写调用方式与日常规则；检查细节以实现与 ADR 为准。
+
+### A.1 调用
+
+```bash
+make gates          # warn：打印违规/覆盖率，不阻断；已并入 make verify
+make gates-strict   # strict：违规即 exit 1；CI 与合并前使用
+make gates-test     # 合成仓库自测 A1…A5，不碰真实历史
+```
+
+- 默认范围 `HEAD^..HEAD`；可用 `RANGE=origin/main..HEAD make gates-strict`。
+- pre-commit：`scripts/check-collab-gates.sh --staged --role=Developer --mode=strict`。
+- `GATES_MODE` 只切换 warn/strict，**不能跳过**；不存在 `SKIP_GATES`。
+
+### A.2 两档模式
+
+| 模式 | 场景 | 未覆盖 AC | 违规 |
+|---|---|---|---|
+| warn | 日常 `make verify` | 打印，不阻断 | 打印，不阻断 |
+| strict | CI / 合并 / 发布 | 无有效台账即阻断 | 阻断 |
+
+### A.3 豁免键
+
+| 键 | 作用域 | 规则 |
+|---|---|---|
+| `Role:` | G-1 | 多值；受管路径的所有者必须出现；缺失在 strict 下阻断 |
+| `Exception: T-NNN` | 仅 G-1 | 线程必须存在且未 CLOSED；输出必须打印；禁止静态路径白名单 |
+| `Non-normative: true` | 仅 G-2 | 只用于链接/错别字；输出必须打印；A6 人工判断是否滥用 |
+
+`Exception:` 不能豁免 G-2/G-3；`Non-normative:` 不能豁免 G-1。
+
+### A.4 AC 基线/覆盖台账
+
+- `docs/collab/ac-baseline.txt`：AC 编号只增不减；当前 Spec 必须与 baseline 一致。
+- `docs/collab/ac-coverage.tsv`：`ac	owner	expiry	reason	thread`；过期/缺 owner/reason 即 strict 失败。
+- 台账由 Reviewer 维护；Developer 不得改台账来过闸门；不得删 AC/测试/注释。
+
+### A.5 Reviewer A1…A5
+
+按 [ADR 0006](../adr/0006-collab-gates.md) 的 A1…A5 执行，把终端输出贴进 T-002“验证”段；A6 人工兜底。
+
+### A.6 绕过禁令
+
+删除/重编号 AC、删唯一测试、改 baseline 删除条目、堆 `Exception`、把 Spec 挪出受管目录、用 `Non-normative` 掩盖业务变更、改闸门脚本让检查恒真、CI 改 warn——一律打回。闸门脚本改动需 Architect + Reviewer 双方复核。

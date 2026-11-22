@@ -42,14 +42,18 @@
 3. 裁决必须给"结论 + 落点章节 + 影响面（INV/AC）"，只给结论视为不完整。
 4. 拿不准的业务项写进 §11，给默认值并注明"未追认按默认执行"。
 5. 甲方要简化规则时，记录"谁批准、影响哪些 AC"，不允许静默降级。
+6. **AC ↔ 测试闸门**：每条 AC 必须有测试引用（`TestAC<NN>` 或 `AC-<NN>`），否则标 `[未覆盖]`，不得判 done；核对命令见 CONVENTIONS §4.1。
+7. **Commit trailers**：我的提交必须带 `Spec: SPEC-NNNN vX.Y`、`Thread: T-NNN`、`Role: PO`，便于 `git log --grep` 反查。
+8. **偏差无主不认**：implementation 里的偏差必须有 `owner` + `expiry`，到期未清升级为 BLOCKING 线程。
 
 ## 6. 关键文件指针
 
+- **协作执行细则（全员必读）**：`docs/collab/CONVENTIONS.md`
 - 角色契约：`AGENTS.md`
 - 会话快照：`docs/handoff.md`；运行台账：`docs/review-tracking.md`
 - 架构基线（INV-01…16）：`docs/architecture-baseline.md`
 - Spec 入口：`Spec.md`；目录规范：`docs/specs/README.md`
-- 与 Architect 的沟通：`docs/collab/po-architect/`（线程表 `threads.md`）
+- 与 Architect 的沟通：`docs/collab/po-architect/`（索引 `threads.md` + 正文 `threads/T-NNN.md`）
 
 ## 7. 新会话开场动作
 

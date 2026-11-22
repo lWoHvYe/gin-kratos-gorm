@@ -1,39 +1,31 @@
 # PO ↔ Architect 协作通道
 
-> 用途：把"提问 → 裁决 → 回写"的过程留痕，避免口头结论丢失或反复讨论同一件事。
-> **本目录只记录过程，不作验收依据。** 结论以 `docs/specs/` 与 `docs/adr/` 为准。
+> 通用协议见 [`../CONVENTIONS.md`](../CONVENTIONS.md)（所有 Agent 必读）。
+> 本文件只写**这一对角色**的补充规定；冲突时以 CONVENTIONS 为准。
 
-## 1. 谁写什么
+## 目录结构
 
-| 文件 | 谁维护 | 内容 |
-|---|---|---|
-| `threads.md` | 双方追加 | 线程台账：编号、状态、提问、裁决、回写结果 |
-| `docs/specs/*` | **仅 PO** | 业务裁决的唯一正式载体 |
-| `docs/adr/*` | **仅 Architect** | 设计裁决的唯一正式载体 |
+```text
+docs/collab/po-architect/
+├── README.md       本文件：配对补充规则
+├── threads.md      线程索引（只有表格）
+└── threads/
+    └── T-NNN.md    一文件一线程，正文 + YAML front-matter
+```
 
-双方都**不改对方文件**；需要对方改的，开线程而不是直接编辑。
+## 配对补充规则
 
-## 2. 线程规则
+1. **谁写什么**：PO 写线程的"裁决"段与 `docs/specs/`；Architect 写"回写"段与 `docs/adr/`。双方不改对方文件。
+2. **一次只推进一个阻塞线程**：`BLOCKING` 未 `ANSWERED` 时不开新线程，避免并行发散。
+3. **Architect 提问必须带 ADR 章节号**；PO 裁决必须带 Spec 章节号。缺章节号直接退回。
+4. **ADR 的"待 PO 裁决"标记**：PO 答复后必须在同一轮删除或改为已决，不允许长期共存（历史已出现过一次漂移）。
+5. **关闭由 Architect 执行**：满足 CONVENTIONS §3 三条件后改 `status: CLOSED`、填 `closed_by`、同步索引表。
 
-1. 编号 `T-NNN`，三位递增，**永不复用**；一个线程只装一个主题，可含多个子问题。
-2. 状态机：
+## 与其他文档的关系
 
-   ```text
-   OPEN ──PO 裁决──> ANSWERED ──Architect 回写并证实──> CLOSED
-   ```
-
-3. **提问方必须给全**：现象、Spec 原文与章节、ADR 当前处理、影响（金额 / 用户承诺 / 契约）、选项与建议、是否 `BLOCKING`。
-4. **裁决方必须给全**：结论、落点章节、影响的不变量（INV）与验收项（AC）。只给结论不给落点，视为未裁决。
-5. `BLOCKING` 项：PO 在 48 小时内给口径；**未裁决不得开工**（fail-closed）。非阻塞项按 Spec §11 默认值执行。
-6. 只追加不删历史；线程关闭后保留原文与裁决，便于回溯。
-7. 结论必须回写 Spec/ADR 并对应 commit；线程里写了但 Spec 没写，等于没定。
-
-## 3. 关闭条件
-
-一个线程可以标 `CLOSED`，当且仅当：
-
-- PO 裁决已写入 Spec，且 Spec 版本号已升、变更记录已注明影响面；
-- Architect 已把对应设计写回 ADR，并把原"待裁决"标记改为已决；
-- 若涉及实现，Deviation Register 中该条已改为 `closed` 或明确排期。
-
-缺任意一条，状态只能停在 `ANSWERED`。
+| 文档 | 角色 |
+|---|---|
+| `docs/specs/` | 业务结论，唯一事实源 |
+| `docs/adr/` | 设计结论，唯一事实源 |
+| `docs/implementation/*-deviation-register.md` | 实现与设计的差异，必须带 `owner` + `expiry` |
+| `docs/collab/po-architect/threads/` | 过程记录，**不作验收依据** |

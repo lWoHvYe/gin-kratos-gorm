@@ -33,3 +33,4 @@ Developer 在 ADR 获批前不得开工。
 - 长期记忆与项目状态：[docs/po/MEMORY.md](docs/po/MEMORY.md)
 - 未立项需求池：[docs/po/backlog.md](docs/po/backlog.md)
 - 与 Architect 的线程台账：[docs/collab/po-architect/threads.md](docs/collab/po-architect/threads.md)
+- **协作执行细则（全员必读）**：[docs/collab/CONVENTIONS.md](docs/collab/CONVENTIONS.md)

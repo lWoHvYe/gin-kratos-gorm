@@ -11,7 +11,8 @@
 | Spec | SPEC-0001 **v1.2**（approved，`docs/specs/0001-fulfillment-quantity-split.md`） |
 | ADR | ADR-0005 **v1.2 / Amendment 2**（accepted，T-001 已回写） |
 | 流程 ADR | ADR-0006 协作闸门可执行化（accepted，待 Developer 实现） |
-| 线程 | T-001 **CLOSED**；T-002 **ANSWERED**（等实现 + A1…A5） |
+| 线程（PO↔Arch） | T-001 **CLOSED**；T-002 **ANSWERED**（等实现 + A1…A5） |
+| 线程（Arch↔Dev） | `docs/collab/architect-developer/T-001` **OPEN**（实施交接） |
 | 生产开关 | `QUANTITY_SPLIT_ENABLED` / `CARRIER_REGISTRY_ENABLED` / `DELIVERY_AUTO_CONFIRM_ENABLED` / `SHORTAGE_CASE_ENABLED` / `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false |
 
 ## 未完成项（不能判 done）
@@ -39,6 +40,11 @@
 - `make gates`（warn，并入 `verify`）/ `make gates-strict`（CI/合并）/ `make gates-test`（A1…A5 自测）。
 - 豁免只允许 `Role:`、`Exception: T-NNN`、`Non-normative: true`；不得删 AC/测试、改 baseline、堆豁免、改脚本恒真。
 - 覆盖台账 `docs/collab/ac-coverage.tsv` 由 Reviewer 维护；baseline `docs/collab/ac-baseline.txt` 只增不减。
+
+## 协作通道
+
+- PO↔Arch：`docs/collab/po-architect/`
+- Arch↔Dev：`docs/collab/architect-developer/`（实施交接/契约提问；trailer 用 `Thread: architect-developer/T-NNN`）
 
 ## 常用命令
 

@@ -150,7 +150,7 @@ docs/collab/po-architect/threads.md。有 OPEN 且 BLOCKING 的线程先裁决�
 
 ```text
 你是 Architect。读 AGENTS.md、docs/collab/CONVENTIONS.md、当前 Spec 版本、
-docs/collab/po-architect/threads.md。OPEN 线程按"提问四要素"回复；已 ANSWERED 的
+docs/collab/po-architect/threads.md、docs/collab/architect-developer/threads.md。OPEN 线程按"提问四要素"回复；已 ANSWERED 的
 线程负责回写 ADR 并标 CLOSED。ADR 变更用 Amendment，不许原地改写已接受结论；
 不许改 docs/specs 与 docs/po。commit 带 Spec:/ADR:/Thread: trailers。
 ```
@@ -159,7 +159,7 @@ docs/collab/po-architect/threads.md。OPEN 线程按"提问四要素"回复；�
 
 ```text
 你是 Developer。读 AGENTS.md、docs/collab/CONVENTIONS.md、当前 Spec、对应 ADR、
-docs/implementation/ 偏差登记。每条 AC 至少一个测试且测试名含 TestAC<NN>；
+docs/collab/architect-developer/threads.md、docs/implementation/ 偏差登记。每条 AC 至少一个测试且测试名含 TestAC<NN>；
 实现与 ADR 不符时不许自己发明规则，开线程问。偏差必须登记 owner + expiry；
 不许改 Spec/ADR。commit 带 Spec:/ADR:/AC: trailers。
 ```

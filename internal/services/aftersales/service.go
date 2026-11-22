@@ -13,6 +13,7 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/outbox"
@@ -514,11 +515,11 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*
 		if err := appendLog(ctx, tx, row.id, "REFUND_INTENT", row.status, statusRefunding, string(intent)); err != nil {
 			return nil, err
 		}
-		payload, _ := json.Marshal(afterSaleEvent{
-			AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, UserID: row.userID,
+		payload, _ := json.Marshal(events.AfterSaleRefundRequested{
+			AfterSaleNo: afterSaleNo, OrderNo: row.orderNo, GroupNo: groupNo, UserID: row.userID,
 			Type: row.typ, Status: statusRefunding, AmountCent: row.amountCent,
 			EffectiveAmountCent: row.effectiveAmountCent, AmountState: row.amountState,
-			RestockState: row.restockState, Reason: row.reason, GroupNo: groupNo, RefundIntent: true,
+			RestockState: row.restockState, Reason: row.reason, RefundIntent: true,
 		})
 		if err := outbox.Append(ctx, tx, outbox.Event{
 			Topic: topicAfterSaleRefundRequested, AggregateType: aggregateAfterSale,

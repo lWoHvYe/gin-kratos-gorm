@@ -11,20 +11,14 @@ import (
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/consumer"
 	"gin-kratos-gorm/internal/platform/db"
+	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/mq"
 	"gin-kratos-gorm/internal/platform/outbox"
 
 	"github.com/nats-io/nats.go"
 )
 
-type paymentRefundedEvent struct {
-	PaymentNo         string `json:"payment_no"`
-	OrderNo           string `json:"order_no"`
-	AmountCent        int64  `json:"amount_cent"`
-	RefundedCent      int64  `json:"refunded_cent"`
-	OrderRefundedCent int64  `json:"order_refunded_cent"`
-	CapturedCent      int64  `json:"captured_cent"`
-}
+type paymentRefundedEvent = events.PaymentRefunded
 
 // RunRefundConsumer projects payment refunds onto the order aggregate. The
 // payment event is the source of truth; the update is monotonic and idempotent.

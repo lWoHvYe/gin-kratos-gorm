@@ -7,16 +7,13 @@ import (
 
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/consumer"
+	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/mq"
 
 	"github.com/nats-io/nats.go"
 )
 
-type afterSaleCompletedEvent struct {
-	AfterSaleNo string `json:"after_sale_no"`
-	OrderNo     string `json:"order_no"`
-	GroupNo     string `json:"group_no"`
-}
+type afterSaleCompletedEvent = events.AfterSaleCompleted
 
 // RunAfterSaleConsumer projects a completed refund onto the explicit
 // per-group refund state. The permit decision remains authoritative; this is

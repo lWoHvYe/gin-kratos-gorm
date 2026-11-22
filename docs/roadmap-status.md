@@ -36,10 +36,10 @@ money, inventory, recovery or production operation.
 |---|---|---|
 | Production backup/restore, A/B/C rollback | deferred | C fixture/UAT migration and restore rehearsed; no production-sized backup or A/B production rollback because there is no large-scale production |
 | Multi payment intent captured aggregation | done | `GetPaymentByOrder` sums settled intents; `RefundOrder` allocates across captured intents with order-level idempotency; `order_refunded_cent` keeps the Order projection correct; integration tests cover aggregation and retry |
-| B inventory replay gRPC/BFF | partial | `cmd/inventory op-replay` CLI exists; no gRPC/BFF replay surface |
-| #38 AI mesh live 403 | partial | Helm render has read-only AI policies; live 403 verification was not run |
-| Typed outbox event schema | partial | core refund/shipment consumers have local structs including `group_no`; many outbox payloads remain `map[string]any`/JSON |
-| OpenAPI/proto/TS consistency | partial | generated TS + hand-written overlays; no automated proto/OpenAPI conformance gate |
+| B inventory replay gRPC/BFF | done | CLI plus `ReplayInventoryOperation` gRPC and admin `POST /inventory/operations/:id/replay`; integration test and live 404 route check |
+| #38 AI mesh live 403 | done | live UAT check: AI-sa ListProducts succeeds, CreateProduct returns PermissionDenied; `scripts/check-ai-mesh.sh` |
+| Typed outbox event schema | partial | new refund-requested/completed/payment-refunded payloads use typed `internal/platform/events` structs and a contract test; legacy events remain maps. This is the necessary group/refund/payment subset; full legacy migration is deferred |
+| OpenAPI/proto/TS consistency | partial | `make contract-check` runs proto guard, typed event tests and admin/gateway OpenAPI route tests; generated TS still has hand-written overlays and no full schema conformance |
 | Migration runner lock/failure marking | done | see P0.1b |
 
 ## P3: deferred product/AI work
@@ -66,8 +66,9 @@ A task may be marked done only when all of the following hold:
    explicitly labelled "not production-ready" and cannot be counted as done.
 5. UAT with dev secrets/mock payment is labelled UAT, never production.
 
-Under this definition, P2 replay/events/contracts/#38 and all P3 remain open.
-P0.2, P0.4, P1.1/P1.2/P1.3/P1.6 and P2 payment aggregation are done.
+Under this definition, the necessary P0/P1/P2 slice is complete. Remaining
+explicitly deferred: full legacy-event typing, complete OpenAPI/proto/TS schema
+conformance and all P3 work.
 
 ## Verification snapshot
 
@@ -83,8 +84,7 @@ C                           functional dev+UAT; production split off
 
 ## Recommended next order
 
-1. Add alerts for the after-sale backlog gauges (small).
-2. P2: replay BFF, #38 live 403, typed event/contract gate.
-3. Consolidate `availableActions`/`multiGroupActions` behind one action policy and
-   decide whether a per-group refund projection is worth persisting.
-4. Only then consider P2 payment aggregation/replay and P3 product/AI work.
+1. Add live Prometheus firing coverage in CI (promtool already passes).
+2. Migrate remaining legacy outbox events to typed structs and add a complete
+   proto/OpenAPI/TS conformance gate.
+3. P3 only after those contract/governance items close.

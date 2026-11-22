@@ -454,8 +454,10 @@ func TestReplayMissingCancelItem(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedReservation(t, db, orderNo, 2, 1, statusHeld)
-	if err := svc.ReplayInventoryOperation(ctx, summary.OperationID, []int64{2}); err != nil {
-		t.Fatalf("replay: %v", err)
+	if _, err := svc.ReplayInventoryOperation(ctx, &pb.ReplayInventoryOperationRequest{
+		OperationId: summary.OperationID, SkuIds: []int64{2},
+	}); err != nil {
+		t.Fatalf("replay RPC: %v", err)
 	}
 	if got := reservationStatus(t, db, orderNo, 2); got != statusReleased {
 		t.Fatalf("sku2 status = %s after replay", got)
@@ -465,7 +467,7 @@ func TestReplayMissingCancelItem(t *testing.T) {
 		t.Fatalf("operation after replay = %s %d/%d/%d", status, succeeded, failed, skipped)
 	}
 	// A DONE item cannot be replayed: stock already moved.
-	if err := svc.ReplayInventoryOperation(ctx, summary.OperationID, []int64{1}); !apperr.IsCode(err, apperr.CodeConflict) {
+	if err := svc.ReplayInventoryOperationForCLI(ctx, summary.OperationID, []int64{1}); !apperr.IsCode(err, apperr.CodeConflict) {
 		t.Fatalf("replay DONE item err = %v, want CONFLICT", err)
 	}
 	assertStockInvariants(t, db)

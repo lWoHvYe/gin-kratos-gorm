@@ -11,6 +11,7 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/outbox"
@@ -390,11 +391,11 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 	if err := appendLog(ctx, tx, current.id, "REFUND", statusRefunding, statusRefunded, "payment refund completed"); err != nil {
 		return err
 	}
-	payload, _ := json.Marshal(afterSaleEvent{
-		AfterSaleNo: afterSaleNo, OrderNo: current.orderNo, UserID: current.userID,
+	payload, _ := json.Marshal(events.AfterSaleCompleted{
+		AfterSaleNo: afterSaleNo, OrderNo: current.orderNo, GroupNo: groupNo, UserID: current.userID,
 		Type: current.typ, Status: statusRefunded, AmountCent: current.amountCent,
 		EffectiveAmountCent: current.effectiveAmountCent, AmountState: amountConsumed,
-		RestockState: current.restockState, Reason: current.reason, GroupNo: groupNo,
+		RestockState: current.restockState, Reason: current.reason,
 	})
 	if err := outbox.Append(ctx, tx, outbox.Event{
 		Topic: topicAfterSaleCompleted, AggregateType: aggregateAfterSale,

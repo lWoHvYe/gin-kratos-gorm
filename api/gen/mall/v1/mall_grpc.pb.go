@@ -1419,6 +1419,7 @@ const (
 	InventoryService_AdminAdjustStock_FullMethodName          = "/mall.v1.InventoryService/AdminAdjustStock"
 	InventoryService_ListStocks_FullMethodName                = "/mall.v1.InventoryService/ListStocks"
 	InventoryService_ListLowStock_FullMethodName              = "/mall.v1.InventoryService/ListLowStock"
+	InventoryService_ReplayInventoryOperation_FullMethodName  = "/mall.v1.InventoryService/ReplayInventoryOperation"
 	InventoryService_AllocateOrder_FullMethodName             = "/mall.v1.InventoryService/AllocateOrder"
 	InventoryService_Restock_FullMethodName                   = "/mall.v1.InventoryService/Restock"
 	InventoryService_TccTryConfirm_FullMethodName             = "/mall.v1.InventoryService/TccTryConfirm"
@@ -1448,6 +1449,8 @@ type InventoryServiceClient interface {
 	AdminAdjustStock(ctx context.Context, in *AdminAdjustStockRequest, opts ...grpc.CallOption) (*Stock, error)
 	ListStocks(ctx context.Context, in *ListStocksRequest, opts ...grpc.CallOption) (*StockList, error)
 	ListLowStock(ctx context.Context, in *ListLowStockRequest, opts ...grpc.CallOption) (*StockList, error)
+	// Explicit recovery for a permanently failed inventory operation.
+	ReplayInventoryOperation(ctx context.Context, in *ReplayInventoryOperationRequest, opts ...grpc.CallOption) (*Empty, error)
 	// Read-only warehouse allocation for checkout preview. It never reserves
 	// stock; Order/Reserve still own the durable allocation.
 	AllocateOrder(ctx context.Context, in *AllocateOrderRequest, opts ...grpc.CallOption) (*AllocateOrderReply, error)
@@ -1549,6 +1552,16 @@ func (c *inventoryServiceClient) ListLowStock(ctx context.Context, in *ListLowSt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StockList)
 	err := c.cc.Invoke(ctx, InventoryService_ListLowStock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *inventoryServiceClient) ReplayInventoryOperation(ctx context.Context, in *ReplayInventoryOperationRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, InventoryService_ReplayInventoryOperation_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1699,6 +1712,8 @@ type InventoryServiceServer interface {
 	AdminAdjustStock(context.Context, *AdminAdjustStockRequest) (*Stock, error)
 	ListStocks(context.Context, *ListStocksRequest) (*StockList, error)
 	ListLowStock(context.Context, *ListLowStockRequest) (*StockList, error)
+	// Explicit recovery for a permanently failed inventory operation.
+	ReplayInventoryOperation(context.Context, *ReplayInventoryOperationRequest) (*Empty, error)
 	// Read-only warehouse allocation for checkout preview. It never reserves
 	// stock; Order/Reserve still own the durable allocation.
 	AllocateOrder(context.Context, *AllocateOrderRequest) (*AllocateOrderReply, error)
@@ -1749,6 +1764,9 @@ func (UnimplementedInventoryServiceServer) ListStocks(context.Context, *ListStoc
 }
 func (UnimplementedInventoryServiceServer) ListLowStock(context.Context, *ListLowStockRequest) (*StockList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListLowStock not implemented")
+}
+func (UnimplementedInventoryServiceServer) ReplayInventoryOperation(context.Context, *ReplayInventoryOperationRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplayInventoryOperation not implemented")
 }
 func (UnimplementedInventoryServiceServer) AllocateOrder(context.Context, *AllocateOrderRequest) (*AllocateOrderReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AllocateOrder not implemented")
@@ -1950,6 +1968,24 @@ func _InventoryService_ListLowStock_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InventoryServiceServer).ListLowStock(ctx, req.(*ListLowStockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InventoryService_ReplayInventoryOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplayInventoryOperationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).ReplayInventoryOperation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_ReplayInventoryOperation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).ReplayInventoryOperation(ctx, req.(*ReplayInventoryOperationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2226,6 +2262,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListLowStock",
 			Handler:    _InventoryService_ListLowStock_Handler,
+		},
+		{
+			MethodName: "ReplayInventoryOperation",
+			Handler:    _InventoryService_ReplayInventoryOperation_Handler,
 		},
 		{
 			MethodName: "AllocateOrder",

@@ -22,6 +22,7 @@ import (
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/db"
 	"gin-kratos-gorm/internal/platform/dtm"
+	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/outbox"
 )
@@ -374,19 +375,12 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 			AggregateType: aggregatePayment,
 			AggregateID:   in.PaymentNo,
 			EventType:     eventRefunded,
-			Payload: map[string]any{
-				"refund_no":           ref.RefundNo,
-				"payment_no":          in.PaymentNo,
-				"order_no":            in.OrderNo,
-				"user_id":             in.UserID,
-				"amount_cent":         amount,
-				"refunded_cent":       totalRefunded,
-				"order_refunded_cent": orderRefunded,
-				"captured_cent":       captured,
-				"reason":              reason,
-				"channel":             in.Channel,
-				"status":              nextStatus,
-				"idempotency_key":     idempotencyKey,
+			Payload: events.PaymentRefunded{
+				RefundNo: ref.RefundNo, PaymentNo: in.PaymentNo, OrderNo: in.OrderNo,
+				UserID: in.UserID, AmountCent: amount, RefundedCent: totalRefunded,
+				OrderRefundedCent: orderRefunded, CapturedCent: captured,
+				Reason: reason, Channel: in.Channel, Status: nextStatus,
+				IdempotencyKey: idempotencyKey,
 			},
 		})
 	})

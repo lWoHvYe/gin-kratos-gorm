@@ -175,6 +175,7 @@ func NewEngine(logger *slog.Logger, jwt *auth.Manager, clients *Clients, aiEnabl
 	admin.PUT("/skus/:id/status", h.setSkuStatus)
 	admin.GET("/inventory/stocks", h.listStocks)
 	admin.POST("/inventory/adjust", h.adjustStock)
+	admin.POST("/inventory/operations/:operationId/replay", h.replayInventoryOperation)
 	admin.GET("/orders", h.listOrders)
 	admin.GET("/orders/:orderNo", h.getOrder)
 	admin.POST("/orders/:orderNo/cancel", h.cancelOrder)

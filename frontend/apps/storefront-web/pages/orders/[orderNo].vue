@@ -16,15 +16,18 @@ const { data: shipments, refresh: refreshShipments } = await useAsyncData(`shipm
   if (!token.value) return { shipments: [] as Shipment[], total: 0 }
   return await request<{ shipments: Shipment[]; total: number }>(`/api/v1/orders/${orderNo}/shipments`)
 })
-async function act(path: string, body: Record<string, unknown> = {}): Promise<void> {
+async function act(path: string, body: Record<string, unknown> = {}, settleMs = 0): Promise<void> {
   message.value = ''
   try {
     await request(`/api/v1/orders/${orderNo}${path}`, { method: 'POST', body })
     await refresh(); await refreshShipments()
-    // Shipment -> order is an async projection; give it one short poll so the
-    // per-group status and PARTIALLY_* header converge without a manual reload.
-    await new Promise((resolve) => setTimeout(resolve, 700))
-    await refresh(); await refreshShipments()
+    // Shipment -> order is an async projection. Poll briefly so the per-group
+    // status and PARTIALLY_* header converge without a manual reload.
+    const deadline = Date.now() + settleMs
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      await refresh(); await refreshShipments()
+    } while (Date.now() < deadline)
   } catch (err) { message.value = err instanceof Error ? err.message : '操作失败' }
 }
 function hasGroupAction(action: string, groupNo: string): boolean {
@@ -38,7 +41,7 @@ function shipmentFor(groupNo: string): Shipment | undefined {
 async function receiveGroup(groupNo: string): Promise<void> {
   const shipment = shipmentFor(groupNo)
   if (!shipment) { message.value = '该组暂无可收货的物流单'; return }
-  await act('/receive', { shipment_no: shipment.shipment_no })
+  await act('/receive', { shipment_no: shipment.shipment_no }, 8000)
 }
 function afterSaleLink(groupNo: string): string {
   return `/after-sales/apply?order=${orderNo}&group=${encodeURIComponent(groupNo)}`

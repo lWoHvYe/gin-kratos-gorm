@@ -130,3 +130,29 @@ func (h *handlers) adjustStock(c *gin.Context) {
 	}
 	httpx.OK(c, stock)
 }
+
+type replayOperationRequest struct {
+	SkuIDs []int64 `json:"sku_ids"`
+}
+
+// replayInventoryOperation exposes the explicit per-item inventory recovery to
+// operators. It is not a scanner: the caller must name the operation.
+func (h *handlers) replayInventoryOperation(c *gin.Context) {
+	operationID := strings.TrimSpace(c.Param("operationId"))
+	if operationID == "" {
+		httpx.Error(c, apperr.Invalid("operation_id is required"))
+		return
+	}
+	var in replayOperationRequest
+	if err := bff.BindJSON(c, &in); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if _, err := h.clients.Inventory.ReplayInventoryOperation(c.Request.Context(), &pb.ReplayInventoryOperationRequest{
+		OperationId: operationID, SkuIds: in.SkuIDs,
+	}); err != nil {
+		httpx.Error(c, bff.RemoteError(err))
+		return
+	}
+	httpx.OK(c, gin.H{"ok": true})
+}

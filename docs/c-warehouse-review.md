@@ -70,6 +70,7 @@ rollout is still gated.
 - `scripts/e2e-warehouse-split.sh` -> two quote groups, two parcels,
   `COMPLETED/RECEIVED`.
 - `frontend` typecheck/build -> pass.
+- Live AI mesh: read allowed, Catalog CreateProduct PermissionDenied.
 - Playwright -> 9 tests, including
   [warehouse-split.spec.ts](../frontend/e2e/warehouse-split.spec.ts) and
   [admin-split.spec.ts](../frontend/e2e/admin-split.spec.ts): group UI, G2

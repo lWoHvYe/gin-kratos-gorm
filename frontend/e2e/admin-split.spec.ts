@@ -56,6 +56,10 @@ test('admin creates a G2 shipment for a split order', async ({ page, request }) 
     data: { amount_cent: quote.pay_cent, event_id: `admin-split-${paymentNo}` },
   })
   expect(payReply.ok()).toBeTruthy()
+  await expect.poll(async () => {
+    const reply = await request.get(`${gateway}/orders/${orderNo}`, { headers: userHeaders })
+    return (await reply.json()).status
+  }, { timeout: 20_000 }).toBe('ALLOCATED')
 
   await page.goto('/admin/login')
   const inputs = page.locator('input')

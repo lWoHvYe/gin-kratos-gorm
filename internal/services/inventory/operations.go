@@ -870,7 +870,7 @@ func (s *Service) loadOperationTx(ctx context.Context, tx *sql.Tx, operationID s
 // ReplayInventoryOperation is the explicit recovery path for permanently failed
 // or missing items. It never resets a DONE item: stock already moved must not be
 // applied twice. There is intentionally no background scanner.
-func (s *Service) ReplayInventoryOperation(ctx context.Context, operationID string, skus []int64) error {
+func (s *Service) replayOperation(ctx context.Context, operationID string, skus []int64) error {
 	operationID = strings.TrimSpace(operationID)
 	if operationID == "" {
 		return apperr.Invalid("operation_id is required")

@@ -111,7 +111,7 @@ func runOperationReplay(cfg *config.Config, logger *slog.Logger) {
 	}
 	defer database.Close()
 	svc := inventory.New(database, logger)
-	if err := svc.ReplayInventoryOperation(ctx, *operationID, skus); err != nil {
+	if err := svc.ReplayInventoryOperationForCLI(ctx, *operationID, skus); err != nil {
 		logger.Error("op-replay failed", "operation", *operationID, "error", err)
 		os.Exit(1)
 	}

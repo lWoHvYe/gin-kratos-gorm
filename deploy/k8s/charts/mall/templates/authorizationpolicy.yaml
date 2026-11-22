@@ -66,6 +66,28 @@ spec:
       to:
         - operation:
             ports: ["3000", "8080", "8081", "9001", "9002", "9003", "9004", "9005", "9006", "9007", "9008", "9009", "9010", "9011", "36789", "36790"]
+
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-ai-writes
+  namespace: {{ .Values.namespace }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: mall-waypoint
+  action: DENY
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/{{ .Values.namespace }}/sa/ai-sa"
+      to:
+        - operation:
+            paths:
+              {{- toYaml .Values.authz.aiDenyPaths | nindent 14 }}
 {{- range $rule := .Values.authz.rules }}
 ---
 apiVersion: security.istio.io/v1

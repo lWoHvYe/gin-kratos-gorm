@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Live #38 check: AI service account can read Catalog but cannot call a write
+# method through the ambient waypoint. UAT-only by default.
+set -euo pipefail
+NS="${UAT_NS:-mall-uat}"
+IMAGE="${AI_MESH_IMAGE:-fullstorydev/grpcurl:v1.9.3}"
+case "$NS" in mall-uat*) ;; *) echo "refusing outside mall-uat" >&2; exit 1;; esac
+cleanup() { kubectl -n "$NS" delete pod ai-mesh-read ai-mesh-write --ignore-not-found >/dev/null 2>&1 || true; }
+trap cleanup EXIT INT TERM
+kubectl -n "$NS" delete pod ai-mesh-read ai-mesh-write --ignore-not-found >/dev/null
+
+kubectl -n "$NS" run ai-mesh-read --image="$IMAGE" --restart=Never \
+  --overrides='{"spec":{"serviceAccountName":"ai-sa"}}' --command -- \
+  grpcurl -plaintext -d '{}' catalog:9002 mall.v1.CatalogService/ListProducts >/dev/null
+for _ in $(seq 1 30); do
+  [ "$(kubectl -n "$NS" get pod ai-mesh-read -o jsonpath='{.status.phase}' 2>/dev/null)" = "Succeeded" ] && break
+  sleep 1
+done
+READ="$(kubectl -n "$NS" logs ai-mesh-read 2>&1 || true)"
+echo "$READ" | grep -q '"products"' || { echo "AI read failed: $READ"; exit 1; }
+echo "AI read allowed"
+
+kubectl -n "$NS" run ai-mesh-write --image="$IMAGE" --restart=Never \
+  --overrides='{"spec":{"serviceAccountName":"ai-sa"}}' --command -- \
+  grpcurl -plaintext -d '{}' catalog:9002 mall.v1.CatalogService/CreateProduct >/dev/null
+for _ in $(seq 1 30); do
+  [ "$(kubectl -n "$NS" get pod ai-mesh-write -o jsonpath='{.status.phase}' 2>/dev/null)" = "Succeeded" ] && break
+  sleep 1
+done
+WRITE="$(kubectl -n "$NS" logs ai-mesh-write 2>&1 || true)"
+echo "$WRITE" | grep -q 'PermissionDenied' || { echo "AI write was not denied: $WRITE"; exit 1; }
+echo "AI write denied (PermissionDenied)"

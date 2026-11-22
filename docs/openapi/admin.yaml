@@ -805,6 +805,30 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+  /api/admin/v1/inventory/operations/{operationId}/replay:
+    post:
+      summary: Replay a failed inventory operation explicitly
+      tags: [inventory]
+      parameters:
+        - name: operationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sku_ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
   /api/admin/v1/orders/{param}:
     get:
       summary: Get item

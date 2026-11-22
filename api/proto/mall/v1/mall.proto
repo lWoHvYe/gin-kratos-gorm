@@ -243,6 +243,8 @@ service InventoryService {
   rpc AdminAdjustStock (AdminAdjustStockRequest) returns (Stock);
   rpc ListStocks (ListStocksRequest) returns (StockList);
   rpc ListLowStock (ListLowStockRequest) returns (StockList);
+  // Explicit recovery for a permanently failed inventory operation.
+  rpc ReplayInventoryOperation (ReplayInventoryOperationRequest) returns (Empty);
   // Read-only warehouse allocation for checkout preview. It never reserves
   // stock; Order/Reserve still own the durable allocation.
   rpc AllocateOrder (AllocateOrderRequest) returns (AllocateOrderReply);
@@ -305,6 +307,10 @@ message StockList { repeated Stock stocks = 1; int64 total = 2; }
 message ListLowStockRequest {
   int64 threshold = 1;
   int32 limit = 2;
+}
+message ReplayInventoryOperationRequest {
+  string operation_id = 1;
+  repeated int64 sku_ids = 2;
 }
 message RestockRequest {
   string order_no = 1;

@@ -5,13 +5,13 @@
 
 | 编号 | 主题 | 发起 | 阻塞 | 状态 | 落点 | 文件 |
 |---|---|---|---|---|---|---|
-| T-001 | SPEC-0001 v1.2 实施审查（HEAD `8ea9236`）— **FAIL** | Reviewer 2026-11-22 | 是 | **OPEN** | P0-1…P0-6 已回证；**P0-7 运费 hold 结清待修**（不得开 `FREIGHT_RESPONSIBILITY_ENABLED`） | [T-001.md](threads/T-001.md) |
+| T-001 | SPEC-0001 v1.2 实施审查（P0-1…P0-7） | Reviewer 2026-11-22 | 是 | **CLOSED** | P0-7 修复 `f162ecf`；Reviewer 复跑 **PASS**；P0-6 到期项按 `ac-coverage.tsv` 跟踪 | [T-001.md](threads/T-001.md) |
 
 ## 状态统计
 
-- `OPEN`：1（T-001，等 Developer 修复 + 回证）
+- `OPEN`：0
 - `ANSWERED`：0
-- `CLOSED`：0
+- `CLOSED`：1（T-001，复核通过）
 
 ## 维护规则
 

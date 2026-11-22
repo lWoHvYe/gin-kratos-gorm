@@ -6,7 +6,7 @@
 
 | 编号 | 标题 | 状态 | 版本 | 文件 |
 |---|---|---|---|---|
-| SPEC-0001 | 多仓按数量拆行、选仓优先级与承运商签收 | approved | 1.0 | [0001-fulfillment-quantity-split.md](docs/specs/0001-fulfillment-quantity-split.md) |
+| SPEC-0001 | 多仓按数量拆行、选仓优先级与承运商签收 | approved | 1.1 | [0001-fulfillment-quantity-split.md](docs/specs/0001-fulfillment-quantity-split.md) |
 
 ## 新增 Spec 的命名规则
 

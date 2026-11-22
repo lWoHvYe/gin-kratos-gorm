@@ -209,6 +209,7 @@ test-integration:
 	@test -n "$$TEST_MYSQL_DSN" || (echo "set TEST_MYSQL_DSN, e.g. root:root@tcp(127.0.0.1:3306)/mall_outbox_test?parseTime=true" >&2; exit 1)
 	@echo ">> outbox lease + relay (MySQL, NATS)"
 	TEST_NATS_URL=$${TEST_NATS_URL:-nats://127.0.0.1:4222} \
+		TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" outbox)" \
 		$(GO) test ./internal/platform/outbox -run 'TestClaim|TestMark|TestPrune|TestAppend|TestRelay' -count=1
 	@echo ">> consumer DLQ (NATS)"
 	TEST_NATS_URL=$${TEST_NATS_URL:-nats://127.0.0.1:4222} \
@@ -220,19 +221,19 @@ test-integration:
 	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-127.0.0.1:6379} \
 		$(GO) test ./internal/services/seckill -run TestReserveScript -count=1
 	@echo ">> inventory seckill/compensation/ledger (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/inventory -run 'TestCancelConfirmed|TestReleaseHeld|TestQualificationRelease|TestConcurrentRelease|TestReleaseTxClosed|TestTccCancelConfirm|TestCompensationHandler|TestConfirmConsumerNATS|TestConfirmConsumerMultiSKUOperation|TestOrderCancelledConsumerNATS|TestArchiveLedger|TestConfirmOperation|TestCancelOperation|TestOperationTx|TestReplayMissing|TestOperationRetry|TestConcurrentConfirm|TestOperationScope|TestAllocateOrder|TestReservationAndOperationKeysIncludeWarehouse' -count=1
+	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" inventory)" $(GO) test ./internal/services/inventory -run 'TestCancelConfirmed|TestReleaseHeld|TestQualificationRelease|TestConcurrentRelease|TestReleaseTxClosed|TestTccCancelConfirm|TestCompensationHandler|TestConfirmConsumerNATS|TestConfirmConsumerMultiSKUOperation|TestOrderCancelledConsumerNATS|TestArchiveLedger|TestConfirmOperation|TestCancelOperation|TestOperationTx|TestReplayMissing|TestOperationRetry|TestConcurrentConfirm|TestOperationScope|TestAllocateOrder|TestReservationAndOperationKeysIncludeWarehouse' -count=1
 	@echo ">> order settlement + shipping permits (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/order -run 'TestShippingPermit|TestBlockShipment|TestAuthorizeShipment|TestRefundProjection|TestAvailableActions|TestTccCancelKeepsLifecycle|TestFulfillmentGroupShadow|TestMultiGroupShadow|TestGroupShipmentProjection' -count=1
+	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" order)" $(GO) test ./internal/services/order -run 'TestShippingPermit|TestBlockShipment|TestAuthorizeShipment|TestRefundProjection|TestAvailableActions|TestTccCancelKeepsLifecycle|TestFulfillmentGroupShadow|TestMultiGroupShadow|TestGroupShipmentProjection' -count=1
 	@echo ">> payment settlement read (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/payment -run 'TestGetPaymentByOrder' -count=1
+	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" payment)" $(GO) test ./internal/services/payment -run 'TestGetPaymentByOrder' -count=1
 	@echo ">> after-sales amount/restock/refund protocol (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/aftersales -run 'TestAfterSaleAmount|TestPartialApproval|TestReturnRefund|TestRestockFailure|TestRestockPermanentFailureEmitsEvent|TestAfterSaleGroupRefundAndRestock|TestRefundOnlyBeforeGroupShipment|TestRefundTaskRetries|TestConcurrentAfterSale' -count=1
+	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" aftersales)" $(GO) test ./internal/services/aftersales -run 'TestAfterSaleAmount|TestPartialApproval|TestReturnRefund|TestRestockFailure|TestRestockPermanentFailureEmitsEvent|TestAfterSaleGroupRefundAndRestock|TestRefundOnlyBeforeGroupShipment|TestRefundTaskRetries|TestConcurrentAfterSale' -count=1
 	@echo ">> fulfillment shipping permit (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/fulfillment -run 'TestShipRequiresOrderPermit|TestShipUsesShipmentGroup|TestCreateShipmentValidatesGroupWarehouseAndItems|TestCancelCreatedShipmentOnlyVoidsDraft' -count=1
+	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" fulfillment)" $(GO) test ./internal/services/fulfillment -run 'TestShipRequiresOrderPermit|TestShipUsesShipmentGroup|TestCreateShipmentValidatesGroupWarehouseAndItems|TestCancelCreatedShipmentOnlyVoidsDraft' -count=1
 	@echo ">> catalog stock projection (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/catalog -run 'TestStockProjectionRejectsOlderVersion|TestKeysetPaginationBothReaders' -count=1
+	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" catalog)" $(GO) test ./internal/services/catalog -run 'TestStockProjectionRejectsOlderVersion|TestKeysetPaginationBothReaders' -count=1
 	@echo ">> pricing quote cleanup (MySQL)"
-	TEST_MYSQL_DSN="$$TEST_MYSQL_DSN" $(GO) test ./internal/services/pricing -run TestCleanupQuotesRemovesOnlyExpiredRetention -count=1
+	TEST_MYSQL_DSN="$$($$PWD/scripts/test-dsn.sh "$$TEST_MYSQL_DSN" pricing)" $(GO) test ./internal/services/pricing -run TestCleanupQuotesRemovesOnlyExpiredRetention -count=1
 
 test-race:
 	$(GO) test -race -p 1 ./internal/services/... ./internal/platform/...

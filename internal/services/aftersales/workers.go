@@ -12,6 +12,7 @@ import (
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/id"
+	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/outbox"
 )
 
@@ -51,6 +52,7 @@ func RunRestockWorker(ctx context.Context, database *sql.DB, svc *Service, logge
 }
 
 func runRestockBatch(ctx context.Context, database *sql.DB, svc *Service, logger *slog.Logger) {
+	observeTaskBacklog(ctx, database)
 	rows, err := database.QueryContext(ctx, `SELECT after_sale_no, sku_id, warehouse_id, group_no
 		FROM after_sale_restock_tasks
 		WHERE status IN ('PENDING', 'PROCESSING')
@@ -277,6 +279,7 @@ func RunRefundWorker(ctx context.Context, database *sql.DB, svc *Service, logger
 }
 
 func runRefundBatch(ctx context.Context, database *sql.DB, svc *Service, logger *slog.Logger) {
+	observeTaskBacklog(ctx, database)
 	rows, err := database.QueryContext(ctx, `SELECT after_sale_no FROM after_sale_refund_tasks
 		WHERE status IN ('PENDING', 'PROCESSING')
 		  AND (status = 'PENDING' OR lease_until IS NULL OR lease_until < NOW(3))
@@ -486,4 +489,26 @@ func ensureRefundTaskTx(ctx context.Context, tx *sql.Tx, afterSaleNo string) err
 		return apperr.Internal("ensure refund task", err)
 	}
 	return nil
+}
+
+// observeTaskBacklog feeds the restock/refund backlog gauges on every worker
+// tick. It is deliberately read-only and failure-tolerant: metrics must never
+// stop durable task processing.
+func observeTaskBacklog(ctx context.Context, database *sql.DB) {
+	var restock, refund int64
+	var restockOldest, refundOldest float64
+	if err := database.QueryRowContext(ctx, `SELECT COUNT(*),
+		COALESCE(TIMESTAMPDIFF(SECOND, MIN(created_at), NOW(3)), 0)
+		FROM after_sale_restock_tasks WHERE status IN ('PENDING', 'PROCESSING')`).
+		Scan(&restock, &restockOldest); err == nil {
+		metrics.AfterSaleRestockBacklog.Set(float64(restock))
+		metrics.AfterSaleRestockOldestSeconds.Set(restockOldest)
+	}
+	if err := database.QueryRowContext(ctx, `SELECT COUNT(*),
+		COALESCE(TIMESTAMPDIFF(SECOND, MIN(created_at), NOW(3)), 0)
+		FROM after_sale_refund_tasks WHERE status IN ('PENDING', 'PROCESSING')`).
+		Scan(&refund, &refundOldest); err == nil {
+		metrics.AfterSaleRefundBacklog.Set(float64(refund))
+		metrics.AfterSaleRefundOldestSeconds.Set(refundOldest)
+	}
 }

@@ -343,6 +343,9 @@ make rehearse-c-migration # disposable MySQL: pre-C dumps -> migrate -> restore
 make test-migrate-runner # disposable MySQL: FAILED refusal + concurrent lease
 # UAT install/validation: docs/runbooks/uat-environment.md
 make concurrency-phase15 # opt-in one-unit oversell race check
+make test-integration # per-package DBs derived from TEST_MYSQL_DSN
+# base DSN must contain /mall_integration_test; target uses
+# mall_integration_<package> via scripts/test-dsn.sh
 make fmt-check    # gofmt gate
 make vet          # go vet ./...
 ```
@@ -539,6 +542,19 @@ HPA is a safety net, not a launch plan. Pre-scale the deployment before the
 sale; reactive CPU scaling is too slow for a flash crowd. The current
 single-node profile leaves these disabled.
 
+## Split/after-sale observability
+
+The after-sales worker exports:
+
+- `mall_aftersale_restock_backlog`
+- `mall_aftersale_restock_oldest_seconds`
+- `mall_aftersale_refund_backlog`
+- `mall_aftersale_refund_oldest_seconds`
+
+Alert when backlog is non-zero for longer than the restock/refund SLO or when
+the oldest task age grows without draining. These are durable task queues, not
+status scanners.
+
 ## Integration checks
 
 Run the seckill S1/S2/S3 checks against a running stack:
@@ -577,9 +593,9 @@ UAT/dev use the single `WAREHOUSE_MODE=split` switch; the legacy
 for older values files. The production values keep split off.
 Phase 4/5/6 now have per-group shipments, permits, returns/refunds and
 group-aware storefront/admin UI. The dev single-node values enable split; the
-production defaults keep `WAREHOUSE_SPLIT_ENABLED=false` until the
-[production rollout/rollback rehearsal](runbooks/c-migration-rollback.md)
-passes against a production backup. The disposable dev rehearsal is
+production defaults keep split off because there is no large-scale production
+rollout. The [migration/rollback runbook](runbooks/c-migration-rollback.md)
+remains the gate for a future production change window. The disposable dev rehearsal is
 `make rehearse-c-migration`; it uses the pre-C dumps in `/tmp/mall-predeploy`
 by default.
 

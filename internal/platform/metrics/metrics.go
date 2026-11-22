@@ -69,6 +69,26 @@ var (
 		Help: "Stuck after-sale refunds retried by result.",
 	}, []string{"result"})
 
+	// AfterSaleRestockBacklog/Oldest expose durable restock work.
+	AfterSaleRestockBacklog = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_aftersale_restock_backlog",
+		Help: "Pending or processing after-sale restock tasks.",
+	})
+	AfterSaleRestockOldestSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_aftersale_restock_oldest_seconds",
+		Help: "Age of the oldest pending after-sale restock task in seconds.",
+	})
+
+	// AfterSaleRefundBacklog/Oldest expose durable refund work.
+	AfterSaleRefundBacklog = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_aftersale_refund_backlog",
+		Help: "Pending or processing after-sale refund tasks.",
+	})
+	AfterSaleRefundOldestSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_aftersale_refund_oldest_seconds",
+		Help: "Age of the oldest pending after-sale refund task in seconds.",
+	})
+
 	// PaymentRefundEvents tracks compensation events consumed by payment.
 	PaymentRefundEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mall_payment_refund_events_total",
@@ -224,5 +244,7 @@ func init() {
 		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, AIRAGSearch, AIRAGEmpty,
 		AIRAGDocuments, AIRAGBuildSeconds, AIRAGVersions, AIRAGConsumerPending,
 		AIRAGTruncated, AIRAGRebuildFailures, QuotesCleaned,
-		InventoryLedgerRows, InventoryLedgerOldestSeconds, InventoryLedgerArchived, AIFeedback)
+		InventoryLedgerRows, InventoryLedgerOldestSeconds, InventoryLedgerArchived, AIFeedback,
+		AfterSaleRestockBacklog, AfterSaleRestockOldestSeconds,
+		AfterSaleRefundBacklog, AfterSaleRefundOldestSeconds)
 }

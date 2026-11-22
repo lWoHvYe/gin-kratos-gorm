@@ -62,34 +62,42 @@ rollout is still gated.
 
 ## Verification executed
 
-- `make verify` -> `verify: OK`, proto baseline 731.
+- `make verify` -> `verify: OK`, proto baseline 734.
 - `make test-integration` -> all listed MySQL/NATS suites `ok`.
 - `go test -race -p 1` on order/fulfillment/after-sales/admin -> `ok`.
 - `scripts/e2e-phase15.sh` -> `phase15 e2e passed`.
 - `scripts/e2e-warehouse-split.sh` -> two quote groups, two parcels,
   `COMPLETED/RECEIVED`.
 - `frontend` typecheck/build -> pass.
-- Playwright -> 8 tests, including
-  [warehouse-split.spec.ts](../frontend/e2e/warehouse-split.spec.ts): group UI,
-  G2 receive, `PARTIALLY_RECEIVED`.
+- Playwright -> 9 tests, including
+  [warehouse-split.spec.ts](../frontend/e2e/warehouse-split.spec.ts) and
+  [admin-split.spec.ts](../frontend/e2e/admin-split.spec.ts): group UI, G2
+  receive, admin G2 shipment.
+- `scripts/check-split-concurrency.sh`: duplicate payment, concurrent G1/G2
+  ship, draft cancellation, refund/ship race.
+- `make test-integration` now derives `mall_integration_<package>`; packages no
+  longer share one test database.
 
 ## Not covered / production gates
 
 - Dev fixture migration/rollback rehearsal passed (disposable MySQL, pre-C
   dumps, current migrate image). A production backup/restore and old-image
   smoke are still required; production values keep split disabled.
-- No high-load/chaos run for split checkout, shipment concurrency, or restock
-  workers.
-- Admin group-shipment UI has unit/type coverage but not a browser Playwright
-  assertion.
+- No high-load/chaos run for split checkout; only targeted correctness races.
+- Admin group-shipment UI is covered by Playwright.
+- No production-profile secret/payment configuration; UAT uses dev/mock.
 - A separate k3s UAT stack was installed on 2026-11-22 with isolated
-  `mall-uat-data`; single E2E, split E2E, split Playwright and group refund
-  passed. It uses dev secrets/mock payment and is not a production profile.
+  `mall-uat-data`; single E2E, split E2E, split Playwright, admin split,
+  concurrency and group refund passed. It uses dev secrets/mock payment and is
+  not a production profile.
 - Payment multi-intent aggregation and the A/B production rollback rehearsal
   remain separate gates.
 
 ## Verdict
 
-C is **dev-ready and enabled in the single-node dev cluster**. It is not marked
-production-complete: production migration/rollback, load/chaos and an admin
-browser test remain before enabling the production flag.
+C is **functionally complete and enabled in dev and UAT**. The isolated UAT
+stack passed fresh migration, single/split E2E, admin/storefront split UI,
+targeted concurrency, draft cancellation and group refund. Production remains
+intentionally off because there is no large-scale production rollout; the
+runbook and hardened migration runner are retained for the eventual change
+window.

@@ -38,3 +38,31 @@
 - B-01 失败时 `stock_changed=true`，BFF 同响应返回完整 `next_preview`；不再只回 `retry_preview`。
 - B-05 的退款执行走 AfterSales durable refund task，不在 NATS handler 内直接打款。
 - 缺货四小时/48 小时字段和 `AUTO_T7` 文案、60 秒申诉宽限、已确认后 15 天争议不回滚均已实现。
+
+## D. Reviewer T-001 修复登记（2026-11-22）
+
+| 项 | 处置 | 证据 | owner | expiry |
+|---|---|---|---|---|
+| P0-1 反妥协自检 | 已在 `docs/collab/developer-reviewer/threads/T-001.md` 追加三问回答 | 并发/超时/部分成功、状态字段、妥协清单 | Developer | closed |
+| P0-2 行级在途占用 | `pending_quantity/pending_amount_cent` 在创建、成功、驳回、永久失败四条路径处理 | `TestLinePendingReservationBlocksConcurrentOverRefund`、`TestRejectedAfterSaleReleasesLinePending` | Developer | 2026-12-15 |
+| P0-3 运费开关 | `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false；关闭时回旧口径并拒绝判责 RPC | `TestFreightResponsibilityDisabledUsesLegacyRule` | Developer | 2026-12-15 |
+| P0-4 自动确认回拨 | `due_at` 同 reason 只允许向后、`DELIVERED` 不回拨；T1 再校验 `delivered_at+24h` | `TestAC20DuplicateDeliveredDoesNotShrinkWindow` | Developer | 2026-12-15 |
+| P0-5 历史混提 | 不回写历史；登记为 `[mixed]`；后续按 §5.2 拆分 | 下表 | Developer | 2026-12-15（T-002 追认） |
+| P0-6 AC 深度 | AC-14 补累计/在途封顶、AC-22 补 3 工作日 deadline；其余缺口写 coverage 台账 | `TestAC14...`、`TestAC22...` | Developer | 2026-12-15 |
+
+### D.1 历史 `[mixed]` 提交（不重写历史）
+
+| commit | 混提内容 | 处置 |
+|---|---|---|
+| `0c1bd16` | contracts + 5 services + migrations + gates + frontend + docs | 登记 `[mixed]`；后续按 `contracts` / 服务 / `migrations` / `gates` 拆分 |
+| `655ccc7` | `test(collab)` 不在当时 scope 词表 | 登记 `[mixed]`；不再使用 |
+| `6e4ec31` | `test(fulfillment)` 实际改多个服务测试 | 登记 `[mixed]`；后续 `test(<service>)` 按被测服务 |
+| `be11508` | Developer 自改 `CONVENTIONS.md` | 登记 `[mixed]`；已开 `architect-developer/T-002` 请求 Architect 追认，未追认前不再改 CONVENTIONS |
+
+> 历史提交不 `amend`/`rebase`；本表只用于 Reviewer 审查与后续拆分依据。
+
+## E. 台账所有权
+
+`docs/collab/ac-baseline.txt` / `ac-coverage.tsv` 按 CONVENTIONS §1 归 Reviewer。
+本轮因 Reviewer P0-6 直接要求在 coverage 台账补 AC-22/28/29/30/35/37 行，Developer 已写入；
+后续由 Reviewer 复核/覆盖，Developer 不再单方修改台账。

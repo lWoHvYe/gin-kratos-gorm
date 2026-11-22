@@ -18,17 +18,19 @@
 |---|---|
 | Spec | SPEC-0001 **v1.2**（approved，`docs/specs/0001-fulfillment-quantity-split.md`） |
 | ADR | ADR-0005 **v1.2 / Amendment 2**（accepted，T-001 已回写） |
-| 流程 ADR | ADR-0006 协作闸门可执行化（accepted；A1…A5 PASS，Reviewer PASS `f162ecf`） |
-| 线程（PO↔Arch） | T-001 **CLOSED**；T-002 **CLOSED**（A1…A5 PASS） |
+| 流程 ADR | ADR-0006 **v1.1 / Amendment 1**（T-003：G-3 `AC-REF`、G-4 到期、`--range/--release`、能力边界；待 Developer 实现 + Reviewer A1…A5） |
+| 线程（PO↔Arch） | T-001 **CLOSED**；T-002 **CLOSED**（A1…A5 PASS）；T-003 **ANSWERED**（等 G-4 实现 + A1…A5） |
 | 线程（Arch↔Dev） | T-001 **CLOSED**（实施交接）；T-002 **CLOSED**（scope 追认） |
 | Reviewer 门禁 | `docs/collab/developer-reviewer/T-001` **CLOSED / PASS**（`f162ecf`） |
 | 生产开关 | `QUANTITY_SPLIT_ENABLED` / `CARRIER_REGISTRY_ENABLED` / `DELIVERY_AUTO_CONFIRM_ENABLED` / `SHORTAGE_CASE_ENABLED` / `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false |
 
 ## 未完成项（不能判 done）
 
+- **T-003 / G-4**：`AC-REF` 措辞、`DEFERRED/OVERDUE`、G-4 到期闸门、`SCAN RANGE`/`--release`、CONVENTIONS §4.4 待 Developer 实现；Reviewer A1…A5 未跑。
 - **B-01/B-05**：Developer 已交付，Reviewer **PASS**（P0-1…P0-7 关闭）；发布门禁已过。
 - **残余**：B-06a（change_reason/return_carrier_code）、C-01…C-03 shim、D-01/D-02（缺货 BFF、日终对账/故障注入），owner+expiry 见偏差登记；**到期未清升级 BLOCKING**。
 - AC-22/28/29/30/35/37 的浏览器/SLA 深度缺口仍在 `ac-coverage.tsv`，`expiry=2026-12-15`；不得静默续期。
+- **R 建议（非阻断 [TODO]）**：P0-7 多组金额序列断言；长期 REQUESTED/APPROVED hold 到期 WAIVED/排除；AC-22/28/29/30/35/37 到期跟踪。
 - 生产开关仍默认 false；灰度需单独决策。
 
 ## 易漂移点（每次改 ADR 先看）
@@ -55,7 +57,11 @@
 - PO↔Arch：`docs/collab/po-architect/`
 - Arch↔Dev：`docs/collab/architect-developer/`（实施交接/契约提问；trailer 用 `Thread: architect-developer/T-NNN`）
 
-## 最近裁决（2026-11-22）
+## 最近裁决（2026-11-23）
+
+- T-003：G-3 改 `AC-REF (references only)`；新增 G-4 到期闸门（`ac-coverage.tsv` + 偏差登记，`expiry<=today` 且非 closed 即失败；续期需 `Expiry-Renewal`，>3 条批量延后失败）；首行 `SCAN RANGE`；`--release` 必须显式 range；CONVENTIONS §4.4 能力边界。
+
+## 历史裁决（2026-11-22）
 
 - Arch↔Dev T-002：scope 词表**追认（选项 B）**——`gates` 不含 `ac-baseline.txt`/`ac-coverage.tsv`（Reviewer 所有）；闸门自测用 `ci(gates)`，不用 `test(collab)`。
 - `be11508` 由 Developer 直改 CONVENTIONS 属越权；内容追认，历史不回改；后续改 CONVENTIONS 必须开 `architect-developer/T-NNN`。

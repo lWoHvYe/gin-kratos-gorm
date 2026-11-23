@@ -27,6 +27,9 @@ old table still described P2#10 as rejected and Phase 7 as not started.
   implementation approval.
 - Contract debt: SPEC-0001 AC-27 使用 Given/Then/And，下一次 SPEC-0001 版本升级 MUST
   改为 EARS 并登记基线迁移；在此之前不得把 AC-27 标为 AC-VERIFIED。
+- 2026-11-24: C-04 proto/config and C-05 migrations passed QC-16 and merged to main
+  (`merge: C-04/C-05 contract and migrations`). Phase 0 exit; Phase 1 implementation
+  may start on a WIP branch. No service code, AC-VERIFIED, or Release PASS.
 - 2026-11-24: Director approved D-22..D-26 defaults:
   - D-22: 24h terminal — no capture/zero -> `EXPIRED_ZERO`; captured and no shipped group ->
     `EXPIRED_REFUND` (does not write `CANCELLED`); shipped group -> `EXPIRED_FINANCE`;

@@ -287,6 +287,11 @@ func (s *Service) Callback(ctx context.Context, req *pb.CallbackRequest) (*pb.Ca
 			return err
 		}
 		in.Status = next
+		if next == statusSucceeded {
+			if err := r.ensureSettlementTask(ctx, tx, in.PaymentNo, in.OrderNo, now); err != nil {
+				return err
+			}
+		}
 		return outbox.Append(ctx, tx, paymentEvent(in, next))
 	})
 	if err != nil {
@@ -300,7 +305,11 @@ func (s *Service) Callback(ctx context.Context, req *pb.CallbackRequest) (*pb.Ca
 	}
 	if cbStatus == statusSucceeded && in.Status == statusSucceeded {
 		if err := s.markPaidTCC(ctx, in); err != nil {
+			// Keep the durable settlement task pending for the worker.
 			return nil, err
+		}
+		if err := finishSettlementTask(ctx, s.db, in.PaymentNo, settlementDone, ""); err != nil {
+			s.log.Warn("mark settlement task done", "payment_no", in.PaymentNo, "error", err)
 		}
 	}
 	return &pb.CallbackReply{Ok: true}, nil

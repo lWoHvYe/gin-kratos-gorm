@@ -32,6 +32,11 @@ func main() {
 	defer workers.Stop()
 	workers.Go(func(ctx context.Context) { outbox.Relay(ctx, bundle.DB, bundle.MQ, bundle.Logger, time.Second) })
 	workers.Go(func(ctx context.Context) { payment.RunRefundConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger) })
+	if cfg.PaymentSettlementWorkerEnabled {
+		workers.Go(func(ctx context.Context) {
+			payment.RunSettlementWorker(ctx, bundle.DB, bundle.Service, bundle.Logger, time.Second)
+		})
+	}
 	if err := bundle.App.Run(); err != nil {
 		panic(err)
 	}

@@ -40,6 +40,9 @@ type Config struct {
 	PaymentSecret string
 	// PaymentMockEnabled allows the BFF mock-pay route and unsigned callbacks.
 	PaymentMockEnabled bool
+	// PaymentSettlementWorkerEnabled drives captured payments through the
+	// durable payment_settlement_tasks worker (ADR-0007). Default false.
+	PaymentSettlementWorkerEnabled bool
 	// WarehouseAllocationShadow enables the checkout allocator dual-read. It
 	// never changes the quote or order; phase 2b wires warehouse quote lines.
 	WarehouseAllocationShadow bool
@@ -432,6 +435,13 @@ func applyEnv(c *Config) error {
 	}
 	if v := os.Getenv("PAYMENT_SECRET"); v != "" {
 		c.PaymentSecret = v
+	}
+	if v, ok := os.LookupEnv("PAYMENT_SETTLEMENT_WORKER_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("PAYMENT_SETTLEMENT_WORKER_ENABLED must be a boolean (got %q)", v)
+		}
+		c.PaymentSettlementWorkerEnabled = parsed
 	}
 	if v, ok := os.LookupEnv("PAYMENT_MOCK_ENABLED"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))

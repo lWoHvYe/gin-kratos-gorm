@@ -20,6 +20,22 @@ HEAD; running status remains in `docs/review-tracking.md`.
 - Production split remains **off**. Dev and UAT use `WAREHOUSE_MODE=split`.
 - There is no large-scale production rollout.
 
+## 2026-11-23 update (supersedes stale statements below)
+
+- C's "functionally complete" verdict was withdrawn (H4). Production split
+  remains off; dev/UAT still use `WAREHOUSE_MODE=split`.
+- P0 payment settlement & fulfillment admission: SPEC-0002 v1.6 approved,
+  SPEC-0001 v1.3 approved (group-refund release boundary). ADR-0007 is next;
+  **no protocol code has been written**.
+- P0-C landed: order list scan fix (+ regression tests), Helm wiring for the five
+  SPEC-0001 flags (defaults false, render-time dependency guard), 0012 long-term
+  split-chain decision. Audit: dev/UAT applied only up to `aftersales/0011`;
+  no persistent environment applied 0012.
+- AI production default is now `false`; `allow-ingress` was narrowed to
+  `istio-system`; Pricing write DENY added. Live Mesh UAT is still pending.
+- Current truth is `docs/review-tracking.md`; the Snapshot/P3 sections below are
+  historical (2026-11-22) and must not be used as current status.
+
 ## Current architecture state
 
 Core services: identity, catalog, inventory, cart, pricing, order, payment,

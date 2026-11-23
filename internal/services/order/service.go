@@ -673,6 +673,9 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 		if err := appendOrderSettledEvent(ctx, tx, record, paymentNo); err != nil {
 			return err
 		}
+		if err := ensurePricingConfirmationTask(ctx, tx, record); err != nil {
+			return err
+		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic:         topicOrderPaid,
 			AggregateType: "order",

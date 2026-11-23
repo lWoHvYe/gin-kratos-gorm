@@ -116,6 +116,9 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 		if err := appendOrderSettledEvent(ctx, tx, record, paymentNo); err != nil {
 			return err
 		}
+		if err := ensurePricingConfirmationTask(ctx, tx, record); err != nil {
+			return err
+		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic: topicOrderPaid, AggregateType: "order", AggregateID: orderNo, EventType: "order.paid",
 			Payload: map[string]any{

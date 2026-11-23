@@ -43,6 +43,9 @@ type Config struct {
 	// PaymentSettlementWorkerEnabled drives captured payments through the
 	// durable payment_settlement_tasks worker (ADR-0007). Default false.
 	PaymentSettlementWorkerEnabled bool
+	// PricingConfirmationWorkerEnabled drives the durable coupon/promotion
+	// confirmation worker (ADR-0007). Default false.
+	PricingConfirmationWorkerEnabled bool
 	// WarehouseAllocationShadow enables the checkout allocator dual-read. It
 	// never changes the quote or order; phase 2b wires warehouse quote lines.
 	WarehouseAllocationShadow bool
@@ -435,6 +438,13 @@ func applyEnv(c *Config) error {
 	}
 	if v := os.Getenv("PAYMENT_SECRET"); v != "" {
 		c.PaymentSecret = v
+	}
+	if v, ok := os.LookupEnv("PRICING_CONFIRMATION_WORKER_ENABLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("PRICING_CONFIRMATION_WORKER_ENABLED must be a boolean (got %q)", v)
+		}
+		c.PricingConfirmationWorkerEnabled = parsed
 	}
 	if v, ok := os.LookupEnv("PAYMENT_SETTLEMENT_WORKER_ENABLED"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))

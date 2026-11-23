@@ -62,8 +62,12 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-.specify
-.dsh
+
+# Spec Kit governance (.specify/) IS tracked: the constitution, templates and
+# scripts must resolve identically on every checkout. Machine-local state
+# (feature.json, integration packages) is excluded by .specify/.gitignore.
+# .dsh/skills is tracked as well; ignore only per-checkout runtime state.
+.dsh/skills/**/.state/
 
 # Frontend
 /.pnpm-store/

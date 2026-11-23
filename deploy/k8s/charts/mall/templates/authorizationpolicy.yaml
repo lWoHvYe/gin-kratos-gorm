@@ -22,7 +22,12 @@ spec:
   rules:
     - from:
         - source:
-            namespaces: ["{{ .Values.ingress.gatewayNamespace }}", "{{ .Values.namespace }}"]
+            # Only the external ingress gateway may reach the waypoint namespace-wide.
+            # Service-to-service traffic in {{ .Values.namespace }} must instead match
+            # one of the explicit allow-<service> rules below (or the precise
+            # *-ai-read rules); 2026-11-23 H5 removed the namespace-wide internal
+            # source so ai-sa cannot inherit a broad ALLOW.
+            namespaces: ["{{ .Values.ingress.gatewayNamespace }}"]
       to:
         - operation:
             methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]

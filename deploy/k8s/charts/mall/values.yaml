@@ -21,6 +21,23 @@ warehouseSplitEnabled: false
 # flags. Empty keeps the legacy booleans for older values files.
 warehouseMode: ""
 
+# SPEC-0001 / ADR-0005 §13.1 feature switches. All default false: production
+# stays on the single-warehouse, single-group, free-text-carrier path until the
+# ADR-0003 gates are explicitly run. Each key is injected only into the service
+# that consumes it (see templates/deployments.yaml).
+# quantitySplitEnabled requires warehouseMode=split; QUANTITY_SPLIT_ENABLED
+# fails startup without WAREHOUSE_MODE=split, so the chart injects both into
+# inventory and refuses to render the broken combination.
+quantitySplitEnabled: false
+# fulfillment: controlled carrier registry admission.
+carrierRegistryEnabled: false
+# fulfillment: T+1/T+7 receipt auto-confirm worker.
+deliveryAutoConfirmEnabled: false
+# order: post-payment shortage choice flow (48h fail-safe worker).
+shortageCaseEnabled: false
+# aftersales: freight responsibility determination and refund hold.
+freightResponsibilityEnabled: false
+
 mysql:
   host: mysql.mall-data.svc.cluster.local
   port: 3306
@@ -132,7 +149,10 @@ seckill:
 
 ai:
   # The assistant is optional; disabling it hides the BFF route.
-  enabled: true
+  # 2026-11-23 (H5): production default is off until the Mesh live UAT
+  # (scripts/check-ai-mesh.sh) passes on the narrowed authorization matrix.
+  # dev/UAT overlays may enable it explicitly.
+  enabled: false
   provider: mock
   model: deepseek-chat
   deepseekBaseURL: https://api.deepseek.com
@@ -352,6 +372,18 @@ authz:
     - "/mall.v1.PromotionService/SetPromotionStatus"
     - "/mall.v1.PromotionService/ListPromotions"
     - "/mall.v1.PromotionService/ListPromotionReservations"
+    # 2026-11-23 (H5 stopgap): PricingService writes were missing from the DENY
+    # list. The durable fix is the narrowed allow-ingress + explicit per-service
+    # ALLOW matrix; these entries are the second line and must be re-reviewed
+    # when the Pricing read surface is added.
+    - "/mall.v1.PricingService/CreateQuote"
+    - "/mall.v1.PricingService/LockCoupon"
+    - "/mall.v1.PricingService/UnlockCoupon"
+    - "/mall.v1.PricingService/ConsumeCoupon"
+    - "/mall.v1.PricingService/TccTryConsume"
+    - "/mall.v1.PricingService/TccConfirmConsume"
+    - "/mall.v1.PricingService/TccCancelConsume"
+    - "/mall.v1.PricingService/TccQueryConsume"
     - "/mall.v1.OrderService/CreateOrder"
     - "/mall.v1.OrderService/CreateSeckillOrder"
     - "/mall.v1.OrderService/CreateOrderInner"

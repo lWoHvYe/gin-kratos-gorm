@@ -62,6 +62,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+.specify
+.dsh
 
 # Frontend
 /.pnpm-store/

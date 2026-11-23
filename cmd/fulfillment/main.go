@@ -63,6 +63,7 @@ func main() {
 	})
 	workers.Go(func(ctx context.Context) { fulfillment.RunOrderPaidConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { fulfillment.RunAfterSaleRefundConsumer(ctx, client, svc, logger) })
+	workers.Go(func(ctx context.Context) { fulfillment.RunRefundAdmittedConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) {
 		fulfillment.RunDeliveryAutoConfirmWorker(ctx, svc, logger, 15*time.Second)
 	})

@@ -603,10 +603,13 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	if record.RefundState == refundStateRefunding || record.RefundState == refundStateFull {
 		return nil, apperr.Failed("order refund is in progress")
 	}
+	paymentNo := strings.TrimSpace(req.GetPaymentNo())
 	switch record.Status {
 	case statusPaid:
-		s.afterPaid(ctx, record)
-		return s.replyFor(ctx, s.db, record)
+		if paymentNo == "" || record.SettlementPaymentNo == paymentNo {
+			return s.replyFor(ctx, s.db, record)
+		}
+		return nil, apperr.Conflict("order was already settled by another payment")
 	case statusPendingPayment:
 	default:
 		return nil, apperr.Failed(fmt.Sprintf("order cannot be paid in status %s", record.Status))
@@ -653,7 +656,6 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	if err := s.checkOrderReady(ctx, orderNo, items); err != nil {
 		return nil, err
 	}
-	paymentNo := strings.TrimSpace(req.GetPaymentNo())
 	operator := "payment"
 	if paymentNo != "" {
 		operator = truncate("payment:"+paymentNo, 64)

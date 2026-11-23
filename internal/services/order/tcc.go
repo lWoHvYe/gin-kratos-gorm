@@ -66,8 +66,12 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 	if record.RefundState == refundStateRefunding || record.RefundState == refundStateFull {
 		return nil, apperr.Failed("order refund is in progress")
 	}
+	paymentNo := strings.TrimSpace(req.GetPaymentNo())
 	if record.Status == statusPaid {
-		return &pb.Empty{}, nil
+		if paymentNo != "" && record.SettlementPaymentNo == paymentNo {
+			return &pb.Empty{}, nil
+		}
+		return nil, apperr.Conflict("order was already settled by another payment")
 	}
 	if record.Status != statusPendingPayment {
 		return nil, apperr.Failed(fmt.Sprintf("order cannot be paid in status %s", record.Status))
@@ -83,7 +87,6 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 	if err != nil {
 		return nil, apperr.Internal("load order items", err)
 	}
-	paymentNo := strings.TrimSpace(req.GetPaymentNo())
 	operator := "payment"
 	if paymentNo != "" {
 		operator = truncate("payment:"+paymentNo, 64)

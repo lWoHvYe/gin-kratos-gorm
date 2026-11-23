@@ -5856,8 +5856,26 @@ type LegacyResolution struct {
 	State          string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
 	CandidateCount int32                  `protobuf:"varint,3,opt,name=candidate_count,json=candidateCount,proto3" json:"candidate_count,omitempty"`
 	ResolutionId   string                 `protobuf:"bytes,4,opt,name=resolution_id,json=resolutionId,proto3" json:"resolution_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// pay_cent is the order amount under resolution (orders.pay_cent).
+	PayCent int64 `protobuf:"varint,5,opt,name=pay_cent,json=payCent,proto3" json:"pay_cent,omitempty"`
+	// blocked_scope is UNSHIPPED_GROUPS_AND_REFUND, FINANCE_HOLD,
+	// REJECTED_HOLD or NONE (ADR-0007 Amendment 1 §5.4).
+	BlockedScope string `protobuf:"bytes,6,opt,name=blocked_scope,json=blockedScope,proto3" json:"blocked_scope,omitempty"`
+	// resolution_kind is empty while OPEN/RESOLVING/COMPENSATING; otherwise
+	// MANUAL, EXPIRED_ZERO, EXPIRED_REFUND, EXPIRED_FINANCE or REJECTED.
+	ResolutionKind string `protobuf:"bytes,7,opt,name=resolution_kind,json=resolutionKind,proto3" json:"resolution_kind,omitempty"`
+	// expires_at_unix is the queue's 24h deadline.
+	ExpiresAtUnix int64 `protobuf:"varint,8,opt,name=expires_at_unix,json=expiresAtUnix,proto3" json:"expires_at_unix,omitempty"`
+	// resolved_payment_no is the effective payment written back by RESOLVED.
+	ResolvedPaymentNo string `protobuf:"bytes,9,opt,name=resolved_payment_no,json=resolvedPaymentNo,proto3" json:"resolved_payment_no,omitempty"`
+	// operator/authorized_by identify the ops/Director command that wrote a
+	// terminal state; empty for queue rows without a manual command.
+	Operator     string `protobuf:"bytes,10,opt,name=operator,proto3" json:"operator,omitempty"`
+	AuthorizedBy string `protobuf:"bytes,11,opt,name=authorized_by,json=authorizedBy,proto3" json:"authorized_by,omitempty"`
+	// version is the queue row version used by conditional state transitions.
+	Version       int64 `protobuf:"varint,12,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LegacyResolution) Reset() {
@@ -5916,6 +5934,62 @@ func (x *LegacyResolution) GetResolutionId() string {
 		return x.ResolutionId
 	}
 	return ""
+}
+
+func (x *LegacyResolution) GetPayCent() int64 {
+	if x != nil {
+		return x.PayCent
+	}
+	return 0
+}
+
+func (x *LegacyResolution) GetBlockedScope() string {
+	if x != nil {
+		return x.BlockedScope
+	}
+	return ""
+}
+
+func (x *LegacyResolution) GetResolutionKind() string {
+	if x != nil {
+		return x.ResolutionKind
+	}
+	return ""
+}
+
+func (x *LegacyResolution) GetExpiresAtUnix() int64 {
+	if x != nil {
+		return x.ExpiresAtUnix
+	}
+	return 0
+}
+
+func (x *LegacyResolution) GetResolvedPaymentNo() string {
+	if x != nil {
+		return x.ResolvedPaymentNo
+	}
+	return ""
+}
+
+func (x *LegacyResolution) GetOperator() string {
+	if x != nil {
+		return x.Operator
+	}
+	return ""
+}
+
+func (x *LegacyResolution) GetAuthorizedBy() string {
+	if x != nil {
+		return x.AuthorizedBy
+	}
+	return ""
+}
+
+func (x *LegacyResolution) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
 }
 
 type OrderItem struct {
@@ -17208,12 +17282,21 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\fevidence_ref\x18\x06 \x01(\tR\vevidenceRef\"_\n" +
 	"\x1dResumeLegacyResolutionRequest\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12#\n" +
-	"\rresolution_id\x18\x02 \x01(\tR\fresolutionId\"\x91\x01\n" +
+	"\rresolution_id\x18\x02 \x01(\tR\fresolutionId\"\xad\x03\n" +
 	"\x10LegacyResolution\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12'\n" +
 	"\x0fcandidate_count\x18\x03 \x01(\x05R\x0ecandidateCount\x12#\n" +
-	"\rresolution_id\x18\x04 \x01(\tR\fresolutionId\"\xb9\x02\n" +
+	"\rresolution_id\x18\x04 \x01(\tR\fresolutionId\x12\x19\n" +
+	"\bpay_cent\x18\x05 \x01(\x03R\apayCent\x12#\n" +
+	"\rblocked_scope\x18\x06 \x01(\tR\fblockedScope\x12'\n" +
+	"\x0fresolution_kind\x18\a \x01(\tR\x0eresolutionKind\x12&\n" +
+	"\x0fexpires_at_unix\x18\b \x01(\x03R\rexpiresAtUnix\x12.\n" +
+	"\x13resolved_payment_no\x18\t \x01(\tR\x11resolvedPaymentNo\x12\x1a\n" +
+	"\boperator\x18\n" +
+	" \x01(\tR\boperator\x12#\n" +
+	"\rauthorized_by\x18\v \x01(\tR\fauthorizedBy\x12\x18\n" +
+	"\aversion\x18\f \x01(\x03R\aversion\"\xb9\x02\n" +
 	"\tOrderItem\x12\x15\n" +
 	"\x06sku_id\x18\x01 \x01(\x03R\x05skuId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +

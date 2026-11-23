@@ -578,6 +578,24 @@ message LegacyResolution {
   string state = 2;
   int32 candidate_count = 3;
   string resolution_id = 4;
+  // pay_cent is the order amount under resolution (orders.pay_cent).
+  int64 pay_cent = 5;
+  // blocked_scope is UNSHIPPED_GROUPS_AND_REFUND, FINANCE_HOLD,
+  // REJECTED_HOLD or NONE (ADR-0007 Amendment 1 §5.4).
+  string blocked_scope = 6;
+  // resolution_kind is empty while OPEN/RESOLVING/COMPENSATING; otherwise
+  // MANUAL, EXPIRED_ZERO, EXPIRED_REFUND, EXPIRED_FINANCE or REJECTED.
+  string resolution_kind = 7;
+  // expires_at_unix is the queue's 24h deadline.
+  int64 expires_at_unix = 8;
+  // resolved_payment_no is the effective payment written back by RESOLVED.
+  string resolved_payment_no = 9;
+  // operator/authorized_by identify the ops/Director command that wrote a
+  // terminal state; empty for queue rows without a manual command.
+  string operator = 10;
+  string authorized_by = 11;
+  // version is the queue row version used by conditional state transitions.
+  int64 version = 12;
 }
 
 message OrderItem {

@@ -62,6 +62,8 @@
 | `ResolveLegacyResolution` | `order_no, resolution_id, payment_no, operator, authorized_by, evidence_ref` | 人工唯一候选写回；`OPEN/RESOLVING→RESOLVED` CAS |
 | `ResumeLegacyResolution` | `order_no, resolution_id` | 幂等恢复被阻断的 ship/refund；不重复发货/退款 |
 
+> **C-04 M-1（QC-15 修订）**：三个历史队列 RPC 的 reply 统一为 `LegacyResolution`：`order_no/state/candidate_count/resolution_id/pay_cent/blocked_scope/resolution_kind/expires_at_unix/resolved_payment_no/operator/authorized_by/version`。`state`、`resolution_kind`、`blocked_scope` 的取值以 ADR §5.4 为准；本修订只补只读可见字段，不新增队列状态或业务语义。
+
 ### 1.4 事件与配置
 
 - `order.settled`：保持 `shop.order.settled.v1`；必填字段不变；新增可选 `schema_version`（缺省 1，>1 影子拒绝）；不新增必填字段。
@@ -71,6 +73,11 @@
   - `FULFILLMENT_SETTLE_CONSUMER_MODE=paid|shadow|settled`；**R1 默认 `paid`**；`settled` 需 release 门禁 + 人类批准。
   - `SETTLE_RELEASE_APPROVAL_ID`：启动时校验 `settlement_switch_approvals`；无有效批准按 `paid` 运行并告警。
   - 旧 `FULFILLMENT_CONSUME_ORDER_SETTLED`：`false`/未设置→`paid`；`true`→受门禁的 `settled` 请求，不得绕过。
+  - **配置契约载体（QC-15 B-1 修订）**：`internal/platform/config/config.go` 属于 C-04 增量，必须随 C-04 评审：
+    - `FulfillmentSettleConsumerMode` ← `FULFILLMENT_SETTLE_CONSUMER_MODE`（`paid|shadow|settled`，默认 `paid`；大小写/空值/未知值 fail-fast）。
+    - `SettleReleaseApprovalID` ← `SETTLE_RELEASE_APPROVAL_ID`；请求 `settled` 时必填，缺失启动 fail-fast。
+    - 旧布尔只映射 `paid` 或受门禁的 `settled`，不得映射 `shadow`；新旧同时存在且冲突 → 启动 fail-fast，不静默择一。
+    - `shadow`/`settled` 的批准行内容（`target_mode/status/expires_at/release_range`）由 Fulfillment 启动校验；没有有效批准行时按 ADR §3.2 回退 `paid` 并告警，不由 config 包猜测。
 
 ---
 
@@ -125,5 +132,14 @@
 | C-04 | **未批准**；本文件只列输入，交 QC/Developer 评审 |
 | C-05 | **未批准**；迁移编号由 Developer 在评审后取下一个可用号 |
 | Plan allowed_paths | 需包含 `migrations/fulfillment/**`（QC-12 MAJOR，Plan owner 处理） |
+
+### 4.1 C-04 草案修订记录（QC-15，WIP-DRAFT）
+
+| QC-15 项 | 修订落点 | 状态 |
+|---|---|---|
+| **B-1** 配置契约 | §1.4 引用 + `internal/platform/config/config.go`（三态/approval id/旧布尔映射/fail-fast） | C-04 草案已补，**待 QC 复审**；仍非批准 |
+| **M-1** `LegacyResolution` reply | §1.3 引用 + `api/proto/mall/v1/mall.proto` 的 `LegacyResolution` 字段 5–12 | C-04 草案已补，**待 QC 复审**；仍非批准 |
+
+> 本修订不批准 C-04/C-05，不改变 ADR/SPEC；`GetRefundByKey` 包限定与 `RefundRequest.refund_id` 不新增按 QC-15 裁决保持。
 
 **下一步**：QC 审 C-04/C-05 输入 → Developer 提供可执行性/风险 → C-04/C-05 批准 → 实现。在此之前不得写代码/迁移/测试。

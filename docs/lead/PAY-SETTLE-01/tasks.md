@@ -23,6 +23,12 @@ Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未
 - [ ] **T1.5** `order.refund_requested` 消费者改为观察/告警；不直接 Refund
 - [ ] **T1.6** `PENDING_PAYMENT+已捕获` 分支按 C-03 裁决（CAS→CANCELLED 或 PAID+写生效支付）
 - [ ] **T1.7** 测试：Σ 不等、REFUNDING vs Ship 竞态、崩溃续跑、部分失败、无组 G1、已发货组
+- [ ] **T1.2b** 按 Architect Addendum R-1/R-2/R-3 修复：
+  - R-1：Σ 不等写 `refund_batches(state=PRECHECK_FAILED)` 审计，其他零写入；调整“零行”测试。
+  - R-2：Tx1 外读 `ListShipments`，`exception_state != 'NONE' && shipped_at_unix>0` 判已离仓；不可用/不明确 fail-closed；T1.4 `CancelIfCreated` 返回 `ALREADY_SHIPPED`。
+  - R-3：`PENDING_PAYMENT && captured>0` 在 T1.2b 只加 fail-closed guard，不建 batch；CAS→CANCELLED 归 T1.6。
+  - 测试：审计 batch、exception 已离仓、PENDING 捕获 guard、其他零写入。
+
 
 ## Phase 2 — P-04 历史 PAID（Owner: Developer；依赖: T1.2 生产者修复 + T0.7）
 

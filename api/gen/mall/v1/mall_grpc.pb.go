@@ -3079,6 +3079,7 @@ const (
 	OrderService_CancelOrder_FullMethodName              = "/mall.v1.OrderService/CancelOrder"
 	OrderService_CancelOrderInner_FullMethodName         = "/mall.v1.OrderService/CancelOrderInner"
 	OrderService_MarkPaid_FullMethodName                 = "/mall.v1.OrderService/MarkPaid"
+	OrderService_SettleZero_FullMethodName               = "/mall.v1.OrderService/SettleZero"
 	OrderService_GetOrder_FullMethodName                 = "/mall.v1.OrderService/GetOrder"
 	OrderService_ListOrders_FullMethodName               = "/mall.v1.OrderService/ListOrders"
 	OrderService_GetOrderStats_FullMethodName            = "/mall.v1.OrderService/GetOrderStats"
@@ -3105,6 +3106,8 @@ type OrderServiceClient interface {
 	CancelOrder(ctx context.Context, in *CancelOrderRequest, opts ...grpc.CallOption) (*Order, error)
 	CancelOrderInner(ctx context.Context, in *CancelOrderInnerRequest, opts ...grpc.CallOption) (*Empty, error)
 	MarkPaid(ctx context.Context, in *MarkPaidRequest, opts ...grpc.CallOption) (*Order, error)
+	// Zero-amount orders settle without a Payment intent or capture.
+	SettleZero(ctx context.Context, in *SettleZeroRequest, opts ...grpc.CallOption) (*Order, error)
 	GetOrder(ctx context.Context, in *GetOrderRequest, opts ...grpc.CallOption) (*Order, error)
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*OrderList, error)
 	GetOrderStats(ctx context.Context, in *StatsRequest, opts ...grpc.CallOption) (*OrderStats, error)
@@ -3186,6 +3189,16 @@ func (c *orderServiceClient) MarkPaid(ctx context.Context, in *MarkPaidRequest, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Order)
 	err := c.cc.Invoke(ctx, OrderService_MarkPaid_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orderServiceClient) SettleZero(ctx context.Context, in *SettleZeroRequest, opts ...grpc.CallOption) (*Order, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Order)
+	err := c.cc.Invoke(ctx, OrderService_SettleZero_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3324,6 +3337,8 @@ type OrderServiceServer interface {
 	CancelOrder(context.Context, *CancelOrderRequest) (*Order, error)
 	CancelOrderInner(context.Context, *CancelOrderInnerRequest) (*Empty, error)
 	MarkPaid(context.Context, *MarkPaidRequest) (*Order, error)
+	// Zero-amount orders settle without a Payment intent or capture.
+	SettleZero(context.Context, *SettleZeroRequest) (*Order, error)
 	GetOrder(context.Context, *GetOrderRequest) (*Order, error)
 	ListOrders(context.Context, *ListOrdersRequest) (*OrderList, error)
 	GetOrderStats(context.Context, *StatsRequest) (*OrderStats, error)
@@ -3368,6 +3383,9 @@ func (UnimplementedOrderServiceServer) CancelOrderInner(context.Context, *Cancel
 }
 func (UnimplementedOrderServiceServer) MarkPaid(context.Context, *MarkPaidRequest) (*Order, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MarkPaid not implemented")
+}
+func (UnimplementedOrderServiceServer) SettleZero(context.Context, *SettleZeroRequest) (*Order, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SettleZero not implemented")
 }
 func (UnimplementedOrderServiceServer) GetOrder(context.Context, *GetOrderRequest) (*Order, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetOrder not implemented")
@@ -3530,6 +3548,24 @@ func _OrderService_MarkPaid_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrderServiceServer).MarkPaid(ctx, req.(*MarkPaidRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OrderService_SettleZero_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SettleZeroRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).SettleZero(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_SettleZero_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).SettleZero(ctx, req.(*SettleZeroRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3780,6 +3816,10 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MarkPaid",
 			Handler:    _OrderService_MarkPaid_Handler,
+		},
+		{
+			MethodName: "SettleZero",
+			Handler:    _OrderService_SettleZero_Handler,
 		},
 		{
 			MethodName: "GetOrder",

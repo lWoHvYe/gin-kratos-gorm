@@ -473,6 +473,8 @@ service OrderService {
   rpc CancelOrder (CancelOrderRequest) returns (Order);
   rpc CancelOrderInner (CancelOrderInnerRequest) returns (Empty);
   rpc MarkPaid (MarkPaidRequest) returns (Order);
+  // Zero-amount orders settle without a Payment intent or capture.
+  rpc SettleZero (SettleZeroRequest) returns (Order);
   rpc GetOrder (GetOrderRequest) returns (Order);
   rpc ListOrders (ListOrdersRequest) returns (OrderList);
   rpc GetOrderStats (StatsRequest) returns (OrderStats);
@@ -634,6 +636,7 @@ message GetShortageCaseRequest { string order_no = 1; string group_no = 2; }
 
 message CancelOrderInnerRequest { string order_no = 1; string reason = 2; }
 message MarkPaidRequest { string order_no = 1; string payment_no = 2; int64 paid_cent = 3; }
+message SettleZeroRequest { string order_no = 1; }
 message GetOrderRequest { string order_no = 1; int64 user_id = 2; bool admin = 3; }
 message ListOrdersRequest {
   int64 user_id = 1;

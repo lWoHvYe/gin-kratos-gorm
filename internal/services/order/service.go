@@ -68,6 +68,7 @@ type Service struct {
 
 	inventoryDTM          string
 	orderDTM              string
+	requireInventory      bool
 	warehouseSplitEnabled bool
 	shortageCaseEnabled   bool
 	now                   func() time.Time
@@ -81,6 +82,9 @@ type Options struct {
 	WarehouseSplitEnabled bool
 	// ShortageCaseEnabled runs the 48h fail-safe shortage worker.
 	ShortageCaseEnabled bool
+	// RequireInventory makes nil inventory a hard configuration error instead
+	// of a unit-test convenience. cmd/order sets it to true.
+	RequireInventory bool
 }
 
 func New(database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client,
@@ -96,6 +100,7 @@ func NewWithOptions(database *sql.DB, client *mq.Client, logger *slog.Logger, dt
 	return &Service{
 		warehouseSplitEnabled: opts.WarehouseSplitEnabled,
 		shortageCaseEnabled:   opts.ShortageCaseEnabled,
+		requireInventory:      opts.RequireInventory,
 		db:                    database,
 		mq:                    client,
 		log:                   logger,
@@ -805,6 +810,9 @@ func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *order
 // Inventory; production cmd/order always wires it.
 func (s *Service) checkOrderReady(ctx context.Context, orderNo string, items []*pb.OrderItem) error {
 	if s.inventory == nil {
+		if s.requireInventory {
+			return apperr.Unavailable("inventory client is required for settlement", nil)
+		}
 		return nil
 	}
 	req := &pb.CheckOrderReadyRequest{OrderNo: orderNo}

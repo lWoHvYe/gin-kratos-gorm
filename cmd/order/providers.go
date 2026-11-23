@@ -95,6 +95,7 @@ func provideOrderService(cfg *config.Config, database *sql.DB, client *mq.Client
 	return order.NewWithOptions(database, client, logger, dtmClient, pricing, inventory, promotion, order.Options{
 		WarehouseSplitEnabled: cfg.WarehouseSplitEnabled,
 		ShortageCaseEnabled:   cfg.ShortageCaseEnabled,
+		RequireInventory:      true,
 	})
 }
 

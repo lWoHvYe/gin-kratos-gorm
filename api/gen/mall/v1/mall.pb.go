@@ -6737,6 +6737,50 @@ func (x *MarkPaidRequest) GetPaidCent() int64 {
 	return 0
 }
 
+type SettleZeroRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrderNo       string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SettleZeroRequest) Reset() {
+	*x = SettleZeroRequest{}
+	mi := &file_mall_v1_mall_proto_msgTypes[97]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SettleZeroRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SettleZeroRequest) ProtoMessage() {}
+
+func (x *SettleZeroRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mall_v1_mall_proto_msgTypes[97]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SettleZeroRequest.ProtoReflect.Descriptor instead.
+func (*SettleZeroRequest) Descriptor() ([]byte, []int) {
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *SettleZeroRequest) GetOrderNo() string {
+	if x != nil {
+		return x.OrderNo
+	}
+	return ""
+}
+
 type GetOrderRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OrderNo       string                 `protobuf:"bytes,1,opt,name=order_no,json=orderNo,proto3" json:"order_no,omitempty"`
@@ -6748,7 +6792,7 @@ type GetOrderRequest struct {
 
 func (x *GetOrderRequest) Reset() {
 	*x = GetOrderRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[97]
+	mi := &file_mall_v1_mall_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6760,7 +6804,7 @@ func (x *GetOrderRequest) String() string {
 func (*GetOrderRequest) ProtoMessage() {}
 
 func (x *GetOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[97]
+	mi := &file_mall_v1_mall_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6773,7 +6817,7 @@ func (x *GetOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrderRequest.ProtoReflect.Descriptor instead.
 func (*GetOrderRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{97}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *GetOrderRequest) GetOrderNo() string {
@@ -6810,7 +6854,7 @@ type ListOrdersRequest struct {
 
 func (x *ListOrdersRequest) Reset() {
 	*x = ListOrdersRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[98]
+	mi := &file_mall_v1_mall_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6822,7 +6866,7 @@ func (x *ListOrdersRequest) String() string {
 func (*ListOrdersRequest) ProtoMessage() {}
 
 func (x *ListOrdersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[98]
+	mi := &file_mall_v1_mall_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6835,7 +6879,7 @@ func (x *ListOrdersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOrdersRequest.ProtoReflect.Descriptor instead.
 func (*ListOrdersRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{98}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *ListOrdersRequest) GetUserId() int64 {
@@ -6883,7 +6927,7 @@ type OrderList struct {
 
 func (x *OrderList) Reset() {
 	*x = OrderList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[99]
+	mi := &file_mall_v1_mall_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6895,7 +6939,7 @@ func (x *OrderList) String() string {
 func (*OrderList) ProtoMessage() {}
 
 func (x *OrderList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[99]
+	mi := &file_mall_v1_mall_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6908,7 +6952,7 @@ func (x *OrderList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderList.ProtoReflect.Descriptor instead.
 func (*OrderList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{99}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *OrderList) GetOrders() []*Order {
@@ -6935,7 +6979,7 @@ type StatsRequest struct {
 
 func (x *StatsRequest) Reset() {
 	*x = StatsRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[100]
+	mi := &file_mall_v1_mall_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6947,7 +6991,7 @@ func (x *StatsRequest) String() string {
 func (*StatsRequest) ProtoMessage() {}
 
 func (x *StatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[100]
+	mi := &file_mall_v1_mall_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6960,7 +7004,7 @@ func (x *StatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatsRequest.ProtoReflect.Descriptor instead.
 func (*StatsRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{100}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *StatsRequest) GetFromUnix() int64 {
@@ -6992,7 +7036,7 @@ type OrderStats struct {
 
 func (x *OrderStats) Reset() {
 	*x = OrderStats{}
-	mi := &file_mall_v1_mall_proto_msgTypes[101]
+	mi := &file_mall_v1_mall_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7004,7 +7048,7 @@ func (x *OrderStats) String() string {
 func (*OrderStats) ProtoMessage() {}
 
 func (x *OrderStats) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[101]
+	mi := &file_mall_v1_mall_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7017,7 +7061,7 @@ func (x *OrderStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderStats.ProtoReflect.Descriptor instead.
 func (*OrderStats) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{101}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *OrderStats) GetTotalOrders() int64 {
@@ -7087,7 +7131,7 @@ type Intent struct {
 
 func (x *Intent) Reset() {
 	*x = Intent{}
-	mi := &file_mall_v1_mall_proto_msgTypes[102]
+	mi := &file_mall_v1_mall_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7099,7 +7143,7 @@ func (x *Intent) String() string {
 func (*Intent) ProtoMessage() {}
 
 func (x *Intent) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[102]
+	mi := &file_mall_v1_mall_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7112,7 +7156,7 @@ func (x *Intent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Intent.ProtoReflect.Descriptor instead.
 func (*Intent) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{102}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *Intent) GetPaymentNo() string {
@@ -7197,7 +7241,7 @@ type CreateIntentRequest struct {
 
 func (x *CreateIntentRequest) Reset() {
 	*x = CreateIntentRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[103]
+	mi := &file_mall_v1_mall_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7209,7 +7253,7 @@ func (x *CreateIntentRequest) String() string {
 func (*CreateIntentRequest) ProtoMessage() {}
 
 func (x *CreateIntentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[103]
+	mi := &file_mall_v1_mall_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7222,7 +7266,7 @@ func (x *CreateIntentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIntentRequest.ProtoReflect.Descriptor instead.
 func (*CreateIntentRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{103}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *CreateIntentRequest) GetOrderNo() string {
@@ -7262,7 +7306,7 @@ type GetIntentRequest struct {
 
 func (x *GetIntentRequest) Reset() {
 	*x = GetIntentRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[104]
+	mi := &file_mall_v1_mall_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7274,7 +7318,7 @@ func (x *GetIntentRequest) String() string {
 func (*GetIntentRequest) ProtoMessage() {}
 
 func (x *GetIntentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[104]
+	mi := &file_mall_v1_mall_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7287,7 +7331,7 @@ func (x *GetIntentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIntentRequest.ProtoReflect.Descriptor instead.
 func (*GetIntentRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{104}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *GetIntentRequest) GetPaymentNo() string {
@@ -7306,7 +7350,7 @@ type GetPaymentByOrderRequest struct {
 
 func (x *GetPaymentByOrderRequest) Reset() {
 	*x = GetPaymentByOrderRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[105]
+	mi := &file_mall_v1_mall_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7318,7 +7362,7 @@ func (x *GetPaymentByOrderRequest) String() string {
 func (*GetPaymentByOrderRequest) ProtoMessage() {}
 
 func (x *GetPaymentByOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[105]
+	mi := &file_mall_v1_mall_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7331,7 +7375,7 @@ func (x *GetPaymentByOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPaymentByOrderRequest.ProtoReflect.Descriptor instead.
 func (*GetPaymentByOrderRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{105}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *GetPaymentByOrderRequest) GetOrderNo() string {
@@ -7350,7 +7394,7 @@ type ListOrderIntentsRequest struct {
 
 func (x *ListOrderIntentsRequest) Reset() {
 	*x = ListOrderIntentsRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[106]
+	mi := &file_mall_v1_mall_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7362,7 +7406,7 @@ func (x *ListOrderIntentsRequest) String() string {
 func (*ListOrderIntentsRequest) ProtoMessage() {}
 
 func (x *ListOrderIntentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[106]
+	mi := &file_mall_v1_mall_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7375,7 +7419,7 @@ func (x *ListOrderIntentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOrderIntentsRequest.ProtoReflect.Descriptor instead.
 func (*ListOrderIntentsRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{106}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *ListOrderIntentsRequest) GetOrderNo() string {
@@ -7394,7 +7438,7 @@ type IntentList struct {
 
 func (x *IntentList) Reset() {
 	*x = IntentList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[107]
+	mi := &file_mall_v1_mall_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7406,7 +7450,7 @@ func (x *IntentList) String() string {
 func (*IntentList) ProtoMessage() {}
 
 func (x *IntentList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[107]
+	mi := &file_mall_v1_mall_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7419,7 +7463,7 @@ func (x *IntentList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntentList.ProtoReflect.Descriptor instead.
 func (*IntentList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{107}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *IntentList) GetIntents() []*Intent {
@@ -7443,7 +7487,7 @@ type CallbackRequest struct {
 
 func (x *CallbackRequest) Reset() {
 	*x = CallbackRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[108]
+	mi := &file_mall_v1_mall_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7455,7 +7499,7 @@ func (x *CallbackRequest) String() string {
 func (*CallbackRequest) ProtoMessage() {}
 
 func (x *CallbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[108]
+	mi := &file_mall_v1_mall_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7468,7 +7512,7 @@ func (x *CallbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallbackRequest.ProtoReflect.Descriptor instead.
 func (*CallbackRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{108}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *CallbackRequest) GetPaymentNo() string {
@@ -7522,7 +7566,7 @@ type CallbackReply struct {
 
 func (x *CallbackReply) Reset() {
 	*x = CallbackReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[109]
+	mi := &file_mall_v1_mall_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7534,7 +7578,7 @@ func (x *CallbackReply) String() string {
 func (*CallbackReply) ProtoMessage() {}
 
 func (x *CallbackReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[109]
+	mi := &file_mall_v1_mall_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7547,7 +7591,7 @@ func (x *CallbackReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallbackReply.ProtoReflect.Descriptor instead.
 func (*CallbackReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{109}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *CallbackReply) GetOk() bool {
@@ -7574,7 +7618,7 @@ type RefundOrderRequest struct {
 
 func (x *RefundOrderRequest) Reset() {
 	*x = RefundOrderRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[110]
+	mi := &file_mall_v1_mall_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7586,7 +7630,7 @@ func (x *RefundOrderRequest) String() string {
 func (*RefundOrderRequest) ProtoMessage() {}
 
 func (x *RefundOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[110]
+	mi := &file_mall_v1_mall_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7599,7 +7643,7 @@ func (x *RefundOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundOrderRequest.ProtoReflect.Descriptor instead.
 func (*RefundOrderRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{110}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *RefundOrderRequest) GetOrderNo() string {
@@ -7677,7 +7721,7 @@ type RefundOrderReply struct {
 
 func (x *RefundOrderReply) Reset() {
 	*x = RefundOrderReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[111]
+	mi := &file_mall_v1_mall_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7689,7 +7733,7 @@ func (x *RefundOrderReply) String() string {
 func (*RefundOrderReply) ProtoMessage() {}
 
 func (x *RefundOrderReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[111]
+	mi := &file_mall_v1_mall_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7702,7 +7746,7 @@ func (x *RefundOrderReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundOrderReply.ProtoReflect.Descriptor instead.
 func (*RefundOrderReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{111}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *RefundOrderReply) GetRefundNo() string {
@@ -7742,7 +7786,7 @@ type VerifyPaymentRequest struct {
 
 func (x *VerifyPaymentRequest) Reset() {
 	*x = VerifyPaymentRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[112]
+	mi := &file_mall_v1_mall_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7754,7 +7798,7 @@ func (x *VerifyPaymentRequest) String() string {
 func (*VerifyPaymentRequest) ProtoMessage() {}
 
 func (x *VerifyPaymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[112]
+	mi := &file_mall_v1_mall_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7767,7 +7811,7 @@ func (x *VerifyPaymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyPaymentRequest.ProtoReflect.Descriptor instead.
 func (*VerifyPaymentRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{112}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *VerifyPaymentRequest) GetPaymentNo() string {
@@ -7789,7 +7833,7 @@ type VerifyPaymentReply struct {
 
 func (x *VerifyPaymentReply) Reset() {
 	*x = VerifyPaymentReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[113]
+	mi := &file_mall_v1_mall_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7801,7 +7845,7 @@ func (x *VerifyPaymentReply) String() string {
 func (*VerifyPaymentReply) ProtoMessage() {}
 
 func (x *VerifyPaymentReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[113]
+	mi := &file_mall_v1_mall_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7814,7 +7858,7 @@ func (x *VerifyPaymentReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyPaymentReply.ProtoReflect.Descriptor instead.
 func (*VerifyPaymentReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{113}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *VerifyPaymentReply) GetOrderPrepared() bool {
@@ -7857,7 +7901,7 @@ type RefundRequest struct {
 
 func (x *RefundRequest) Reset() {
 	*x = RefundRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[114]
+	mi := &file_mall_v1_mall_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7869,7 +7913,7 @@ func (x *RefundRequest) String() string {
 func (*RefundRequest) ProtoMessage() {}
 
 func (x *RefundRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[114]
+	mi := &file_mall_v1_mall_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7882,7 +7926,7 @@ func (x *RefundRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundRequest.ProtoReflect.Descriptor instead.
 func (*RefundRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{114}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *RefundRequest) GetPaymentNo() string {
@@ -7928,7 +7972,7 @@ type Refund struct {
 
 func (x *Refund) Reset() {
 	*x = Refund{}
-	mi := &file_mall_v1_mall_proto_msgTypes[115]
+	mi := &file_mall_v1_mall_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7940,7 +7984,7 @@ func (x *Refund) String() string {
 func (*Refund) ProtoMessage() {}
 
 func (x *Refund) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[115]
+	mi := &file_mall_v1_mall_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7953,7 +7997,7 @@ func (x *Refund) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Refund.ProtoReflect.Descriptor instead.
 func (*Refund) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{115}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *Refund) GetRefundNo() string {
@@ -8017,7 +8061,7 @@ type ListRefundsRequest struct {
 
 func (x *ListRefundsRequest) Reset() {
 	*x = ListRefundsRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[116]
+	mi := &file_mall_v1_mall_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8029,7 +8073,7 @@ func (x *ListRefundsRequest) String() string {
 func (*ListRefundsRequest) ProtoMessage() {}
 
 func (x *ListRefundsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[116]
+	mi := &file_mall_v1_mall_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8042,7 +8086,7 @@ func (x *ListRefundsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRefundsRequest.ProtoReflect.Descriptor instead.
 func (*ListRefundsRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{116}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *ListRefundsRequest) GetPaymentNo() string {
@@ -8083,7 +8127,7 @@ type RefundList struct {
 
 func (x *RefundList) Reset() {
 	*x = RefundList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[117]
+	mi := &file_mall_v1_mall_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8095,7 +8139,7 @@ func (x *RefundList) String() string {
 func (*RefundList) ProtoMessage() {}
 
 func (x *RefundList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[117]
+	mi := &file_mall_v1_mall_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8108,7 +8152,7 @@ func (x *RefundList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundList.ProtoReflect.Descriptor instead.
 func (*RefundList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{117}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *RefundList) GetRefunds() []*Refund {
@@ -8147,7 +8191,7 @@ type Campaign struct {
 
 func (x *Campaign) Reset() {
 	*x = Campaign{}
-	mi := &file_mall_v1_mall_proto_msgTypes[118]
+	mi := &file_mall_v1_mall_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8159,7 +8203,7 @@ func (x *Campaign) String() string {
 func (*Campaign) ProtoMessage() {}
 
 func (x *Campaign) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[118]
+	mi := &file_mall_v1_mall_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8172,7 +8216,7 @@ func (x *Campaign) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Campaign.ProtoReflect.Descriptor instead.
 func (*Campaign) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{118}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *Campaign) GetId() int64 {
@@ -8302,7 +8346,7 @@ type PromotionRule struct {
 
 func (x *PromotionRule) Reset() {
 	*x = PromotionRule{}
-	mi := &file_mall_v1_mall_proto_msgTypes[119]
+	mi := &file_mall_v1_mall_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8314,7 +8358,7 @@ func (x *PromotionRule) String() string {
 func (*PromotionRule) ProtoMessage() {}
 
 func (x *PromotionRule) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[119]
+	mi := &file_mall_v1_mall_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8327,7 +8371,7 @@ func (x *PromotionRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionRule.ProtoReflect.Descriptor instead.
 func (*PromotionRule) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{119}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *PromotionRule) GetId() int64 {
@@ -8487,7 +8531,7 @@ type CreateCampaignWithRuleRequest struct {
 
 func (x *CreateCampaignWithRuleRequest) Reset() {
 	*x = CreateCampaignWithRuleRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[120]
+	mi := &file_mall_v1_mall_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8499,7 +8543,7 @@ func (x *CreateCampaignWithRuleRequest) String() string {
 func (*CreateCampaignWithRuleRequest) ProtoMessage() {}
 
 func (x *CreateCampaignWithRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[120]
+	mi := &file_mall_v1_mall_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8512,7 +8556,7 @@ func (x *CreateCampaignWithRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCampaignWithRuleRequest.ProtoReflect.Descriptor instead.
 func (*CreateCampaignWithRuleRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{120}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *CreateCampaignWithRuleRequest) GetCampaign() *Campaign {
@@ -8539,7 +8583,7 @@ type CampaignWithRule struct {
 
 func (x *CampaignWithRule) Reset() {
 	*x = CampaignWithRule{}
-	mi := &file_mall_v1_mall_proto_msgTypes[121]
+	mi := &file_mall_v1_mall_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8551,7 +8595,7 @@ func (x *CampaignWithRule) String() string {
 func (*CampaignWithRule) ProtoMessage() {}
 
 func (x *CampaignWithRule) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[121]
+	mi := &file_mall_v1_mall_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8564,7 +8608,7 @@ func (x *CampaignWithRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CampaignWithRule.ProtoReflect.Descriptor instead.
 func (*CampaignWithRule) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{121}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *CampaignWithRule) GetCampaign() *Campaign {
@@ -8591,7 +8635,7 @@ type GetCampaignWithRuleByCodeRequest struct {
 
 func (x *GetCampaignWithRuleByCodeRequest) Reset() {
 	*x = GetCampaignWithRuleByCodeRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[122]
+	mi := &file_mall_v1_mall_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8603,7 +8647,7 @@ func (x *GetCampaignWithRuleByCodeRequest) String() string {
 func (*GetCampaignWithRuleByCodeRequest) ProtoMessage() {}
 
 func (x *GetCampaignWithRuleByCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[122]
+	mi := &file_mall_v1_mall_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8616,7 +8660,7 @@ func (x *GetCampaignWithRuleByCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCampaignWithRuleByCodeRequest.ProtoReflect.Descriptor instead.
 func (*GetCampaignWithRuleByCodeRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{122}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *GetCampaignWithRuleByCodeRequest) GetCampaignCode() string {
@@ -8642,7 +8686,7 @@ type CampaignList struct {
 
 func (x *CampaignList) Reset() {
 	*x = CampaignList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[123]
+	mi := &file_mall_v1_mall_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8654,7 +8698,7 @@ func (x *CampaignList) String() string {
 func (*CampaignList) ProtoMessage() {}
 
 func (x *CampaignList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[123]
+	mi := &file_mall_v1_mall_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8667,7 +8711,7 @@ func (x *CampaignList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CampaignList.ProtoReflect.Descriptor instead.
 func (*CampaignList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{123}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *CampaignList) GetCampaigns() []*Campaign {
@@ -8689,7 +8733,7 @@ type PromotionListRequest struct {
 
 func (x *PromotionListRequest) Reset() {
 	*x = PromotionListRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[124]
+	mi := &file_mall_v1_mall_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8701,7 +8745,7 @@ func (x *PromotionListRequest) String() string {
 func (*PromotionListRequest) ProtoMessage() {}
 
 func (x *PromotionListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[124]
+	mi := &file_mall_v1_mall_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8714,7 +8758,7 @@ func (x *PromotionListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionListRequest.ProtoReflect.Descriptor instead.
 func (*PromotionListRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{124}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *PromotionListRequest) GetCampaignId() int64 {
@@ -8755,7 +8799,7 @@ type PromotionRuleList struct {
 
 func (x *PromotionRuleList) Reset() {
 	*x = PromotionRuleList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[125]
+	mi := &file_mall_v1_mall_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8767,7 +8811,7 @@ func (x *PromotionRuleList) String() string {
 func (*PromotionRuleList) ProtoMessage() {}
 
 func (x *PromotionRuleList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[125]
+	mi := &file_mall_v1_mall_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8780,7 +8824,7 @@ func (x *PromotionRuleList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionRuleList.ProtoReflect.Descriptor instead.
 func (*PromotionRuleList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{125}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *PromotionRuleList) GetPromotions() []*PromotionRule {
@@ -8807,7 +8851,7 @@ type SetPromotionStatusRequest struct {
 
 func (x *SetPromotionStatusRequest) Reset() {
 	*x = SetPromotionStatusRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[126]
+	mi := &file_mall_v1_mall_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8819,7 +8863,7 @@ func (x *SetPromotionStatusRequest) String() string {
 func (*SetPromotionStatusRequest) ProtoMessage() {}
 
 func (x *SetPromotionStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[126]
+	mi := &file_mall_v1_mall_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8832,7 +8876,7 @@ func (x *SetPromotionStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPromotionStatusRequest.ProtoReflect.Descriptor instead.
 func (*SetPromotionStatusRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{126}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *SetPromotionStatusRequest) GetId() int64 {
@@ -8863,7 +8907,7 @@ type PromotionEvaluateItem struct {
 
 func (x *PromotionEvaluateItem) Reset() {
 	*x = PromotionEvaluateItem{}
-	mi := &file_mall_v1_mall_proto_msgTypes[127]
+	mi := &file_mall_v1_mall_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8875,7 +8919,7 @@ func (x *PromotionEvaluateItem) String() string {
 func (*PromotionEvaluateItem) ProtoMessage() {}
 
 func (x *PromotionEvaluateItem) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[127]
+	mi := &file_mall_v1_mall_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8888,7 +8932,7 @@ func (x *PromotionEvaluateItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionEvaluateItem.ProtoReflect.Descriptor instead.
 func (*PromotionEvaluateItem) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{127}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *PromotionEvaluateItem) GetSkuId() int64 {
@@ -8945,7 +8989,7 @@ type PromotionEvaluateRequest struct {
 
 func (x *PromotionEvaluateRequest) Reset() {
 	*x = PromotionEvaluateRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[128]
+	mi := &file_mall_v1_mall_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8957,7 +9001,7 @@ func (x *PromotionEvaluateRequest) String() string {
 func (*PromotionEvaluateRequest) ProtoMessage() {}
 
 func (x *PromotionEvaluateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[128]
+	mi := &file_mall_v1_mall_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8970,7 +9014,7 @@ func (x *PromotionEvaluateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionEvaluateRequest.ProtoReflect.Descriptor instead.
 func (*PromotionEvaluateRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{128}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *PromotionEvaluateRequest) GetUserId() int64 {
@@ -9013,7 +9057,7 @@ type EvaluateDraftRequest struct {
 
 func (x *EvaluateDraftRequest) Reset() {
 	*x = EvaluateDraftRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[129]
+	mi := &file_mall_v1_mall_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9025,7 +9069,7 @@ func (x *EvaluateDraftRequest) String() string {
 func (*EvaluateDraftRequest) ProtoMessage() {}
 
 func (x *EvaluateDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[129]
+	mi := &file_mall_v1_mall_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9038,7 +9082,7 @@ func (x *EvaluateDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvaluateDraftRequest.ProtoReflect.Descriptor instead.
 func (*EvaluateDraftRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{129}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *EvaluateDraftRequest) GetEvaluation() *PromotionEvaluateRequest {
@@ -9072,7 +9116,7 @@ type PromotionAllocation struct {
 
 func (x *PromotionAllocation) Reset() {
 	*x = PromotionAllocation{}
-	mi := &file_mall_v1_mall_proto_msgTypes[130]
+	mi := &file_mall_v1_mall_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9084,7 +9128,7 @@ func (x *PromotionAllocation) String() string {
 func (*PromotionAllocation) ProtoMessage() {}
 
 func (x *PromotionAllocation) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[130]
+	mi := &file_mall_v1_mall_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9097,7 +9141,7 @@ func (x *PromotionAllocation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionAllocation.ProtoReflect.Descriptor instead.
 func (*PromotionAllocation) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{130}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{131}
 }
 
 func (x *PromotionAllocation) GetSkuId() int64 {
@@ -9133,7 +9177,7 @@ type AppliedPromotion struct {
 
 func (x *AppliedPromotion) Reset() {
 	*x = AppliedPromotion{}
-	mi := &file_mall_v1_mall_proto_msgTypes[131]
+	mi := &file_mall_v1_mall_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9145,7 +9189,7 @@ func (x *AppliedPromotion) String() string {
 func (*AppliedPromotion) ProtoMessage() {}
 
 func (x *AppliedPromotion) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[131]
+	mi := &file_mall_v1_mall_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9158,7 +9202,7 @@ func (x *AppliedPromotion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppliedPromotion.ProtoReflect.Descriptor instead.
 func (*AppliedPromotion) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{131}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *AppliedPromotion) GetRuleId() int64 {
@@ -9249,7 +9293,7 @@ type RejectedPromotion struct {
 
 func (x *RejectedPromotion) Reset() {
 	*x = RejectedPromotion{}
-	mi := &file_mall_v1_mall_proto_msgTypes[132]
+	mi := &file_mall_v1_mall_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9261,7 +9305,7 @@ func (x *RejectedPromotion) String() string {
 func (*RejectedPromotion) ProtoMessage() {}
 
 func (x *RejectedPromotion) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[132]
+	mi := &file_mall_v1_mall_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9274,7 +9318,7 @@ func (x *RejectedPromotion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectedPromotion.ProtoReflect.Descriptor instead.
 func (*RejectedPromotion) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{132}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *RejectedPromotion) GetRuleId() int64 {
@@ -9312,7 +9356,7 @@ type PromotionEvaluation struct {
 
 func (x *PromotionEvaluation) Reset() {
 	*x = PromotionEvaluation{}
-	mi := &file_mall_v1_mall_proto_msgTypes[133]
+	mi := &file_mall_v1_mall_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9324,7 +9368,7 @@ func (x *PromotionEvaluation) String() string {
 func (*PromotionEvaluation) ProtoMessage() {}
 
 func (x *PromotionEvaluation) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[133]
+	mi := &file_mall_v1_mall_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9337,7 +9381,7 @@ func (x *PromotionEvaluation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionEvaluation.ProtoReflect.Descriptor instead.
 func (*PromotionEvaluation) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{133}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *PromotionEvaluation) GetApplied() []*AppliedPromotion {
@@ -9393,7 +9437,7 @@ type PromotionReserveRequest struct {
 
 func (x *PromotionReserveRequest) Reset() {
 	*x = PromotionReserveRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[134]
+	mi := &file_mall_v1_mall_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9405,7 +9449,7 @@ func (x *PromotionReserveRequest) String() string {
 func (*PromotionReserveRequest) ProtoMessage() {}
 
 func (x *PromotionReserveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[134]
+	mi := &file_mall_v1_mall_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9418,7 +9462,7 @@ func (x *PromotionReserveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionReserveRequest.ProtoReflect.Descriptor instead.
 func (*PromotionReserveRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{134}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *PromotionReserveRequest) GetQuoteId() string {
@@ -9452,7 +9496,7 @@ type PromotionReserveReply struct {
 
 func (x *PromotionReserveReply) Reset() {
 	*x = PromotionReserveReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[135]
+	mi := &file_mall_v1_mall_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9464,7 +9508,7 @@ func (x *PromotionReserveReply) String() string {
 func (*PromotionReserveReply) ProtoMessage() {}
 
 func (x *PromotionReserveReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[135]
+	mi := &file_mall_v1_mall_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9477,7 +9521,7 @@ func (x *PromotionReserveReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionReserveReply.ProtoReflect.Descriptor instead.
 func (*PromotionReserveReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{135}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *PromotionReserveReply) GetReservationNos() []string {
@@ -9503,7 +9547,7 @@ type PromotionOrderRequest struct {
 
 func (x *PromotionOrderRequest) Reset() {
 	*x = PromotionOrderRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[136]
+	mi := &file_mall_v1_mall_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9515,7 +9559,7 @@ func (x *PromotionOrderRequest) String() string {
 func (*PromotionOrderRequest) ProtoMessage() {}
 
 func (x *PromotionOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[136]
+	mi := &file_mall_v1_mall_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9528,7 +9572,7 @@ func (x *PromotionOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionOrderRequest.ProtoReflect.Descriptor instead.
 func (*PromotionOrderRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{136}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *PromotionOrderRequest) GetOrderNo() string {
@@ -9549,7 +9593,7 @@ type ListPromotionReservationsRequest struct {
 
 func (x *ListPromotionReservationsRequest) Reset() {
 	*x = ListPromotionReservationsRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[137]
+	mi := &file_mall_v1_mall_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9561,7 +9605,7 @@ func (x *ListPromotionReservationsRequest) String() string {
 func (*ListPromotionReservationsRequest) ProtoMessage() {}
 
 func (x *ListPromotionReservationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[137]
+	mi := &file_mall_v1_mall_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9574,7 +9618,7 @@ func (x *ListPromotionReservationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPromotionReservationsRequest.ProtoReflect.Descriptor instead.
 func (*ListPromotionReservationsRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{137}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *ListPromotionReservationsRequest) GetOrderNo() string {
@@ -9615,7 +9659,7 @@ type PromotionReservation struct {
 
 func (x *PromotionReservation) Reset() {
 	*x = PromotionReservation{}
-	mi := &file_mall_v1_mall_proto_msgTypes[138]
+	mi := &file_mall_v1_mall_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9627,7 +9671,7 @@ func (x *PromotionReservation) String() string {
 func (*PromotionReservation) ProtoMessage() {}
 
 func (x *PromotionReservation) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[138]
+	mi := &file_mall_v1_mall_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9640,7 +9684,7 @@ func (x *PromotionReservation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionReservation.ProtoReflect.Descriptor instead.
 func (*PromotionReservation) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{138}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *PromotionReservation) GetReservationNo() string {
@@ -9716,7 +9760,7 @@ type PromotionReservationList struct {
 
 func (x *PromotionReservationList) Reset() {
 	*x = PromotionReservationList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[139]
+	mi := &file_mall_v1_mall_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9728,7 +9772,7 @@ func (x *PromotionReservationList) String() string {
 func (*PromotionReservationList) ProtoMessage() {}
 
 func (x *PromotionReservationList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[139]
+	mi := &file_mall_v1_mall_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9741,7 +9785,7 @@ func (x *PromotionReservationList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromotionReservationList.ProtoReflect.Descriptor instead.
 func (*PromotionReservationList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{139}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *PromotionReservationList) GetReservations() []*PromotionReservation {
@@ -9768,7 +9812,7 @@ type ShipmentItem struct {
 
 func (x *ShipmentItem) Reset() {
 	*x = ShipmentItem{}
-	mi := &file_mall_v1_mall_proto_msgTypes[140]
+	mi := &file_mall_v1_mall_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9780,7 +9824,7 @@ func (x *ShipmentItem) String() string {
 func (*ShipmentItem) ProtoMessage() {}
 
 func (x *ShipmentItem) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[140]
+	mi := &file_mall_v1_mall_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9793,7 +9837,7 @@ func (x *ShipmentItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShipmentItem.ProtoReflect.Descriptor instead.
 func (*ShipmentItem) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{140}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *ShipmentItem) GetSkuId() int64 {
@@ -9834,7 +9878,7 @@ type Shipment struct {
 
 func (x *Shipment) Reset() {
 	*x = Shipment{}
-	mi := &file_mall_v1_mall_proto_msgTypes[141]
+	mi := &file_mall_v1_mall_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9846,7 +9890,7 @@ func (x *Shipment) String() string {
 func (*Shipment) ProtoMessage() {}
 
 func (x *Shipment) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[141]
+	mi := &file_mall_v1_mall_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9859,7 +9903,7 @@ func (x *Shipment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Shipment.ProtoReflect.Descriptor instead.
 func (*Shipment) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{141}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *Shipment) GetShipmentNo() string {
@@ -9990,7 +10034,7 @@ type CreateShipmentRequest struct {
 
 func (x *CreateShipmentRequest) Reset() {
 	*x = CreateShipmentRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[142]
+	mi := &file_mall_v1_mall_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10002,7 +10046,7 @@ func (x *CreateShipmentRequest) String() string {
 func (*CreateShipmentRequest) ProtoMessage() {}
 
 func (x *CreateShipmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[142]
+	mi := &file_mall_v1_mall_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10015,7 +10059,7 @@ func (x *CreateShipmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateShipmentRequest.ProtoReflect.Descriptor instead.
 func (*CreateShipmentRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{142}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *CreateShipmentRequest) GetOrderNo() string {
@@ -10076,7 +10120,7 @@ type ShipRequest struct {
 
 func (x *ShipRequest) Reset() {
 	*x = ShipRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[143]
+	mi := &file_mall_v1_mall_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10088,7 +10132,7 @@ func (x *ShipRequest) String() string {
 func (*ShipRequest) ProtoMessage() {}
 
 func (x *ShipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[143]
+	mi := &file_mall_v1_mall_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10101,7 +10145,7 @@ func (x *ShipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShipRequest.ProtoReflect.Descriptor instead.
 func (*ShipRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{143}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *ShipRequest) GetShipmentNo() string {
@@ -10123,7 +10167,7 @@ type CancelIfCreatedRequest struct {
 
 func (x *CancelIfCreatedRequest) Reset() {
 	*x = CancelIfCreatedRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[144]
+	mi := &file_mall_v1_mall_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10135,7 +10179,7 @@ func (x *CancelIfCreatedRequest) String() string {
 func (*CancelIfCreatedRequest) ProtoMessage() {}
 
 func (x *CancelIfCreatedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[144]
+	mi := &file_mall_v1_mall_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10148,7 +10192,7 @@ func (x *CancelIfCreatedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelIfCreatedRequest.ProtoReflect.Descriptor instead.
 func (*CancelIfCreatedRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{144}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *CancelIfCreatedRequest) GetOrderNo() string {
@@ -10189,7 +10233,7 @@ type CancelIfCreatedReply struct {
 
 func (x *CancelIfCreatedReply) Reset() {
 	*x = CancelIfCreatedReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[145]
+	mi := &file_mall_v1_mall_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10201,7 +10245,7 @@ func (x *CancelIfCreatedReply) String() string {
 func (*CancelIfCreatedReply) ProtoMessage() {}
 
 func (x *CancelIfCreatedReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[145]
+	mi := &file_mall_v1_mall_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10214,7 +10258,7 @@ func (x *CancelIfCreatedReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelIfCreatedReply.ProtoReflect.Descriptor instead.
 func (*CancelIfCreatedReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{145}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *CancelIfCreatedReply) GetStatus() string {
@@ -10233,7 +10277,7 @@ type ReceiveRequest struct {
 
 func (x *ReceiveRequest) Reset() {
 	*x = ReceiveRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[146]
+	mi := &file_mall_v1_mall_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10245,7 +10289,7 @@ func (x *ReceiveRequest) String() string {
 func (*ReceiveRequest) ProtoMessage() {}
 
 func (x *ReceiveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[146]
+	mi := &file_mall_v1_mall_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10258,7 +10302,7 @@ func (x *ReceiveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReceiveRequest.ProtoReflect.Descriptor instead.
 func (*ReceiveRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{146}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *ReceiveRequest) GetShipmentNo() string {
@@ -10277,7 +10321,7 @@ type GetShipmentRequest struct {
 
 func (x *GetShipmentRequest) Reset() {
 	*x = GetShipmentRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[147]
+	mi := &file_mall_v1_mall_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10289,7 +10333,7 @@ func (x *GetShipmentRequest) String() string {
 func (*GetShipmentRequest) ProtoMessage() {}
 
 func (x *GetShipmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[147]
+	mi := &file_mall_v1_mall_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10302,7 +10346,7 @@ func (x *GetShipmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShipmentRequest.ProtoReflect.Descriptor instead.
 func (*GetShipmentRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{147}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *GetShipmentRequest) GetShipmentNo() string {
@@ -10321,7 +10365,7 @@ type GetShipmentByOrderRequest struct {
 
 func (x *GetShipmentByOrderRequest) Reset() {
 	*x = GetShipmentByOrderRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[148]
+	mi := &file_mall_v1_mall_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10333,7 +10377,7 @@ func (x *GetShipmentByOrderRequest) String() string {
 func (*GetShipmentByOrderRequest) ProtoMessage() {}
 
 func (x *GetShipmentByOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[148]
+	mi := &file_mall_v1_mall_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10346,7 +10390,7 @@ func (x *GetShipmentByOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetShipmentByOrderRequest.ProtoReflect.Descriptor instead.
 func (*GetShipmentByOrderRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{148}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *GetShipmentByOrderRequest) GetOrderNo() string {
@@ -10368,7 +10412,7 @@ type ListShipmentsRequest struct {
 
 func (x *ListShipmentsRequest) Reset() {
 	*x = ListShipmentsRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[149]
+	mi := &file_mall_v1_mall_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10380,7 +10424,7 @@ func (x *ListShipmentsRequest) String() string {
 func (*ListShipmentsRequest) ProtoMessage() {}
 
 func (x *ListShipmentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[149]
+	mi := &file_mall_v1_mall_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10393,7 +10437,7 @@ func (x *ListShipmentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListShipmentsRequest.ProtoReflect.Descriptor instead.
 func (*ListShipmentsRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{149}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *ListShipmentsRequest) GetPage() int32 {
@@ -10434,7 +10478,7 @@ type ShipmentList struct {
 
 func (x *ShipmentList) Reset() {
 	*x = ShipmentList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[150]
+	mi := &file_mall_v1_mall_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10446,7 +10490,7 @@ func (x *ShipmentList) String() string {
 func (*ShipmentList) ProtoMessage() {}
 
 func (x *ShipmentList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[150]
+	mi := &file_mall_v1_mall_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10459,7 +10503,7 @@ func (x *ShipmentList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShipmentList.ProtoReflect.Descriptor instead.
 func (*ShipmentList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{150}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *ShipmentList) GetShipments() []*Shipment {
@@ -10489,7 +10533,7 @@ type Carrier struct {
 
 func (x *Carrier) Reset() {
 	*x = Carrier{}
-	mi := &file_mall_v1_mall_proto_msgTypes[151]
+	mi := &file_mall_v1_mall_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10501,7 +10545,7 @@ func (x *Carrier) String() string {
 func (*Carrier) ProtoMessage() {}
 
 func (x *Carrier) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[151]
+	mi := &file_mall_v1_mall_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10514,7 +10558,7 @@ func (x *Carrier) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Carrier.ProtoReflect.Descriptor instead.
 func (*Carrier) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{151}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *Carrier) GetCode() string {
@@ -10561,7 +10605,7 @@ type CarrierList struct {
 
 func (x *CarrierList) Reset() {
 	*x = CarrierList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[152]
+	mi := &file_mall_v1_mall_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10573,7 +10617,7 @@ func (x *CarrierList) String() string {
 func (*CarrierList) ProtoMessage() {}
 
 func (x *CarrierList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[152]
+	mi := &file_mall_v1_mall_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10586,7 +10630,7 @@ func (x *CarrierList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CarrierList.ProtoReflect.Descriptor instead.
 func (*CarrierList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{152}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *CarrierList) GetCarriers() []*Carrier {
@@ -10608,7 +10652,7 @@ type SetCarrierStatusRequest struct {
 
 func (x *SetCarrierStatusRequest) Reset() {
 	*x = SetCarrierStatusRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[153]
+	mi := &file_mall_v1_mall_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10620,7 +10664,7 @@ func (x *SetCarrierStatusRequest) String() string {
 func (*SetCarrierStatusRequest) ProtoMessage() {}
 
 func (x *SetCarrierStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[153]
+	mi := &file_mall_v1_mall_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10633,7 +10677,7 @@ func (x *SetCarrierStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetCarrierStatusRequest.ProtoReflect.Descriptor instead.
 func (*SetCarrierStatusRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{153}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *SetCarrierStatusRequest) GetCode() string {
@@ -10680,7 +10724,7 @@ type RecordTrackingEventRequest struct {
 
 func (x *RecordTrackingEventRequest) Reset() {
 	*x = RecordTrackingEventRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[154]
+	mi := &file_mall_v1_mall_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10692,7 +10736,7 @@ func (x *RecordTrackingEventRequest) String() string {
 func (*RecordTrackingEventRequest) ProtoMessage() {}
 
 func (x *RecordTrackingEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[154]
+	mi := &file_mall_v1_mall_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10705,7 +10749,7 @@ func (x *RecordTrackingEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordTrackingEventRequest.ProtoReflect.Descriptor instead.
 func (*RecordTrackingEventRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{154}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *RecordTrackingEventRequest) GetShipmentNo() string {
@@ -10781,7 +10825,7 @@ type TrackingEvent struct {
 
 func (x *TrackingEvent) Reset() {
 	*x = TrackingEvent{}
-	mi := &file_mall_v1_mall_proto_msgTypes[155]
+	mi := &file_mall_v1_mall_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10793,7 +10837,7 @@ func (x *TrackingEvent) String() string {
 func (*TrackingEvent) ProtoMessage() {}
 
 func (x *TrackingEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[155]
+	mi := &file_mall_v1_mall_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10806,7 +10850,7 @@ func (x *TrackingEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrackingEvent.ProtoReflect.Descriptor instead.
 func (*TrackingEvent) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{155}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *TrackingEvent) GetId() int64 {
@@ -10881,7 +10925,7 @@ type TrackingEventList struct {
 
 func (x *TrackingEventList) Reset() {
 	*x = TrackingEventList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[156]
+	mi := &file_mall_v1_mall_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10893,7 +10937,7 @@ func (x *TrackingEventList) String() string {
 func (*TrackingEventList) ProtoMessage() {}
 
 func (x *TrackingEventList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[156]
+	mi := &file_mall_v1_mall_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10906,7 +10950,7 @@ func (x *TrackingEventList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrackingEventList.ProtoReflect.Descriptor instead.
 func (*TrackingEventList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{156}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *TrackingEventList) GetEvents() []*TrackingEvent {
@@ -10925,7 +10969,7 @@ type ListTrackingEventsRequest struct {
 
 func (x *ListTrackingEventsRequest) Reset() {
 	*x = ListTrackingEventsRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[157]
+	mi := &file_mall_v1_mall_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10937,7 +10981,7 @@ func (x *ListTrackingEventsRequest) String() string {
 func (*ListTrackingEventsRequest) ProtoMessage() {}
 
 func (x *ListTrackingEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[157]
+	mi := &file_mall_v1_mall_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10950,7 +10994,7 @@ func (x *ListTrackingEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTrackingEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListTrackingEventsRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{157}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *ListTrackingEventsRequest) GetShipmentNo() string {
@@ -10970,7 +11014,7 @@ type ConfirmReceiptRequest struct {
 
 func (x *ConfirmReceiptRequest) Reset() {
 	*x = ConfirmReceiptRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[158]
+	mi := &file_mall_v1_mall_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10982,7 +11026,7 @@ func (x *ConfirmReceiptRequest) String() string {
 func (*ConfirmReceiptRequest) ProtoMessage() {}
 
 func (x *ConfirmReceiptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[158]
+	mi := &file_mall_v1_mall_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10995,7 +11039,7 @@ func (x *ConfirmReceiptRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmReceiptRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmReceiptRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{158}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *ConfirmReceiptRequest) GetShipmentNo() string {
@@ -11023,7 +11067,7 @@ type OpenReceiptDisputeRequest struct {
 
 func (x *OpenReceiptDisputeRequest) Reset() {
 	*x = OpenReceiptDisputeRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[159]
+	mi := &file_mall_v1_mall_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11035,7 +11079,7 @@ func (x *OpenReceiptDisputeRequest) String() string {
 func (*OpenReceiptDisputeRequest) ProtoMessage() {}
 
 func (x *OpenReceiptDisputeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[159]
+	mi := &file_mall_v1_mall_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11048,7 +11092,7 @@ func (x *OpenReceiptDisputeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenReceiptDisputeRequest.ProtoReflect.Descriptor instead.
 func (*OpenReceiptDisputeRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{159}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *OpenReceiptDisputeRequest) GetShipmentNo() string {
@@ -11085,7 +11129,7 @@ type ResolveReceiptDisputeRequest struct {
 
 func (x *ResolveReceiptDisputeRequest) Reset() {
 	*x = ResolveReceiptDisputeRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[160]
+	mi := &file_mall_v1_mall_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11097,7 +11141,7 @@ func (x *ResolveReceiptDisputeRequest) String() string {
 func (*ResolveReceiptDisputeRequest) ProtoMessage() {}
 
 func (x *ResolveReceiptDisputeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[160]
+	mi := &file_mall_v1_mall_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11110,7 +11154,7 @@ func (x *ResolveReceiptDisputeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveReceiptDisputeRequest.ProtoReflect.Descriptor instead.
 func (*ResolveReceiptDisputeRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{160}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *ResolveReceiptDisputeRequest) GetDisputeId() int64 {
@@ -11160,7 +11204,7 @@ type ReceiptDispute struct {
 
 func (x *ReceiptDispute) Reset() {
 	*x = ReceiptDispute{}
-	mi := &file_mall_v1_mall_proto_msgTypes[161]
+	mi := &file_mall_v1_mall_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11172,7 +11216,7 @@ func (x *ReceiptDispute) String() string {
 func (*ReceiptDispute) ProtoMessage() {}
 
 func (x *ReceiptDispute) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[161]
+	mi := &file_mall_v1_mall_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11185,7 +11229,7 @@ func (x *ReceiptDispute) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReceiptDispute.ProtoReflect.Descriptor instead.
 func (*ReceiptDispute) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{161}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *ReceiptDispute) GetId() int64 {
@@ -11280,7 +11324,7 @@ type AfterSaleItem struct {
 
 func (x *AfterSaleItem) Reset() {
 	*x = AfterSaleItem{}
-	mi := &file_mall_v1_mall_proto_msgTypes[162]
+	mi := &file_mall_v1_mall_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11292,7 +11336,7 @@ func (x *AfterSaleItem) String() string {
 func (*AfterSaleItem) ProtoMessage() {}
 
 func (x *AfterSaleItem) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[162]
+	mi := &file_mall_v1_mall_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11305,7 +11349,7 @@ func (x *AfterSaleItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AfterSaleItem.ProtoReflect.Descriptor instead.
 func (*AfterSaleItem) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{162}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *AfterSaleItem) GetSkuId() int64 {
@@ -11396,7 +11440,7 @@ type AfterSale struct {
 
 func (x *AfterSale) Reset() {
 	*x = AfterSale{}
-	mi := &file_mall_v1_mall_proto_msgTypes[163]
+	mi := &file_mall_v1_mall_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11408,7 +11452,7 @@ func (x *AfterSale) String() string {
 func (*AfterSale) ProtoMessage() {}
 
 func (x *AfterSale) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[163]
+	mi := &file_mall_v1_mall_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11421,7 +11465,7 @@ func (x *AfterSale) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AfterSale.ProtoReflect.Descriptor instead.
 func (*AfterSale) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{163}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *AfterSale) GetAfterSaleNo() string {
@@ -11616,7 +11660,7 @@ type AfterSaleList struct {
 
 func (x *AfterSaleList) Reset() {
 	*x = AfterSaleList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[164]
+	mi := &file_mall_v1_mall_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11628,7 +11672,7 @@ func (x *AfterSaleList) String() string {
 func (*AfterSaleList) ProtoMessage() {}
 
 func (x *AfterSaleList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[164]
+	mi := &file_mall_v1_mall_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11641,7 +11685,7 @@ func (x *AfterSaleList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AfterSaleList.ProtoReflect.Descriptor instead.
 func (*AfterSaleList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{164}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *AfterSaleList) GetAfterSales() []*AfterSale {
@@ -11673,7 +11717,7 @@ type AfterSaleStats struct {
 
 func (x *AfterSaleStats) Reset() {
 	*x = AfterSaleStats{}
-	mi := &file_mall_v1_mall_proto_msgTypes[165]
+	mi := &file_mall_v1_mall_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11685,7 +11729,7 @@ func (x *AfterSaleStats) String() string {
 func (*AfterSaleStats) ProtoMessage() {}
 
 func (x *AfterSaleStats) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[165]
+	mi := &file_mall_v1_mall_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11698,7 +11742,7 @@ func (x *AfterSaleStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AfterSaleStats.ProtoReflect.Descriptor instead.
 func (*AfterSaleStats) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{165}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *AfterSaleStats) GetTotal() int64 {
@@ -11768,7 +11812,7 @@ type CreateAfterSaleRequest struct {
 
 func (x *CreateAfterSaleRequest) Reset() {
 	*x = CreateAfterSaleRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[166]
+	mi := &file_mall_v1_mall_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11780,7 +11824,7 @@ func (x *CreateAfterSaleRequest) String() string {
 func (*CreateAfterSaleRequest) ProtoMessage() {}
 
 func (x *CreateAfterSaleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[166]
+	mi := &file_mall_v1_mall_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11793,7 +11837,7 @@ func (x *CreateAfterSaleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAfterSaleRequest.ProtoReflect.Descriptor instead.
 func (*CreateAfterSaleRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{166}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *CreateAfterSaleRequest) GetOrderNo() string {
@@ -11855,7 +11899,7 @@ type GetAfterSaleRequest struct {
 
 func (x *GetAfterSaleRequest) Reset() {
 	*x = GetAfterSaleRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[167]
+	mi := &file_mall_v1_mall_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11867,7 +11911,7 @@ func (x *GetAfterSaleRequest) String() string {
 func (*GetAfterSaleRequest) ProtoMessage() {}
 
 func (x *GetAfterSaleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[167]
+	mi := &file_mall_v1_mall_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11880,7 +11924,7 @@ func (x *GetAfterSaleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAfterSaleRequest.ProtoReflect.Descriptor instead.
 func (*GetAfterSaleRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{167}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *GetAfterSaleRequest) GetAfterSaleNo() string {
@@ -11901,7 +11945,7 @@ type SubmitReturnTrackingRequest struct {
 
 func (x *SubmitReturnTrackingRequest) Reset() {
 	*x = SubmitReturnTrackingRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[168]
+	mi := &file_mall_v1_mall_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11913,7 +11957,7 @@ func (x *SubmitReturnTrackingRequest) String() string {
 func (*SubmitReturnTrackingRequest) ProtoMessage() {}
 
 func (x *SubmitReturnTrackingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[168]
+	mi := &file_mall_v1_mall_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11926,7 +11970,7 @@ func (x *SubmitReturnTrackingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitReturnTrackingRequest.ProtoReflect.Descriptor instead.
 func (*SubmitReturnTrackingRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{168}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *SubmitReturnTrackingRequest) GetAfterSaleNo() string {
@@ -11960,7 +12004,7 @@ type ReceiveReturnRequest struct {
 
 func (x *ReceiveReturnRequest) Reset() {
 	*x = ReceiveReturnRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[169]
+	mi := &file_mall_v1_mall_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11972,7 +12016,7 @@ func (x *ReceiveReturnRequest) String() string {
 func (*ReceiveReturnRequest) ProtoMessage() {}
 
 func (x *ReceiveReturnRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[169]
+	mi := &file_mall_v1_mall_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11985,7 +12029,7 @@ func (x *ReceiveReturnRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReceiveReturnRequest.ProtoReflect.Descriptor instead.
 func (*ReceiveReturnRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{169}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *ReceiveReturnRequest) GetAfterSaleNo() string {
@@ -12015,7 +12059,7 @@ type ListAfterSalesRequest struct {
 
 func (x *ListAfterSalesRequest) Reset() {
 	*x = ListAfterSalesRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[170]
+	mi := &file_mall_v1_mall_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12027,7 +12071,7 @@ func (x *ListAfterSalesRequest) String() string {
 func (*ListAfterSalesRequest) ProtoMessage() {}
 
 func (x *ListAfterSalesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[170]
+	mi := &file_mall_v1_mall_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12040,7 +12084,7 @@ func (x *ListAfterSalesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAfterSalesRequest.ProtoReflect.Descriptor instead.
 func (*ListAfterSalesRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{170}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *ListAfterSalesRequest) GetUserId() int64 {
@@ -12090,7 +12134,7 @@ type ApproveRequest struct {
 
 func (x *ApproveRequest) Reset() {
 	*x = ApproveRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[171]
+	mi := &file_mall_v1_mall_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12102,7 +12146,7 @@ func (x *ApproveRequest) String() string {
 func (*ApproveRequest) ProtoMessage() {}
 
 func (x *ApproveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[171]
+	mi := &file_mall_v1_mall_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12115,7 +12159,7 @@ func (x *ApproveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveRequest.ProtoReflect.Descriptor instead.
 func (*ApproveRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{171}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *ApproveRequest) GetAfterSaleNo() string {
@@ -12155,7 +12199,7 @@ type RefundAfterSaleRequest struct {
 
 func (x *RefundAfterSaleRequest) Reset() {
 	*x = RefundAfterSaleRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[172]
+	mi := &file_mall_v1_mall_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12167,7 +12211,7 @@ func (x *RefundAfterSaleRequest) String() string {
 func (*RefundAfterSaleRequest) ProtoMessage() {}
 
 func (x *RefundAfterSaleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[172]
+	mi := &file_mall_v1_mall_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12180,7 +12224,7 @@ func (x *RefundAfterSaleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundAfterSaleRequest.ProtoReflect.Descriptor instead.
 func (*RefundAfterSaleRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{172}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *RefundAfterSaleRequest) GetAfterSaleNo() string {
@@ -12209,7 +12253,7 @@ type RefundQuote struct {
 
 func (x *RefundQuote) Reset() {
 	*x = RefundQuote{}
-	mi := &file_mall_v1_mall_proto_msgTypes[173]
+	mi := &file_mall_v1_mall_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12221,7 +12265,7 @@ func (x *RefundQuote) String() string {
 func (*RefundQuote) ProtoMessage() {}
 
 func (x *RefundQuote) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[173]
+	mi := &file_mall_v1_mall_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12234,7 +12278,7 @@ func (x *RefundQuote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefundQuote.ProtoReflect.Descriptor instead.
 func (*RefundQuote) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{173}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *RefundQuote) GetOrderNo() string {
@@ -12327,7 +12371,7 @@ type PreviewRefundQuoteRequest struct {
 
 func (x *PreviewRefundQuoteRequest) Reset() {
 	*x = PreviewRefundQuoteRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[174]
+	mi := &file_mall_v1_mall_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12339,7 +12383,7 @@ func (x *PreviewRefundQuoteRequest) String() string {
 func (*PreviewRefundQuoteRequest) ProtoMessage() {}
 
 func (x *PreviewRefundQuoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[174]
+	mi := &file_mall_v1_mall_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12352,7 +12396,7 @@ func (x *PreviewRefundQuoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewRefundQuoteRequest.ProtoReflect.Descriptor instead.
 func (*PreviewRefundQuoteRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{174}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *PreviewRefundQuoteRequest) GetOrderNo() string {
@@ -12407,7 +12451,7 @@ type LineRefund struct {
 
 func (x *LineRefund) Reset() {
 	*x = LineRefund{}
-	mi := &file_mall_v1_mall_proto_msgTypes[175]
+	mi := &file_mall_v1_mall_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12419,7 +12463,7 @@ func (x *LineRefund) String() string {
 func (*LineRefund) ProtoMessage() {}
 
 func (x *LineRefund) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[175]
+	mi := &file_mall_v1_mall_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12432,7 +12476,7 @@ func (x *LineRefund) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LineRefund.ProtoReflect.Descriptor instead.
 func (*LineRefund) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{175}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *LineRefund) GetOrderNo() string {
@@ -12507,7 +12551,7 @@ type LineRefundList struct {
 
 func (x *LineRefundList) Reset() {
 	*x = LineRefundList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[176]
+	mi := &file_mall_v1_mall_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12519,7 +12563,7 @@ func (x *LineRefundList) String() string {
 func (*LineRefundList) ProtoMessage() {}
 
 func (x *LineRefundList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[176]
+	mi := &file_mall_v1_mall_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12532,7 +12576,7 @@ func (x *LineRefundList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LineRefundList.ProtoReflect.Descriptor instead.
 func (*LineRefundList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{176}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *LineRefundList) GetLines() []*LineRefund {
@@ -12553,7 +12597,7 @@ type ListLineRefundsRequest struct {
 
 func (x *ListLineRefundsRequest) Reset() {
 	*x = ListLineRefundsRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[177]
+	mi := &file_mall_v1_mall_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12565,7 +12609,7 @@ func (x *ListLineRefundsRequest) String() string {
 func (*ListLineRefundsRequest) ProtoMessage() {}
 
 func (x *ListLineRefundsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[177]
+	mi := &file_mall_v1_mall_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12578,7 +12622,7 @@ func (x *ListLineRefundsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLineRefundsRequest.ProtoReflect.Descriptor instead.
 func (*ListLineRefundsRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{177}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *ListLineRefundsRequest) GetOrderNo() string {
@@ -12616,7 +12660,7 @@ type AuthorizeCrossWarehouseRestockRequest struct {
 
 func (x *AuthorizeCrossWarehouseRestockRequest) Reset() {
 	*x = AuthorizeCrossWarehouseRestockRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[178]
+	mi := &file_mall_v1_mall_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12628,7 +12672,7 @@ func (x *AuthorizeCrossWarehouseRestockRequest) String() string {
 func (*AuthorizeCrossWarehouseRestockRequest) ProtoMessage() {}
 
 func (x *AuthorizeCrossWarehouseRestockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[178]
+	mi := &file_mall_v1_mall_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12641,7 +12685,7 @@ func (x *AuthorizeCrossWarehouseRestockRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use AuthorizeCrossWarehouseRestockRequest.ProtoReflect.Descriptor instead.
 func (*AuthorizeCrossWarehouseRestockRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{178}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *AuthorizeCrossWarehouseRestockRequest) GetAfterSaleNo() string {
@@ -12700,7 +12744,7 @@ type DetermineResponsibilityRequest struct {
 
 func (x *DetermineResponsibilityRequest) Reset() {
 	*x = DetermineResponsibilityRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[179]
+	mi := &file_mall_v1_mall_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12712,7 +12756,7 @@ func (x *DetermineResponsibilityRequest) String() string {
 func (*DetermineResponsibilityRequest) ProtoMessage() {}
 
 func (x *DetermineResponsibilityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[179]
+	mi := &file_mall_v1_mall_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12725,7 +12769,7 @@ func (x *DetermineResponsibilityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetermineResponsibilityRequest.ProtoReflect.Descriptor instead.
 func (*DetermineResponsibilityRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{179}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{180}
 }
 
 func (x *DetermineResponsibilityRequest) GetAfterSaleNo() string {
@@ -12784,7 +12828,7 @@ type VerifyRestockAuthorizationRequest struct {
 
 func (x *VerifyRestockAuthorizationRequest) Reset() {
 	*x = VerifyRestockAuthorizationRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[180]
+	mi := &file_mall_v1_mall_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12796,7 +12840,7 @@ func (x *VerifyRestockAuthorizationRequest) String() string {
 func (*VerifyRestockAuthorizationRequest) ProtoMessage() {}
 
 func (x *VerifyRestockAuthorizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[180]
+	mi := &file_mall_v1_mall_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12809,7 +12853,7 @@ func (x *VerifyRestockAuthorizationRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use VerifyRestockAuthorizationRequest.ProtoReflect.Descriptor instead.
 func (*VerifyRestockAuthorizationRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{180}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *VerifyRestockAuthorizationRequest) GetRestockAuthNo() string {
@@ -12864,7 +12908,7 @@ type VerifyRestockAuthorizationReply struct {
 
 func (x *VerifyRestockAuthorizationReply) Reset() {
 	*x = VerifyRestockAuthorizationReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[181]
+	mi := &file_mall_v1_mall_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12876,7 +12920,7 @@ func (x *VerifyRestockAuthorizationReply) String() string {
 func (*VerifyRestockAuthorizationReply) ProtoMessage() {}
 
 func (x *VerifyRestockAuthorizationReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[181]
+	mi := &file_mall_v1_mall_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12889,7 +12933,7 @@ func (x *VerifyRestockAuthorizationReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyRestockAuthorizationReply.ProtoReflect.Descriptor instead.
 func (*VerifyRestockAuthorizationReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{181}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *VerifyRestockAuthorizationReply) GetValid() bool {
@@ -12930,7 +12974,7 @@ type SeckillActivity struct {
 
 func (x *SeckillActivity) Reset() {
 	*x = SeckillActivity{}
-	mi := &file_mall_v1_mall_proto_msgTypes[182]
+	mi := &file_mall_v1_mall_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12942,7 +12986,7 @@ func (x *SeckillActivity) String() string {
 func (*SeckillActivity) ProtoMessage() {}
 
 func (x *SeckillActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[182]
+	mi := &file_mall_v1_mall_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12955,7 +12999,7 @@ func (x *SeckillActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeckillActivity.ProtoReflect.Descriptor instead.
 func (*SeckillActivity) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{182}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *SeckillActivity) GetId() int64 {
@@ -13087,7 +13131,7 @@ type CreateSeckillActivityRequest struct {
 
 func (x *CreateSeckillActivityRequest) Reset() {
 	*x = CreateSeckillActivityRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[183]
+	mi := &file_mall_v1_mall_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13099,7 +13143,7 @@ func (x *CreateSeckillActivityRequest) String() string {
 func (*CreateSeckillActivityRequest) ProtoMessage() {}
 
 func (x *CreateSeckillActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[183]
+	mi := &file_mall_v1_mall_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13112,7 +13156,7 @@ func (x *CreateSeckillActivityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSeckillActivityRequest.ProtoReflect.Descriptor instead.
 func (*CreateSeckillActivityRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{183}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *CreateSeckillActivityRequest) GetCampaignId() int64 {
@@ -13197,7 +13241,7 @@ type UpdateSeckillActivityRequest struct {
 
 func (x *UpdateSeckillActivityRequest) Reset() {
 	*x = UpdateSeckillActivityRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[184]
+	mi := &file_mall_v1_mall_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13209,7 +13253,7 @@ func (x *UpdateSeckillActivityRequest) String() string {
 func (*UpdateSeckillActivityRequest) ProtoMessage() {}
 
 func (x *UpdateSeckillActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[184]
+	mi := &file_mall_v1_mall_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13222,7 +13266,7 @@ func (x *UpdateSeckillActivityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSeckillActivityRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSeckillActivityRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{184}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *UpdateSeckillActivityRequest) GetId() int64 {
@@ -13311,7 +13355,7 @@ type GetSeckillActivityRequest struct {
 
 func (x *GetSeckillActivityRequest) Reset() {
 	*x = GetSeckillActivityRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[185]
+	mi := &file_mall_v1_mall_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13323,7 +13367,7 @@ func (x *GetSeckillActivityRequest) String() string {
 func (*GetSeckillActivityRequest) ProtoMessage() {}
 
 func (x *GetSeckillActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[185]
+	mi := &file_mall_v1_mall_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13336,7 +13380,7 @@ func (x *GetSeckillActivityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSeckillActivityRequest.ProtoReflect.Descriptor instead.
 func (*GetSeckillActivityRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{185}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{186}
 }
 
 func (x *GetSeckillActivityRequest) GetId() int64 {
@@ -13357,7 +13401,7 @@ type ListSeckillActivitiesRequest struct {
 
 func (x *ListSeckillActivitiesRequest) Reset() {
 	*x = ListSeckillActivitiesRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[186]
+	mi := &file_mall_v1_mall_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13369,7 +13413,7 @@ func (x *ListSeckillActivitiesRequest) String() string {
 func (*ListSeckillActivitiesRequest) ProtoMessage() {}
 
 func (x *ListSeckillActivitiesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[186]
+	mi := &file_mall_v1_mall_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13382,7 +13426,7 @@ func (x *ListSeckillActivitiesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSeckillActivitiesRequest.ProtoReflect.Descriptor instead.
 func (*ListSeckillActivitiesRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{186}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *ListSeckillActivitiesRequest) GetPage() int32 {
@@ -13416,7 +13460,7 @@ type SeckillActivityList struct {
 
 func (x *SeckillActivityList) Reset() {
 	*x = SeckillActivityList{}
-	mi := &file_mall_v1_mall_proto_msgTypes[187]
+	mi := &file_mall_v1_mall_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13428,7 +13472,7 @@ func (x *SeckillActivityList) String() string {
 func (*SeckillActivityList) ProtoMessage() {}
 
 func (x *SeckillActivityList) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[187]
+	mi := &file_mall_v1_mall_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13441,7 +13485,7 @@ func (x *SeckillActivityList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeckillActivityList.ProtoReflect.Descriptor instead.
 func (*SeckillActivityList) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{187}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{188}
 }
 
 func (x *SeckillActivityList) GetActivities() []*SeckillActivity {
@@ -13467,7 +13511,7 @@ type SeckillActivityCommand struct {
 
 func (x *SeckillActivityCommand) Reset() {
 	*x = SeckillActivityCommand{}
-	mi := &file_mall_v1_mall_proto_msgTypes[188]
+	mi := &file_mall_v1_mall_proto_msgTypes[189]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13479,7 +13523,7 @@ func (x *SeckillActivityCommand) String() string {
 func (*SeckillActivityCommand) ProtoMessage() {}
 
 func (x *SeckillActivityCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[188]
+	mi := &file_mall_v1_mall_proto_msgTypes[189]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13492,7 +13536,7 @@ func (x *SeckillActivityCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeckillActivityCommand.ProtoReflect.Descriptor instead.
 func (*SeckillActivityCommand) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{188}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *SeckillActivityCommand) GetId() int64 {
@@ -13519,7 +13563,7 @@ type SeckillStock struct {
 
 func (x *SeckillStock) Reset() {
 	*x = SeckillStock{}
-	mi := &file_mall_v1_mall_proto_msgTypes[189]
+	mi := &file_mall_v1_mall_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13531,7 +13575,7 @@ func (x *SeckillStock) String() string {
 func (*SeckillStock) ProtoMessage() {}
 
 func (x *SeckillStock) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[189]
+	mi := &file_mall_v1_mall_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13544,7 +13588,7 @@ func (x *SeckillStock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeckillStock.ProtoReflect.Descriptor instead.
 func (*SeckillStock) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{189}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{190}
 }
 
 func (x *SeckillStock) GetActivityId() int64 {
@@ -13622,7 +13666,7 @@ type AllocateSeckillStockRequest struct {
 
 func (x *AllocateSeckillStockRequest) Reset() {
 	*x = AllocateSeckillStockRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[190]
+	mi := &file_mall_v1_mall_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13634,7 +13678,7 @@ func (x *AllocateSeckillStockRequest) String() string {
 func (*AllocateSeckillStockRequest) ProtoMessage() {}
 
 func (x *AllocateSeckillStockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[190]
+	mi := &file_mall_v1_mall_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13647,7 +13691,7 @@ func (x *AllocateSeckillStockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocateSeckillStockRequest.ProtoReflect.Descriptor instead.
 func (*AllocateSeckillStockRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{190}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{191}
 }
 
 func (x *AllocateSeckillStockRequest) GetActivityId() int64 {
@@ -13687,7 +13731,7 @@ type ReleaseSeckillStockRequest struct {
 
 func (x *ReleaseSeckillStockRequest) Reset() {
 	*x = ReleaseSeckillStockRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[191]
+	mi := &file_mall_v1_mall_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13699,7 +13743,7 @@ func (x *ReleaseSeckillStockRequest) String() string {
 func (*ReleaseSeckillStockRequest) ProtoMessage() {}
 
 func (x *ReleaseSeckillStockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[191]
+	mi := &file_mall_v1_mall_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13712,7 +13756,7 @@ func (x *ReleaseSeckillStockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseSeckillStockRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseSeckillStockRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{191}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{192}
 }
 
 func (x *ReleaseSeckillStockRequest) GetActivityId() int64 {
@@ -13731,7 +13775,7 @@ type GetSeckillStockRequest struct {
 
 func (x *GetSeckillStockRequest) Reset() {
 	*x = GetSeckillStockRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[192]
+	mi := &file_mall_v1_mall_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13743,7 +13787,7 @@ func (x *GetSeckillStockRequest) String() string {
 func (*GetSeckillStockRequest) ProtoMessage() {}
 
 func (x *GetSeckillStockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[192]
+	mi := &file_mall_v1_mall_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13756,7 +13800,7 @@ func (x *GetSeckillStockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSeckillStockRequest.ProtoReflect.Descriptor instead.
 func (*GetSeckillStockRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{192}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{193}
 }
 
 func (x *GetSeckillStockRequest) GetActivityId() int64 {
@@ -13780,7 +13824,7 @@ type ReserveSeckillRequest struct {
 
 func (x *ReserveSeckillRequest) Reset() {
 	*x = ReserveSeckillRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[193]
+	mi := &file_mall_v1_mall_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13792,7 +13836,7 @@ func (x *ReserveSeckillRequest) String() string {
 func (*ReserveSeckillRequest) ProtoMessage() {}
 
 func (x *ReserveSeckillRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[193]
+	mi := &file_mall_v1_mall_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13805,7 +13849,7 @@ func (x *ReserveSeckillRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReserveSeckillRequest.ProtoReflect.Descriptor instead.
 func (*ReserveSeckillRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{193}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{194}
 }
 
 func (x *ReserveSeckillRequest) GetActivityId() int64 {
@@ -13860,7 +13904,7 @@ type GetSeckillQualificationRequest struct {
 
 func (x *GetSeckillQualificationRequest) Reset() {
 	*x = GetSeckillQualificationRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[194]
+	mi := &file_mall_v1_mall_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13872,7 +13916,7 @@ func (x *GetSeckillQualificationRequest) String() string {
 func (*GetSeckillQualificationRequest) ProtoMessage() {}
 
 func (x *GetSeckillQualificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[194]
+	mi := &file_mall_v1_mall_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13885,7 +13929,7 @@ func (x *GetSeckillQualificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSeckillQualificationRequest.ProtoReflect.Descriptor instead.
 func (*GetSeckillQualificationRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{194}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *GetSeckillQualificationRequest) GetToken() string {
@@ -13921,7 +13965,7 @@ type SeckillQualification struct {
 
 func (x *SeckillQualification) Reset() {
 	*x = SeckillQualification{}
-	mi := &file_mall_v1_mall_proto_msgTypes[195]
+	mi := &file_mall_v1_mall_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13933,7 +13977,7 @@ func (x *SeckillQualification) String() string {
 func (*SeckillQualification) ProtoMessage() {}
 
 func (x *SeckillQualification) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[195]
+	mi := &file_mall_v1_mall_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13946,7 +13990,7 @@ func (x *SeckillQualification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SeckillQualification.ProtoReflect.Descriptor instead.
 func (*SeckillQualification) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{195}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{196}
 }
 
 func (x *SeckillQualification) GetToken() string {
@@ -14037,7 +14081,7 @@ type HoldSeckillStockRequest struct {
 
 func (x *HoldSeckillStockRequest) Reset() {
 	*x = HoldSeckillStockRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[196]
+	mi := &file_mall_v1_mall_proto_msgTypes[197]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14049,7 +14093,7 @@ func (x *HoldSeckillStockRequest) String() string {
 func (*HoldSeckillStockRequest) ProtoMessage() {}
 
 func (x *HoldSeckillStockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[196]
+	mi := &file_mall_v1_mall_proto_msgTypes[197]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14062,7 +14106,7 @@ func (x *HoldSeckillStockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HoldSeckillStockRequest.ProtoReflect.Descriptor instead.
 func (*HoldSeckillStockRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{196}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{197}
 }
 
 func (x *HoldSeckillStockRequest) GetActivityId() int64 {
@@ -14097,7 +14141,7 @@ type ReleaseSeckillHoldRequest struct {
 
 func (x *ReleaseSeckillHoldRequest) Reset() {
 	*x = ReleaseSeckillHoldRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[197]
+	mi := &file_mall_v1_mall_proto_msgTypes[198]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14109,7 +14153,7 @@ func (x *ReleaseSeckillHoldRequest) String() string {
 func (*ReleaseSeckillHoldRequest) ProtoMessage() {}
 
 func (x *ReleaseSeckillHoldRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[197]
+	mi := &file_mall_v1_mall_proto_msgTypes[198]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14122,7 +14166,7 @@ func (x *ReleaseSeckillHoldRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseSeckillHoldRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseSeckillHoldRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{197}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{198}
 }
 
 func (x *ReleaseSeckillHoldRequest) GetActivityId() int64 {
@@ -14165,7 +14209,7 @@ type CreateSeckillOrderRequest struct {
 
 func (x *CreateSeckillOrderRequest) Reset() {
 	*x = CreateSeckillOrderRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[198]
+	mi := &file_mall_v1_mall_proto_msgTypes[199]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14177,7 +14221,7 @@ func (x *CreateSeckillOrderRequest) String() string {
 func (*CreateSeckillOrderRequest) ProtoMessage() {}
 
 func (x *CreateSeckillOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[198]
+	mi := &file_mall_v1_mall_proto_msgTypes[199]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14190,7 +14234,7 @@ func (x *CreateSeckillOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSeckillOrderRequest.ProtoReflect.Descriptor instead.
 func (*CreateSeckillOrderRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{198}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{199}
 }
 
 func (x *CreateSeckillOrderRequest) GetActivityId() int64 {
@@ -14284,7 +14328,7 @@ type CreateSeckillReservationRequest struct {
 
 func (x *CreateSeckillReservationRequest) Reset() {
 	*x = CreateSeckillReservationRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[199]
+	mi := &file_mall_v1_mall_proto_msgTypes[200]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14296,7 +14340,7 @@ func (x *CreateSeckillReservationRequest) String() string {
 func (*CreateSeckillReservationRequest) ProtoMessage() {}
 
 func (x *CreateSeckillReservationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[199]
+	mi := &file_mall_v1_mall_proto_msgTypes[200]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14309,7 +14353,7 @@ func (x *CreateSeckillReservationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSeckillReservationRequest.ProtoReflect.Descriptor instead.
 func (*CreateSeckillReservationRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{199}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{200}
 }
 
 func (x *CreateSeckillReservationRequest) GetActivityId() int64 {
@@ -14364,7 +14408,7 @@ type ReleaseSeckillReservationRequest struct {
 
 func (x *ReleaseSeckillReservationRequest) Reset() {
 	*x = ReleaseSeckillReservationRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[200]
+	mi := &file_mall_v1_mall_proto_msgTypes[201]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14376,7 +14420,7 @@ func (x *ReleaseSeckillReservationRequest) String() string {
 func (*ReleaseSeckillReservationRequest) ProtoMessage() {}
 
 func (x *ReleaseSeckillReservationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[200]
+	mi := &file_mall_v1_mall_proto_msgTypes[201]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14389,7 +14433,7 @@ func (x *ReleaseSeckillReservationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseSeckillReservationRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseSeckillReservationRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{200}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{201}
 }
 
 func (x *ReleaseSeckillReservationRequest) GetOrderNo() string {
@@ -14416,7 +14460,7 @@ type ReplaySeckillDLQRequest struct {
 
 func (x *ReplaySeckillDLQRequest) Reset() {
 	*x = ReplaySeckillDLQRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[201]
+	mi := &file_mall_v1_mall_proto_msgTypes[202]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14428,7 +14472,7 @@ func (x *ReplaySeckillDLQRequest) String() string {
 func (*ReplaySeckillDLQRequest) ProtoMessage() {}
 
 func (x *ReplaySeckillDLQRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[201]
+	mi := &file_mall_v1_mall_proto_msgTypes[202]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14441,7 +14485,7 @@ func (x *ReplaySeckillDLQRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplaySeckillDLQRequest.ProtoReflect.Descriptor instead.
 func (*ReplaySeckillDLQRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{201}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{202}
 }
 
 func (x *ReplaySeckillDLQRequest) GetActivityId() int64 {
@@ -14469,7 +14513,7 @@ type ReplaySeckillDLQReply struct {
 
 func (x *ReplaySeckillDLQReply) Reset() {
 	*x = ReplaySeckillDLQReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[202]
+	mi := &file_mall_v1_mall_proto_msgTypes[203]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14481,7 +14525,7 @@ func (x *ReplaySeckillDLQReply) String() string {
 func (*ReplaySeckillDLQReply) ProtoMessage() {}
 
 func (x *ReplaySeckillDLQReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[202]
+	mi := &file_mall_v1_mall_proto_msgTypes[203]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14494,7 +14538,7 @@ func (x *ReplaySeckillDLQReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplaySeckillDLQReply.ProtoReflect.Descriptor instead.
 func (*ReplaySeckillDLQReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{202}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{203}
 }
 
 func (x *ReplaySeckillDLQReply) GetReplayed() int32 {
@@ -14531,7 +14575,7 @@ type AIChatRequest struct {
 
 func (x *AIChatRequest) Reset() {
 	*x = AIChatRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[203]
+	mi := &file_mall_v1_mall_proto_msgTypes[204]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14543,7 +14587,7 @@ func (x *AIChatRequest) String() string {
 func (*AIChatRequest) ProtoMessage() {}
 
 func (x *AIChatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[203]
+	mi := &file_mall_v1_mall_proto_msgTypes[204]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14556,7 +14600,7 @@ func (x *AIChatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIChatRequest.ProtoReflect.Descriptor instead.
 func (*AIChatRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{203}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{204}
 }
 
 func (x *AIChatRequest) GetSessionId() string {
@@ -14596,7 +14640,7 @@ type FeedbackSummaryRequest struct {
 
 func (x *FeedbackSummaryRequest) Reset() {
 	*x = FeedbackSummaryRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[204]
+	mi := &file_mall_v1_mall_proto_msgTypes[205]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14608,7 +14652,7 @@ func (x *FeedbackSummaryRequest) String() string {
 func (*FeedbackSummaryRequest) ProtoMessage() {}
 
 func (x *FeedbackSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[204]
+	mi := &file_mall_v1_mall_proto_msgTypes[205]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14621,7 +14665,7 @@ func (x *FeedbackSummaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedbackSummaryRequest.ProtoReflect.Descriptor instead.
 func (*FeedbackSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{204}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{205}
 }
 
 func (x *FeedbackSummaryRequest) GetDays() int32 {
@@ -14641,7 +14685,7 @@ type KnowledgeSearchRequest struct {
 
 func (x *KnowledgeSearchRequest) Reset() {
 	*x = KnowledgeSearchRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[205]
+	mi := &file_mall_v1_mall_proto_msgTypes[206]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14653,7 +14697,7 @@ func (x *KnowledgeSearchRequest) String() string {
 func (*KnowledgeSearchRequest) ProtoMessage() {}
 
 func (x *KnowledgeSearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[205]
+	mi := &file_mall_v1_mall_proto_msgTypes[206]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14666,7 +14710,7 @@ func (x *KnowledgeSearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KnowledgeSearchRequest.ProtoReflect.Descriptor instead.
 func (*KnowledgeSearchRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{205}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{206}
 }
 
 func (x *KnowledgeSearchRequest) GetQuery() string {
@@ -14696,7 +14740,7 @@ type KnowledgeDoc struct {
 
 func (x *KnowledgeDoc) Reset() {
 	*x = KnowledgeDoc{}
-	mi := &file_mall_v1_mall_proto_msgTypes[206]
+	mi := &file_mall_v1_mall_proto_msgTypes[207]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14708,7 +14752,7 @@ func (x *KnowledgeDoc) String() string {
 func (*KnowledgeDoc) ProtoMessage() {}
 
 func (x *KnowledgeDoc) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[206]
+	mi := &file_mall_v1_mall_proto_msgTypes[207]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14721,7 +14765,7 @@ func (x *KnowledgeDoc) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KnowledgeDoc.ProtoReflect.Descriptor instead.
 func (*KnowledgeDoc) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{206}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{207}
 }
 
 func (x *KnowledgeDoc) GetId() string {
@@ -14768,7 +14812,7 @@ type KnowledgeSearchReply struct {
 
 func (x *KnowledgeSearchReply) Reset() {
 	*x = KnowledgeSearchReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[207]
+	mi := &file_mall_v1_mall_proto_msgTypes[208]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14780,7 +14824,7 @@ func (x *KnowledgeSearchReply) String() string {
 func (*KnowledgeSearchReply) ProtoMessage() {}
 
 func (x *KnowledgeSearchReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[207]
+	mi := &file_mall_v1_mall_proto_msgTypes[208]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14793,7 +14837,7 @@ func (x *KnowledgeSearchReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KnowledgeSearchReply.ProtoReflect.Descriptor instead.
 func (*KnowledgeSearchReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{207}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{208}
 }
 
 func (x *KnowledgeSearchReply) GetDocs() []*KnowledgeDoc {
@@ -14813,7 +14857,7 @@ type GetCartDraftRequest struct {
 
 func (x *GetCartDraftRequest) Reset() {
 	*x = GetCartDraftRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[208]
+	mi := &file_mall_v1_mall_proto_msgTypes[209]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14825,7 +14869,7 @@ func (x *GetCartDraftRequest) String() string {
 func (*GetCartDraftRequest) ProtoMessage() {}
 
 func (x *GetCartDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[208]
+	mi := &file_mall_v1_mall_proto_msgTypes[209]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14838,7 +14882,7 @@ func (x *GetCartDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCartDraftRequest.ProtoReflect.Descriptor instead.
 func (*GetCartDraftRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{208}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{209}
 }
 
 func (x *GetCartDraftRequest) GetDraftId() string {
@@ -14865,7 +14909,7 @@ type CartDraftReply struct {
 
 func (x *CartDraftReply) Reset() {
 	*x = CartDraftReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[209]
+	mi := &file_mall_v1_mall_proto_msgTypes[210]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14877,7 +14921,7 @@ func (x *CartDraftReply) String() string {
 func (*CartDraftReply) ProtoMessage() {}
 
 func (x *CartDraftReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[209]
+	mi := &file_mall_v1_mall_proto_msgTypes[210]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14890,7 +14934,7 @@ func (x *CartDraftReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CartDraftReply.ProtoReflect.Descriptor instead.
 func (*CartDraftReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{209}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{210}
 }
 
 func (x *CartDraftReply) GetDraftJson() string {
@@ -14917,7 +14961,7 @@ type CompleteCartDraftRequest struct {
 
 func (x *CompleteCartDraftRequest) Reset() {
 	*x = CompleteCartDraftRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[210]
+	mi := &file_mall_v1_mall_proto_msgTypes[211]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14929,7 +14973,7 @@ func (x *CompleteCartDraftRequest) String() string {
 func (*CompleteCartDraftRequest) ProtoMessage() {}
 
 func (x *CompleteCartDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[210]
+	mi := &file_mall_v1_mall_proto_msgTypes[211]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14942,7 +14986,7 @@ func (x *CompleteCartDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteCartDraftRequest.ProtoReflect.Descriptor instead.
 func (*CompleteCartDraftRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{210}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{211}
 }
 
 func (x *CompleteCartDraftRequest) GetDraftId() string {
@@ -14973,7 +15017,7 @@ type AIPreferences struct {
 
 func (x *AIPreferences) Reset() {
 	*x = AIPreferences{}
-	mi := &file_mall_v1_mall_proto_msgTypes[211]
+	mi := &file_mall_v1_mall_proto_msgTypes[212]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -14985,7 +15029,7 @@ func (x *AIPreferences) String() string {
 func (*AIPreferences) ProtoMessage() {}
 
 func (x *AIPreferences) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[211]
+	mi := &file_mall_v1_mall_proto_msgTypes[212]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -14998,7 +15042,7 @@ func (x *AIPreferences) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIPreferences.ProtoReflect.Descriptor instead.
 func (*AIPreferences) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{211}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{212}
 }
 
 func (x *AIPreferences) GetPreferredCategories() []string {
@@ -15052,7 +15096,7 @@ type GetAIPreferencesRequest struct {
 
 func (x *GetAIPreferencesRequest) Reset() {
 	*x = GetAIPreferencesRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[212]
+	mi := &file_mall_v1_mall_proto_msgTypes[213]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15064,7 +15108,7 @@ func (x *GetAIPreferencesRequest) String() string {
 func (*GetAIPreferencesRequest) ProtoMessage() {}
 
 func (x *GetAIPreferencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[212]
+	mi := &file_mall_v1_mall_proto_msgTypes[213]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15077,7 +15121,7 @@ func (x *GetAIPreferencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAIPreferencesRequest.ProtoReflect.Descriptor instead.
 func (*GetAIPreferencesRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{212}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{213}
 }
 
 func (x *GetAIPreferencesRequest) GetUserId() int64 {
@@ -15097,7 +15141,7 @@ type SetAIPreferencesRequest struct {
 
 func (x *SetAIPreferencesRequest) Reset() {
 	*x = SetAIPreferencesRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[213]
+	mi := &file_mall_v1_mall_proto_msgTypes[214]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15109,7 +15153,7 @@ func (x *SetAIPreferencesRequest) String() string {
 func (*SetAIPreferencesRequest) ProtoMessage() {}
 
 func (x *SetAIPreferencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[213]
+	mi := &file_mall_v1_mall_proto_msgTypes[214]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15122,7 +15166,7 @@ func (x *SetAIPreferencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAIPreferencesRequest.ProtoReflect.Descriptor instead.
 func (*SetAIPreferencesRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{213}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{214}
 }
 
 func (x *SetAIPreferencesRequest) GetUserId() int64 {
@@ -15148,7 +15192,7 @@ type ClearAIPreferencesRequest struct {
 
 func (x *ClearAIPreferencesRequest) Reset() {
 	*x = ClearAIPreferencesRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[214]
+	mi := &file_mall_v1_mall_proto_msgTypes[215]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15160,7 +15204,7 @@ func (x *ClearAIPreferencesRequest) String() string {
 func (*ClearAIPreferencesRequest) ProtoMessage() {}
 
 func (x *ClearAIPreferencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[214]
+	mi := &file_mall_v1_mall_proto_msgTypes[215]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15173,7 +15217,7 @@ func (x *ClearAIPreferencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearAIPreferencesRequest.ProtoReflect.Descriptor instead.
 func (*ClearAIPreferencesRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{214}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{215}
 }
 
 func (x *ClearAIPreferencesRequest) GetUserId() int64 {
@@ -15192,7 +15236,7 @@ type OpsBriefRequest struct {
 
 func (x *OpsBriefRequest) Reset() {
 	*x = OpsBriefRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[215]
+	mi := &file_mall_v1_mall_proto_msgTypes[216]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15204,7 +15248,7 @@ func (x *OpsBriefRequest) String() string {
 func (*OpsBriefRequest) ProtoMessage() {}
 
 func (x *OpsBriefRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[215]
+	mi := &file_mall_v1_mall_proto_msgTypes[216]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15217,7 +15261,7 @@ func (x *OpsBriefRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpsBriefRequest.ProtoReflect.Descriptor instead.
 func (*OpsBriefRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{215}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{216}
 }
 
 func (x *OpsBriefRequest) GetDays() int32 {
@@ -15239,7 +15283,7 @@ type OpsFeedbackRequest struct {
 
 func (x *OpsFeedbackRequest) Reset() {
 	*x = OpsFeedbackRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[216]
+	mi := &file_mall_v1_mall_proto_msgTypes[217]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15251,7 +15295,7 @@ func (x *OpsFeedbackRequest) String() string {
 func (*OpsFeedbackRequest) ProtoMessage() {}
 
 func (x *OpsFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[216]
+	mi := &file_mall_v1_mall_proto_msgTypes[217]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15264,7 +15308,7 @@ func (x *OpsFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpsFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*OpsFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{216}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{217}
 }
 
 func (x *OpsFeedbackRequest) GetDay() string {
@@ -15314,7 +15358,7 @@ type OpsBriefReply struct {
 
 func (x *OpsBriefReply) Reset() {
 	*x = OpsBriefReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[217]
+	mi := &file_mall_v1_mall_proto_msgTypes[218]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15326,7 +15370,7 @@ func (x *OpsBriefReply) String() string {
 func (*OpsBriefReply) ProtoMessage() {}
 
 func (x *OpsBriefReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[217]
+	mi := &file_mall_v1_mall_proto_msgTypes[218]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15339,7 +15383,7 @@ func (x *OpsBriefReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpsBriefReply.ProtoReflect.Descriptor instead.
 func (*OpsBriefReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{217}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{218}
 }
 
 func (x *OpsBriefReply) GetSummary() string {
@@ -15436,7 +15480,7 @@ type StartCampaignDraftRequest struct {
 
 func (x *StartCampaignDraftRequest) Reset() {
 	*x = StartCampaignDraftRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[218]
+	mi := &file_mall_v1_mall_proto_msgTypes[219]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15448,7 +15492,7 @@ func (x *StartCampaignDraftRequest) String() string {
 func (*StartCampaignDraftRequest) ProtoMessage() {}
 
 func (x *StartCampaignDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[218]
+	mi := &file_mall_v1_mall_proto_msgTypes[219]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15461,7 +15505,7 @@ func (x *StartCampaignDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartCampaignDraftRequest.ProtoReflect.Descriptor instead.
 func (*StartCampaignDraftRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{218}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{219}
 }
 
 func (x *StartCampaignDraftRequest) GetUserId() int64 {
@@ -15537,7 +15581,7 @@ type CampaignDraftReply struct {
 
 func (x *CampaignDraftReply) Reset() {
 	*x = CampaignDraftReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[219]
+	mi := &file_mall_v1_mall_proto_msgTypes[220]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15549,7 +15593,7 @@ func (x *CampaignDraftReply) String() string {
 func (*CampaignDraftReply) ProtoMessage() {}
 
 func (x *CampaignDraftReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[219]
+	mi := &file_mall_v1_mall_proto_msgTypes[220]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15562,7 +15606,7 @@ func (x *CampaignDraftReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CampaignDraftReply.ProtoReflect.Descriptor instead.
 func (*CampaignDraftReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{219}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{220}
 }
 
 func (x *CampaignDraftReply) GetCheckpointId() string {
@@ -15590,7 +15634,7 @@ type AbortCampaignDraftRequest struct {
 
 func (x *AbortCampaignDraftRequest) Reset() {
 	*x = AbortCampaignDraftRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[220]
+	mi := &file_mall_v1_mall_proto_msgTypes[221]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15602,7 +15646,7 @@ func (x *AbortCampaignDraftRequest) String() string {
 func (*AbortCampaignDraftRequest) ProtoMessage() {}
 
 func (x *AbortCampaignDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[220]
+	mi := &file_mall_v1_mall_proto_msgTypes[221]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15615,7 +15659,7 @@ func (x *AbortCampaignDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbortCampaignDraftRequest.ProtoReflect.Descriptor instead.
 func (*AbortCampaignDraftRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{220}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{221}
 }
 
 func (x *AbortCampaignDraftRequest) GetUserId() int64 {
@@ -15653,7 +15697,7 @@ type ResumeCampaignDraftRequest struct {
 
 func (x *ResumeCampaignDraftRequest) Reset() {
 	*x = ResumeCampaignDraftRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[221]
+	mi := &file_mall_v1_mall_proto_msgTypes[222]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15665,7 +15709,7 @@ func (x *ResumeCampaignDraftRequest) String() string {
 func (*ResumeCampaignDraftRequest) ProtoMessage() {}
 
 func (x *ResumeCampaignDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[221]
+	mi := &file_mall_v1_mall_proto_msgTypes[222]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15678,7 +15722,7 @@ func (x *ResumeCampaignDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeCampaignDraftRequest.ProtoReflect.Descriptor instead.
 func (*ResumeCampaignDraftRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{221}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{222}
 }
 
 func (x *ResumeCampaignDraftRequest) GetUserId() int64 {
@@ -15734,7 +15778,7 @@ type FeedbackDaySummary struct {
 
 func (x *FeedbackDaySummary) Reset() {
 	*x = FeedbackDaySummary{}
-	mi := &file_mall_v1_mall_proto_msgTypes[222]
+	mi := &file_mall_v1_mall_proto_msgTypes[223]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15746,7 +15790,7 @@ func (x *FeedbackDaySummary) String() string {
 func (*FeedbackDaySummary) ProtoMessage() {}
 
 func (x *FeedbackDaySummary) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[222]
+	mi := &file_mall_v1_mall_proto_msgTypes[223]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15759,7 +15803,7 @@ func (x *FeedbackDaySummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedbackDaySummary.ProtoReflect.Descriptor instead.
 func (*FeedbackDaySummary) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{222}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{223}
 }
 
 func (x *FeedbackDaySummary) GetDay() string {
@@ -15793,7 +15837,7 @@ type FeedbackComment struct {
 
 func (x *FeedbackComment) Reset() {
 	*x = FeedbackComment{}
-	mi := &file_mall_v1_mall_proto_msgTypes[223]
+	mi := &file_mall_v1_mall_proto_msgTypes[224]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15805,7 +15849,7 @@ func (x *FeedbackComment) String() string {
 func (*FeedbackComment) ProtoMessage() {}
 
 func (x *FeedbackComment) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[223]
+	mi := &file_mall_v1_mall_proto_msgTypes[224]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15818,7 +15862,7 @@ func (x *FeedbackComment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedbackComment.ProtoReflect.Descriptor instead.
 func (*FeedbackComment) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{223}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{224}
 }
 
 func (x *FeedbackComment) GetDay() string {
@@ -15848,7 +15892,7 @@ type FeedbackSummaryReply struct {
 
 func (x *FeedbackSummaryReply) Reset() {
 	*x = FeedbackSummaryReply{}
-	mi := &file_mall_v1_mall_proto_msgTypes[224]
+	mi := &file_mall_v1_mall_proto_msgTypes[225]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15860,7 +15904,7 @@ func (x *FeedbackSummaryReply) String() string {
 func (*FeedbackSummaryReply) ProtoMessage() {}
 
 func (x *FeedbackSummaryReply) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[224]
+	mi := &file_mall_v1_mall_proto_msgTypes[225]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15873,7 +15917,7 @@ func (x *FeedbackSummaryReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FeedbackSummaryReply.ProtoReflect.Descriptor instead.
 func (*FeedbackSummaryReply) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{224}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{225}
 }
 
 func (x *FeedbackSummaryReply) GetTotal() int64 {
@@ -15925,7 +15969,7 @@ type AIFeedbackRequest struct {
 
 func (x *AIFeedbackRequest) Reset() {
 	*x = AIFeedbackRequest{}
-	mi := &file_mall_v1_mall_proto_msgTypes[225]
+	mi := &file_mall_v1_mall_proto_msgTypes[226]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -15937,7 +15981,7 @@ func (x *AIFeedbackRequest) String() string {
 func (*AIFeedbackRequest) ProtoMessage() {}
 
 func (x *AIFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[225]
+	mi := &file_mall_v1_mall_proto_msgTypes[226]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -15950,7 +15994,7 @@ func (x *AIFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*AIFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{225}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{226}
 }
 
 func (x *AIFeedbackRequest) GetSessionId() string {
@@ -16000,7 +16044,7 @@ type AIChatEvent struct {
 
 func (x *AIChatEvent) Reset() {
 	*x = AIChatEvent{}
-	mi := &file_mall_v1_mall_proto_msgTypes[226]
+	mi := &file_mall_v1_mall_proto_msgTypes[227]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -16012,7 +16056,7 @@ func (x *AIChatEvent) String() string {
 func (*AIChatEvent) ProtoMessage() {}
 
 func (x *AIChatEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_mall_v1_mall_proto_msgTypes[226]
+	mi := &file_mall_v1_mall_proto_msgTypes[227]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -16025,7 +16069,7 @@ func (x *AIChatEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIChatEvent.ProtoReflect.Descriptor instead.
 func (*AIChatEvent) Descriptor() ([]byte, []int) {
-	return file_mall_v1_mall_proto_rawDescGZIP(), []int{226}
+	return file_mall_v1_mall_proto_rawDescGZIP(), []int{227}
 }
 
 func (x *AIChatEvent) GetType() string {
@@ -16631,7 +16675,9 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x1d\n" +
 	"\n" +
 	"payment_no\x18\x02 \x01(\tR\tpaymentNo\x12\x1b\n" +
-	"\tpaid_cent\x18\x03 \x01(\x03R\bpaidCent\"[\n" +
+	"\tpaid_cent\x18\x03 \x01(\x03R\bpaidCent\".\n" +
+	"\x11SettleZeroRequest\x12\x19\n" +
+	"\border_no\x18\x01 \x01(\tR\aorderNo\"[\n" +
 	"\x0fGetOrderRequest\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x14\n" +
@@ -17543,14 +17589,17 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\rTccTryConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x0e.mall.v1.Empty\x12?\n" +
 	"\x11TccConfirmConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x0e.mall.v1.Empty\x12>\n" +
 	"\x10TccCancelConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x0e.mall.v1.Empty\x12E\n" +
-	"\x0fTccQueryConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x16.mall.v1.TccQueryReply2\xd6\t\n" +
+	"\x0fTccQueryConsume\x12\x1a.mall.v1.TccPaymentRequest\x1a\x16.mall.v1.TccQueryReply2\x90\n" +
+	"\n" +
 	"\fOrderService\x12:\n" +
 	"\vCreateOrder\x12\x1b.mall.v1.CreateOrderRequest\x1a\x0e.mall.v1.Order\x12H\n" +
 	"\x12CreateSeckillOrder\x12\".mall.v1.CreateSeckillOrderRequest\x1a\x0e.mall.v1.Order\x12D\n" +
 	"\x10CreateOrderInner\x12 .mall.v1.CreateOrderInnerRequest\x1a\x0e.mall.v1.Order\x12:\n" +
 	"\vCancelOrder\x12\x1b.mall.v1.CancelOrderRequest\x1a\x0e.mall.v1.Order\x12D\n" +
 	"\x10CancelOrderInner\x12 .mall.v1.CancelOrderInnerRequest\x1a\x0e.mall.v1.Empty\x124\n" +
-	"\bMarkPaid\x12\x18.mall.v1.MarkPaidRequest\x1a\x0e.mall.v1.Order\x124\n" +
+	"\bMarkPaid\x12\x18.mall.v1.MarkPaidRequest\x1a\x0e.mall.v1.Order\x128\n" +
+	"\n" +
+	"SettleZero\x12\x1a.mall.v1.SettleZeroRequest\x1a\x0e.mall.v1.Order\x124\n" +
 	"\bGetOrder\x12\x18.mall.v1.GetOrderRequest\x1a\x0e.mall.v1.Order\x12<\n" +
 	"\n" +
 	"ListOrders\x12\x1a.mall.v1.ListOrdersRequest\x1a\x12.mall.v1.OrderList\x12;\n" +
@@ -17666,7 +17715,7 @@ func file_mall_v1_mall_proto_rawDescGZIP() []byte {
 	return file_mall_v1_mall_proto_rawDescData
 }
 
-var file_mall_v1_mall_proto_msgTypes = make([]protoimpl.MessageInfo, 227)
+var file_mall_v1_mall_proto_msgTypes = make([]protoimpl.MessageInfo, 228)
 var file_mall_v1_mall_proto_goTypes = []any{
 	(*Empty)(nil),                                 // 0: mall.v1.Empty
 	(*User)(nil),                                  // 1: mall.v1.User
@@ -17765,136 +17814,137 @@ var file_mall_v1_mall_proto_goTypes = []any{
 	(*GetShortageCaseRequest)(nil),                // 94: mall.v1.GetShortageCaseRequest
 	(*CancelOrderInnerRequest)(nil),               // 95: mall.v1.CancelOrderInnerRequest
 	(*MarkPaidRequest)(nil),                       // 96: mall.v1.MarkPaidRequest
-	(*GetOrderRequest)(nil),                       // 97: mall.v1.GetOrderRequest
-	(*ListOrdersRequest)(nil),                     // 98: mall.v1.ListOrdersRequest
-	(*OrderList)(nil),                             // 99: mall.v1.OrderList
-	(*StatsRequest)(nil),                          // 100: mall.v1.StatsRequest
-	(*OrderStats)(nil),                            // 101: mall.v1.OrderStats
-	(*Intent)(nil),                                // 102: mall.v1.Intent
-	(*CreateIntentRequest)(nil),                   // 103: mall.v1.CreateIntentRequest
-	(*GetIntentRequest)(nil),                      // 104: mall.v1.GetIntentRequest
-	(*GetPaymentByOrderRequest)(nil),              // 105: mall.v1.GetPaymentByOrderRequest
-	(*ListOrderIntentsRequest)(nil),               // 106: mall.v1.ListOrderIntentsRequest
-	(*IntentList)(nil),                            // 107: mall.v1.IntentList
-	(*CallbackRequest)(nil),                       // 108: mall.v1.CallbackRequest
-	(*CallbackReply)(nil),                         // 109: mall.v1.CallbackReply
-	(*RefundOrderRequest)(nil),                    // 110: mall.v1.RefundOrderRequest
-	(*RefundOrderReply)(nil),                      // 111: mall.v1.RefundOrderReply
-	(*VerifyPaymentRequest)(nil),                  // 112: mall.v1.VerifyPaymentRequest
-	(*VerifyPaymentReply)(nil),                    // 113: mall.v1.VerifyPaymentReply
-	(*RefundRequest)(nil),                         // 114: mall.v1.RefundRequest
-	(*Refund)(nil),                                // 115: mall.v1.Refund
-	(*ListRefundsRequest)(nil),                    // 116: mall.v1.ListRefundsRequest
-	(*RefundList)(nil),                            // 117: mall.v1.RefundList
-	(*Campaign)(nil),                              // 118: mall.v1.Campaign
-	(*PromotionRule)(nil),                         // 119: mall.v1.PromotionRule
-	(*CreateCampaignWithRuleRequest)(nil),         // 120: mall.v1.CreateCampaignWithRuleRequest
-	(*CampaignWithRule)(nil),                      // 121: mall.v1.CampaignWithRule
-	(*GetCampaignWithRuleByCodeRequest)(nil),      // 122: mall.v1.GetCampaignWithRuleByCodeRequest
-	(*CampaignList)(nil),                          // 123: mall.v1.CampaignList
-	(*PromotionListRequest)(nil),                  // 124: mall.v1.PromotionListRequest
-	(*PromotionRuleList)(nil),                     // 125: mall.v1.PromotionRuleList
-	(*SetPromotionStatusRequest)(nil),             // 126: mall.v1.SetPromotionStatusRequest
-	(*PromotionEvaluateItem)(nil),                 // 127: mall.v1.PromotionEvaluateItem
-	(*PromotionEvaluateRequest)(nil),              // 128: mall.v1.PromotionEvaluateRequest
-	(*EvaluateDraftRequest)(nil),                  // 129: mall.v1.EvaluateDraftRequest
-	(*PromotionAllocation)(nil),                   // 130: mall.v1.PromotionAllocation
-	(*AppliedPromotion)(nil),                      // 131: mall.v1.AppliedPromotion
-	(*RejectedPromotion)(nil),                     // 132: mall.v1.RejectedPromotion
-	(*PromotionEvaluation)(nil),                   // 133: mall.v1.PromotionEvaluation
-	(*PromotionReserveRequest)(nil),               // 134: mall.v1.PromotionReserveRequest
-	(*PromotionReserveReply)(nil),                 // 135: mall.v1.PromotionReserveReply
-	(*PromotionOrderRequest)(nil),                 // 136: mall.v1.PromotionOrderRequest
-	(*ListPromotionReservationsRequest)(nil),      // 137: mall.v1.ListPromotionReservationsRequest
-	(*PromotionReservation)(nil),                  // 138: mall.v1.PromotionReservation
-	(*PromotionReservationList)(nil),              // 139: mall.v1.PromotionReservationList
-	(*ShipmentItem)(nil),                          // 140: mall.v1.ShipmentItem
-	(*Shipment)(nil),                              // 141: mall.v1.Shipment
-	(*CreateShipmentRequest)(nil),                 // 142: mall.v1.CreateShipmentRequest
-	(*ShipRequest)(nil),                           // 143: mall.v1.ShipRequest
-	(*CancelIfCreatedRequest)(nil),                // 144: mall.v1.CancelIfCreatedRequest
-	(*CancelIfCreatedReply)(nil),                  // 145: mall.v1.CancelIfCreatedReply
-	(*ReceiveRequest)(nil),                        // 146: mall.v1.ReceiveRequest
-	(*GetShipmentRequest)(nil),                    // 147: mall.v1.GetShipmentRequest
-	(*GetShipmentByOrderRequest)(nil),             // 148: mall.v1.GetShipmentByOrderRequest
-	(*ListShipmentsRequest)(nil),                  // 149: mall.v1.ListShipmentsRequest
-	(*ShipmentList)(nil),                          // 150: mall.v1.ShipmentList
-	(*Carrier)(nil),                               // 151: mall.v1.Carrier
-	(*CarrierList)(nil),                           // 152: mall.v1.CarrierList
-	(*SetCarrierStatusRequest)(nil),               // 153: mall.v1.SetCarrierStatusRequest
-	(*RecordTrackingEventRequest)(nil),            // 154: mall.v1.RecordTrackingEventRequest
-	(*TrackingEvent)(nil),                         // 155: mall.v1.TrackingEvent
-	(*TrackingEventList)(nil),                     // 156: mall.v1.TrackingEventList
-	(*ListTrackingEventsRequest)(nil),             // 157: mall.v1.ListTrackingEventsRequest
-	(*ConfirmReceiptRequest)(nil),                 // 158: mall.v1.ConfirmReceiptRequest
-	(*OpenReceiptDisputeRequest)(nil),             // 159: mall.v1.OpenReceiptDisputeRequest
-	(*ResolveReceiptDisputeRequest)(nil),          // 160: mall.v1.ResolveReceiptDisputeRequest
-	(*ReceiptDispute)(nil),                        // 161: mall.v1.ReceiptDispute
-	(*AfterSaleItem)(nil),                         // 162: mall.v1.AfterSaleItem
-	(*AfterSale)(nil),                             // 163: mall.v1.AfterSale
-	(*AfterSaleList)(nil),                         // 164: mall.v1.AfterSaleList
-	(*AfterSaleStats)(nil),                        // 165: mall.v1.AfterSaleStats
-	(*CreateAfterSaleRequest)(nil),                // 166: mall.v1.CreateAfterSaleRequest
-	(*GetAfterSaleRequest)(nil),                   // 167: mall.v1.GetAfterSaleRequest
-	(*SubmitReturnTrackingRequest)(nil),           // 168: mall.v1.SubmitReturnTrackingRequest
-	(*ReceiveReturnRequest)(nil),                  // 169: mall.v1.ReceiveReturnRequest
-	(*ListAfterSalesRequest)(nil),                 // 170: mall.v1.ListAfterSalesRequest
-	(*ApproveRequest)(nil),                        // 171: mall.v1.ApproveRequest
-	(*RefundAfterSaleRequest)(nil),                // 172: mall.v1.RefundAfterSaleRequest
-	(*RefundQuote)(nil),                           // 173: mall.v1.RefundQuote
-	(*PreviewRefundQuoteRequest)(nil),             // 174: mall.v1.PreviewRefundQuoteRequest
-	(*LineRefund)(nil),                            // 175: mall.v1.LineRefund
-	(*LineRefundList)(nil),                        // 176: mall.v1.LineRefundList
-	(*ListLineRefundsRequest)(nil),                // 177: mall.v1.ListLineRefundsRequest
-	(*AuthorizeCrossWarehouseRestockRequest)(nil), // 178: mall.v1.AuthorizeCrossWarehouseRestockRequest
-	(*DetermineResponsibilityRequest)(nil),        // 179: mall.v1.DetermineResponsibilityRequest
-	(*VerifyRestockAuthorizationRequest)(nil),     // 180: mall.v1.VerifyRestockAuthorizationRequest
-	(*VerifyRestockAuthorizationReply)(nil),       // 181: mall.v1.VerifyRestockAuthorizationReply
-	(*SeckillActivity)(nil),                       // 182: mall.v1.SeckillActivity
-	(*CreateSeckillActivityRequest)(nil),          // 183: mall.v1.CreateSeckillActivityRequest
-	(*UpdateSeckillActivityRequest)(nil),          // 184: mall.v1.UpdateSeckillActivityRequest
-	(*GetSeckillActivityRequest)(nil),             // 185: mall.v1.GetSeckillActivityRequest
-	(*ListSeckillActivitiesRequest)(nil),          // 186: mall.v1.ListSeckillActivitiesRequest
-	(*SeckillActivityList)(nil),                   // 187: mall.v1.SeckillActivityList
-	(*SeckillActivityCommand)(nil),                // 188: mall.v1.SeckillActivityCommand
-	(*SeckillStock)(nil),                          // 189: mall.v1.SeckillStock
-	(*AllocateSeckillStockRequest)(nil),           // 190: mall.v1.AllocateSeckillStockRequest
-	(*ReleaseSeckillStockRequest)(nil),            // 191: mall.v1.ReleaseSeckillStockRequest
-	(*GetSeckillStockRequest)(nil),                // 192: mall.v1.GetSeckillStockRequest
-	(*ReserveSeckillRequest)(nil),                 // 193: mall.v1.ReserveSeckillRequest
-	(*GetSeckillQualificationRequest)(nil),        // 194: mall.v1.GetSeckillQualificationRequest
-	(*SeckillQualification)(nil),                  // 195: mall.v1.SeckillQualification
-	(*HoldSeckillStockRequest)(nil),               // 196: mall.v1.HoldSeckillStockRequest
-	(*ReleaseSeckillHoldRequest)(nil),             // 197: mall.v1.ReleaseSeckillHoldRequest
-	(*CreateSeckillOrderRequest)(nil),             // 198: mall.v1.CreateSeckillOrderRequest
-	(*CreateSeckillReservationRequest)(nil),       // 199: mall.v1.CreateSeckillReservationRequest
-	(*ReleaseSeckillReservationRequest)(nil),      // 200: mall.v1.ReleaseSeckillReservationRequest
-	(*ReplaySeckillDLQRequest)(nil),               // 201: mall.v1.ReplaySeckillDLQRequest
-	(*ReplaySeckillDLQReply)(nil),                 // 202: mall.v1.ReplaySeckillDLQReply
-	(*AIChatRequest)(nil),                         // 203: mall.v1.AIChatRequest
-	(*FeedbackSummaryRequest)(nil),                // 204: mall.v1.FeedbackSummaryRequest
-	(*KnowledgeSearchRequest)(nil),                // 205: mall.v1.KnowledgeSearchRequest
-	(*KnowledgeDoc)(nil),                          // 206: mall.v1.KnowledgeDoc
-	(*KnowledgeSearchReply)(nil),                  // 207: mall.v1.KnowledgeSearchReply
-	(*GetCartDraftRequest)(nil),                   // 208: mall.v1.GetCartDraftRequest
-	(*CartDraftReply)(nil),                        // 209: mall.v1.CartDraftReply
-	(*CompleteCartDraftRequest)(nil),              // 210: mall.v1.CompleteCartDraftRequest
-	(*AIPreferences)(nil),                         // 211: mall.v1.AIPreferences
-	(*GetAIPreferencesRequest)(nil),               // 212: mall.v1.GetAIPreferencesRequest
-	(*SetAIPreferencesRequest)(nil),               // 213: mall.v1.SetAIPreferencesRequest
-	(*ClearAIPreferencesRequest)(nil),             // 214: mall.v1.ClearAIPreferencesRequest
-	(*OpsBriefRequest)(nil),                       // 215: mall.v1.OpsBriefRequest
-	(*OpsFeedbackRequest)(nil),                    // 216: mall.v1.OpsFeedbackRequest
-	(*OpsBriefReply)(nil),                         // 217: mall.v1.OpsBriefReply
-	(*StartCampaignDraftRequest)(nil),             // 218: mall.v1.StartCampaignDraftRequest
-	(*CampaignDraftReply)(nil),                    // 219: mall.v1.CampaignDraftReply
-	(*AbortCampaignDraftRequest)(nil),             // 220: mall.v1.AbortCampaignDraftRequest
-	(*ResumeCampaignDraftRequest)(nil),            // 221: mall.v1.ResumeCampaignDraftRequest
-	(*FeedbackDaySummary)(nil),                    // 222: mall.v1.FeedbackDaySummary
-	(*FeedbackComment)(nil),                       // 223: mall.v1.FeedbackComment
-	(*FeedbackSummaryReply)(nil),                  // 224: mall.v1.FeedbackSummaryReply
-	(*AIFeedbackRequest)(nil),                     // 225: mall.v1.AIFeedbackRequest
-	(*AIChatEvent)(nil),                           // 226: mall.v1.AIChatEvent
+	(*SettleZeroRequest)(nil),                     // 97: mall.v1.SettleZeroRequest
+	(*GetOrderRequest)(nil),                       // 98: mall.v1.GetOrderRequest
+	(*ListOrdersRequest)(nil),                     // 99: mall.v1.ListOrdersRequest
+	(*OrderList)(nil),                             // 100: mall.v1.OrderList
+	(*StatsRequest)(nil),                          // 101: mall.v1.StatsRequest
+	(*OrderStats)(nil),                            // 102: mall.v1.OrderStats
+	(*Intent)(nil),                                // 103: mall.v1.Intent
+	(*CreateIntentRequest)(nil),                   // 104: mall.v1.CreateIntentRequest
+	(*GetIntentRequest)(nil),                      // 105: mall.v1.GetIntentRequest
+	(*GetPaymentByOrderRequest)(nil),              // 106: mall.v1.GetPaymentByOrderRequest
+	(*ListOrderIntentsRequest)(nil),               // 107: mall.v1.ListOrderIntentsRequest
+	(*IntentList)(nil),                            // 108: mall.v1.IntentList
+	(*CallbackRequest)(nil),                       // 109: mall.v1.CallbackRequest
+	(*CallbackReply)(nil),                         // 110: mall.v1.CallbackReply
+	(*RefundOrderRequest)(nil),                    // 111: mall.v1.RefundOrderRequest
+	(*RefundOrderReply)(nil),                      // 112: mall.v1.RefundOrderReply
+	(*VerifyPaymentRequest)(nil),                  // 113: mall.v1.VerifyPaymentRequest
+	(*VerifyPaymentReply)(nil),                    // 114: mall.v1.VerifyPaymentReply
+	(*RefundRequest)(nil),                         // 115: mall.v1.RefundRequest
+	(*Refund)(nil),                                // 116: mall.v1.Refund
+	(*ListRefundsRequest)(nil),                    // 117: mall.v1.ListRefundsRequest
+	(*RefundList)(nil),                            // 118: mall.v1.RefundList
+	(*Campaign)(nil),                              // 119: mall.v1.Campaign
+	(*PromotionRule)(nil),                         // 120: mall.v1.PromotionRule
+	(*CreateCampaignWithRuleRequest)(nil),         // 121: mall.v1.CreateCampaignWithRuleRequest
+	(*CampaignWithRule)(nil),                      // 122: mall.v1.CampaignWithRule
+	(*GetCampaignWithRuleByCodeRequest)(nil),      // 123: mall.v1.GetCampaignWithRuleByCodeRequest
+	(*CampaignList)(nil),                          // 124: mall.v1.CampaignList
+	(*PromotionListRequest)(nil),                  // 125: mall.v1.PromotionListRequest
+	(*PromotionRuleList)(nil),                     // 126: mall.v1.PromotionRuleList
+	(*SetPromotionStatusRequest)(nil),             // 127: mall.v1.SetPromotionStatusRequest
+	(*PromotionEvaluateItem)(nil),                 // 128: mall.v1.PromotionEvaluateItem
+	(*PromotionEvaluateRequest)(nil),              // 129: mall.v1.PromotionEvaluateRequest
+	(*EvaluateDraftRequest)(nil),                  // 130: mall.v1.EvaluateDraftRequest
+	(*PromotionAllocation)(nil),                   // 131: mall.v1.PromotionAllocation
+	(*AppliedPromotion)(nil),                      // 132: mall.v1.AppliedPromotion
+	(*RejectedPromotion)(nil),                     // 133: mall.v1.RejectedPromotion
+	(*PromotionEvaluation)(nil),                   // 134: mall.v1.PromotionEvaluation
+	(*PromotionReserveRequest)(nil),               // 135: mall.v1.PromotionReserveRequest
+	(*PromotionReserveReply)(nil),                 // 136: mall.v1.PromotionReserveReply
+	(*PromotionOrderRequest)(nil),                 // 137: mall.v1.PromotionOrderRequest
+	(*ListPromotionReservationsRequest)(nil),      // 138: mall.v1.ListPromotionReservationsRequest
+	(*PromotionReservation)(nil),                  // 139: mall.v1.PromotionReservation
+	(*PromotionReservationList)(nil),              // 140: mall.v1.PromotionReservationList
+	(*ShipmentItem)(nil),                          // 141: mall.v1.ShipmentItem
+	(*Shipment)(nil),                              // 142: mall.v1.Shipment
+	(*CreateShipmentRequest)(nil),                 // 143: mall.v1.CreateShipmentRequest
+	(*ShipRequest)(nil),                           // 144: mall.v1.ShipRequest
+	(*CancelIfCreatedRequest)(nil),                // 145: mall.v1.CancelIfCreatedRequest
+	(*CancelIfCreatedReply)(nil),                  // 146: mall.v1.CancelIfCreatedReply
+	(*ReceiveRequest)(nil),                        // 147: mall.v1.ReceiveRequest
+	(*GetShipmentRequest)(nil),                    // 148: mall.v1.GetShipmentRequest
+	(*GetShipmentByOrderRequest)(nil),             // 149: mall.v1.GetShipmentByOrderRequest
+	(*ListShipmentsRequest)(nil),                  // 150: mall.v1.ListShipmentsRequest
+	(*ShipmentList)(nil),                          // 151: mall.v1.ShipmentList
+	(*Carrier)(nil),                               // 152: mall.v1.Carrier
+	(*CarrierList)(nil),                           // 153: mall.v1.CarrierList
+	(*SetCarrierStatusRequest)(nil),               // 154: mall.v1.SetCarrierStatusRequest
+	(*RecordTrackingEventRequest)(nil),            // 155: mall.v1.RecordTrackingEventRequest
+	(*TrackingEvent)(nil),                         // 156: mall.v1.TrackingEvent
+	(*TrackingEventList)(nil),                     // 157: mall.v1.TrackingEventList
+	(*ListTrackingEventsRequest)(nil),             // 158: mall.v1.ListTrackingEventsRequest
+	(*ConfirmReceiptRequest)(nil),                 // 159: mall.v1.ConfirmReceiptRequest
+	(*OpenReceiptDisputeRequest)(nil),             // 160: mall.v1.OpenReceiptDisputeRequest
+	(*ResolveReceiptDisputeRequest)(nil),          // 161: mall.v1.ResolveReceiptDisputeRequest
+	(*ReceiptDispute)(nil),                        // 162: mall.v1.ReceiptDispute
+	(*AfterSaleItem)(nil),                         // 163: mall.v1.AfterSaleItem
+	(*AfterSale)(nil),                             // 164: mall.v1.AfterSale
+	(*AfterSaleList)(nil),                         // 165: mall.v1.AfterSaleList
+	(*AfterSaleStats)(nil),                        // 166: mall.v1.AfterSaleStats
+	(*CreateAfterSaleRequest)(nil),                // 167: mall.v1.CreateAfterSaleRequest
+	(*GetAfterSaleRequest)(nil),                   // 168: mall.v1.GetAfterSaleRequest
+	(*SubmitReturnTrackingRequest)(nil),           // 169: mall.v1.SubmitReturnTrackingRequest
+	(*ReceiveReturnRequest)(nil),                  // 170: mall.v1.ReceiveReturnRequest
+	(*ListAfterSalesRequest)(nil),                 // 171: mall.v1.ListAfterSalesRequest
+	(*ApproveRequest)(nil),                        // 172: mall.v1.ApproveRequest
+	(*RefundAfterSaleRequest)(nil),                // 173: mall.v1.RefundAfterSaleRequest
+	(*RefundQuote)(nil),                           // 174: mall.v1.RefundQuote
+	(*PreviewRefundQuoteRequest)(nil),             // 175: mall.v1.PreviewRefundQuoteRequest
+	(*LineRefund)(nil),                            // 176: mall.v1.LineRefund
+	(*LineRefundList)(nil),                        // 177: mall.v1.LineRefundList
+	(*ListLineRefundsRequest)(nil),                // 178: mall.v1.ListLineRefundsRequest
+	(*AuthorizeCrossWarehouseRestockRequest)(nil), // 179: mall.v1.AuthorizeCrossWarehouseRestockRequest
+	(*DetermineResponsibilityRequest)(nil),        // 180: mall.v1.DetermineResponsibilityRequest
+	(*VerifyRestockAuthorizationRequest)(nil),     // 181: mall.v1.VerifyRestockAuthorizationRequest
+	(*VerifyRestockAuthorizationReply)(nil),       // 182: mall.v1.VerifyRestockAuthorizationReply
+	(*SeckillActivity)(nil),                       // 183: mall.v1.SeckillActivity
+	(*CreateSeckillActivityRequest)(nil),          // 184: mall.v1.CreateSeckillActivityRequest
+	(*UpdateSeckillActivityRequest)(nil),          // 185: mall.v1.UpdateSeckillActivityRequest
+	(*GetSeckillActivityRequest)(nil),             // 186: mall.v1.GetSeckillActivityRequest
+	(*ListSeckillActivitiesRequest)(nil),          // 187: mall.v1.ListSeckillActivitiesRequest
+	(*SeckillActivityList)(nil),                   // 188: mall.v1.SeckillActivityList
+	(*SeckillActivityCommand)(nil),                // 189: mall.v1.SeckillActivityCommand
+	(*SeckillStock)(nil),                          // 190: mall.v1.SeckillStock
+	(*AllocateSeckillStockRequest)(nil),           // 191: mall.v1.AllocateSeckillStockRequest
+	(*ReleaseSeckillStockRequest)(nil),            // 192: mall.v1.ReleaseSeckillStockRequest
+	(*GetSeckillStockRequest)(nil),                // 193: mall.v1.GetSeckillStockRequest
+	(*ReserveSeckillRequest)(nil),                 // 194: mall.v1.ReserveSeckillRequest
+	(*GetSeckillQualificationRequest)(nil),        // 195: mall.v1.GetSeckillQualificationRequest
+	(*SeckillQualification)(nil),                  // 196: mall.v1.SeckillQualification
+	(*HoldSeckillStockRequest)(nil),               // 197: mall.v1.HoldSeckillStockRequest
+	(*ReleaseSeckillHoldRequest)(nil),             // 198: mall.v1.ReleaseSeckillHoldRequest
+	(*CreateSeckillOrderRequest)(nil),             // 199: mall.v1.CreateSeckillOrderRequest
+	(*CreateSeckillReservationRequest)(nil),       // 200: mall.v1.CreateSeckillReservationRequest
+	(*ReleaseSeckillReservationRequest)(nil),      // 201: mall.v1.ReleaseSeckillReservationRequest
+	(*ReplaySeckillDLQRequest)(nil),               // 202: mall.v1.ReplaySeckillDLQRequest
+	(*ReplaySeckillDLQReply)(nil),                 // 203: mall.v1.ReplaySeckillDLQReply
+	(*AIChatRequest)(nil),                         // 204: mall.v1.AIChatRequest
+	(*FeedbackSummaryRequest)(nil),                // 205: mall.v1.FeedbackSummaryRequest
+	(*KnowledgeSearchRequest)(nil),                // 206: mall.v1.KnowledgeSearchRequest
+	(*KnowledgeDoc)(nil),                          // 207: mall.v1.KnowledgeDoc
+	(*KnowledgeSearchReply)(nil),                  // 208: mall.v1.KnowledgeSearchReply
+	(*GetCartDraftRequest)(nil),                   // 209: mall.v1.GetCartDraftRequest
+	(*CartDraftReply)(nil),                        // 210: mall.v1.CartDraftReply
+	(*CompleteCartDraftRequest)(nil),              // 211: mall.v1.CompleteCartDraftRequest
+	(*AIPreferences)(nil),                         // 212: mall.v1.AIPreferences
+	(*GetAIPreferencesRequest)(nil),               // 213: mall.v1.GetAIPreferencesRequest
+	(*SetAIPreferencesRequest)(nil),               // 214: mall.v1.SetAIPreferencesRequest
+	(*ClearAIPreferencesRequest)(nil),             // 215: mall.v1.ClearAIPreferencesRequest
+	(*OpsBriefRequest)(nil),                       // 216: mall.v1.OpsBriefRequest
+	(*OpsFeedbackRequest)(nil),                    // 217: mall.v1.OpsFeedbackRequest
+	(*OpsBriefReply)(nil),                         // 218: mall.v1.OpsBriefReply
+	(*StartCampaignDraftRequest)(nil),             // 219: mall.v1.StartCampaignDraftRequest
+	(*CampaignDraftReply)(nil),                    // 220: mall.v1.CampaignDraftReply
+	(*AbortCampaignDraftRequest)(nil),             // 221: mall.v1.AbortCampaignDraftRequest
+	(*ResumeCampaignDraftRequest)(nil),            // 222: mall.v1.ResumeCampaignDraftRequest
+	(*FeedbackDaySummary)(nil),                    // 223: mall.v1.FeedbackDaySummary
+	(*FeedbackComment)(nil),                       // 224: mall.v1.FeedbackComment
+	(*FeedbackSummaryReply)(nil),                  // 225: mall.v1.FeedbackSummaryReply
+	(*AIFeedbackRequest)(nil),                     // 226: mall.v1.AIFeedbackRequest
+	(*AIChatEvent)(nil),                           // 227: mall.v1.AIChatEvent
 }
 var file_mall_v1_mall_proto_depIdxs = []int32{
 	1,   // 0: mall.v1.LoginReply.user:type_name -> mall.v1.User
@@ -17937,38 +17987,38 @@ var file_mall_v1_mall_proto_depIdxs = []int32{
 	83,  // 37: mall.v1.CreateOrderInnerRequest.items:type_name -> mall.v1.OrderItem
 	87,  // 38: mall.v1.CreateOrderInnerRequest.fulfillment_groups:type_name -> mall.v1.OrderFulfillmentGroup
 	85,  // 39: mall.v1.OrderList.orders:type_name -> mall.v1.Order
-	102, // 40: mall.v1.IntentList.intents:type_name -> mall.v1.Intent
-	115, // 41: mall.v1.RefundList.refunds:type_name -> mall.v1.Refund
-	118, // 42: mall.v1.CreateCampaignWithRuleRequest.campaign:type_name -> mall.v1.Campaign
-	119, // 43: mall.v1.CreateCampaignWithRuleRequest.rule:type_name -> mall.v1.PromotionRule
-	118, // 44: mall.v1.CampaignWithRule.campaign:type_name -> mall.v1.Campaign
-	119, // 45: mall.v1.CampaignWithRule.rule:type_name -> mall.v1.PromotionRule
-	118, // 46: mall.v1.CampaignList.campaigns:type_name -> mall.v1.Campaign
-	119, // 47: mall.v1.PromotionRuleList.promotions:type_name -> mall.v1.PromotionRule
-	127, // 48: mall.v1.PromotionEvaluateRequest.items:type_name -> mall.v1.PromotionEvaluateItem
-	128, // 49: mall.v1.EvaluateDraftRequest.evaluation:type_name -> mall.v1.PromotionEvaluateRequest
-	118, // 50: mall.v1.EvaluateDraftRequest.campaign:type_name -> mall.v1.Campaign
-	119, // 51: mall.v1.EvaluateDraftRequest.rule:type_name -> mall.v1.PromotionRule
-	130, // 52: mall.v1.AppliedPromotion.allocations:type_name -> mall.v1.PromotionAllocation
-	131, // 53: mall.v1.PromotionEvaluation.applied:type_name -> mall.v1.AppliedPromotion
-	132, // 54: mall.v1.PromotionEvaluation.rejected:type_name -> mall.v1.RejectedPromotion
-	138, // 55: mall.v1.PromotionReservationList.reservations:type_name -> mall.v1.PromotionReservation
-	140, // 56: mall.v1.Shipment.items:type_name -> mall.v1.ShipmentItem
-	140, // 57: mall.v1.CreateShipmentRequest.items:type_name -> mall.v1.ShipmentItem
-	141, // 58: mall.v1.ShipmentList.shipments:type_name -> mall.v1.Shipment
-	151, // 59: mall.v1.CarrierList.carriers:type_name -> mall.v1.Carrier
-	155, // 60: mall.v1.TrackingEventList.events:type_name -> mall.v1.TrackingEvent
-	162, // 61: mall.v1.AfterSale.items:type_name -> mall.v1.AfterSaleItem
-	163, // 62: mall.v1.AfterSaleList.after_sales:type_name -> mall.v1.AfterSale
-	162, // 63: mall.v1.CreateAfterSaleRequest.items:type_name -> mall.v1.AfterSaleItem
-	175, // 64: mall.v1.LineRefundList.lines:type_name -> mall.v1.LineRefund
-	182, // 65: mall.v1.SeckillActivityList.activities:type_name -> mall.v1.SeckillActivity
-	206, // 66: mall.v1.KnowledgeSearchReply.docs:type_name -> mall.v1.KnowledgeDoc
-	211, // 67: mall.v1.SetAIPreferencesRequest.preferences:type_name -> mall.v1.AIPreferences
-	118, // 68: mall.v1.ResumeCampaignDraftRequest.campaign:type_name -> mall.v1.Campaign
-	119, // 69: mall.v1.ResumeCampaignDraftRequest.rule:type_name -> mall.v1.PromotionRule
-	222, // 70: mall.v1.FeedbackSummaryReply.days:type_name -> mall.v1.FeedbackDaySummary
-	223, // 71: mall.v1.FeedbackSummaryReply.not_helpful_comments:type_name -> mall.v1.FeedbackComment
+	103, // 40: mall.v1.IntentList.intents:type_name -> mall.v1.Intent
+	116, // 41: mall.v1.RefundList.refunds:type_name -> mall.v1.Refund
+	119, // 42: mall.v1.CreateCampaignWithRuleRequest.campaign:type_name -> mall.v1.Campaign
+	120, // 43: mall.v1.CreateCampaignWithRuleRequest.rule:type_name -> mall.v1.PromotionRule
+	119, // 44: mall.v1.CampaignWithRule.campaign:type_name -> mall.v1.Campaign
+	120, // 45: mall.v1.CampaignWithRule.rule:type_name -> mall.v1.PromotionRule
+	119, // 46: mall.v1.CampaignList.campaigns:type_name -> mall.v1.Campaign
+	120, // 47: mall.v1.PromotionRuleList.promotions:type_name -> mall.v1.PromotionRule
+	128, // 48: mall.v1.PromotionEvaluateRequest.items:type_name -> mall.v1.PromotionEvaluateItem
+	129, // 49: mall.v1.EvaluateDraftRequest.evaluation:type_name -> mall.v1.PromotionEvaluateRequest
+	119, // 50: mall.v1.EvaluateDraftRequest.campaign:type_name -> mall.v1.Campaign
+	120, // 51: mall.v1.EvaluateDraftRequest.rule:type_name -> mall.v1.PromotionRule
+	131, // 52: mall.v1.AppliedPromotion.allocations:type_name -> mall.v1.PromotionAllocation
+	132, // 53: mall.v1.PromotionEvaluation.applied:type_name -> mall.v1.AppliedPromotion
+	133, // 54: mall.v1.PromotionEvaluation.rejected:type_name -> mall.v1.RejectedPromotion
+	139, // 55: mall.v1.PromotionReservationList.reservations:type_name -> mall.v1.PromotionReservation
+	141, // 56: mall.v1.Shipment.items:type_name -> mall.v1.ShipmentItem
+	141, // 57: mall.v1.CreateShipmentRequest.items:type_name -> mall.v1.ShipmentItem
+	142, // 58: mall.v1.ShipmentList.shipments:type_name -> mall.v1.Shipment
+	152, // 59: mall.v1.CarrierList.carriers:type_name -> mall.v1.Carrier
+	156, // 60: mall.v1.TrackingEventList.events:type_name -> mall.v1.TrackingEvent
+	163, // 61: mall.v1.AfterSale.items:type_name -> mall.v1.AfterSaleItem
+	164, // 62: mall.v1.AfterSaleList.after_sales:type_name -> mall.v1.AfterSale
+	163, // 63: mall.v1.CreateAfterSaleRequest.items:type_name -> mall.v1.AfterSaleItem
+	176, // 64: mall.v1.LineRefundList.lines:type_name -> mall.v1.LineRefund
+	183, // 65: mall.v1.SeckillActivityList.activities:type_name -> mall.v1.SeckillActivity
+	207, // 66: mall.v1.KnowledgeSearchReply.docs:type_name -> mall.v1.KnowledgeDoc
+	212, // 67: mall.v1.SetAIPreferencesRequest.preferences:type_name -> mall.v1.AIPreferences
+	119, // 68: mall.v1.ResumeCampaignDraftRequest.campaign:type_name -> mall.v1.Campaign
+	120, // 69: mall.v1.ResumeCampaignDraftRequest.rule:type_name -> mall.v1.PromotionRule
+	223, // 70: mall.v1.FeedbackSummaryReply.days:type_name -> mall.v1.FeedbackDaySummary
+	224, // 71: mall.v1.FeedbackSummaryReply.not_helpful_comments:type_name -> mall.v1.FeedbackComment
 	2,   // 72: mall.v1.IdentityService.Register:input_type -> mall.v1.RegisterRequest
 	3,   // 73: mall.v1.IdentityService.Login:input_type -> mall.v1.LoginRequest
 	4,   // 74: mall.v1.IdentityService.Refresh:input_type -> mall.v1.RefreshRequest
@@ -18018,13 +18068,13 @@ var file_mall_v1_mall_proto_depIdxs = []int32{
 	81,  // 118: mall.v1.InventoryService.TccCancelConfirm:input_type -> mall.v1.TccPaymentRequest
 	81,  // 119: mall.v1.InventoryService.TccQueryConfirm:input_type -> mall.v1.TccPaymentRequest
 	56,  // 120: mall.v1.InventoryService.CheckOrderReady:input_type -> mall.v1.CheckOrderReadyRequest
-	190, // 121: mall.v1.InventoryService.AllocateSeckillStock:input_type -> mall.v1.AllocateSeckillStockRequest
-	191, // 122: mall.v1.InventoryService.ReleaseSeckillStock:input_type -> mall.v1.ReleaseSeckillStockRequest
-	192, // 123: mall.v1.InventoryService.GetSeckillStock:input_type -> mall.v1.GetSeckillStockRequest
-	196, // 124: mall.v1.InventoryService.HoldSeckillStock:input_type -> mall.v1.HoldSeckillStockRequest
-	197, // 125: mall.v1.InventoryService.ReleaseSeckillHold:input_type -> mall.v1.ReleaseSeckillHoldRequest
-	199, // 126: mall.v1.InventoryService.CreateSeckillReservation:input_type -> mall.v1.CreateSeckillReservationRequest
-	200, // 127: mall.v1.InventoryService.ReleaseSeckillReservation:input_type -> mall.v1.ReleaseSeckillReservationRequest
+	191, // 121: mall.v1.InventoryService.AllocateSeckillStock:input_type -> mall.v1.AllocateSeckillStockRequest
+	192, // 122: mall.v1.InventoryService.ReleaseSeckillStock:input_type -> mall.v1.ReleaseSeckillStockRequest
+	193, // 123: mall.v1.InventoryService.GetSeckillStock:input_type -> mall.v1.GetSeckillStockRequest
+	197, // 124: mall.v1.InventoryService.HoldSeckillStock:input_type -> mall.v1.HoldSeckillStockRequest
+	198, // 125: mall.v1.InventoryService.ReleaseSeckillHold:input_type -> mall.v1.ReleaseSeckillHoldRequest
+	200, // 126: mall.v1.InventoryService.CreateSeckillReservation:input_type -> mall.v1.CreateSeckillReservationRequest
+	201, // 127: mall.v1.InventoryService.ReleaseSeckillReservation:input_type -> mall.v1.ReleaseSeckillReservationRequest
 	67,  // 128: mall.v1.CartService.GetCart:input_type -> mall.v1.GetCartRequest
 	68,  // 129: mall.v1.CartService.AddItem:input_type -> mall.v1.AddItemRequest
 	69,  // 130: mall.v1.CartService.ConfirmCartDraft:input_type -> mall.v1.ConfirmCartDraftRequest
@@ -18041,280 +18091,282 @@ var file_mall_v1_mall_proto_depIdxs = []int32{
 	81,  // 141: mall.v1.PricingService.TccCancelConsume:input_type -> mall.v1.TccPaymentRequest
 	81,  // 142: mall.v1.PricingService.TccQueryConsume:input_type -> mall.v1.TccPaymentRequest
 	86,  // 143: mall.v1.OrderService.CreateOrder:input_type -> mall.v1.CreateOrderRequest
-	198, // 144: mall.v1.OrderService.CreateSeckillOrder:input_type -> mall.v1.CreateSeckillOrderRequest
+	199, // 144: mall.v1.OrderService.CreateSeckillOrder:input_type -> mall.v1.CreateSeckillOrderRequest
 	88,  // 145: mall.v1.OrderService.CreateOrderInner:input_type -> mall.v1.CreateOrderInnerRequest
 	89,  // 146: mall.v1.OrderService.CancelOrder:input_type -> mall.v1.CancelOrderRequest
 	95,  // 147: mall.v1.OrderService.CancelOrderInner:input_type -> mall.v1.CancelOrderInnerRequest
 	96,  // 148: mall.v1.OrderService.MarkPaid:input_type -> mall.v1.MarkPaidRequest
-	97,  // 149: mall.v1.OrderService.GetOrder:input_type -> mall.v1.GetOrderRequest
-	98,  // 150: mall.v1.OrderService.ListOrders:input_type -> mall.v1.ListOrdersRequest
-	100, // 151: mall.v1.OrderService.GetOrderStats:input_type -> mall.v1.StatsRequest
-	81,  // 152: mall.v1.OrderService.TccTryMarkPaid:input_type -> mall.v1.TccPaymentRequest
-	81,  // 153: mall.v1.OrderService.TccConfirmMarkPaid:input_type -> mall.v1.TccPaymentRequest
-	81,  // 154: mall.v1.OrderService.TccCancelMarkPaid:input_type -> mall.v1.TccPaymentRequest
-	81,  // 155: mall.v1.OrderService.TccQueryMarkPaid:input_type -> mall.v1.TccPaymentRequest
-	90,  // 156: mall.v1.OrderService.AuthorizeShipment:input_type -> mall.v1.ShipmentPermitRequest
-	90,  // 157: mall.v1.OrderService.BlockShipmentForRefund:input_type -> mall.v1.ShipmentPermitRequest
-	92,  // 158: mall.v1.OrderService.ReportGroupShortage:input_type -> mall.v1.ReportGroupShortageRequest
-	93,  // 159: mall.v1.OrderService.ChooseShortageResolution:input_type -> mall.v1.ChooseShortageResolutionRequest
-	94,  // 160: mall.v1.OrderService.GetShortageCase:input_type -> mall.v1.GetShortageCaseRequest
-	103, // 161: mall.v1.PaymentService.CreateIntent:input_type -> mall.v1.CreateIntentRequest
-	104, // 162: mall.v1.PaymentService.GetIntent:input_type -> mall.v1.GetIntentRequest
-	105, // 163: mall.v1.PaymentService.GetPaymentByOrder:input_type -> mall.v1.GetPaymentByOrderRequest
-	106, // 164: mall.v1.PaymentService.ListOrderIntents:input_type -> mall.v1.ListOrderIntentsRequest
-	108, // 165: mall.v1.PaymentService.Callback:input_type -> mall.v1.CallbackRequest
-	114, // 166: mall.v1.PaymentService.Refund:input_type -> mall.v1.RefundRequest
-	110, // 167: mall.v1.PaymentService.RefundOrder:input_type -> mall.v1.RefundOrderRequest
-	112, // 168: mall.v1.PaymentService.VerifyPayment:input_type -> mall.v1.VerifyPaymentRequest
-	116, // 169: mall.v1.PaymentService.ListRefunds:input_type -> mall.v1.ListRefundsRequest
-	128, // 170: mall.v1.PromotionService.EvaluatePromotions:input_type -> mall.v1.PromotionEvaluateRequest
-	129, // 171: mall.v1.PromotionService.EvaluateDraft:input_type -> mall.v1.EvaluateDraftRequest
-	134, // 172: mall.v1.PromotionService.ReservePromotions:input_type -> mall.v1.PromotionReserveRequest
-	136, // 173: mall.v1.PromotionService.ConfirmPromotions:input_type -> mall.v1.PromotionOrderRequest
-	136, // 174: mall.v1.PromotionService.ReleasePromotions:input_type -> mall.v1.PromotionOrderRequest
-	118, // 175: mall.v1.PromotionService.CreateCampaign:input_type -> mall.v1.Campaign
-	120, // 176: mall.v1.PromotionService.CreateCampaignWithRule:input_type -> mall.v1.CreateCampaignWithRuleRequest
-	122, // 177: mall.v1.PromotionService.GetCampaignWithRuleByCode:input_type -> mall.v1.GetCampaignWithRuleByCodeRequest
-	118, // 178: mall.v1.PromotionService.UpdateCampaign:input_type -> mall.v1.Campaign
-	126, // 179: mall.v1.PromotionService.SetCampaignStatus:input_type -> mall.v1.SetPromotionStatusRequest
-	0,   // 180: mall.v1.PromotionService.ListCampaigns:input_type -> mall.v1.Empty
-	119, // 181: mall.v1.PromotionService.CreatePromotion:input_type -> mall.v1.PromotionRule
-	119, // 182: mall.v1.PromotionService.UpdatePromotion:input_type -> mall.v1.PromotionRule
-	126, // 183: mall.v1.PromotionService.SetPromotionStatus:input_type -> mall.v1.SetPromotionStatusRequest
-	124, // 184: mall.v1.PromotionService.ListPromotions:input_type -> mall.v1.PromotionListRequest
-	137, // 185: mall.v1.PromotionService.ListPromotionReservations:input_type -> mall.v1.ListPromotionReservationsRequest
-	142, // 186: mall.v1.FulfillmentService.CreateShipment:input_type -> mall.v1.CreateShipmentRequest
-	143, // 187: mall.v1.FulfillmentService.Ship:input_type -> mall.v1.ShipRequest
-	144, // 188: mall.v1.FulfillmentService.CancelIfCreated:input_type -> mall.v1.CancelIfCreatedRequest
-	146, // 189: mall.v1.FulfillmentService.Receive:input_type -> mall.v1.ReceiveRequest
-	147, // 190: mall.v1.FulfillmentService.GetShipment:input_type -> mall.v1.GetShipmentRequest
-	148, // 191: mall.v1.FulfillmentService.GetShipmentByOrder:input_type -> mall.v1.GetShipmentByOrderRequest
-	149, // 192: mall.v1.FulfillmentService.ListShipments:input_type -> mall.v1.ListShipmentsRequest
-	154, // 193: mall.v1.FulfillmentService.RecordTrackingEvent:input_type -> mall.v1.RecordTrackingEventRequest
-	158, // 194: mall.v1.FulfillmentService.ConfirmReceipt:input_type -> mall.v1.ConfirmReceiptRequest
-	159, // 195: mall.v1.FulfillmentService.OpenReceiptDispute:input_type -> mall.v1.OpenReceiptDisputeRequest
-	160, // 196: mall.v1.FulfillmentService.ResolveReceiptDispute:input_type -> mall.v1.ResolveReceiptDisputeRequest
-	157, // 197: mall.v1.FulfillmentService.ListTrackingEvents:input_type -> mall.v1.ListTrackingEventsRequest
-	151, // 198: mall.v1.FulfillmentService.CreateCarrier:input_type -> mall.v1.Carrier
-	151, // 199: mall.v1.FulfillmentService.UpdateCarrier:input_type -> mall.v1.Carrier
-	153, // 200: mall.v1.FulfillmentService.SetCarrierStatus:input_type -> mall.v1.SetCarrierStatusRequest
-	0,   // 201: mall.v1.FulfillmentService.ListCarriers:input_type -> mall.v1.Empty
-	166, // 202: mall.v1.AfterSalesService.CreateAfterSale:input_type -> mall.v1.CreateAfterSaleRequest
-	167, // 203: mall.v1.AfterSalesService.GetAfterSale:input_type -> mall.v1.GetAfterSaleRequest
-	171, // 204: mall.v1.AfterSalesService.Approve:input_type -> mall.v1.ApproveRequest
-	168, // 205: mall.v1.AfterSalesService.SubmitReturnTracking:input_type -> mall.v1.SubmitReturnTrackingRequest
-	169, // 206: mall.v1.AfterSalesService.ReceiveReturn:input_type -> mall.v1.ReceiveReturnRequest
-	172, // 207: mall.v1.AfterSalesService.Refund:input_type -> mall.v1.RefundAfterSaleRequest
-	170, // 208: mall.v1.AfterSalesService.ListAfterSales:input_type -> mall.v1.ListAfterSalesRequest
-	100, // 209: mall.v1.AfterSalesService.GetAfterSaleStats:input_type -> mall.v1.StatsRequest
-	174, // 210: mall.v1.AfterSalesService.PreviewRefundQuote:input_type -> mall.v1.PreviewRefundQuoteRequest
-	177, // 211: mall.v1.AfterSalesService.ListLineRefunds:input_type -> mall.v1.ListLineRefundsRequest
-	178, // 212: mall.v1.AfterSalesService.AuthorizeCrossWarehouseRestock:input_type -> mall.v1.AuthorizeCrossWarehouseRestockRequest
-	179, // 213: mall.v1.AfterSalesService.DetermineResponsibility:input_type -> mall.v1.DetermineResponsibilityRequest
-	180, // 214: mall.v1.AfterSalesService.VerifyRestockAuthorization:input_type -> mall.v1.VerifyRestockAuthorizationRequest
-	183, // 215: mall.v1.SeckillService.CreateActivity:input_type -> mall.v1.CreateSeckillActivityRequest
-	184, // 216: mall.v1.SeckillService.UpdateActivity:input_type -> mall.v1.UpdateSeckillActivityRequest
-	185, // 217: mall.v1.SeckillService.GetActivity:input_type -> mall.v1.GetSeckillActivityRequest
-	186, // 218: mall.v1.SeckillService.ListActivities:input_type -> mall.v1.ListSeckillActivitiesRequest
-	188, // 219: mall.v1.SeckillService.PublishActivity:input_type -> mall.v1.SeckillActivityCommand
-	188, // 220: mall.v1.SeckillService.PauseActivity:input_type -> mall.v1.SeckillActivityCommand
-	188, // 221: mall.v1.SeckillService.WarmupActivity:input_type -> mall.v1.SeckillActivityCommand
-	188, // 222: mall.v1.SeckillService.GetActivityStock:input_type -> mall.v1.SeckillActivityCommand
-	193, // 223: mall.v1.SeckillService.Reserve:input_type -> mall.v1.ReserveSeckillRequest
-	194, // 224: mall.v1.SeckillService.GetQualification:input_type -> mall.v1.GetSeckillQualificationRequest
-	185, // 225: mall.v1.SeckillService.GetPublicActivity:input_type -> mall.v1.GetSeckillActivityRequest
-	186, // 226: mall.v1.SeckillService.ListPublicActivities:input_type -> mall.v1.ListSeckillActivitiesRequest
-	201, // 227: mall.v1.SeckillService.ReplayDLQ:input_type -> mall.v1.ReplaySeckillDLQRequest
-	203, // 228: mall.v1.AIService.Chat:input_type -> mall.v1.AIChatRequest
-	225, // 229: mall.v1.AIService.SubmitFeedback:input_type -> mall.v1.AIFeedbackRequest
-	204, // 230: mall.v1.AIService.FeedbackSummary:input_type -> mall.v1.FeedbackSummaryRequest
-	205, // 231: mall.v1.AIService.SearchKnowledge:input_type -> mall.v1.KnowledgeSearchRequest
-	208, // 232: mall.v1.AIService.GetCartDraft:input_type -> mall.v1.GetCartDraftRequest
-	210, // 233: mall.v1.AIService.CompleteCartDraft:input_type -> mall.v1.CompleteCartDraftRequest
-	212, // 234: mall.v1.AIService.GetPreferences:input_type -> mall.v1.GetAIPreferencesRequest
-	213, // 235: mall.v1.AIService.SetPreferences:input_type -> mall.v1.SetAIPreferencesRequest
-	214, // 236: mall.v1.AIService.ClearPreferences:input_type -> mall.v1.ClearAIPreferencesRequest
-	215, // 237: mall.v1.AIService.OpsBrief:input_type -> mall.v1.OpsBriefRequest
-	0,   // 238: mall.v1.AIService.LatestOpsBrief:input_type -> mall.v1.Empty
-	216, // 239: mall.v1.AIService.OpsFeedback:input_type -> mall.v1.OpsFeedbackRequest
-	218, // 240: mall.v1.AIService.StartCampaignDraft:input_type -> mall.v1.StartCampaignDraftRequest
-	221, // 241: mall.v1.AIService.CheckCampaignDraft:input_type -> mall.v1.ResumeCampaignDraftRequest
-	221, // 242: mall.v1.AIService.ResumeCampaignDraft:input_type -> mall.v1.ResumeCampaignDraftRequest
-	220, // 243: mall.v1.AIService.AbortCampaignDraft:input_type -> mall.v1.AbortCampaignDraftRequest
-	6,   // 244: mall.v1.IdentityService.Register:output_type -> mall.v1.LoginReply
-	6,   // 245: mall.v1.IdentityService.Login:output_type -> mall.v1.LoginReply
-	6,   // 246: mall.v1.IdentityService.Refresh:output_type -> mall.v1.LoginReply
-	0,   // 247: mall.v1.IdentityService.Logout:output_type -> mall.v1.Empty
-	1,   // 248: mall.v1.IdentityService.GetUser:output_type -> mall.v1.User
-	11,  // 249: mall.v1.IdentityService.CreateAddress:output_type -> mall.v1.Address
-	11,  // 250: mall.v1.IdentityService.UpdateAddress:output_type -> mall.v1.Address
-	0,   // 251: mall.v1.IdentityService.DeleteAddress:output_type -> mall.v1.Empty
-	0,   // 252: mall.v1.IdentityService.SetDefaultAddress:output_type -> mall.v1.Empty
-	16,  // 253: mall.v1.IdentityService.ListAddresses:output_type -> mall.v1.AddressList
-	9,   // 254: mall.v1.IdentityService.ListUsers:output_type -> mall.v1.UserList
-	1,   // 255: mall.v1.IdentityService.SetUserStatus:output_type -> mall.v1.User
-	30,  // 256: mall.v1.CatalogService.GetProduct:output_type -> mall.v1.Product
-	34,  // 257: mall.v1.CatalogService.ListProducts:output_type -> mall.v1.ProductList
-	29,  // 258: mall.v1.CatalogService.GetSku:output_type -> mall.v1.Sku
-	17,  // 259: mall.v1.CatalogService.CreateCategory:output_type -> mall.v1.Category
-	17,  // 260: mall.v1.CatalogService.UpdateCategory:output_type -> mall.v1.Category
-	0,   // 261: mall.v1.CatalogService.DeleteCategory:output_type -> mall.v1.Empty
-	18,  // 262: mall.v1.CatalogService.ListCategories:output_type -> mall.v1.CategoryList
-	22,  // 263: mall.v1.CatalogService.CreateBrand:output_type -> mall.v1.Brand
-	22,  // 264: mall.v1.CatalogService.UpdateBrand:output_type -> mall.v1.Brand
-	0,   // 265: mall.v1.CatalogService.DeleteBrand:output_type -> mall.v1.Empty
-	23,  // 266: mall.v1.CatalogService.ListBrands:output_type -> mall.v1.BrandList
-	30,  // 267: mall.v1.CatalogService.CreateProduct:output_type -> mall.v1.Product
-	30,  // 268: mall.v1.CatalogService.UpdateProduct:output_type -> mall.v1.Product
-	0,   // 269: mall.v1.CatalogService.DeleteProduct:output_type -> mall.v1.Empty
-	0,   // 270: mall.v1.CatalogService.SetProductStatus:output_type -> mall.v1.Empty
-	34,  // 271: mall.v1.CatalogService.ListAdminProducts:output_type -> mall.v1.ProductList
-	30,  // 272: mall.v1.CatalogService.GetAdminProduct:output_type -> mall.v1.Product
-	29,  // 273: mall.v1.CatalogService.CreateSku:output_type -> mall.v1.Sku
-	29,  // 274: mall.v1.CatalogService.UpdateSku:output_type -> mall.v1.Sku
-	0,   // 275: mall.v1.CatalogService.DeleteSku:output_type -> mall.v1.Empty
-	29,  // 276: mall.v1.CatalogService.SetSkuStatus:output_type -> mall.v1.Sku
-	45,  // 277: mall.v1.InventoryService.GetStock:output_type -> mall.v1.Stock
-	61,  // 278: mall.v1.InventoryService.BatchGetStock:output_type -> mall.v1.StockList
-	54,  // 279: mall.v1.InventoryService.Reserve:output_type -> mall.v1.ReserveReply
-	0,   // 280: mall.v1.InventoryService.Confirm:output_type -> mall.v1.Empty
-	0,   // 281: mall.v1.InventoryService.Release:output_type -> mall.v1.Empty
-	45,  // 282: mall.v1.InventoryService.AdminAdjustStock:output_type -> mall.v1.Stock
-	61,  // 283: mall.v1.InventoryService.ListStocks:output_type -> mall.v1.StockList
-	61,  // 284: mall.v1.InventoryService.ListLowStock:output_type -> mall.v1.StockList
-	0,   // 285: mall.v1.InventoryService.ReplayInventoryOperation:output_type -> mall.v1.Empty
-	51,  // 286: mall.v1.InventoryService.AllocateOrder:output_type -> mall.v1.AllocateOrderReply
-	45,  // 287: mall.v1.InventoryService.Restock:output_type -> mall.v1.Stock
-	0,   // 288: mall.v1.InventoryService.TccTryConfirm:output_type -> mall.v1.Empty
-	0,   // 289: mall.v1.InventoryService.TccConfirm:output_type -> mall.v1.Empty
-	0,   // 290: mall.v1.InventoryService.TccCancelConfirm:output_type -> mall.v1.Empty
-	82,  // 291: mall.v1.InventoryService.TccQueryConfirm:output_type -> mall.v1.TccQueryReply
-	58,  // 292: mall.v1.InventoryService.CheckOrderReady:output_type -> mall.v1.CheckOrderReadyReply
-	189, // 293: mall.v1.InventoryService.AllocateSeckillStock:output_type -> mall.v1.SeckillStock
-	189, // 294: mall.v1.InventoryService.ReleaseSeckillStock:output_type -> mall.v1.SeckillStock
-	189, // 295: mall.v1.InventoryService.GetSeckillStock:output_type -> mall.v1.SeckillStock
-	189, // 296: mall.v1.InventoryService.HoldSeckillStock:output_type -> mall.v1.SeckillStock
-	189, // 297: mall.v1.InventoryService.ReleaseSeckillHold:output_type -> mall.v1.SeckillStock
-	54,  // 298: mall.v1.InventoryService.CreateSeckillReservation:output_type -> mall.v1.ReserveReply
-	0,   // 299: mall.v1.InventoryService.ReleaseSeckillReservation:output_type -> mall.v1.Empty
-	66,  // 300: mall.v1.CartService.GetCart:output_type -> mall.v1.Cart
-	66,  // 301: mall.v1.CartService.AddItem:output_type -> mall.v1.Cart
-	66,  // 302: mall.v1.CartService.ConfirmCartDraft:output_type -> mall.v1.Cart
-	66,  // 303: mall.v1.CartService.UpdateItem:output_type -> mall.v1.Cart
-	66,  // 304: mall.v1.CartService.RemoveItem:output_type -> mall.v1.Cart
-	0,   // 305: mall.v1.CartService.ClearSelected:output_type -> mall.v1.Empty
-	78,  // 306: mall.v1.PricingService.CreateQuote:output_type -> mall.v1.Quote
-	78,  // 307: mall.v1.PricingService.GetQuote:output_type -> mall.v1.Quote
-	0,   // 308: mall.v1.PricingService.LockCoupon:output_type -> mall.v1.Empty
-	0,   // 309: mall.v1.PricingService.UnlockCoupon:output_type -> mall.v1.Empty
-	0,   // 310: mall.v1.PricingService.ConsumeCoupon:output_type -> mall.v1.Empty
-	0,   // 311: mall.v1.PricingService.TccTryConsume:output_type -> mall.v1.Empty
-	0,   // 312: mall.v1.PricingService.TccConfirmConsume:output_type -> mall.v1.Empty
-	0,   // 313: mall.v1.PricingService.TccCancelConsume:output_type -> mall.v1.Empty
-	82,  // 314: mall.v1.PricingService.TccQueryConsume:output_type -> mall.v1.TccQueryReply
-	85,  // 315: mall.v1.OrderService.CreateOrder:output_type -> mall.v1.Order
-	85,  // 316: mall.v1.OrderService.CreateSeckillOrder:output_type -> mall.v1.Order
-	85,  // 317: mall.v1.OrderService.CreateOrderInner:output_type -> mall.v1.Order
-	85,  // 318: mall.v1.OrderService.CancelOrder:output_type -> mall.v1.Order
-	0,   // 319: mall.v1.OrderService.CancelOrderInner:output_type -> mall.v1.Empty
-	85,  // 320: mall.v1.OrderService.MarkPaid:output_type -> mall.v1.Order
-	85,  // 321: mall.v1.OrderService.GetOrder:output_type -> mall.v1.Order
-	99,  // 322: mall.v1.OrderService.ListOrders:output_type -> mall.v1.OrderList
-	101, // 323: mall.v1.OrderService.GetOrderStats:output_type -> mall.v1.OrderStats
-	0,   // 324: mall.v1.OrderService.TccTryMarkPaid:output_type -> mall.v1.Empty
-	0,   // 325: mall.v1.OrderService.TccConfirmMarkPaid:output_type -> mall.v1.Empty
-	0,   // 326: mall.v1.OrderService.TccCancelMarkPaid:output_type -> mall.v1.Empty
-	82,  // 327: mall.v1.OrderService.TccQueryMarkPaid:output_type -> mall.v1.TccQueryReply
-	0,   // 328: mall.v1.OrderService.AuthorizeShipment:output_type -> mall.v1.Empty
-	0,   // 329: mall.v1.OrderService.BlockShipmentForRefund:output_type -> mall.v1.Empty
-	91,  // 330: mall.v1.OrderService.ReportGroupShortage:output_type -> mall.v1.ShortageCase
-	91,  // 331: mall.v1.OrderService.ChooseShortageResolution:output_type -> mall.v1.ShortageCase
-	91,  // 332: mall.v1.OrderService.GetShortageCase:output_type -> mall.v1.ShortageCase
-	102, // 333: mall.v1.PaymentService.CreateIntent:output_type -> mall.v1.Intent
-	102, // 334: mall.v1.PaymentService.GetIntent:output_type -> mall.v1.Intent
-	102, // 335: mall.v1.PaymentService.GetPaymentByOrder:output_type -> mall.v1.Intent
-	107, // 336: mall.v1.PaymentService.ListOrderIntents:output_type -> mall.v1.IntentList
-	109, // 337: mall.v1.PaymentService.Callback:output_type -> mall.v1.CallbackReply
-	0,   // 338: mall.v1.PaymentService.Refund:output_type -> mall.v1.Empty
-	111, // 339: mall.v1.PaymentService.RefundOrder:output_type -> mall.v1.RefundOrderReply
-	113, // 340: mall.v1.PaymentService.VerifyPayment:output_type -> mall.v1.VerifyPaymentReply
-	117, // 341: mall.v1.PaymentService.ListRefunds:output_type -> mall.v1.RefundList
-	133, // 342: mall.v1.PromotionService.EvaluatePromotions:output_type -> mall.v1.PromotionEvaluation
-	133, // 343: mall.v1.PromotionService.EvaluateDraft:output_type -> mall.v1.PromotionEvaluation
-	135, // 344: mall.v1.PromotionService.ReservePromotions:output_type -> mall.v1.PromotionReserveReply
-	0,   // 345: mall.v1.PromotionService.ConfirmPromotions:output_type -> mall.v1.Empty
-	0,   // 346: mall.v1.PromotionService.ReleasePromotions:output_type -> mall.v1.Empty
-	118, // 347: mall.v1.PromotionService.CreateCampaign:output_type -> mall.v1.Campaign
-	121, // 348: mall.v1.PromotionService.CreateCampaignWithRule:output_type -> mall.v1.CampaignWithRule
-	121, // 349: mall.v1.PromotionService.GetCampaignWithRuleByCode:output_type -> mall.v1.CampaignWithRule
-	118, // 350: mall.v1.PromotionService.UpdateCampaign:output_type -> mall.v1.Campaign
-	0,   // 351: mall.v1.PromotionService.SetCampaignStatus:output_type -> mall.v1.Empty
-	123, // 352: mall.v1.PromotionService.ListCampaigns:output_type -> mall.v1.CampaignList
-	119, // 353: mall.v1.PromotionService.CreatePromotion:output_type -> mall.v1.PromotionRule
-	119, // 354: mall.v1.PromotionService.UpdatePromotion:output_type -> mall.v1.PromotionRule
-	0,   // 355: mall.v1.PromotionService.SetPromotionStatus:output_type -> mall.v1.Empty
-	125, // 356: mall.v1.PromotionService.ListPromotions:output_type -> mall.v1.PromotionRuleList
-	139, // 357: mall.v1.PromotionService.ListPromotionReservations:output_type -> mall.v1.PromotionReservationList
-	141, // 358: mall.v1.FulfillmentService.CreateShipment:output_type -> mall.v1.Shipment
-	141, // 359: mall.v1.FulfillmentService.Ship:output_type -> mall.v1.Shipment
-	145, // 360: mall.v1.FulfillmentService.CancelIfCreated:output_type -> mall.v1.CancelIfCreatedReply
-	141, // 361: mall.v1.FulfillmentService.Receive:output_type -> mall.v1.Shipment
-	141, // 362: mall.v1.FulfillmentService.GetShipment:output_type -> mall.v1.Shipment
-	141, // 363: mall.v1.FulfillmentService.GetShipmentByOrder:output_type -> mall.v1.Shipment
-	150, // 364: mall.v1.FulfillmentService.ListShipments:output_type -> mall.v1.ShipmentList
-	141, // 365: mall.v1.FulfillmentService.RecordTrackingEvent:output_type -> mall.v1.Shipment
-	141, // 366: mall.v1.FulfillmentService.ConfirmReceipt:output_type -> mall.v1.Shipment
-	161, // 367: mall.v1.FulfillmentService.OpenReceiptDispute:output_type -> mall.v1.ReceiptDispute
-	161, // 368: mall.v1.FulfillmentService.ResolveReceiptDispute:output_type -> mall.v1.ReceiptDispute
-	156, // 369: mall.v1.FulfillmentService.ListTrackingEvents:output_type -> mall.v1.TrackingEventList
-	151, // 370: mall.v1.FulfillmentService.CreateCarrier:output_type -> mall.v1.Carrier
-	151, // 371: mall.v1.FulfillmentService.UpdateCarrier:output_type -> mall.v1.Carrier
-	151, // 372: mall.v1.FulfillmentService.SetCarrierStatus:output_type -> mall.v1.Carrier
-	152, // 373: mall.v1.FulfillmentService.ListCarriers:output_type -> mall.v1.CarrierList
-	163, // 374: mall.v1.AfterSalesService.CreateAfterSale:output_type -> mall.v1.AfterSale
-	163, // 375: mall.v1.AfterSalesService.GetAfterSale:output_type -> mall.v1.AfterSale
-	163, // 376: mall.v1.AfterSalesService.Approve:output_type -> mall.v1.AfterSale
-	163, // 377: mall.v1.AfterSalesService.SubmitReturnTracking:output_type -> mall.v1.AfterSale
-	163, // 378: mall.v1.AfterSalesService.ReceiveReturn:output_type -> mall.v1.AfterSale
-	163, // 379: mall.v1.AfterSalesService.Refund:output_type -> mall.v1.AfterSale
-	164, // 380: mall.v1.AfterSalesService.ListAfterSales:output_type -> mall.v1.AfterSaleList
-	165, // 381: mall.v1.AfterSalesService.GetAfterSaleStats:output_type -> mall.v1.AfterSaleStats
-	173, // 382: mall.v1.AfterSalesService.PreviewRefundQuote:output_type -> mall.v1.RefundQuote
-	176, // 383: mall.v1.AfterSalesService.ListLineRefunds:output_type -> mall.v1.LineRefundList
-	0,   // 384: mall.v1.AfterSalesService.AuthorizeCrossWarehouseRestock:output_type -> mall.v1.Empty
-	163, // 385: mall.v1.AfterSalesService.DetermineResponsibility:output_type -> mall.v1.AfterSale
-	181, // 386: mall.v1.AfterSalesService.VerifyRestockAuthorization:output_type -> mall.v1.VerifyRestockAuthorizationReply
-	182, // 387: mall.v1.SeckillService.CreateActivity:output_type -> mall.v1.SeckillActivity
-	182, // 388: mall.v1.SeckillService.UpdateActivity:output_type -> mall.v1.SeckillActivity
-	182, // 389: mall.v1.SeckillService.GetActivity:output_type -> mall.v1.SeckillActivity
-	187, // 390: mall.v1.SeckillService.ListActivities:output_type -> mall.v1.SeckillActivityList
-	182, // 391: mall.v1.SeckillService.PublishActivity:output_type -> mall.v1.SeckillActivity
-	182, // 392: mall.v1.SeckillService.PauseActivity:output_type -> mall.v1.SeckillActivity
-	182, // 393: mall.v1.SeckillService.WarmupActivity:output_type -> mall.v1.SeckillActivity
-	189, // 394: mall.v1.SeckillService.GetActivityStock:output_type -> mall.v1.SeckillStock
-	195, // 395: mall.v1.SeckillService.Reserve:output_type -> mall.v1.SeckillQualification
-	195, // 396: mall.v1.SeckillService.GetQualification:output_type -> mall.v1.SeckillQualification
-	182, // 397: mall.v1.SeckillService.GetPublicActivity:output_type -> mall.v1.SeckillActivity
-	187, // 398: mall.v1.SeckillService.ListPublicActivities:output_type -> mall.v1.SeckillActivityList
-	202, // 399: mall.v1.SeckillService.ReplayDLQ:output_type -> mall.v1.ReplaySeckillDLQReply
-	226, // 400: mall.v1.AIService.Chat:output_type -> mall.v1.AIChatEvent
-	0,   // 401: mall.v1.AIService.SubmitFeedback:output_type -> mall.v1.Empty
-	224, // 402: mall.v1.AIService.FeedbackSummary:output_type -> mall.v1.FeedbackSummaryReply
-	207, // 403: mall.v1.AIService.SearchKnowledge:output_type -> mall.v1.KnowledgeSearchReply
-	209, // 404: mall.v1.AIService.GetCartDraft:output_type -> mall.v1.CartDraftReply
-	0,   // 405: mall.v1.AIService.CompleteCartDraft:output_type -> mall.v1.Empty
-	211, // 406: mall.v1.AIService.GetPreferences:output_type -> mall.v1.AIPreferences
-	211, // 407: mall.v1.AIService.SetPreferences:output_type -> mall.v1.AIPreferences
-	0,   // 408: mall.v1.AIService.ClearPreferences:output_type -> mall.v1.Empty
-	217, // 409: mall.v1.AIService.OpsBrief:output_type -> mall.v1.OpsBriefReply
-	217, // 410: mall.v1.AIService.LatestOpsBrief:output_type -> mall.v1.OpsBriefReply
-	0,   // 411: mall.v1.AIService.OpsFeedback:output_type -> mall.v1.Empty
-	219, // 412: mall.v1.AIService.StartCampaignDraft:output_type -> mall.v1.CampaignDraftReply
-	0,   // 413: mall.v1.AIService.CheckCampaignDraft:output_type -> mall.v1.Empty
-	0,   // 414: mall.v1.AIService.ResumeCampaignDraft:output_type -> mall.v1.Empty
-	0,   // 415: mall.v1.AIService.AbortCampaignDraft:output_type -> mall.v1.Empty
-	244, // [244:416] is the sub-list for method output_type
-	72,  // [72:244] is the sub-list for method input_type
+	97,  // 149: mall.v1.OrderService.SettleZero:input_type -> mall.v1.SettleZeroRequest
+	98,  // 150: mall.v1.OrderService.GetOrder:input_type -> mall.v1.GetOrderRequest
+	99,  // 151: mall.v1.OrderService.ListOrders:input_type -> mall.v1.ListOrdersRequest
+	101, // 152: mall.v1.OrderService.GetOrderStats:input_type -> mall.v1.StatsRequest
+	81,  // 153: mall.v1.OrderService.TccTryMarkPaid:input_type -> mall.v1.TccPaymentRequest
+	81,  // 154: mall.v1.OrderService.TccConfirmMarkPaid:input_type -> mall.v1.TccPaymentRequest
+	81,  // 155: mall.v1.OrderService.TccCancelMarkPaid:input_type -> mall.v1.TccPaymentRequest
+	81,  // 156: mall.v1.OrderService.TccQueryMarkPaid:input_type -> mall.v1.TccPaymentRequest
+	90,  // 157: mall.v1.OrderService.AuthorizeShipment:input_type -> mall.v1.ShipmentPermitRequest
+	90,  // 158: mall.v1.OrderService.BlockShipmentForRefund:input_type -> mall.v1.ShipmentPermitRequest
+	92,  // 159: mall.v1.OrderService.ReportGroupShortage:input_type -> mall.v1.ReportGroupShortageRequest
+	93,  // 160: mall.v1.OrderService.ChooseShortageResolution:input_type -> mall.v1.ChooseShortageResolutionRequest
+	94,  // 161: mall.v1.OrderService.GetShortageCase:input_type -> mall.v1.GetShortageCaseRequest
+	104, // 162: mall.v1.PaymentService.CreateIntent:input_type -> mall.v1.CreateIntentRequest
+	105, // 163: mall.v1.PaymentService.GetIntent:input_type -> mall.v1.GetIntentRequest
+	106, // 164: mall.v1.PaymentService.GetPaymentByOrder:input_type -> mall.v1.GetPaymentByOrderRequest
+	107, // 165: mall.v1.PaymentService.ListOrderIntents:input_type -> mall.v1.ListOrderIntentsRequest
+	109, // 166: mall.v1.PaymentService.Callback:input_type -> mall.v1.CallbackRequest
+	115, // 167: mall.v1.PaymentService.Refund:input_type -> mall.v1.RefundRequest
+	111, // 168: mall.v1.PaymentService.RefundOrder:input_type -> mall.v1.RefundOrderRequest
+	113, // 169: mall.v1.PaymentService.VerifyPayment:input_type -> mall.v1.VerifyPaymentRequest
+	117, // 170: mall.v1.PaymentService.ListRefunds:input_type -> mall.v1.ListRefundsRequest
+	129, // 171: mall.v1.PromotionService.EvaluatePromotions:input_type -> mall.v1.PromotionEvaluateRequest
+	130, // 172: mall.v1.PromotionService.EvaluateDraft:input_type -> mall.v1.EvaluateDraftRequest
+	135, // 173: mall.v1.PromotionService.ReservePromotions:input_type -> mall.v1.PromotionReserveRequest
+	137, // 174: mall.v1.PromotionService.ConfirmPromotions:input_type -> mall.v1.PromotionOrderRequest
+	137, // 175: mall.v1.PromotionService.ReleasePromotions:input_type -> mall.v1.PromotionOrderRequest
+	119, // 176: mall.v1.PromotionService.CreateCampaign:input_type -> mall.v1.Campaign
+	121, // 177: mall.v1.PromotionService.CreateCampaignWithRule:input_type -> mall.v1.CreateCampaignWithRuleRequest
+	123, // 178: mall.v1.PromotionService.GetCampaignWithRuleByCode:input_type -> mall.v1.GetCampaignWithRuleByCodeRequest
+	119, // 179: mall.v1.PromotionService.UpdateCampaign:input_type -> mall.v1.Campaign
+	127, // 180: mall.v1.PromotionService.SetCampaignStatus:input_type -> mall.v1.SetPromotionStatusRequest
+	0,   // 181: mall.v1.PromotionService.ListCampaigns:input_type -> mall.v1.Empty
+	120, // 182: mall.v1.PromotionService.CreatePromotion:input_type -> mall.v1.PromotionRule
+	120, // 183: mall.v1.PromotionService.UpdatePromotion:input_type -> mall.v1.PromotionRule
+	127, // 184: mall.v1.PromotionService.SetPromotionStatus:input_type -> mall.v1.SetPromotionStatusRequest
+	125, // 185: mall.v1.PromotionService.ListPromotions:input_type -> mall.v1.PromotionListRequest
+	138, // 186: mall.v1.PromotionService.ListPromotionReservations:input_type -> mall.v1.ListPromotionReservationsRequest
+	143, // 187: mall.v1.FulfillmentService.CreateShipment:input_type -> mall.v1.CreateShipmentRequest
+	144, // 188: mall.v1.FulfillmentService.Ship:input_type -> mall.v1.ShipRequest
+	145, // 189: mall.v1.FulfillmentService.CancelIfCreated:input_type -> mall.v1.CancelIfCreatedRequest
+	147, // 190: mall.v1.FulfillmentService.Receive:input_type -> mall.v1.ReceiveRequest
+	148, // 191: mall.v1.FulfillmentService.GetShipment:input_type -> mall.v1.GetShipmentRequest
+	149, // 192: mall.v1.FulfillmentService.GetShipmentByOrder:input_type -> mall.v1.GetShipmentByOrderRequest
+	150, // 193: mall.v1.FulfillmentService.ListShipments:input_type -> mall.v1.ListShipmentsRequest
+	155, // 194: mall.v1.FulfillmentService.RecordTrackingEvent:input_type -> mall.v1.RecordTrackingEventRequest
+	159, // 195: mall.v1.FulfillmentService.ConfirmReceipt:input_type -> mall.v1.ConfirmReceiptRequest
+	160, // 196: mall.v1.FulfillmentService.OpenReceiptDispute:input_type -> mall.v1.OpenReceiptDisputeRequest
+	161, // 197: mall.v1.FulfillmentService.ResolveReceiptDispute:input_type -> mall.v1.ResolveReceiptDisputeRequest
+	158, // 198: mall.v1.FulfillmentService.ListTrackingEvents:input_type -> mall.v1.ListTrackingEventsRequest
+	152, // 199: mall.v1.FulfillmentService.CreateCarrier:input_type -> mall.v1.Carrier
+	152, // 200: mall.v1.FulfillmentService.UpdateCarrier:input_type -> mall.v1.Carrier
+	154, // 201: mall.v1.FulfillmentService.SetCarrierStatus:input_type -> mall.v1.SetCarrierStatusRequest
+	0,   // 202: mall.v1.FulfillmentService.ListCarriers:input_type -> mall.v1.Empty
+	167, // 203: mall.v1.AfterSalesService.CreateAfterSale:input_type -> mall.v1.CreateAfterSaleRequest
+	168, // 204: mall.v1.AfterSalesService.GetAfterSale:input_type -> mall.v1.GetAfterSaleRequest
+	172, // 205: mall.v1.AfterSalesService.Approve:input_type -> mall.v1.ApproveRequest
+	169, // 206: mall.v1.AfterSalesService.SubmitReturnTracking:input_type -> mall.v1.SubmitReturnTrackingRequest
+	170, // 207: mall.v1.AfterSalesService.ReceiveReturn:input_type -> mall.v1.ReceiveReturnRequest
+	173, // 208: mall.v1.AfterSalesService.Refund:input_type -> mall.v1.RefundAfterSaleRequest
+	171, // 209: mall.v1.AfterSalesService.ListAfterSales:input_type -> mall.v1.ListAfterSalesRequest
+	101, // 210: mall.v1.AfterSalesService.GetAfterSaleStats:input_type -> mall.v1.StatsRequest
+	175, // 211: mall.v1.AfterSalesService.PreviewRefundQuote:input_type -> mall.v1.PreviewRefundQuoteRequest
+	178, // 212: mall.v1.AfterSalesService.ListLineRefunds:input_type -> mall.v1.ListLineRefundsRequest
+	179, // 213: mall.v1.AfterSalesService.AuthorizeCrossWarehouseRestock:input_type -> mall.v1.AuthorizeCrossWarehouseRestockRequest
+	180, // 214: mall.v1.AfterSalesService.DetermineResponsibility:input_type -> mall.v1.DetermineResponsibilityRequest
+	181, // 215: mall.v1.AfterSalesService.VerifyRestockAuthorization:input_type -> mall.v1.VerifyRestockAuthorizationRequest
+	184, // 216: mall.v1.SeckillService.CreateActivity:input_type -> mall.v1.CreateSeckillActivityRequest
+	185, // 217: mall.v1.SeckillService.UpdateActivity:input_type -> mall.v1.UpdateSeckillActivityRequest
+	186, // 218: mall.v1.SeckillService.GetActivity:input_type -> mall.v1.GetSeckillActivityRequest
+	187, // 219: mall.v1.SeckillService.ListActivities:input_type -> mall.v1.ListSeckillActivitiesRequest
+	189, // 220: mall.v1.SeckillService.PublishActivity:input_type -> mall.v1.SeckillActivityCommand
+	189, // 221: mall.v1.SeckillService.PauseActivity:input_type -> mall.v1.SeckillActivityCommand
+	189, // 222: mall.v1.SeckillService.WarmupActivity:input_type -> mall.v1.SeckillActivityCommand
+	189, // 223: mall.v1.SeckillService.GetActivityStock:input_type -> mall.v1.SeckillActivityCommand
+	194, // 224: mall.v1.SeckillService.Reserve:input_type -> mall.v1.ReserveSeckillRequest
+	195, // 225: mall.v1.SeckillService.GetQualification:input_type -> mall.v1.GetSeckillQualificationRequest
+	186, // 226: mall.v1.SeckillService.GetPublicActivity:input_type -> mall.v1.GetSeckillActivityRequest
+	187, // 227: mall.v1.SeckillService.ListPublicActivities:input_type -> mall.v1.ListSeckillActivitiesRequest
+	202, // 228: mall.v1.SeckillService.ReplayDLQ:input_type -> mall.v1.ReplaySeckillDLQRequest
+	204, // 229: mall.v1.AIService.Chat:input_type -> mall.v1.AIChatRequest
+	226, // 230: mall.v1.AIService.SubmitFeedback:input_type -> mall.v1.AIFeedbackRequest
+	205, // 231: mall.v1.AIService.FeedbackSummary:input_type -> mall.v1.FeedbackSummaryRequest
+	206, // 232: mall.v1.AIService.SearchKnowledge:input_type -> mall.v1.KnowledgeSearchRequest
+	209, // 233: mall.v1.AIService.GetCartDraft:input_type -> mall.v1.GetCartDraftRequest
+	211, // 234: mall.v1.AIService.CompleteCartDraft:input_type -> mall.v1.CompleteCartDraftRequest
+	213, // 235: mall.v1.AIService.GetPreferences:input_type -> mall.v1.GetAIPreferencesRequest
+	214, // 236: mall.v1.AIService.SetPreferences:input_type -> mall.v1.SetAIPreferencesRequest
+	215, // 237: mall.v1.AIService.ClearPreferences:input_type -> mall.v1.ClearAIPreferencesRequest
+	216, // 238: mall.v1.AIService.OpsBrief:input_type -> mall.v1.OpsBriefRequest
+	0,   // 239: mall.v1.AIService.LatestOpsBrief:input_type -> mall.v1.Empty
+	217, // 240: mall.v1.AIService.OpsFeedback:input_type -> mall.v1.OpsFeedbackRequest
+	219, // 241: mall.v1.AIService.StartCampaignDraft:input_type -> mall.v1.StartCampaignDraftRequest
+	222, // 242: mall.v1.AIService.CheckCampaignDraft:input_type -> mall.v1.ResumeCampaignDraftRequest
+	222, // 243: mall.v1.AIService.ResumeCampaignDraft:input_type -> mall.v1.ResumeCampaignDraftRequest
+	221, // 244: mall.v1.AIService.AbortCampaignDraft:input_type -> mall.v1.AbortCampaignDraftRequest
+	6,   // 245: mall.v1.IdentityService.Register:output_type -> mall.v1.LoginReply
+	6,   // 246: mall.v1.IdentityService.Login:output_type -> mall.v1.LoginReply
+	6,   // 247: mall.v1.IdentityService.Refresh:output_type -> mall.v1.LoginReply
+	0,   // 248: mall.v1.IdentityService.Logout:output_type -> mall.v1.Empty
+	1,   // 249: mall.v1.IdentityService.GetUser:output_type -> mall.v1.User
+	11,  // 250: mall.v1.IdentityService.CreateAddress:output_type -> mall.v1.Address
+	11,  // 251: mall.v1.IdentityService.UpdateAddress:output_type -> mall.v1.Address
+	0,   // 252: mall.v1.IdentityService.DeleteAddress:output_type -> mall.v1.Empty
+	0,   // 253: mall.v1.IdentityService.SetDefaultAddress:output_type -> mall.v1.Empty
+	16,  // 254: mall.v1.IdentityService.ListAddresses:output_type -> mall.v1.AddressList
+	9,   // 255: mall.v1.IdentityService.ListUsers:output_type -> mall.v1.UserList
+	1,   // 256: mall.v1.IdentityService.SetUserStatus:output_type -> mall.v1.User
+	30,  // 257: mall.v1.CatalogService.GetProduct:output_type -> mall.v1.Product
+	34,  // 258: mall.v1.CatalogService.ListProducts:output_type -> mall.v1.ProductList
+	29,  // 259: mall.v1.CatalogService.GetSku:output_type -> mall.v1.Sku
+	17,  // 260: mall.v1.CatalogService.CreateCategory:output_type -> mall.v1.Category
+	17,  // 261: mall.v1.CatalogService.UpdateCategory:output_type -> mall.v1.Category
+	0,   // 262: mall.v1.CatalogService.DeleteCategory:output_type -> mall.v1.Empty
+	18,  // 263: mall.v1.CatalogService.ListCategories:output_type -> mall.v1.CategoryList
+	22,  // 264: mall.v1.CatalogService.CreateBrand:output_type -> mall.v1.Brand
+	22,  // 265: mall.v1.CatalogService.UpdateBrand:output_type -> mall.v1.Brand
+	0,   // 266: mall.v1.CatalogService.DeleteBrand:output_type -> mall.v1.Empty
+	23,  // 267: mall.v1.CatalogService.ListBrands:output_type -> mall.v1.BrandList
+	30,  // 268: mall.v1.CatalogService.CreateProduct:output_type -> mall.v1.Product
+	30,  // 269: mall.v1.CatalogService.UpdateProduct:output_type -> mall.v1.Product
+	0,   // 270: mall.v1.CatalogService.DeleteProduct:output_type -> mall.v1.Empty
+	0,   // 271: mall.v1.CatalogService.SetProductStatus:output_type -> mall.v1.Empty
+	34,  // 272: mall.v1.CatalogService.ListAdminProducts:output_type -> mall.v1.ProductList
+	30,  // 273: mall.v1.CatalogService.GetAdminProduct:output_type -> mall.v1.Product
+	29,  // 274: mall.v1.CatalogService.CreateSku:output_type -> mall.v1.Sku
+	29,  // 275: mall.v1.CatalogService.UpdateSku:output_type -> mall.v1.Sku
+	0,   // 276: mall.v1.CatalogService.DeleteSku:output_type -> mall.v1.Empty
+	29,  // 277: mall.v1.CatalogService.SetSkuStatus:output_type -> mall.v1.Sku
+	45,  // 278: mall.v1.InventoryService.GetStock:output_type -> mall.v1.Stock
+	61,  // 279: mall.v1.InventoryService.BatchGetStock:output_type -> mall.v1.StockList
+	54,  // 280: mall.v1.InventoryService.Reserve:output_type -> mall.v1.ReserveReply
+	0,   // 281: mall.v1.InventoryService.Confirm:output_type -> mall.v1.Empty
+	0,   // 282: mall.v1.InventoryService.Release:output_type -> mall.v1.Empty
+	45,  // 283: mall.v1.InventoryService.AdminAdjustStock:output_type -> mall.v1.Stock
+	61,  // 284: mall.v1.InventoryService.ListStocks:output_type -> mall.v1.StockList
+	61,  // 285: mall.v1.InventoryService.ListLowStock:output_type -> mall.v1.StockList
+	0,   // 286: mall.v1.InventoryService.ReplayInventoryOperation:output_type -> mall.v1.Empty
+	51,  // 287: mall.v1.InventoryService.AllocateOrder:output_type -> mall.v1.AllocateOrderReply
+	45,  // 288: mall.v1.InventoryService.Restock:output_type -> mall.v1.Stock
+	0,   // 289: mall.v1.InventoryService.TccTryConfirm:output_type -> mall.v1.Empty
+	0,   // 290: mall.v1.InventoryService.TccConfirm:output_type -> mall.v1.Empty
+	0,   // 291: mall.v1.InventoryService.TccCancelConfirm:output_type -> mall.v1.Empty
+	82,  // 292: mall.v1.InventoryService.TccQueryConfirm:output_type -> mall.v1.TccQueryReply
+	58,  // 293: mall.v1.InventoryService.CheckOrderReady:output_type -> mall.v1.CheckOrderReadyReply
+	190, // 294: mall.v1.InventoryService.AllocateSeckillStock:output_type -> mall.v1.SeckillStock
+	190, // 295: mall.v1.InventoryService.ReleaseSeckillStock:output_type -> mall.v1.SeckillStock
+	190, // 296: mall.v1.InventoryService.GetSeckillStock:output_type -> mall.v1.SeckillStock
+	190, // 297: mall.v1.InventoryService.HoldSeckillStock:output_type -> mall.v1.SeckillStock
+	190, // 298: mall.v1.InventoryService.ReleaseSeckillHold:output_type -> mall.v1.SeckillStock
+	54,  // 299: mall.v1.InventoryService.CreateSeckillReservation:output_type -> mall.v1.ReserveReply
+	0,   // 300: mall.v1.InventoryService.ReleaseSeckillReservation:output_type -> mall.v1.Empty
+	66,  // 301: mall.v1.CartService.GetCart:output_type -> mall.v1.Cart
+	66,  // 302: mall.v1.CartService.AddItem:output_type -> mall.v1.Cart
+	66,  // 303: mall.v1.CartService.ConfirmCartDraft:output_type -> mall.v1.Cart
+	66,  // 304: mall.v1.CartService.UpdateItem:output_type -> mall.v1.Cart
+	66,  // 305: mall.v1.CartService.RemoveItem:output_type -> mall.v1.Cart
+	0,   // 306: mall.v1.CartService.ClearSelected:output_type -> mall.v1.Empty
+	78,  // 307: mall.v1.PricingService.CreateQuote:output_type -> mall.v1.Quote
+	78,  // 308: mall.v1.PricingService.GetQuote:output_type -> mall.v1.Quote
+	0,   // 309: mall.v1.PricingService.LockCoupon:output_type -> mall.v1.Empty
+	0,   // 310: mall.v1.PricingService.UnlockCoupon:output_type -> mall.v1.Empty
+	0,   // 311: mall.v1.PricingService.ConsumeCoupon:output_type -> mall.v1.Empty
+	0,   // 312: mall.v1.PricingService.TccTryConsume:output_type -> mall.v1.Empty
+	0,   // 313: mall.v1.PricingService.TccConfirmConsume:output_type -> mall.v1.Empty
+	0,   // 314: mall.v1.PricingService.TccCancelConsume:output_type -> mall.v1.Empty
+	82,  // 315: mall.v1.PricingService.TccQueryConsume:output_type -> mall.v1.TccQueryReply
+	85,  // 316: mall.v1.OrderService.CreateOrder:output_type -> mall.v1.Order
+	85,  // 317: mall.v1.OrderService.CreateSeckillOrder:output_type -> mall.v1.Order
+	85,  // 318: mall.v1.OrderService.CreateOrderInner:output_type -> mall.v1.Order
+	85,  // 319: mall.v1.OrderService.CancelOrder:output_type -> mall.v1.Order
+	0,   // 320: mall.v1.OrderService.CancelOrderInner:output_type -> mall.v1.Empty
+	85,  // 321: mall.v1.OrderService.MarkPaid:output_type -> mall.v1.Order
+	85,  // 322: mall.v1.OrderService.SettleZero:output_type -> mall.v1.Order
+	85,  // 323: mall.v1.OrderService.GetOrder:output_type -> mall.v1.Order
+	100, // 324: mall.v1.OrderService.ListOrders:output_type -> mall.v1.OrderList
+	102, // 325: mall.v1.OrderService.GetOrderStats:output_type -> mall.v1.OrderStats
+	0,   // 326: mall.v1.OrderService.TccTryMarkPaid:output_type -> mall.v1.Empty
+	0,   // 327: mall.v1.OrderService.TccConfirmMarkPaid:output_type -> mall.v1.Empty
+	0,   // 328: mall.v1.OrderService.TccCancelMarkPaid:output_type -> mall.v1.Empty
+	82,  // 329: mall.v1.OrderService.TccQueryMarkPaid:output_type -> mall.v1.TccQueryReply
+	0,   // 330: mall.v1.OrderService.AuthorizeShipment:output_type -> mall.v1.Empty
+	0,   // 331: mall.v1.OrderService.BlockShipmentForRefund:output_type -> mall.v1.Empty
+	91,  // 332: mall.v1.OrderService.ReportGroupShortage:output_type -> mall.v1.ShortageCase
+	91,  // 333: mall.v1.OrderService.ChooseShortageResolution:output_type -> mall.v1.ShortageCase
+	91,  // 334: mall.v1.OrderService.GetShortageCase:output_type -> mall.v1.ShortageCase
+	103, // 335: mall.v1.PaymentService.CreateIntent:output_type -> mall.v1.Intent
+	103, // 336: mall.v1.PaymentService.GetIntent:output_type -> mall.v1.Intent
+	103, // 337: mall.v1.PaymentService.GetPaymentByOrder:output_type -> mall.v1.Intent
+	108, // 338: mall.v1.PaymentService.ListOrderIntents:output_type -> mall.v1.IntentList
+	110, // 339: mall.v1.PaymentService.Callback:output_type -> mall.v1.CallbackReply
+	0,   // 340: mall.v1.PaymentService.Refund:output_type -> mall.v1.Empty
+	112, // 341: mall.v1.PaymentService.RefundOrder:output_type -> mall.v1.RefundOrderReply
+	114, // 342: mall.v1.PaymentService.VerifyPayment:output_type -> mall.v1.VerifyPaymentReply
+	118, // 343: mall.v1.PaymentService.ListRefunds:output_type -> mall.v1.RefundList
+	134, // 344: mall.v1.PromotionService.EvaluatePromotions:output_type -> mall.v1.PromotionEvaluation
+	134, // 345: mall.v1.PromotionService.EvaluateDraft:output_type -> mall.v1.PromotionEvaluation
+	136, // 346: mall.v1.PromotionService.ReservePromotions:output_type -> mall.v1.PromotionReserveReply
+	0,   // 347: mall.v1.PromotionService.ConfirmPromotions:output_type -> mall.v1.Empty
+	0,   // 348: mall.v1.PromotionService.ReleasePromotions:output_type -> mall.v1.Empty
+	119, // 349: mall.v1.PromotionService.CreateCampaign:output_type -> mall.v1.Campaign
+	122, // 350: mall.v1.PromotionService.CreateCampaignWithRule:output_type -> mall.v1.CampaignWithRule
+	122, // 351: mall.v1.PromotionService.GetCampaignWithRuleByCode:output_type -> mall.v1.CampaignWithRule
+	119, // 352: mall.v1.PromotionService.UpdateCampaign:output_type -> mall.v1.Campaign
+	0,   // 353: mall.v1.PromotionService.SetCampaignStatus:output_type -> mall.v1.Empty
+	124, // 354: mall.v1.PromotionService.ListCampaigns:output_type -> mall.v1.CampaignList
+	120, // 355: mall.v1.PromotionService.CreatePromotion:output_type -> mall.v1.PromotionRule
+	120, // 356: mall.v1.PromotionService.UpdatePromotion:output_type -> mall.v1.PromotionRule
+	0,   // 357: mall.v1.PromotionService.SetPromotionStatus:output_type -> mall.v1.Empty
+	126, // 358: mall.v1.PromotionService.ListPromotions:output_type -> mall.v1.PromotionRuleList
+	140, // 359: mall.v1.PromotionService.ListPromotionReservations:output_type -> mall.v1.PromotionReservationList
+	142, // 360: mall.v1.FulfillmentService.CreateShipment:output_type -> mall.v1.Shipment
+	142, // 361: mall.v1.FulfillmentService.Ship:output_type -> mall.v1.Shipment
+	146, // 362: mall.v1.FulfillmentService.CancelIfCreated:output_type -> mall.v1.CancelIfCreatedReply
+	142, // 363: mall.v1.FulfillmentService.Receive:output_type -> mall.v1.Shipment
+	142, // 364: mall.v1.FulfillmentService.GetShipment:output_type -> mall.v1.Shipment
+	142, // 365: mall.v1.FulfillmentService.GetShipmentByOrder:output_type -> mall.v1.Shipment
+	151, // 366: mall.v1.FulfillmentService.ListShipments:output_type -> mall.v1.ShipmentList
+	142, // 367: mall.v1.FulfillmentService.RecordTrackingEvent:output_type -> mall.v1.Shipment
+	142, // 368: mall.v1.FulfillmentService.ConfirmReceipt:output_type -> mall.v1.Shipment
+	162, // 369: mall.v1.FulfillmentService.OpenReceiptDispute:output_type -> mall.v1.ReceiptDispute
+	162, // 370: mall.v1.FulfillmentService.ResolveReceiptDispute:output_type -> mall.v1.ReceiptDispute
+	157, // 371: mall.v1.FulfillmentService.ListTrackingEvents:output_type -> mall.v1.TrackingEventList
+	152, // 372: mall.v1.FulfillmentService.CreateCarrier:output_type -> mall.v1.Carrier
+	152, // 373: mall.v1.FulfillmentService.UpdateCarrier:output_type -> mall.v1.Carrier
+	152, // 374: mall.v1.FulfillmentService.SetCarrierStatus:output_type -> mall.v1.Carrier
+	153, // 375: mall.v1.FulfillmentService.ListCarriers:output_type -> mall.v1.CarrierList
+	164, // 376: mall.v1.AfterSalesService.CreateAfterSale:output_type -> mall.v1.AfterSale
+	164, // 377: mall.v1.AfterSalesService.GetAfterSale:output_type -> mall.v1.AfterSale
+	164, // 378: mall.v1.AfterSalesService.Approve:output_type -> mall.v1.AfterSale
+	164, // 379: mall.v1.AfterSalesService.SubmitReturnTracking:output_type -> mall.v1.AfterSale
+	164, // 380: mall.v1.AfterSalesService.ReceiveReturn:output_type -> mall.v1.AfterSale
+	164, // 381: mall.v1.AfterSalesService.Refund:output_type -> mall.v1.AfterSale
+	165, // 382: mall.v1.AfterSalesService.ListAfterSales:output_type -> mall.v1.AfterSaleList
+	166, // 383: mall.v1.AfterSalesService.GetAfterSaleStats:output_type -> mall.v1.AfterSaleStats
+	174, // 384: mall.v1.AfterSalesService.PreviewRefundQuote:output_type -> mall.v1.RefundQuote
+	177, // 385: mall.v1.AfterSalesService.ListLineRefunds:output_type -> mall.v1.LineRefundList
+	0,   // 386: mall.v1.AfterSalesService.AuthorizeCrossWarehouseRestock:output_type -> mall.v1.Empty
+	164, // 387: mall.v1.AfterSalesService.DetermineResponsibility:output_type -> mall.v1.AfterSale
+	182, // 388: mall.v1.AfterSalesService.VerifyRestockAuthorization:output_type -> mall.v1.VerifyRestockAuthorizationReply
+	183, // 389: mall.v1.SeckillService.CreateActivity:output_type -> mall.v1.SeckillActivity
+	183, // 390: mall.v1.SeckillService.UpdateActivity:output_type -> mall.v1.SeckillActivity
+	183, // 391: mall.v1.SeckillService.GetActivity:output_type -> mall.v1.SeckillActivity
+	188, // 392: mall.v1.SeckillService.ListActivities:output_type -> mall.v1.SeckillActivityList
+	183, // 393: mall.v1.SeckillService.PublishActivity:output_type -> mall.v1.SeckillActivity
+	183, // 394: mall.v1.SeckillService.PauseActivity:output_type -> mall.v1.SeckillActivity
+	183, // 395: mall.v1.SeckillService.WarmupActivity:output_type -> mall.v1.SeckillActivity
+	190, // 396: mall.v1.SeckillService.GetActivityStock:output_type -> mall.v1.SeckillStock
+	196, // 397: mall.v1.SeckillService.Reserve:output_type -> mall.v1.SeckillQualification
+	196, // 398: mall.v1.SeckillService.GetQualification:output_type -> mall.v1.SeckillQualification
+	183, // 399: mall.v1.SeckillService.GetPublicActivity:output_type -> mall.v1.SeckillActivity
+	188, // 400: mall.v1.SeckillService.ListPublicActivities:output_type -> mall.v1.SeckillActivityList
+	203, // 401: mall.v1.SeckillService.ReplayDLQ:output_type -> mall.v1.ReplaySeckillDLQReply
+	227, // 402: mall.v1.AIService.Chat:output_type -> mall.v1.AIChatEvent
+	0,   // 403: mall.v1.AIService.SubmitFeedback:output_type -> mall.v1.Empty
+	225, // 404: mall.v1.AIService.FeedbackSummary:output_type -> mall.v1.FeedbackSummaryReply
+	208, // 405: mall.v1.AIService.SearchKnowledge:output_type -> mall.v1.KnowledgeSearchReply
+	210, // 406: mall.v1.AIService.GetCartDraft:output_type -> mall.v1.CartDraftReply
+	0,   // 407: mall.v1.AIService.CompleteCartDraft:output_type -> mall.v1.Empty
+	212, // 408: mall.v1.AIService.GetPreferences:output_type -> mall.v1.AIPreferences
+	212, // 409: mall.v1.AIService.SetPreferences:output_type -> mall.v1.AIPreferences
+	0,   // 410: mall.v1.AIService.ClearPreferences:output_type -> mall.v1.Empty
+	218, // 411: mall.v1.AIService.OpsBrief:output_type -> mall.v1.OpsBriefReply
+	218, // 412: mall.v1.AIService.LatestOpsBrief:output_type -> mall.v1.OpsBriefReply
+	0,   // 413: mall.v1.AIService.OpsFeedback:output_type -> mall.v1.Empty
+	220, // 414: mall.v1.AIService.StartCampaignDraft:output_type -> mall.v1.CampaignDraftReply
+	0,   // 415: mall.v1.AIService.CheckCampaignDraft:output_type -> mall.v1.Empty
+	0,   // 416: mall.v1.AIService.ResumeCampaignDraft:output_type -> mall.v1.Empty
+	0,   // 417: mall.v1.AIService.AbortCampaignDraft:output_type -> mall.v1.Empty
+	245, // [245:418] is the sub-list for method output_type
+	72,  // [72:245] is the sub-list for method input_type
 	72,  // [72:72] is the sub-list for extension type_name
 	72,  // [72:72] is the sub-list for extension extendee
 	0,   // [0:72] is the sub-list for field type_name
@@ -18331,7 +18383,7 @@ func file_mall_v1_mall_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mall_v1_mall_proto_rawDesc), len(file_mall_v1_mall_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   227,
+			NumMessages:   228,
 			NumExtensions: 0,
 			NumServices:   12,
 		},

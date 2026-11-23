@@ -901,6 +901,7 @@
   "rpc.SetPromotionStatus": "SetPromotionStatusRequest -> Empty",
   "rpc.SetSkuStatus": "SetSkuStatusRequest -> Sku",
   "rpc.SetUserStatus": "SetUserStatusRequest -> User",
+  "rpc.SettleZero": "SettleZeroRequest -> Order",
   "rpc.Ship": "ShipRequest -> Shipment",
   "rpc.StartCampaignDraft": "StartCampaignDraftRequest -> CampaignDraftReply",
   "rpc.SubmitFeedback": "AIFeedbackRequest -> Empty",

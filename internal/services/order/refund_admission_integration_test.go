@@ -7,14 +7,36 @@ import (
 	"testing"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/apperr"
 
 	"google.golang.org/grpc"
 )
 
-type fakePaymentPort struct{ captured, refunded int64 }
+// fakePaymentPort is the order package's narrow Payment stand-in. It records
+// calls so tests can prove a path never consulted Payment.
+type fakePaymentPort struct {
+	captured, refunded int64
+	intents            []*pb.Intent
+	getErr             error
+	listErr            error
+	getCalls           int
+	listCalls          int
+}
 
 func (f *fakePaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, ...grpc.CallOption) (*pb.Intent, error) {
+	f.getCalls++
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
 	return &pb.Intent{PaymentNo: "PAY-1", CapturedCent: f.captured, RefundedCent: f.refunded}, nil
+}
+
+func (f *fakePaymentPort) ListOrderIntents(context.Context, *pb.ListOrderIntentsRequest, ...grpc.CallOption) (*pb.IntentList, error) {
+	f.listCalls++
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return &pb.IntentList{Intents: f.intents}, nil
 }
 
 type fakeFulfillmentPort struct{ status string }
@@ -120,10 +142,14 @@ func TestAdmitRefundConsumedPermitTwoPhase(t *testing.T) {
 	}
 }
 
+// TestAdmitRefundZeroAmountOrder pins the P-03 regression and AC-40: a
+// `zero:<order_no>` order is admitted with amount 0, revokes the unshipped
+// permit, and never consults Payment (no intent exists for a zero order).
 func TestAdmitRefundZeroAmountOrder(t *testing.T) {
 	db := orderTestDB(t)
+	payments := &fakePaymentPort{}
 	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
-	svc.EnableSettlementClients(nil, &fakeFulfillmentPort{status: "CANCELLED"})
+	svc.EnableSettlementClients(payments, &fakeFulfillmentPort{status: "CANCELLED"})
 	ctx := context.Background()
 	if _, err := db.Exec(`INSERT INTO orders
 		(order_no,user_id,status,total_cent,pay_cent,paid_cent,settlement_payment_no,expire_at,applied_promotions_json)
@@ -136,12 +162,51 @@ func TestAdmitRefundZeroAmountOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-ZERO", OrderNo: "ORD-ZADM", GroupNo: "G1", AmountCent: 0, Source: "system_zero",
+		RefundId: "R-ZERO", OrderNo: "ORD-ZADM", GroupNo: "G1", AmountCent: 0, Source: "aftersale",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if reply.GetResult() != refundResultPre {
 		t.Fatalf("zero refund result=%q, want PRE", reply.GetResult())
+	}
+	if payments.getCalls != 0 || payments.listCalls != 0 {
+		t.Fatalf("zero refund consulted Payment (get=%d list=%d)", payments.getCalls, payments.listCalls)
+	}
+	var permitState string
+	if err := db.QueryRow(`SELECT state FROM order_shipping_permits WHERE order_no='ORD-ZADM'`).Scan(&permitState); err != nil {
+		t.Fatal(err)
+	}
+	if permitState != permitRevoked {
+		t.Fatalf("permit=%q, want REVOKED", permitState)
+	}
+	var admitted, committed int64
+	if err := db.QueryRow(`SELECT amount_cent FROM order_refund_admissions WHERE refund_id='R-ZERO'`).Scan(&admitted); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT amount_cent FROM order_refund_commitments WHERE refund_id='R-ZERO'`).Scan(&committed); err != nil {
+		t.Fatal(err)
+	}
+	if admitted != 0 || committed != 0 {
+		t.Fatalf("zero refund amounts: admission=%d commitment=%d, want 0/0", admitted, committed)
+	}
+	// A zero order has no captured quota: any positive admission is rejected
+	// before a second admission row is written.
+	if _, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "R-ZERO-OVER", OrderNo: "ORD-ZADM", GroupNo: "G1", AmountCent: 1,
+	}); err == nil {
+		t.Fatal("positive refund admitted on a zero-amount order")
+	} else if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("error code=%v, want FAILED_PRECONDITION: %v", apperr.From(err).Code, err)
+	}
+	var overRows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM order_refund_admissions WHERE refund_id='R-ZERO-OVER'`).Scan(&overRows); err != nil {
+		t.Fatal(err)
+	}
+	if overRows != 0 {
+		t.Fatalf("over-quota admission rows=%d, want 0", overRows)
+	}
+	if payments.getCalls != 0 || payments.listCalls != 0 {
+		t.Fatalf("zero refund consulted Payment (get=%d list=%d)", payments.getCalls, payments.listCalls)
 	}
 }

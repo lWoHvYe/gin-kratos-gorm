@@ -23,6 +23,10 @@ type inventoryPort interface {
 
 type paymentPort interface {
 	GetIntent(ctx context.Context, in *pb.GetIntentRequest, opts ...grpc.CallOption) (*pb.Intent, error)
+	// ListOrderIntents answers "does any intent of this order have a captured
+	// amount?" without a payment_no, which is required for the AC-40 zero-order
+	// narrowing before a zero settlement.
+	ListOrderIntents(ctx context.Context, in *pb.ListOrderIntentsRequest, opts ...grpc.CallOption) (*pb.IntentList, error)
 }
 
 type fulfillmentPort interface {

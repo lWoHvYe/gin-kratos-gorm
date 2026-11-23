@@ -1,30 +1,30 @@
-# ac	owner	expiry	reason	thread
-AC-22	Developer	2026-12-15	3 个工作日 SLA 告警 worker 与页面提示未实现	developer-reviewer/T-001
-AC-28	Developer	2026-12-15	Playwright 结算页包裹数断言未接入 CI	developer-reviewer/T-001
-AC-29	Developer	2026-12-15	Playwright 订单详情组级物流断言未接入 CI	developer-reviewer/T-001
-AC-30	Developer	2026-12-15	C 端缺货二选一按钮/进度页面未接 BFF	developer-reviewer/T-001
-AC-35	Developer	2026-12-15	同刻申诉与到期 job 的真实竞态 Playwright/并发用例未跑	developer-reviewer/T-001
-AC-37	Developer	2026-12-15	AUTO_T7 页面文案未做浏览器断言	developer-reviewer/T-001
-AC-39	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-40	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-41	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-42	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-43	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-44	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-45	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-46	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-47	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-48	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-49	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-50	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-51	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-52	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-53	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-54	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-55	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-56	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-57	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-58	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-59	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-60	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
-AC-61	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002
+# ac	owner	expiry	reason	thread	test_type	evidence_path	status
+AC-22	Developer	2026-12-15	3 个工作日 SLA 告警 worker 与页面提示未实现	developer-reviewer/T-001	deferred	-	DEFERRED
+AC-28	Developer	2026-12-15	Playwright 结算页包裹数断言未接入 CI	developer-reviewer/T-001	deferred	-	DEFERRED
+AC-29	Developer	2026-12-15	Playwright 订单详情组级物流断言未接入 CI	developer-reviewer/T-001	deferred	-	DEFERRED
+AC-30	Developer	2026-12-15	C 端缺货二选一按钮/进度页面未接 BFF	developer-reviewer/T-001	deferred	-	DEFERRED
+AC-35	Developer	2026-12-15	同刻申诉与到期 job 的真实竞态 Playwright/并发用例未跑	developer-reviewer/T-001	deferred	-	DEFERRED
+AC-37	Developer	2026-12-15	AUTO_T7 页面文案未做浏览器断言	developer-reviewer/T-001	deferred	-	DEFERRED
+AC-39	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-40	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-41	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-42	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-43	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-44	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-45	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-46	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-47	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-48	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-49	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-50	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-51	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-52	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-53	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-54	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-55	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-56	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-57	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-58	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-59	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-60	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-61	Developer	2026-12-31	SPEC-0002 v1.6 approved；实现未开始（ADR-0007 + P0-A/B）	developer-reviewer/T-002	deferred	-	DEFERRED

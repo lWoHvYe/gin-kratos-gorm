@@ -20,6 +20,11 @@ MANAGED = {
     "docs/implementation/": "Developer",
     "docs/po/": "Product Owner",
     "docs/architect/": "System Architect",
+    # v1.2.0 governance: the constitution and its execution细则 are
+    # Architect-owned; AGENTS.md is the top-level execution charter.
+    ".specify/memory/": "System Architect",
+    "AGENTS.md": "System Architect",
+    "docs/collab/CONVENTIONS.md": "System Architect",
 }
 ROLE_ALIASES = {
     "po": "Product Owner", "product owner": "Product Owner", "productowner": "Product Owner",
@@ -98,6 +103,14 @@ def parse_trailers(body: str) -> tuple[set[str], list[str], bool]:
     return roles, exceptions, non_normative
 
 
+def trailer_value(body: str, key: str) -> str:
+    for line in body.splitlines():
+        k, sep, v = line.partition(":")
+        if sep and k.strip().lower() == key.lower():
+            return v.strip()
+    return ""
+
+
 def thread_status(repo: Path, thread: str) -> str | None:
     matches = list(repo.glob(f"docs/collab/*/threads/{thread}.md"))
     if not matches:
@@ -113,6 +126,16 @@ def check_g1(repo: Path, args: argparse.Namespace, files: list[str]) -> list[str
     managed = [f for f in files if any(f.startswith(prefix) for prefix in MANAGED)]
     if not managed:
         return failures
+    if not args.staged:
+        _base, head = split_range(repo, args.range)
+        body = run(repo, ["log", "-1", "--format=%B", head])
+        change_id = trailer_value(body, "change_id")
+        actor = trailer_value(body, "Actor")
+        reviewed_by = trailer_value(body, "Reviewed-by")
+        if not change_id or not actor or not reviewed_by:
+            failures.append("G-1 FAIL HEAD missing change_id/Actor/Reviewed-by trailer")
+        elif actor.strip().lower() == reviewed_by.strip().lower():
+            failures.append("G-1 FAIL Actor and Reviewed-by must differ")
     if args.staged:
         roles = {normalize_role(r) for r in (args.role or "").split(",") if r.strip()}
         exceptions: list[str] = []

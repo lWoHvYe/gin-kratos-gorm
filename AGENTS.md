@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件是本仓库多 Agent 协作的最高行为准则与研发宪法，每次会话自动加载。这里只保留**宏观协同战略、工程哲学、角色边界、SDD 规范与硬性技术约束**；架构细节与接口契约请以 `docs/` 目录为准。
+本文件是本仓库多 Agent 协作的执行准则，每次会话自动加载。它位于 `.specify/memory/constitution.md` 之下；优先级为 **宪法 > 本文件 > `docs/collab/CONVENTIONS.md`**，冲突时以宪法为准。这里只保留**宏观协同战略、工程哲学、角色边界、SDD 规范与硬性技术约束**；架构细节与接口契约请以 `docs/` 目录为准。
 
 ---
 
@@ -19,6 +19,14 @@
 ## 1. 多 Agent 角色矩阵与强制契约
 
 **严禁“既当选手又当裁判”，严禁跨角色越权。** 角色之间必须通过 Artifacts (交付物) 交接。
+
+### 1.0 Senior Agent Lead (Lead) -> 编排、路由与集成
+* **职责**：拆分任务、选择 subagent、维护 Plan/Tasks 与证据索引、集成交付、向人类报告；确保每个交付有 owner、change_id、精确 base/head 与证据。
+* **防守红线**：
+    * 不得代替 PO/Architect/Developer/Reviewer 作者化 Spec、ADR、业务代码、QC 报告或 Reviewer 裁决；治理修订草案仅在人类明确指示下起草，且须人类批准。
+    * 必须读取宪法、本文件、CONVENTIONS 与角色 prompt；治理文件变更后必须做 delta audit，不得依赖旧摘要。
+    * Reviewer/QC FAIL 即 stop-the-line：冻结该 change_id，不得继续提交受管代码；不得用“加个锁/加个 if”的安全网替代协议修复。
+    * 同一时间只推进一个 change_id；不得以 round/commit 数量作为进度。
 
 ### 1.1 Product Owner (产品经理) -> `Spec.md`
 * **职责**：定义业务边界、验收标准 (AC) 与业务不变量。
@@ -51,7 +59,9 @@
 * **职责**：拿着契约核对精确 base/head 的代码与测试日志，写明 review_scope；实现 PASS 不等于 Spec 全量验收或 Release PASS。
 * **防守红线**：
     * **拒绝微观完美主义**：不影响本次契约与发布风险的边缘规范（如 Lint）只能标记 `[TODO]`；**但权限、安全、数据完整性和迁移阻断不得因未直接造成资损而降级。**
-    * **禁止提供“引诱性建议”**：严禁建议“加个本地锁”这种局部补丁。必须指明违反了哪条不变量。**如果发现是架构缺陷，必须标记 `[ARCHITECTURAL_FLAW]`，并明确要求打回给 Architect，严禁允许 Dev 在当前分支硬改。** 
+    * **禁止提供“引诱性建议”**：严禁建议“加个本地锁”这种局部补丁。必须指明违反了哪条不变量。**如果发现是架构缺陷，必须标记 `[ARCHITECTURAL_FLAW]`，并明确要求打回给 Architect，严禁允许 Dev 在当前分支硬改。**
+    * **Actor 独立性**：Reviewer MUST 与作者为不同 actor；报告必须记录 `Actor`/`Reviewed-by`、精确 base/head、`review_scope`、`release_status`，并逐条核对宪法 Article I–V 与 Governance/Workflow 相关条款。
+    * **FAIL 冻结**：FAIL 后不得继续在同一 `change_id` 提交受管代码；修复必须挂重审 Plan；不得用新 `change_id` 或 `hotfix:` 绕过原范围。
 
 ---
 
@@ -63,6 +73,8 @@
     * 如果判定为“架构缺陷”，Dev 必须停止写代码，要求打回给 Architect 修改 ADR。
 3. **阶梯门禁**：Spec 与 ADR 均须经过 QC 和人类批准后才能进入下游；具体流程以 `docs/collab/CONVENTIONS.md` 为准。
 4. **验收语义**：AC 文本引用不等于 AC 已验收；线程 CLOSED、实现 PASS、代码合入与 Release PASS 不得混用。跨服务变更必须验证受影响的既有基线，不得只验证新增 AC。
+5. **Plan/Tasks 与 Stop-the-line**：P0/跨服务/资金/库存/权限/状态机变更必须先有 Plan/Tasks 与 AC 证据矩阵；Plan 未批准不得写业务代码。QC/Reviewer FAIL 后冻结 `change_id`，直到修复 Plan、契约裁决与重审完成。
+6. **Actor/change_id**：受管交付 MUST 使用 `change_id`、`Actor`、`Reviewed-by` trailer；同一 `change_id` 的 `Actor` 不得等于 `Reviewed-by`。
 
 ---
 
@@ -98,9 +110,10 @@
 
 口头回复 `done` 无效，必须附带证据：
 1. **Happy Path**：行为变更必须提供受影响测试的实际执行日志 (如 `make test` 或 `make verify`) 并绑定精确 HEAD；纯文档变更不得伪造测试声明。
-2. **重灾区抗压**：资金、库存、权限和跨服务恢复必须按 ADR 提供**并发竞态测试**或**故障注入测试**日志；不适用时必须说明依据。**Mock 数据必须符合真实业务边界，且必须包含至少一个异常分支的用例，严禁全绿假数据糊弄。** 
+2. **重灾区抗压**：资金、库存、权限和跨服务恢复必须按 ADR 提供**并发竞态测试**或**故障注入测试**日志，并绑定精确 HEAD；不适用时必须取得人类书面豁免。**Mock 数据必须符合真实业务边界，且必须包含至少一个异常分支的用例，严禁全绿假数据糊弄。**
 3. **组合与发布证据**：跨服务变更必须包含受影响基线的非回归证据。实现测试绿色不等于 Release PASS；发布结论必须绑定精确 base/head。阻断项、延期处置及所要求的环境验证。
 4. **防御声明**：必须附带 `【测试范围】` 与 `【未覆盖范围】`，帮助人类挡住审查者的过度发散。
+5. **AC 证据矩阵**：受影响 AC 必须映射到 `docs/collab/ac-coverage.tsv` 的 `test_type`、`evidence_path`、`status`；AC-REF 不等于 AC-VERIFIED。
 
 ---
 
@@ -110,6 +123,7 @@
 * 无测量依据不得在非核心链路引入高复杂度的极值性能优化。
 * 已批准 Spec/ADR 与代码冲突时，必须停止相关交付并由所有者裁决，严禁代码静默覆盖契约；描述性文档与代码现状冲突时，以代码事实为准并修正文档漂移。
 * 单节点 dev 集群不得超过 100k/1M RPS 压测。
+* `main` 不得新增半成品协议路径；未完成协议留在 WIP 分支。既有 PAY-SETTLE-01 WIP 按人类裁决 B 冻结，不得继续扩展。
 
 ---
 

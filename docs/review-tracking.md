@@ -9,6 +9,20 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+## 2026-11-24 human decisions: constitution v1.2.0
+
+- Director approved constitution v1.2.0 and set the hierarchy:
+  **Constitution > AGENTS.md > docs/collab/CONVENTIONS.md**.
+- PAY-SETTLE-01 human decision B: the existing WIP stays on `main` but is
+  **frozen**: no merge to release, no publication, no expansion. Open items:
+  P-01 safety net only (TCC per-group admission/Σ still missing), P-04, P-05,
+  P-06; AC-39…61 remain deferred debts.
+- Ratification gate work: G1 AGENTS/CONVENTIONS hierarchy aligned; G2 G-1
+  change_id/Actor/Reviewed-by + G-1 check added; G3 ac-coverage columns added;
+  G4 this record. G5 human approval recorded here.
+- Contract debt: SPEC-0001 AC-27 使用 Given/Then/And，下一次 SPEC-0001 版本升级 MUST
+  改为 EARS 并登记基线迁移；在此之前不得把 AC-27 标为 AC-VERIFIED。
+
 ## P1
 
 | ID | Status | Evidence / remaining gap |

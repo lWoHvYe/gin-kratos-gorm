@@ -1,7 +1,7 @@
 
 # 多 Agent 协作约定 v3 (执行细则)
 
-> 本文件是 [`AGENTS.md`](../../AGENTS.md) 的执行细则，不改变角色边界；冲突时以 `AGENTS.md` 为准。
+> 本文件是 [`AGENTS.md`](../../AGENTS.md) 的执行细则，不改变角色边界。优先级：**宪法 > `AGENTS.md` > 本文件**；冲突时以宪法为准，其次以 `AGENTS.md` 为准。
 > 所有 Agent 会话开始必须读取 `AGENTS.md`、本文件和自己的角色 prompt。
 
 ---
@@ -19,6 +19,7 @@
 
 | 角色/产物 | 路径 | 唯一作者 | 其他角色 |
 |---|---|---|---|
+| Lead 编排/计划/证据索引 | `docs/lead/**` | Lead | 只读；不拥有 Spec/ADR/代码/QC/Reviewer 产物 |
 | 业务规格 | `docs/specs/**` | Product Owner | 只读；要改就开线程 |
 | 质量审查报告 | `docs/collab/qc-reports/**` | Quality Checker | 只读；不代替 PO/Architect 改文档 |
 | 设计决策 | `docs/adr/**` | System Architect | 只读；要改就开线程 |
@@ -120,7 +121,7 @@ Reviewer 开始审查前再记录精确 `head`。审查期间 HEAD 变化，必�
 Developer⇄Reviewer 的审查线程还必须包含：
 
 ```text
-base / head
+change_id / base / head
 spec_version / adr_revision
 integration_owner
 review_scope
@@ -129,6 +130,7 @@ INV: INV-xx, INV-yy（或“不涉及 + 依据”）
 affected_AC
 verification
 release_status
+Actor / Reviewed-by
 ```
 
 `INV:` 为必填：至少列出本范围可能影响的业务不变量；没有影响时写 `INV: 不涉及（依据）`。
@@ -156,6 +158,7 @@ release_status
 
 - **AC-REF**：测试代码中存在 `TestAC<NN>` 或 `AC-<NN>` 引用。只证明可追溯。
 - **AC-VERIFIED**：在指定 HEAD 和环境中实际执行，结果通过，且 Reviewer 核对了断言与 AC 语义。
+- **唯一台账**：`docs/collab/ac-coverage.tsv`，Owner 固定为 Reviewer；列为 `ac / owner / expiry / reason / thread / test_type / evidence_path / status`。Lead 只维护 Plan/Tasks 与链接，不拥有 AC 状态。
 
 AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行结果；未运行、SKIP、FAIL 均不算 AC-VERIFIED。ADR 指定浏览、集群或故障注入的 AC，不能用一条 Go 注释替代。
 
@@ -177,7 +180,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 | 阀门            | 机器适合检查                                    | 机器不能证明                             |
 | --------------- | ----------------------------------------------- | ---------------------------------------- |
-| G-1 所有权/范围 | 受管路径、Role/Exception 是否存在、线程是否存在 | 跨提交 Role 并集能证明实际作者；架构合理 |
+| G-1 所有权/范围 | 受管路径、Role/Exception 是否存在、线程是否存在、HEAD 的 `change_id`/`Actor`/`Reviewed-by` 是否存在且 `Actor != Reviewed-by` | 跨提交 Role 并集能证明实际作者；架构合理 |
 | G-2 契约版本    | Spec version、索引、变更记录                    | 业务规则正确                             |
 | G-3 AC-REF      | AC 编号、测试引用、延期字段                     | 测试已执行、未 SKIP、断言充分            |
 | G-4 到期        | owner/expiry/status、到期和续期记录             | 延期是否合理、残余风险是否可接受         |
@@ -210,7 +213,7 @@ make gates-test
 
 ## 8. Commit 与交付
 
-- 推荐使用 Conventional Commit 和必要 trailer (如 `Spec/ADR/Thread/AC/Role`)，服务/模块 scope 保持简单。
+- 推荐使用 Conventional Commit 和必要 trailer；受管交付 MUST 包含 `change_id`、`Actor`、`Reviewed-by`、`Role`（`Role` 仍用于 G-1 所有者核对），服务/模块 scope 保持简单。
 - 不维护庞大的强制 scope 词表，不为满足形式机械拆分提交。
 - Spec/ADR 的业务或设计变更必须独立评审批；不要把未批准契约与实现混在一起。
 - 已批准契约的实现允许一个原子行为提交包含 proto、生成物、服务代码、迁移和对应测试。
@@ -228,6 +231,7 @@ make gates-test
 | System Architect | AGENTS、本文件、已批准 Spec、QC 报告     | ADR/Amendment、状态机、恢复协议         | 写业务代码、擅自改 Spec        |
 | Developer        | AGENTS、本文件、Spec+ADR、变更输入包     | 代码、测试日志、偏差与影响声明          | 私自发明规则、用 TODO 掩盖冲突 |
 | Reviewer         | AGENTS、本文件、精确 base/head、Spec+ADR | 有范围的 verdict、AC/基线证据、延期台账 | 用 AC-REF 代替验收、直接改代码 |
+| Lead             | 宪法、AGENTS、本文件、角色 prompt | Plan/Tasks、证据索引、集成报告 | 写 Spec/ADR/代码/QC/Reviewer 裁决 |
 
 通用启动语：
 

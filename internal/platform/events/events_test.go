@@ -34,7 +34,7 @@ func TestCoreEventContractsEncodeRequiredFields(t *testing.T) {
 
 func TestRegistryCoversKnownEventTypes(t *testing.T) {
 	known := []string{
-		"order.created", "order.cancelled", "order.paid", "order.allocated",
+		"order.created", "order.cancelled", "order.paid", "order.settled", "order.refund_admitted", "order.allocated",
 		"order.shipped", "order.completed", "order.refund_requested", "order.refund_projected",
 		"inventory.compensation_requested", "inventory.confirm_requested",
 		"inventory.reserved", "inventory.confirmed", "inventory.released",

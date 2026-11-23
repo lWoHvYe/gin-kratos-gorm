@@ -81,12 +81,39 @@ type operationEvent struct {
 }
 
 type paymentEvent struct {
-	PaymentNo string `json:"payment_no"`
-	OrderNo   string `json:"order_no"`
-	UserID    int64  `json:"user_id,omitempty"`
-	Amount    int64  `json:"amount_cent"`
-	Channel   string `json:"channel,omitempty"`
-	Status    string `json:"status,omitempty"`
+	PaymentNo           string `json:"payment_no"`
+	OrderNo             string `json:"order_no"`
+	UserID              int64  `json:"user_id,omitempty"`
+	Amount              int64  `json:"amount_cent"`
+	Channel             string `json:"channel,omitempty"`
+	Status              string `json:"status,omitempty"`
+	RefundID            string `json:"refund_id,omitempty"`
+	RefundedCent        int64  `json:"refunded_cent,omitempty"`
+	CapturedCent        int64  `json:"captured_cent,omitempty"`
+	OrderCapturedCent   int64  `json:"order_captured_cent,omitempty"`
+	IntentCapturedCent  int64  `json:"intent_captured_cent,omitempty"`
+	IntentRefundedCent  int64  `json:"intent_refunded_cent,omitempty"`
+	NonEffectiveCapture bool   `json:"non_effective_capture,omitempty"`
+	Source              string `json:"source,omitempty"`
+}
+
+type orderSettledEvent struct {
+	OrderNo        string   `json:"order_no"`
+	PaymentNo      string   `json:"payment_no"`
+	SettledAt      int64    `json:"settled_at"`
+	AllocationHash string   `json:"allocation_hash"`
+	PackageCount   int32    `json:"package_count"`
+	WarehouseCount int32    `json:"warehouse_count"`
+	Groups         []string `json:"groups"`
+}
+
+type orderRefundAdmittedEvent struct {
+	RefundID   string `json:"refund_id"`
+	OrderNo    string `json:"order_no"`
+	GroupNo    string `json:"group_no"`
+	Result     string `json:"result"`
+	AmountCent int64  `json:"amount_cent"`
+	Version    int64  `json:"version"`
 }
 
 type shipmentEvent struct {
@@ -154,6 +181,8 @@ var schemas = map[string]schema{
 	"order.cancelled":                  {orderEvent{}, []string{"order_no", "user_id", "status", "cancelled_at", "items"}},
 	"order.paid":                       {orderEvent{}, []string{"order_no", "user_id", "payment_no", "paid_cent", "status", "paid_at", "items"}},
 	"order.allocation_frozen":          {orderEvent{}, []string{"order_no", "allocation_hash", "package_count", "warehouse_count", "frozen_at"}},
+	"order.settled":                    {orderSettledEvent{}, []string{"order_no", "payment_no", "settled_at", "allocation_hash", "package_count", "warehouse_count", "groups"}},
+	"order.refund_admitted":            {orderRefundAdmittedEvent{}, []string{"refund_id", "order_no", "group_no", "result", "amount_cent", "version"}},
 	"order.shortage_reported":          {orderEvent{}, []string{"order_no", "group_no", "status", "detected_at_unix", "notify_deadline_unix", "notified_at_unix", "choose_deadline_unix", "reason_code"}},
 	"order.shortage_resolved":          {orderEvent{}, []string{"order_no", "group_no", "status", "resolution", "reason_code", "resolved_at", "items"}},
 	"order.allocated":                  {orderEvent{}, []string{"order_no", "status"}},

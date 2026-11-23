@@ -3,11 +3,13 @@ package order
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/db"
 )
@@ -76,21 +78,150 @@ func tccPermitAfterSaleNo(paymentNo string) string {
 	return truncate("tcc:"+paymentNo, 64)
 }
 
-// applyTccCompensation runs the single Tx1 for a TCC refund. The Payment
-// snapshot was captured outside the transaction; the Σ equation is rechecked
-// inside the transaction with that same snapshot (ADR §4.1.2 step 3).
-func (s *Service) applyTccCompensation(ctx context.Context, orderNo string, snapshot *tccPaymentSnapshot, paid int64) error {
+// tccErrPendingCaptured is the identifiable error returned while the
+// PENDING_PAYMENT+captured compensation branch belongs to T1.6
+// (ADR-0007 Amd1 §4.8; Addendum 2 R-3). This guard writes nothing.
+const tccErrPendingCaptured = "TCC_PENDING_CAPTURED_NOT_IMPLEMENTED"
+
+func tccPendingCapturedError(orderNo, paymentNo string, paidCent int64) error {
+	return apperr.Failed("TCC compensation for a captured PENDING_PAYMENT order belongs to T1.6").
+		WithDetails(map[string]any{
+			"tcc_error": tccErrPendingCaptured,
+			"order_no":  orderNo, "payment_no": paymentNo, "paid_cent": paidCent,
+		})
+}
+
+// tccSumMismatch carries a failed Σ equation out of Tx1 so the audit batch
+// (PRECHECK_FAILED) can be written after the transaction rolled back
+// (ADR-0007 Amd1 §4.1.2 step 2; Addendum 2 R-1).
+type tccSumMismatch struct {
+	result *tccPrecheck
+	err    error
+}
+
+func (e *tccSumMismatch) Error() string { return e.err.Error() }
+func (e *tccSumMismatch) Unwrap() error { return e.err }
+
+// tccShipmentFacts is the Tx1-external snapshot of the Fulfillment-owned S6
+// shipment facts. Order has no shipment/shipped_at columns, so the AC-51
+// "EXCEPTION and shipped_at" already-left-warehouse rule is evaluated from
+// this snapshot; Tx1 itself never calls Fulfillment (Addendum 2 R-2).
+type tccShipmentFacts struct {
+	byGroup map[string]*pb.Shipment
+}
+
+// loadTccShipmentFacts reads ListShipments(order_no) OUTSIDE the transaction.
+// An unavailable/incomplete/ambiguous answer fails closed before any write:
+// guessing "not shipped" would allow a refund that cancels a shipment which
+// already left the warehouse.
+func (s *Service) loadTccShipmentFacts(ctx context.Context, orderNo string) (*tccShipmentFacts, error) {
+	if s.fulfillment == nil {
+		return nil, apperr.Unavailable("fulfillment client is required for the TCC refund shipment check", nil)
+	}
+	reply, err := s.fulfillment.ListShipments(ctx, &pb.ListShipmentsRequest{
+		OrderNo: orderNo, Page: 1, PageSize: 100,
+	})
+	if err != nil {
+		return nil, apperr.Unavailable("load shipment facts for TCC refund", err)
+	}
+	if reply == nil {
+		return nil, apperr.Unavailable("shipment facts are missing for TCC refund", nil)
+	}
+	if reply.GetTotal() > 100 || int64(len(reply.GetShipments())) != reply.GetTotal() {
+		return nil, apperr.Failed("shipment facts are incomplete; manual reconciliation required").
+			WithDetails(map[string]any{
+				"order_no": orderNo, "total": reply.GetTotal(), "returned": len(reply.GetShipments()),
+			})
+	}
+	facts := &tccShipmentFacts{byGroup: make(map[string]*pb.Shipment, len(reply.GetShipments()))}
+	for _, shipment := range reply.GetShipments() {
+		if shipment == nil {
+			return nil, apperr.Failed("shipment facts contain an empty shipment; manual reconciliation required").
+				WithDetails(map[string]any{"order_no": orderNo})
+		}
+		// A cancelled shipment is a dead attempt; it does not describe whether
+		// the group left the warehouse.
+		if shipment.GetStatus() == "CANCELLED" {
+			continue
+		}
+		groupNo := permitGroup(shipment.GetFulfillmentGroupNo())
+		if existing, ok := facts.byGroup[groupNo]; ok {
+			return nil, apperr.Failed("multiple live shipments for one fulfillment group; manual reconciliation required").
+				WithDetails(map[string]any{
+					"order_no": orderNo, "group_no": groupNo,
+					"shipment_no": shipment.GetShipmentNo(), "existing_shipment_no": existing.GetShipmentNo(),
+				})
+		}
+		facts.byGroup[groupNo] = shipment
+	}
+	return facts, nil
+}
+
+// shipped applies the AC-51 already-left-warehouse rule (Addendum 2 R-2 §3.2):
+// Order group SHIPPED/RECEIVED, or Fulfillment shipment SHIPPED/RECEIVED, or
+// exception_state != NONE with shipped_at. Anything ambiguous fails closed.
+func (f *tccShipmentFacts) shipped(group tccGroupCap) (bool, error) {
+	if isShippedGroupStatus(group.GroupStatus) {
+		return true, nil
+	}
+	if f != nil {
+		if shipment, ok := f.byGroup[group.GroupNo]; ok {
+			if isShippedGroupStatus(shipment.GetStatus()) {
+				return true, nil
+			}
+			if exception := strings.TrimSpace(shipment.GetExceptionState()); exception != "" && exception != "NONE" {
+				if shipment.GetShippedAtUnix() > 0 {
+					return true, nil
+				}
+				return false, apperr.Failed("shipment is in exception without a shipped_at fact; manual reconciliation required").
+					WithDetails(map[string]any{
+						"group_no": group.GroupNo, "shipment_no": shipment.GetShipmentNo(),
+						"status": shipment.GetStatus(), "exception_state": exception,
+					})
+			}
+			return false, nil
+		}
+	}
+	switch group.GroupStatus {
+	case "", "PENDING", statusAllocated:
+		return false, nil
+	default:
+		return false, apperr.Failed("order group has no shipment fact but its status is not PENDING/ALLOCATED; manual reconciliation required").
+			WithDetails(map[string]any{"group_no": group.GroupNo, "group_status": group.GroupStatus})
+	}
+}
+
+// applyTccCompensation runs the single Tx1 for a TCC refund. The Payment and
+// shipment snapshots were captured outside the transaction; the Σ equation is
+// rechecked inside the transaction with that same Payment snapshot
+// (ADR §4.1.2 step 3). A Σ mismatch inside Tx1 rolls back first, then records
+// the PRECHECK_FAILED audit batch (Addendum 2 R-1).
+func (s *Service) applyTccCompensation(ctx context.Context, orderNo string, snapshot *tccPaymentSnapshot, shipments *tccShipmentFacts, paid int64) error {
 	if snapshot == nil {
 		return apperr.Internal("TCC compensation requires a payment snapshot", nil)
 	}
-	return db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		return s.freezeTccCompensationTx(ctx, tx, orderNo, snapshot, paid)
+	if shipments == nil {
+		return apperr.Internal("TCC compensation requires a shipment snapshot", nil)
+	}
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		return s.freezeTccCompensationTx(ctx, tx, orderNo, snapshot, shipments, paid)
 	})
+	if err == nil {
+		return nil
+	}
+	var mismatch *tccSumMismatch
+	if errors.As(err, &mismatch) {
+		if auditErr := s.recordTccPrecheckFailure(ctx, orderNo, mismatch.result); auditErr != nil {
+			s.log.Error("record tcc precheck failure audit batch", "order_no", orderNo, "error", auditErr)
+		}
+		return mismatch.err
+	}
+	return err
 }
 
 // freezeTccCompensationTx is Tx1: lock, recheck, write REFUNDING/batch/
 // applications/permits, or resume a batch that a previous run already froze.
-func (s *Service) freezeTccCompensationTx(ctx context.Context, tx *sql.Tx, orderNo string, snapshot *tccPaymentSnapshot, paid int64) error {
+func (s *Service) freezeTccCompensationTx(ctx context.Context, tx *sql.Tx, orderNo string, snapshot *tccPaymentSnapshot, shipments *tccShipmentFacts, paid int64) error {
 	locked, err := findOrderForUpdate(ctx, tx, orderNo)
 	if err != nil {
 		return apperr.Internal("lock order for tcc compensation", err)
@@ -104,6 +235,13 @@ func (s *Service) freezeTccCompensationTx(ctx context.Context, tx *sql.Tx, order
 	if locked.Status != statusPendingPayment && locked.Status != statusPaid {
 		return nil
 	}
+	// Addendum 2 R-3: PENDING_PAYMENT with captured money is T1.6's
+	// CAS->CANCELLED + payment-level cancel-refund branch. Until it lands this
+	// guard must not write PAID/REFUNDING/batch/permit/application. (The entry
+	// point also guards on the request's paid_cent without a Payment call.)
+	if locked.Status == statusPendingPayment && snapshot.CapturedCent > 0 {
+		return tccPendingCapturedError(locked.OrderNo, snapshot.PaymentNo, snapshot.CapturedCent)
+	}
 
 	batch, completed, err := findTccBatchForResume(ctx, tx, orderNo, snapshot.PaymentNo)
 	if err != nil {
@@ -114,16 +252,21 @@ func (s *Service) freezeTccCompensationTx(ctx context.Context, tx *sql.Tx, order
 	}
 
 	if batch == nil {
-		return s.createTccCompensationTx(ctx, tx, locked, snapshot, paid)
+		return s.createTccCompensationTx(ctx, tx, locked, snapshot, shipments, paid)
 	}
-	return s.resumeTccCompensationTx(ctx, tx, locked, snapshot, batch)
+	return s.resumeTccCompensationTx(ctx, tx, locked, snapshot, shipments, batch)
 }
 
 // createTccCompensationTx is the fresh Tx1 path: strict Σ recheck (no own
 // commitments exist yet), REFUNDING CAS, batch, applications and permits.
-func (s *Service) createTccCompensationTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, snapshot *tccPaymentSnapshot, paid int64) error {
+func (s *Service) createTccCompensationTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, snapshot *tccPaymentSnapshot, shipments *tccShipmentFacts, paid int64) error {
 	rechecked, err := s.recheckTccSumLocked(ctx, tx, locked, snapshot)
 	if err != nil {
+		if rechecked != nil {
+			// Σ equation failure before any order/permit write: roll back and
+			// let the caller record the PRECHECK_FAILED audit batch.
+			return &tccSumMismatch{result: rechecked, err: err}
+		}
 		return err
 	}
 	if rechecked.NoCaptured {
@@ -136,21 +279,21 @@ func (s *Service) createTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 				"pay_cent": rechecked.PayCent, "captured_cent": rechecked.CapturedCent,
 			})
 	}
-	if err := markOrderRefundingTx(ctx, tx, locked, paid); err != nil {
+	if err := markOrderRefundingTx(ctx, tx, locked, snapshot.PaymentNo, paid); err != nil {
 		return err
 	}
 	batch, err := insertTccBatchTx(ctx, tx, locked.OrderNo, snapshot, rechecked)
 	if err != nil {
 		return err
 	}
-	return s.writeTccBatchGroupsTx(ctx, tx, batch, snapshot, rechecked.Groups, "")
+	return s.writeTccBatchGroupsTx(ctx, tx, batch, snapshot, shipments, rechecked.Groups, "")
 }
 
 // resumeTccCompensationTx is Tx1 for a rerun: the batch already froze the
 // compensation, so only missing groups are filled. The Σ recheck ignores this
 // compensation's own commitments (they are the quota being resumed) and must
 // still match the batch snapshot; otherwise it stops before writing anything.
-func (s *Service) resumeTccCompensationTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, snapshot *tccPaymentSnapshot, batch *tccRefundBatch) error {
+func (s *Service) resumeTccCompensationTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, snapshot *tccPaymentSnapshot, shipments *tccShipmentFacts, batch *tccRefundBatch) error {
 	if locked.RefundState != refundStateRefunding {
 		// A batch only exists after Tx1 wrote REFUNDING in the same
 		// transaction. Seeing it without REFUNDING is manual damage.
@@ -186,7 +329,7 @@ func (s *Service) resumeTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 				"recomputed_refunded_captured":  rechecked.RefundedCent,
 			})
 	}
-	return s.writeTccBatchGroupsTx(ctx, tx, batch, snapshot, rechecked.Groups, tccCommitmentPrefix(snapshot.PaymentNo))
+	return s.writeTccBatchGroupsTx(ctx, tx, batch, snapshot, shipments, rechecked.Groups, tccCommitmentPrefix(snapshot.PaymentNo))
 }
 
 // resumeTccCancelledOrder converges a concurrent TCC cancel: if another caller
@@ -206,39 +349,68 @@ func (s *Service) resumeTccCancelledOrder(ctx context.Context, orderNo, paymentN
 	if err != nil {
 		return true, err
 	}
-	return true, s.applyTccCompensation(ctx, orderNo, snapshot, paid)
+	shipments, err := s.loadTccShipmentFacts(ctx, orderNo)
+	if err != nil {
+		return true, err
+	}
+	return true, s.applyTccCompensation(ctx, orderNo, snapshot, shipments, paid)
 }
 
-// markOrderRefundingTx is the refund-state CAS of ADR §4.1.2 step 3. A
-// PENDING_PAYMENT order whose money was captured is first moved to PAID without
-// an order.paid event (T1.6 narrows this branch later); an already REFUNDING
-// order is left untouched so a resume never rewrites lifecycle history.
-func markOrderRefundingTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, paid int64) error {
+// recordTccPrecheckFailure writes the PRECHECK_FAILED audit batch after a Σ
+// mismatch (ADR Amd1 §4.1.2 step 2; Addendum 2 R-1). It writes ONLY that row:
+// no order/permit/commitment/application/outbox/status-log write, and it never
+// replaces an existing audit row (a new attempt_seq is allocated).
+func (s *Service) recordTccPrecheckFailure(ctx context.Context, orderNo string, result *tccPrecheck) error {
+	if result == nil {
+		return apperr.Internal("TCC precheck failure audit requires the computed numbers", nil)
+	}
+	paymentNo := strings.TrimSpace(result.PaymentNo)
+	for attempt := 0; attempt < 3; attempt++ {
+		var maxSeq int
+		if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(attempt_seq),0) FROM refund_batches
+			WHERE source = ? AND order_no = ? AND payment_no = ?`,
+			refundBatchSourceTCC, orderNo, paymentNo).Scan(&maxSeq); err != nil {
+			return apperr.Internal("allocate tcc precheck failure attempt", err)
+		}
+		batchID := tccBatchID(paymentNo, maxSeq+1)
+		_, err := s.db.ExecContext(ctx, `INSERT INTO refund_batches
+			(batch_id, source, order_no, payment_no, attempt_seq, state, captured_snapshot_cent,
+			 refunded_snapshot_cent, sum_group_cap_cent, remaining_captured_cent, attempts, version)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)`,
+			batchID, refundBatchSourceTCC, orderNo, paymentNo, maxSeq+1, refundBatchFailedPre,
+			result.CapturedCent, result.RefundedCent, result.SumGroupCapCent, result.RemainingCapturedCent)
+		if err == nil {
+			s.log.Warn("payment tcc refund precheck failed; audit batch recorded",
+				"order_no", orderNo, "payment_no", paymentNo, "batch_id", batchID,
+				"sum_group_cap_cent", result.SumGroupCapCent,
+				"remaining_captured_cent", result.RemainingCapturedCent,
+				"diff_cent", result.DiffCent())
+			return nil
+		}
+		if isDuplicateKey(err) {
+			continue
+		}
+		return apperr.Internal("record tcc precheck failure audit batch", err)
+	}
+	return apperr.Internal("record tcc precheck failure audit batch: attempt sequence contention", nil)
+}
+
+// markOrderRefundingTx is the refund-state CAS of ADR §4.1.2 step 3. The
+// PENDING_PAYMENT+captured branch is guarded before this function (Addendum 2
+// R-3): T1.6 owns its CAS->CANCELLED + payment-level cancel-refund semantics.
+// An already REFUNDING order is left untouched so a resume never rewrites
+// lifecycle history.
+func markOrderRefundingTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, paymentNo string, paid int64) error {
 	if locked.RefundState == refundStateRefunding {
 		return nil
 	}
-	now := time.Now()
-	if locked.Status == statusPendingPayment && paid > 0 {
-		res, err := tx.ExecContext(ctx, `UPDATE orders
-			SET status = ?, paid_cent = ?, refund_state = ?, version = version + 1, updated_at = ?
-			WHERE order_no = ? AND status = ? AND refund_state <> ?`,
-			statusPaid, paid, refundStateRefunding, now, locked.OrderNo, statusPendingPayment, refundStateFull)
-		if err != nil {
-			return apperr.Internal("mark captured order paid for tcc refund", err)
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return apperr.Conflict("order could not be moved to REFUNDING for tcc compensation").
-				WithDetails(map[string]any{"order_no": locked.OrderNo, "status": locked.Status, "refund_state": locked.RefundState})
-		}
-		if err := insertStatusLog(ctx, tx, locked.OrderNo, statusPendingPayment, statusPaid, "payment tcc cancelled", "system"); err != nil {
-			return err
-		}
-		return setFulfillmentGroupStatus(ctx, tx, locked.OrderNo, statusAllocated)
+	if locked.Status == statusPendingPayment {
+		return tccPendingCapturedError(locked.OrderNo, paymentNo, paid)
 	}
 	res, err := tx.ExecContext(ctx, `UPDATE orders
 		SET refund_state = ?, version = version + 1, updated_at = ?
 		WHERE order_no = ? AND refund_state <> ?`,
-		refundStateRefunding, now, locked.OrderNo, refundStateFull)
+		refundStateRefunding, time.Now(), locked.OrderNo, refundStateFull)
 	if err != nil {
 		return apperr.Internal("mark order refunding for tcc compensation", err)
 	}
@@ -346,7 +518,7 @@ func insertTccBatchTx(ctx context.Context, tx *sql.Tx, orderNo string, snapshot 
 //	shipped / received  -> application(POST_SHIP_ALLOWED), permit untouched
 //
 // CONSUMED never writes REVOKED (ADR §4.1.3).
-func (s *Service) writeTccBatchGroupsTx(ctx context.Context, tx *sql.Tx, batch *tccRefundBatch, snapshot *tccPaymentSnapshot, groups []tccGroupCap, excludeRefundPrefix string) error {
+func (s *Service) writeTccBatchGroupsTx(ctx context.Context, tx *sql.Tx, batch *tccRefundBatch, snapshot *tccPaymentSnapshot, shipments *tccShipmentFacts, groups []tccGroupCap, excludeRefundPrefix string) error {
 	composition, err := loadTccGroupComposition(ctx, tx, batch.OrderNo, excludeRefundPrefix)
 	if err != nil {
 		return err
@@ -376,9 +548,16 @@ func (s *Service) writeTccBatchGroupsTx(ctx context.Context, tx *sql.Tx, batch *
 		}
 
 		refundID := tccGroupRefundID(snapshot.PaymentNo, group.GroupNo)
+		shipped, err := shipments.shipped(group)
+		if err != nil {
+			return err
+		}
 		admissionResult := refundResultPre
 		consumed := false
-		if isShippedGroupStatus(group.GroupStatus) {
+		if shipped {
+			// Already left the warehouse (including EXCEPTION + shipped_at):
+			// refund-only POST path. Never revoke the permit or reserve a new
+			// commitment here (Addendum 2 R-2 §3.3).
 			admissionResult = refundResultPost
 		} else {
 			result, remote, err := decideTccPermitTx(ctx, tx, batch.OrderNo, group.GroupNo, snapshot.PaymentNo)
@@ -419,8 +598,12 @@ func (s *Service) writeTccBatchGroupsTx(ctx context.Context, tx *sql.Tx, batch *
 
 // decideTccPermitTx reads the group permit and applies the AC-50/A-65 permit
 // branch. It returns the durable admission result and whether the group takes
-// the PENDING_REMOTE (CONSUMED) two-phase path. The remote CancelIfCreated call
-// is deliberately NOT made here (T1.4 owns it); Tx1 only persists the decision.
+// the PENDING_REMOTE (CONSUMED) two-phase path.
+//
+// T1.4 boundary: the remote Fulfillment.CancelIfCreated call is deliberately NOT
+// made here; Tx1 only persists the decision. When T1.4 lands, a shipment with
+// exception_state != NONE and shipped_at must be answered as ALREADY_SHIPPED
+// (Addendum 2 R-2 §3.2.5), never as an endless TRANSIENT_ERROR retry.
 func decideTccPermitTx(ctx context.Context, tx *sql.Tx, orderNo, groupNo, paymentNo string) (string, bool, error) {
 	permit, err := ensurePermitTx(ctx, tx, orderNo, groupNo)
 	if err != nil {

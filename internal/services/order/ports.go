@@ -31,6 +31,12 @@ type paymentPort interface {
 
 type fulfillmentPort interface {
 	CancelIfCreated(ctx context.Context, in *pb.CancelIfCreatedRequest, opts ...grpc.CallOption) (*pb.CancelIfCreatedReply, error)
+	// ListShipments reads the Fulfillment-owned shipment facts (S6). Order has
+	// no shipment/shipped_at storage, so the AC-51 "EXCEPTION and shipped_at"
+	// already-left-warehouse rule can only be evaluated from these facts
+	// (ADR-0007 Amd1 Addendum 2 R-2). The existing C-04 RPC is reused; no proto
+	// change is needed.
+	ListShipments(ctx context.Context, in *pb.ListShipmentsRequest, opts ...grpc.CallOption) (*pb.ShipmentList, error)
 }
 
 type pricingPort interface {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -39,10 +40,25 @@ func (f *fakePaymentPort) ListOrderIntents(context.Context, *pb.ListOrderIntents
 	return &pb.IntentList{Intents: f.intents}, nil
 }
 
-type fakeFulfillmentPort struct{ status string }
+type fakeFulfillmentPort struct {
+	status    string
+	shipments []*pb.Shipment
+	listErr   error
+	// listCalls is atomic because concurrent TCC cancel tests call the port
+	// from several goroutines under -race.
+	listCalls atomic.Int64
+}
 
 func (f *fakeFulfillmentPort) CancelIfCreated(context.Context, *pb.CancelIfCreatedRequest, ...grpc.CallOption) (*pb.CancelIfCreatedReply, error) {
 	return &pb.CancelIfCreatedReply{Status: f.status}, nil
+}
+
+func (f *fakeFulfillmentPort) ListShipments(context.Context, *pb.ListShipmentsRequest, ...grpc.CallOption) (*pb.ShipmentList, error) {
+	f.listCalls.Add(1)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return &pb.ShipmentList{Total: int64(len(f.shipments)), Shipments: f.shipments}, nil
 }
 
 func TestAdmitRefundPreShipAndIdempotent(t *testing.T) {

@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"sync"
 	"testing"
 
@@ -93,7 +94,10 @@ func loadTccBatchRow(t *testing.T, db *sql.DB, orderNo, paymentNo string) tccBat
 	return row
 }
 
-func assertNoTccCompensationWrites(t *testing.T, db *sql.DB, orderNo string, versionBefore int64) {
+// assertNoTccStateWrites proves a fail-closed path changed no refund state.
+// The refund_batches ledger is asserted separately because a Σ mismatch is
+// allowed (and required) to leave one PRECHECK_FAILED audit batch (R-1).
+func assertNoTccStateWrites(t *testing.T, db *sql.DB, orderNo string, versionBefore int64) {
 	t.Helper()
 	var version int64
 	var refundState string
@@ -108,7 +112,6 @@ func assertNoTccCompensationWrites(t *testing.T, db *sql.DB, orderNo string, ver
 		t.Fatalf("refund_state = %q, want NONE", refundState)
 	}
 	for _, query := range []string{
-		`SELECT COUNT(*) FROM refund_batches WHERE order_no = ?`,
 		`SELECT COUNT(*) FROM refund_applications WHERE order_no = ?`,
 		`SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = ?`,
 		`SELECT COUNT(*) FROM order_refund_commitments WHERE order_no = ?`,
@@ -117,13 +120,15 @@ func assertNoTccCompensationWrites(t *testing.T, db *sql.DB, orderNo string, ver
 		`SELECT COUNT(*) FROM order_status_logs WHERE order_no = ?`,
 	} {
 		if count := countRows(t, db, query, orderNo); count != 0 {
-			t.Fatalf("Σ precheck wrote rows (%s -> %d)", query, count)
+			t.Fatalf("fail-closed path wrote rows (%s -> %d)", query, count)
 		}
 	}
 }
 
-// AC-65: Σ mismatch changes no table/event/state and returns the numbers.
-func TestTccCancelSigmaMismatchWritesNothing(t *testing.T) {
+// R-1 (ADR Amd1 §4.1.2 step 2): a Σ mismatch writes exactly one
+// PRECHECK_FAILED audit batch with the computed numbers and no order/permit/
+// commitment/application/outbox/status-log write.
+func TestTccCancelSigmaMismatchWritesAuditBatchOnly(t *testing.T) {
 	db := orderTestDB(t)
 	svc := tccTestService(t, db, &fakePaymentPort{captured: 10000})
 	ctx := context.Background()
@@ -133,12 +138,9 @@ func TestTccCancelSigmaMismatchWritesNothing(t *testing.T) {
 	seedTccPermit(t, db, "ORD-TCC-MISMATCH", "G1", permitConsumed, "SHIP-MISMATCH")
 	version := tccVersion(t, db, "ORD-TCC-MISMATCH")
 
-	err := func() error {
-		_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-			OrderNo: "ORD-TCC-MISMATCH", PaymentNo: "PAY-MISMATCH", PaidCent: 10000,
-		})
-		return err
-	}()
+	_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-MISMATCH", PaymentNo: "PAY-MISMATCH", PaidCent: 10000,
+	})
 	if err == nil {
 		t.Fatal("Σ mismatch TCC cancel succeeded")
 	}
@@ -150,7 +152,26 @@ func TestTccCancelSigmaMismatchWritesNothing(t *testing.T) {
 		details["diff_cent"] != int64(-1000) {
 		t.Fatalf("mismatch error lost its numbers: %v", details)
 	}
-	assertNoTccCompensationWrites(t, db, "ORD-TCC-MISMATCH", version)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-MISMATCH'`); got != 1 {
+		t.Fatalf("audit batches = %d, want exactly 1", got)
+	}
+	var batchID, state string
+	var attemptSeq int
+	var captured, refunded, sumCap, remaining int64
+	if err := db.QueryRow(`SELECT batch_id, state, attempt_seq, captured_snapshot_cent,
+		refunded_snapshot_cent, sum_group_cap_cent, remaining_captured_cent
+		FROM refund_batches WHERE order_no = 'ORD-TCC-MISMATCH'`).
+		Scan(&batchID, &state, &attemptSeq, &captured, &refunded, &sumCap, &remaining); err != nil {
+		t.Fatal(err)
+	}
+	if state != refundBatchFailedPre || attemptSeq != 1 || batchID != "tcc:PAY-MISMATCH:1" {
+		t.Fatalf("audit batch = %s/%s/attempt %d", batchID, state, attemptSeq)
+	}
+	if captured != 10000 || refunded != 0 || sumCap != 9000 || remaining != 10000 {
+		t.Fatalf("audit numbers = %d/%d/%d/%d", captured, refunded, sumCap, remaining)
+	}
+	// The audit batch is the ONLY write.
+	assertNoTccStateWrites(t, db, "ORD-TCC-MISMATCH", version)
 	var permitState string
 	var permitVersion int64
 	if err := db.QueryRow(`SELECT state, version FROM order_shipping_permits
@@ -160,6 +181,69 @@ func TestTccCancelSigmaMismatchWritesNothing(t *testing.T) {
 	}
 	if permitState != permitConsumed || permitVersion != 1 {
 		t.Fatalf("mismatch touched the permit: %s/version %d", permitState, permitVersion)
+	}
+}
+
+// R-1 §2.2(3)/(5): repeated Σ failures accumulate distinct PRECHECK_FAILED
+// attempts, the audit row is never resumed, and it does not block a later
+// successful FROZEN attempt.
+func TestTccCancelPrecheckFailureAuditDoesNotBlockNextAttempt(t *testing.T) {
+	db := orderTestDB(t)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 10000})
+	ctx := context.Background()
+	seedTccOrder(t, db, "ORD-TCC-AUDIT", 10000, 10000, 0, 0, "PAY-AUDIT")
+	seedTccGroup(t, db, "ORD-TCC-AUDIT", "G1", 1, 0)
+	seedTccLine(t, db, "ORD-TCC-AUDIT", 1, "G1", 9000)
+
+	for i := 0; i < 2; i++ {
+		if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+			OrderNo: "ORD-TCC-AUDIT", PaymentNo: "PAY-AUDIT", PaidCent: 10000,
+		}); !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+			t.Fatalf("attempt %d error = %v", i, err)
+		}
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchFailedPre); got != 2 {
+		t.Fatalf("audit attempts = %d, want 2", got)
+	}
+	var refundState string
+	if err := db.QueryRow(`SELECT refund_state FROM orders WHERE order_no = 'ORD-TCC-AUDIT'`).Scan(&refundState); err != nil {
+		t.Fatal(err)
+	}
+	if refundState != refundStateNone {
+		t.Fatalf("failed prechecks changed refund_state to %s", refundState)
+	}
+	// Fix the line so Σ matches, then a new attempt must be created.
+	if _, err := db.Exec(`UPDATE order_items SET line_paid_cent = 10000 WHERE order_no = 'ORD-TCC-AUDIT'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-AUDIT", PaymentNo: "PAY-AUDIT", PaidCent: 10000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var frozenID string
+	var frozenSeq int
+	if err := db.QueryRow(`SELECT batch_id, attempt_seq FROM refund_batches
+		WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchFrozen).Scan(&frozenID, &frozenSeq); err != nil {
+		t.Fatal(err)
+	}
+	if frozenID != "tcc:PAY-AUDIT:3" || frozenSeq != 3 {
+		t.Fatalf("successful attempt = %s/seq %d, want tcc:PAY-AUDIT:3/3", frozenID, frozenSeq)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchFailedPre); got != 2 {
+		t.Fatalf("audit attempts after success = %d, want 2", got)
+	}
+	// A repeat on the frozen batch resumes it; no new batch/attempt.
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-AUDIT", PaymentNo: "PAY-AUDIT", PaidCent: 10000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT'`); got != 3 {
+		t.Fatalf("batches after resume = %d, want 3 (2 audit + 1 frozen)", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchFrozen); got != 1 {
+		t.Fatalf("frozen batches = %d, want 1", got)
 	}
 }
 
@@ -626,7 +710,10 @@ func TestTccCancelNoCapturedFailsClosed(t *testing.T) {
 	if err == nil || !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
 		t.Fatalf("no-captured TCC cancel = %v, want FAILED_PRECONDITION", err)
 	}
-	assertNoTccCompensationWrites(t, db, "ORD-TCC-NOCAP", version)
+	assertNoTccStateWrites(t, db, "ORD-TCC-NOCAP", version)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-NOCAP'`); got != 0 {
+		t.Fatalf("no-captured path wrote refund batches: %d", got)
+	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-NOCAP'`); got != 0 {
 		t.Fatalf("no-captured path created permits: %d", got)
 	}
@@ -755,5 +842,232 @@ func TestTccCancelConcurrentPrecheckConvergesOnFrozenBatch(t *testing.T) {
 	}
 	if state != permitConsumed {
 		t.Fatalf("permit = %s, want CONSUMED", state)
+	}
+}
+
+func seedTccPendingOrder(t *testing.T, db *sql.DB, orderNo string, payCent, paidCent, freightCent int64) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO orders
+		(order_no,user_id,status,total_cent,discount_cent,promotion_discount_cent,applied_promotions_json,
+		 freight_cent,pay_cent,paid_cent,settlement_payment_no,refunded_cent,refund_status,refund_state,
+		 receiver_name,receiver_phone,receiver_address,quote_id,client_request_id,
+		 allocation_frozen_at,allocation_hash,package_count,warehouse_count,expire_at,created_at)
+		VALUES (?,1,'PENDING_PAYMENT',?,0,0,'[]',?,?,?,'',0,'','NONE',
+		 'A','1','R','','',NULL,'',1,1,NOW(3),NOW(3))`,
+		orderNo, payCent, freightCent, payCent, paidCent); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Addendum 2 R-3: PENDING_PAYMENT + captured money belongs to T1.6. Until it
+// lands the compensation must fail closed with an identifiable error, write
+// nothing and not even call Payment.
+func TestTccCancelPendingCapturedGuardWritesNothing(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	svc := tccTestService(t, db, payments)
+	ctx := context.Background()
+	seedTccPendingOrder(t, db, "ORD-TCC-PENDING-CAP", 10000, 0, 0)
+	seedTccGroup(t, db, "ORD-TCC-PENDING-CAP", "G1", 1, 0)
+	seedTccLine(t, db, "ORD-TCC-PENDING-CAP", 1, "G1", 10000)
+	version := tccVersion(t, db, "ORD-TCC-PENDING-CAP")
+
+	_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-PENDING-CAP", PaymentNo: "PAY-PENDING-CAP", PaidCent: 10000,
+	})
+	if err == nil {
+		t.Fatal("captured PENDING_PAYMENT compensation was accepted")
+	}
+	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("error code=%v, want FAILED_PRECONDITION: %v", apperr.From(err).Code, err)
+	}
+	if got := apperr.From(err).Details["tcc_error"]; got != tccErrPendingCaptured {
+		t.Fatalf("tcc_error detail = %v, want %s", got, tccErrPendingCaptured)
+	}
+	if payments.getCalls != 0 {
+		t.Fatalf("PENDING guard called Payment %d times", payments.getCalls)
+	}
+	assertNoTccStateWrites(t, db, "ORD-TCC-PENDING-CAP", version)
+	for _, query := range []string{
+		`SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-PENDING-CAP'`,
+		`SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-PENDING-CAP'`,
+	} {
+		if got := countRows(t, db, query); got != 0 {
+			t.Fatalf("PENDING guard wrote rows (%s -> %d)", query, got)
+		}
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM orders WHERE order_no = 'ORD-TCC-PENDING-CAP'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusPendingPayment {
+		t.Fatalf("PENDING guard changed status to %s", status)
+	}
+}
+
+// Regression: the genuinely uncaptured PENDING branch still cancels locally
+// (AC-65 no-captured branch) and never creates a refund batch.
+func TestTccCancelPendingWithoutCaptureStillCancelsLocally(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{}
+	svc := tccTestService(t, db, payments)
+	ctx := context.Background()
+	seedTccPendingOrder(t, db, "ORD-TCC-PENDING-ZERO", 10000, 0, 0)
+
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-PENDING-ZERO", PaymentNo: "PAY-PENDING-ZERO", PaidCent: 0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var status, refundState string
+	if err := db.QueryRow(`SELECT status, refund_state FROM orders WHERE order_no = 'ORD-TCC-PENDING-ZERO'`).
+		Scan(&status, &refundState); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusCancelled || refundState != refundStateNone {
+		t.Fatalf("local cancel = %s/%s, want CANCELLED/NONE", status, refundState)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-PENDING-ZERO'`); got != 0 {
+		t.Fatalf("local cancel wrote refund batches: %d", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = 'ORD-TCC-PENDING-ZERO' AND event_type = 'order.cancelled'`); got != 1 {
+		t.Fatalf("order.cancelled events = %d, want 1", got)
+	}
+	if payments.getCalls != 0 {
+		t.Fatalf("local cancel called Payment %d times", payments.getCalls)
+	}
+}
+
+// Addendum 2 R-2: an EXCEPTION shipment with shipped_at is already out of the
+// warehouse even when the Order group projection is not SHIPPED. It must take
+// the refund-only POST path: never revoke a permit, never reserve a commitment.
+func TestTccCancelExceptionShippedGroupIsPostShipAllowed(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	fulfillment := &fakeFulfillmentPort{status: "CANCELLED", shipments: []*pb.Shipment{{
+		ShipmentNo: "SHIP-EX", OrderNo: "ORD-TCC-EX", FulfillmentGroupNo: "G1",
+		Status: "CREATED", ExceptionState: "OPEN", ShippedAtUnix: 1700000000,
+	}}}
+	svc := tccTestServiceWithFulfillment(t, db, payments, fulfillment)
+	ctx := context.Background()
+	seedTccOrder(t, db, "ORD-TCC-EX", 10000, 10000, 0, 0, "PAY-EX")
+	seedTccGroup(t, db, "ORD-TCC-EX", "G1", 1, 0)
+	seedTccLine(t, db, "ORD-TCC-EX", 1, "G1", 10000)
+
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-EX", PaymentNo: "PAY-EX", PaidCent: 10000,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := fulfillment.listCalls.Load(); got != 1 {
+		t.Fatalf("ListShipments calls = %d, want 1 before Tx1", got)
+	}
+	var result string
+	var amount int64
+	if err := db.QueryRow(`SELECT admission_result, amount_cent FROM refund_applications
+		WHERE refund_id = 'tcc:PAY-EX:G1'`).Scan(&result, &amount); err != nil {
+		t.Fatal(err)
+	}
+	if result != refundResultPost || amount != 10000 {
+		t.Fatalf("exception-shipped application = %s/%d, want POST/10000", result, amount)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-EX'`); got != 0 {
+		t.Fatalf("exception-shipped group had a permit write: %d", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-TCC-EX'`); got != 0 {
+		t.Fatalf("exception-shipped group wrote a remote admission: %d", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_commitments WHERE order_no = 'ORD-TCC-EX'`); got != 0 {
+		t.Fatalf("exception-shipped group reserved a commitment: %d", got)
+	}
+}
+
+// Addendum 2 R-2: exception_state without shipped_at is ambiguous and must
+// fail closed before any write.
+func TestTccCancelExceptionWithoutShippedAtFailsClosed(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	fulfillment := &fakeFulfillmentPort{status: "CANCELLED", shipments: []*pb.Shipment{{
+		ShipmentNo: "SHIP-EX2", OrderNo: "ORD-TCC-EX2", FulfillmentGroupNo: "G1",
+		Status: "CREATED", ExceptionState: "OPEN", ShippedAtUnix: 0,
+	}}}
+	svc := tccTestServiceWithFulfillment(t, db, payments, fulfillment)
+	ctx := context.Background()
+	seedTccOrder(t, db, "ORD-TCC-EX2", 10000, 10000, 0, 0, "PAY-EX2")
+	seedTccGroup(t, db, "ORD-TCC-EX2", "G1", 1, 0)
+	seedTccLine(t, db, "ORD-TCC-EX2", 1, "G1", 10000)
+	version := tccVersion(t, db, "ORD-TCC-EX2")
+
+	_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-EX2", PaymentNo: "PAY-EX2", PaidCent: 10000,
+	})
+	if err == nil || !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("ambiguous exception = %v, want FAILED_PRECONDITION", err)
+	}
+	assertNoTccStateWrites(t, db, "ORD-TCC-EX2", version)
+	for _, query := range []string{
+		`SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-EX2'`,
+		`SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-EX2'`,
+	} {
+		if got := countRows(t, db, query); got != 0 {
+			t.Fatalf("ambiguous exception wrote rows (%s -> %d)", query, got)
+		}
+	}
+}
+
+// Addendum 2 R-2: Fulfillment unavailable fails closed before any write; the
+// refund never guesses "not shipped".
+func TestTccCancelShipmentFactsUnavailableFailsClosed(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	fulfillment := &fakeFulfillmentPort{status: "CANCELLED", listErr: errors.New("fulfillment timeout")}
+	svc := tccTestServiceWithFulfillment(t, db, payments, fulfillment)
+	ctx := context.Background()
+	seedTccOrder(t, db, "ORD-TCC-EXDOWN", 10000, 10000, 0, 0, "PAY-EXDOWN")
+	seedTccGroup(t, db, "ORD-TCC-EXDOWN", "G1", 1, 0)
+	seedTccLine(t, db, "ORD-TCC-EXDOWN", 1, "G1", 10000)
+	version := tccVersion(t, db, "ORD-TCC-EXDOWN")
+
+	_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-EXDOWN", PaymentNo: "PAY-EXDOWN", PaidCent: 10000,
+	})
+	if err == nil || !apperr.IsCode(err, apperr.CodeUnavailable) {
+		t.Fatalf("fulfillment timeout = %v, want UNAVAILABLE", err)
+	}
+	assertNoTccStateWrites(t, db, "ORD-TCC-EXDOWN", version)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-EXDOWN'`); got != 0 {
+		t.Fatalf("unavailable fulfillment wrote refund batches: %d", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-EXDOWN'`); got != 0 {
+		t.Fatalf("unavailable fulfillment wrote permits: %d", got)
+	}
+}
+
+// R-1: the Tx1 recheck failure (facts changed between the outside precheck and
+// the order lock) rolls back and records the PRECHECK_FAILED audit batch too.
+func TestTccCancelTx1RecheckMismatchWritesAuditOnly(t *testing.T) {
+	db := orderTestDB(t)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 10000})
+	ctx := context.Background()
+	seedTccOrder(t, db, "ORD-TCC-TX1", 10000, 10000, 0, 0, "PAY-TX1")
+	seedTccGroup(t, db, "ORD-TCC-TX1", "G1", 1, 0)
+	seedTccLine(t, db, "ORD-TCC-TX1", 1, "G1", 9000) // Σ = 9000 vs captured 10000
+	version := tccVersion(t, db, "ORD-TCC-TX1")
+
+	err := svc.applyTccCompensation(ctx, "ORD-TCC-TX1",
+		&tccPaymentSnapshot{PaymentNo: "PAY-TX1", CapturedCent: 10000},
+		&tccShipmentFacts{byGroup: map[string]*pb.Shipment{}}, 10000)
+	if err == nil || !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("Tx1 recheck mismatch = %v, want FAILED_PRECONDITION", err)
+	}
+	if got := apperr.From(err).Details["sum_group_cap_cent"]; got != int64(9000) {
+		t.Fatalf("Tx1 recheck lost its numbers: %v", apperr.From(err).Details)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-TX1' AND state = ?`, refundBatchFailedPre); got != 1 {
+		t.Fatalf("Tx1 audit batches = %d, want 1", got)
+	}
+	assertNoTccStateWrites(t, db, "ORD-TCC-TX1", version)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-TX1'`); got != 0 {
+		t.Fatalf("Tx1 mismatch wrote permits: %d", got)
 	}
 }

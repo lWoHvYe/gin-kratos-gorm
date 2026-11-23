@@ -200,6 +200,14 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 	if paid <= 0 {
 		paid = record.PaidCent
 	}
+	// Addendum 2 R-3: PENDING_PAYMENT with captured money belongs to T1.6
+	// (CAS->CANCELLED + payment-level cancel refund). Until it lands this
+	// guard must write nothing and must not call Payment. The request's
+	// paid_cent is the TCC compensation's captured amount, so no extra
+	// Payment round-trip is needed to identify the branch.
+	if from == statusPendingPayment && paid > 0 {
+		return nil, tccPendingCapturedError(orderNo, paymentNo, paid)
+	}
 	if paid > record.PaidCent {
 		return nil, apperr.Invalid("paid_cent exceeds captured amount")
 	}
@@ -238,6 +246,13 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 				}
 				return &pb.Empty{}, nil
 			}
+			if pre != nil {
+				// Genuine Σ mismatch: record the audit batch (R-1) and return
+				// the original FAILED_PRECONDITION with its numbers.
+				if auditErr := s.recordTccPrecheckFailure(ctx, orderNo, pre); auditErr != nil {
+					s.log.Error("record tcc precheck failure audit batch", "order_no", orderNo, "error", auditErr)
+				}
+			}
 			return nil, err
 		}
 		if pre.NoCaptured {
@@ -257,7 +272,14 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 	if snapshot == nil {
 		return nil, apperr.Internal("tcc compensation has no payment snapshot", nil)
 	}
-	if err := s.applyTccCompensation(ctx, orderNo, snapshot, paid); err != nil {
+	// R-2: the Fulfillment-owned shipment facts are read OUTSIDE Tx1 and passed
+	// in as a snapshot. Unavailable/incomplete/ambiguous facts fail closed
+	// before the audit batch/order/permit writes.
+	shipments, err := s.loadTccShipmentFacts(ctx, orderNo)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.applyTccCompensation(ctx, orderNo, snapshot, shipments, paid); err != nil {
 		return nil, err
 	}
 	return &pb.Empty{}, nil
@@ -347,6 +369,9 @@ const (
 
 // tccCancelDecision maps (status, captured amount) to the compensation path.
 // A PENDING order with no capture must be cancelled, not parked in REFUNDING.
+// The PENDING_PAYMENT + captured case never reaches this mapping from
+// TccCancelMarkPaid: Addendum 2 R-3 guards it until T1.6 implements the
+// CAS->CANCELLED + payment-level cancel-refund branch.
 func tccCancelDecision(status string, paid int64) tccCancelAction {
 	switch status {
 	case statusPendingPayment:

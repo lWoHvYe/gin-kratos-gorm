@@ -17,8 +17,18 @@ import (
 
 func tccTestService(t *testing.T, db *sql.DB, payments paymentPort) *Service {
 	t.Helper()
+	// T1.2b R-2: Tx1 now needs the Fulfillment shipment snapshot outside the
+	// transaction. The default fake returns "no shipment facts", which is the
+	// normal case for a group that has not left the warehouse.
 	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
-	svc.EnableSettlementClients(payments, nil)
+	svc.EnableSettlementClients(payments, &fakeFulfillmentPort{status: "CANCELLED"})
+	return svc
+}
+
+func tccTestServiceWithFulfillment(t *testing.T, db *sql.DB, payments paymentPort, fulfillment fulfillmentPort) *Service {
+	t.Helper()
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(payments, fulfillment)
 	return svc
 }
 

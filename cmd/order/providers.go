@@ -24,12 +24,16 @@ import (
 )
 
 const (
-	defaultPricingAddr   = "pricing:9005"
-	defaultInventoryAddr = "inventory:9003"
+	defaultPricingAddr     = "pricing:9005"
+	defaultInventoryAddr   = "inventory:9003"
+	defaultPaymentAddr     = "payment:9007"
+	defaultFulfillmentAddr = "fulfillment:9008"
 )
 
 type pricingConn struct{ *grpc.ClientConn }
 type inventoryConn struct{ *grpc.ClientConn }
+type paymentConn struct{ *grpc.ClientConn }
+type fulfillmentConn struct{ *grpc.ClientConn }
 
 type orderApp struct {
 	App     *kratos.App
@@ -83,6 +87,30 @@ func provideInventoryClient(conn *inventoryConn) pb.InventoryServiceClient {
 	return pb.NewInventoryServiceClient(conn.ClientConn)
 }
 
+func providePaymentConn(ctx context.Context) (*paymentConn, func(), error) {
+	conn, err := grpcx.Dial(ctx, env("PAYMENT_ADDR", defaultPaymentAddr))
+	if err != nil {
+		return nil, nil, err
+	}
+	return &paymentConn{conn}, func() { _ = conn.Close() }, nil
+}
+
+func provideFulfillmentConn(ctx context.Context) (*fulfillmentConn, func(), error) {
+	conn, err := grpcx.Dial(ctx, env("FULFILLMENT_ADDR", defaultFulfillmentAddr))
+	if err != nil {
+		return nil, nil, err
+	}
+	return &fulfillmentConn{conn}, func() { _ = conn.Close() }, nil
+}
+
+func providePaymentClient(conn *paymentConn) pb.PaymentServiceClient {
+	return pb.NewPaymentServiceClient(conn.ClientConn)
+}
+
+func provideFulfillmentClient(conn *fulfillmentConn) pb.FulfillmentServiceClient {
+	return pb.NewFulfillmentServiceClient(conn.ClientConn)
+}
+
 func providePromotionClient(conn *pricingConn) pb.PromotionServiceClient {
 	return pb.NewPromotionServiceClient(conn.ClientConn)
 }
@@ -91,12 +119,14 @@ func provideDTMClient(cfg *config.Config) *dtm.Client {
 	return dtm.New(cfg)
 }
 
-func provideOrderService(cfg *config.Config, database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client, pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient, promotion pb.PromotionServiceClient) *order.Service {
-	return order.NewWithOptions(database, client, logger, dtmClient, pricing, inventory, promotion, order.Options{
+func provideOrderService(cfg *config.Config, database *sql.DB, client *mq.Client, logger *slog.Logger, dtmClient *dtm.Client, pricing pb.PricingServiceClient, inventory pb.InventoryServiceClient, promotion pb.PromotionServiceClient, payments pb.PaymentServiceClient, fulfillment pb.FulfillmentServiceClient) *order.Service {
+	svc := order.NewWithOptions(database, client, logger, dtmClient, pricing, inventory, promotion, order.Options{
 		WarehouseSplitEnabled: cfg.WarehouseSplitEnabled,
 		ShortageCaseEnabled:   cfg.ShortageCaseEnabled,
 		RequireInventory:      true,
 	})
+	svc.EnableSettlementClients(payments, fulfillment)
+	return svc
 }
 
 func provideGRPCServer(cfg *config.Config, logger *slog.Logger, svc *order.Service) *kratosgrpc.Server {

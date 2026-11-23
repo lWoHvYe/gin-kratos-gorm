@@ -488,6 +488,9 @@ service OrderService {
   // BlockShipmentForRefund records refund admission on the same permit row. A
   // permit already CONSUMED still allows refund-only after shipment.
   rpc BlockShipmentForRefund (ShipmentPermitRequest) returns (Empty);
+  // AdmitRefund is the group-level refund admission gate (ADR-0007). It is
+  // idempotent by refund_id and never moves money.
+  rpc AdmitRefund (AdmitRefundRequest) returns (AdmitRefundReply);
   // Post-payment shortage: explicit wait/refund choice, never silent re-route.
   rpc ReportGroupShortage (ReportGroupShortageRequest) returns (ShortageCase);
   rpc ChooseShortageResolution (ChooseShortageResolutionRequest) returns (ShortageCase);
@@ -502,6 +505,21 @@ message TccPaymentRequest {
   repeated OrderItem items = 6;
 }
 message TccQueryReply { bool prepared = 1; }
+
+message AdmitRefundRequest {
+  string refund_id = 1;
+  string order_no = 2;
+  string group_no = 3;
+  int64 amount_cent = 4;
+  string source = 5;
+}
+message AdmitRefundReply {
+  string refund_id = 1;
+  string result = 2;
+  string state = 3;
+  int64 amount_cent = 4;
+  int64 version = 5;
+}
 
 message OrderItem {
   int64 sku_id = 1;

@@ -448,10 +448,10 @@ authz:
         - "/mall.v1.OrderService/GetOrder"
         - "/mall.v1.OrderService/GetOrderStats"
     - name: payment
-      sources: [gateway, admin, aftersales, seckill]
+      sources: [gateway, admin, aftersales, seckill, order]
       paths: ["/mall.v1.PaymentService/*"]
     - name: fulfillment
-      sources: [gateway, admin]
+      sources: [gateway, admin, order]
       paths: ["/mall.v1.FulfillmentService/*"]
     - name: aftersales
       sources: [gateway, admin]

@@ -3089,6 +3089,7 @@ const (
 	OrderService_TccQueryMarkPaid_FullMethodName         = "/mall.v1.OrderService/TccQueryMarkPaid"
 	OrderService_AuthorizeShipment_FullMethodName        = "/mall.v1.OrderService/AuthorizeShipment"
 	OrderService_BlockShipmentForRefund_FullMethodName   = "/mall.v1.OrderService/BlockShipmentForRefund"
+	OrderService_AdmitRefund_FullMethodName              = "/mall.v1.OrderService/AdmitRefund"
 	OrderService_ReportGroupShortage_FullMethodName      = "/mall.v1.OrderService/ReportGroupShortage"
 	OrderService_ChooseShortageResolution_FullMethodName = "/mall.v1.OrderService/ChooseShortageResolution"
 	OrderService_GetShortageCase_FullMethodName          = "/mall.v1.OrderService/GetShortageCase"
@@ -3121,6 +3122,9 @@ type OrderServiceClient interface {
 	// BlockShipmentForRefund records refund admission on the same permit row. A
 	// permit already CONSUMED still allows refund-only after shipment.
 	BlockShipmentForRefund(ctx context.Context, in *ShipmentPermitRequest, opts ...grpc.CallOption) (*Empty, error)
+	// AdmitRefund is the group-level refund admission gate (ADR-0007). It is
+	// idempotent by refund_id and never moves money.
+	AdmitRefund(ctx context.Context, in *AdmitRefundRequest, opts ...grpc.CallOption) (*AdmitRefundReply, error)
 	// Post-payment shortage: explicit wait/refund choice, never silent re-route.
 	ReportGroupShortage(ctx context.Context, in *ReportGroupShortageRequest, opts ...grpc.CallOption) (*ShortageCase, error)
 	ChooseShortageResolution(ctx context.Context, in *ChooseShortageResolutionRequest, opts ...grpc.CallOption) (*ShortageCase, error)
@@ -3295,6 +3299,16 @@ func (c *orderServiceClient) BlockShipmentForRefund(ctx context.Context, in *Shi
 	return out, nil
 }
 
+func (c *orderServiceClient) AdmitRefund(ctx context.Context, in *AdmitRefundRequest, opts ...grpc.CallOption) (*AdmitRefundReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdmitRefundReply)
+	err := c.cc.Invoke(ctx, OrderService_AdmitRefund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orderServiceClient) ReportGroupShortage(ctx context.Context, in *ReportGroupShortageRequest, opts ...grpc.CallOption) (*ShortageCase, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ShortageCase)
@@ -3352,6 +3366,9 @@ type OrderServiceServer interface {
 	// BlockShipmentForRefund records refund admission on the same permit row. A
 	// permit already CONSUMED still allows refund-only after shipment.
 	BlockShipmentForRefund(context.Context, *ShipmentPermitRequest) (*Empty, error)
+	// AdmitRefund is the group-level refund admission gate (ADR-0007). It is
+	// idempotent by refund_id and never moves money.
+	AdmitRefund(context.Context, *AdmitRefundRequest) (*AdmitRefundReply, error)
 	// Post-payment shortage: explicit wait/refund choice, never silent re-route.
 	ReportGroupShortage(context.Context, *ReportGroupShortageRequest) (*ShortageCase, error)
 	ChooseShortageResolution(context.Context, *ChooseShortageResolutionRequest) (*ShortageCase, error)
@@ -3413,6 +3430,9 @@ func (UnimplementedOrderServiceServer) AuthorizeShipment(context.Context, *Shipm
 }
 func (UnimplementedOrderServiceServer) BlockShipmentForRefund(context.Context, *ShipmentPermitRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BlockShipmentForRefund not implemented")
+}
+func (UnimplementedOrderServiceServer) AdmitRefund(context.Context, *AdmitRefundRequest) (*AdmitRefundReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AdmitRefund not implemented")
 }
 func (UnimplementedOrderServiceServer) ReportGroupShortage(context.Context, *ReportGroupShortageRequest) (*ShortageCase, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReportGroupShortage not implemented")
@@ -3732,6 +3752,24 @@ func _OrderService_BlockShipmentForRefund_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrderService_AdmitRefund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdmitRefundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).AdmitRefund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_AdmitRefund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).AdmitRefund(ctx, req.(*AdmitRefundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _OrderService_ReportGroupShortage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReportGroupShortageRequest)
 	if err := dec(in); err != nil {
@@ -3856,6 +3894,10 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BlockShipmentForRefund",
 			Handler:    _OrderService_BlockShipmentForRefund_Handler,
+		},
+		{
+			MethodName: "AdmitRefund",
+			Handler:    _OrderService_AdmitRefund_Handler,
 		},
 		{
 			MethodName: "ReportGroupShortage",

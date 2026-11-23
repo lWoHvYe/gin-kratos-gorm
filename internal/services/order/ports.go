@@ -21,6 +21,14 @@ type inventoryPort interface {
 	CheckOrderReady(ctx context.Context, in *pb.CheckOrderReadyRequest, opts ...grpc.CallOption) (*pb.CheckOrderReadyReply, error)
 }
 
+type paymentPort interface {
+	GetIntent(ctx context.Context, in *pb.GetIntentRequest, opts ...grpc.CallOption) (*pb.Intent, error)
+}
+
+type fulfillmentPort interface {
+	CancelIfCreated(ctx context.Context, in *pb.CancelIfCreatedRequest, opts ...grpc.CallOption) (*pb.CancelIfCreatedReply, error)
+}
+
 type pricingPort interface {
 	GetQuote(ctx context.Context, in *pb.GetQuoteRequest, opts ...grpc.CallOption) (*pb.Quote, error)
 	LockCoupon(ctx context.Context, in *pb.LockCouponRequest, opts ...grpc.CallOption) (*pb.Empty, error)

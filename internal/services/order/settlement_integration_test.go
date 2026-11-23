@@ -43,7 +43,8 @@ func orderTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	for _, table := range []string{"order_shipping_permits", "order_fulfillment_groups", "order_items",
+	for _, table := range []string{"order_refund_admissions", "order_refund_commitments",
+		"order_shipping_permits", "order_fulfillment_groups", "order_items",
 		"order_allocation_snapshots", "order_allocation_decisions", "order_shortage_cases",
 		"order_reconciliation_diffs", "order_status_logs", "orders", "outbox_events"} {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
@@ -109,6 +110,21 @@ func orderTestDB(t *testing.T) *sql.DB {
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
 			PRIMARY KEY (order_no, fulfillment_group_no))`,
+		`CREATE TABLE IF NOT EXISTS order_refund_admissions (
+			refund_id VARCHAR(128) NOT NULL PRIMARY KEY, order_no VARCHAR(64) NOT NULL,
+			group_no VARCHAR(64) NOT NULL, result VARCHAR(32) NOT NULL DEFAULT 'PENDING_REMOTE',
+			state VARCHAR(32) NOT NULL DEFAULT 'PENDING_REMOTE', amount_cent BIGINT NOT NULL DEFAULT 0,
+			version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3))`,
+		`CREATE TABLE IF NOT EXISTS order_refund_commitments (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL,
+			group_no VARCHAR(64) NOT NULL, refund_id VARCHAR(128) NOT NULL,
+			amount_cent BIGINT NOT NULL, state VARCHAR(16) NOT NULL DEFAULT 'RESERVED',
+			version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+			UNIQUE KEY uk_order_refund_commitment (order_no, group_no, refund_id))`,
 		`CREATE TABLE IF NOT EXISTS order_allocation_snapshots (
 			order_no VARCHAR(64) NOT NULL PRIMARY KEY, allocation_hash CHAR(64) NOT NULL DEFAULT '',
 			lines_json JSON NOT NULL, groups_json JSON NOT NULL, frozen_at DATETIME(3) NULL,

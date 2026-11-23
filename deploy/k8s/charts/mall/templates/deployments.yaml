@@ -149,6 +149,10 @@ spec:
               value: "inventory:9003/mall.v1.InventoryService"
             - name: ORDER_DTM_URL
               value: "order:9006/mall.v1.OrderService"
+            - name: PAYMENT_ADDR
+              value: "payment:9007"
+            - name: FULFILLMENT_ADDR
+              value: "fulfillment:9008"
             {{- end }}
             {{- if $.Values.warehouseMode }}
             {{- /* inventory needs WAREHOUSE_MODE only to satisfy the

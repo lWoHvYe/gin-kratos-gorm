@@ -41,12 +41,33 @@ func initialize(ctx context.Context, cfg *config.Config) (*orderApp, func(), err
 	}
 	inventoryServiceClient := provideInventoryClient(mainInventoryConn)
 	promotionServiceClient := providePromotionClient(mainPricingConn)
-	service := provideOrderService(cfg, db, client, logger, dtmClient, pricingServiceClient, inventoryServiceClient, promotionServiceClient)
+	mainPaymentConn, cleanup5, err := providePaymentConn(ctx)
+	if err != nil {
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	paymentServiceClient := providePaymentClient(mainPaymentConn)
+	mainFulfillmentConn, cleanup6, err := provideFulfillmentConn(ctx)
+	if err != nil {
+		cleanup5()
+		cleanup4()
+		cleanup3()
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	fulfillmentServiceClient := provideFulfillmentClient(mainFulfillmentConn)
+	service := provideOrderService(cfg, db, client, logger, dtmClient, pricingServiceClient, inventoryServiceClient, promotionServiceClient, paymentServiceClient, fulfillmentServiceClient)
 	server := provideGRPCServer(cfg, logger, service)
 	httpServer := provideHealthServer(cfg, db, client, logger)
 	app := provideApp(cfg, logger, server, httpServer)
 	mainOrderApp := provideOrderApp(app, service, db, client, logger)
 	return mainOrderApp, func() {
+		cleanup6()
+		cleanup5()
 		cleanup4()
 		cleanup3()
 		cleanup2()

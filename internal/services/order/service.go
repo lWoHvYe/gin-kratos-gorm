@@ -62,9 +62,11 @@ type Service struct {
 	mq        *mq.Client
 	log       *slog.Logger
 	dtm       *dtm.Client
-	pricing   pricingPort
-	inventory inventoryPort
-	promotion pb.PromotionServiceClient
+	pricing     pricingPort
+	inventory   inventoryPort
+	payments    paymentPort
+	fulfillment fulfillmentPort
+	promotion   pb.PromotionServiceClient
 
 	inventoryDTM          string
 	orderDTM              string
@@ -72,6 +74,13 @@ type Service struct {
 	warehouseSplitEnabled bool
 	shortageCaseEnabled   bool
 	now                   func() time.Time
+}
+
+// EnableSettlementClients wires the two clients required by refund admission.
+// They are separate from the constructor so existing tests can omit them.
+func (s *Service) EnableSettlementClients(payments paymentPort, fulfillment fulfillmentPort) {
+	s.payments = payments
+	s.fulfillment = fulfillment
 }
 
 // New builds the order service. pricing and inventory may be nil in tests that

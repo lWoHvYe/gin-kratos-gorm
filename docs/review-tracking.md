@@ -36,8 +36,31 @@ old table still described P2#10 as rejected and Phase 7 as not started.
     application + admission;
   - D-26: 168h starts at the group's first `UNDETERMINED` for that after-sale; other groups/
     later applications do not reset.
-  These are business decisions only; SPEC-0002 v1.8 still needs QC/Reviewer and human
-  `SPEC_APPROVED`, and D-27..D-29 remain Architect decisions.
+  These are business decisions only; SPEC-0002 v1.8, SPEC-0001 v1.4 and
+  ADR-0007 Amendment 1 were approved on 2026-11-24 (see the next section).
+  D-27..D-29 are closed by ADR-0007 Amendment 1.
+
+## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
+
+Director approved on 2026-11-24, and PO applied the approved drafts to canonical
+`docs/specs/`:
+
+- **SPEC-0002 v1.8** — payment settlement & fulfillment admission. Approved
+  `docs/specs/0002-payment-settlement-admission.md`; adds S15…S18, INV-45…49,
+  AC-40 narrowing, AC-62…66, E22…E31, D-22…D-29. Historical v1.7 text is retained
+  in the change log.
+- **SPEC-0001 v1.4** — independent approval for the AC-27 EARS baseline migration
+  only (`refund_state=REFUNDED`; in-progress `REFUNDING` is not included).
+- **ADR-0007 Amendment 1** — accepted 2026-11-24 (A-01…A-14); it maps AC-62…66
+  and closes D-27…D-29. The ADR file's own status header is Architect-owned and
+  may lag this human-approval record; Architect must sync it.
+
+**Scope of this record**: it is a **contract approval only**, not AC-VERIFIED,
+not implementation PASS, and not Release PASS. No code/test evidence is claimed.
+AC-39…61 remain deferred; AC-62…66 are newly registered as deferred
+(`Developer`, expiry `2026-12-31`, `developer-reviewer/T-002`). Any
+implementation/release still requires Reviewer verdict, AC evidence, affected
+baseline regression (AC-14/21/25/27/31/32), and human `RELEASE_APPROVED`.
 
 ## P1
 
@@ -240,9 +263,9 @@ Audit: dev `mall-data` and UAT `mall-uat-data` applied only up to
 persistent environment applies it; implementation still needs Architect sign-off,
 a backfill tool and a disposable-DB rehearsal.
 
-**Gate note (not a release claim)**: to keep `make gates-strict` honest while
-the Spec is unapproved, the draft lives in `docs/po/drafts/` (PO-owned) and is
-**not** indexed in `docs/specs/README.md` or `Spec.md`. On `SPEC_APPROVED`,
+**Gate note (historical, 2026-11-23; superseded by the 2026-11-24 approvals
+above)**: while the Spec was still unapproved, the draft lived in
+`docs/po/drafts/` and was not indexed in `docs/specs/README.md` or `Spec.md`. On `SPEC_APPROVED`,
 Reviewer adds AC-39…61 to `docs/collab/ac-baseline.txt` and `ac-coverage.tsv`
 (owner + expiry + thread), the PO moves the file into `docs/specs/`, updates both
 indexes, and the approval is committed as `docs(spec): SPEC-0002 v1.x ...` in the

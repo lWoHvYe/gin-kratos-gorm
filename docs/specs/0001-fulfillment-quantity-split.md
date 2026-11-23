@@ -2,11 +2,11 @@
 id: SPEC-0001
 title: 多仓按数量拆行、选仓优先级与承运商签收
 status: approved          # draft | in-review | approved | superseded
-version: 1.3
-updated_at: 2026-11-23
+version: 1.4
+updated_at: 2026-11-24
 owner: Product Owner
 approved_by: 甲方
-approved_at: 2026-11-23
+approved_at: 2026-11-24
 domain: fulfillment
 supersedes: []
 superseded_by: null
@@ -17,12 +17,12 @@ adr: [0005]               # Architect 出稿后回填
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.3（已冻结） |
-| 日期 | 2026-11-23（v1.1 修正 AC-02/判责；v1.2 裁决 P-01…P-18；v1.3 组退款释放口径） |
-| 状态 | **已批准**：甲方 2026-11-22 批准 v1.0；v1.1、v1.2 为回写裁决；v1.3 于 2026-11-23 批准，见第 13、14、15 节 |
+| 版本 | v1.4（已冻结） |
+| 日期 | 2026-11-24（v1.4 仅 AC-27 EARS 基线迁移） |
+| 状态 | **已批准**：甲方 2026-11-22 批准 v1.0；v1.1、v1.2、v1.3 为回写裁决；v1.4 于 2026-11-24 独立批准，见第 13、14 节 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件，不接收口头补充） |
-| 冻结规则 | v1.3 后任何业务口径变更必须升版为 v1.4 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
+| 冻结规则 | v1.4 后任何业务口径变更必须升版为 v1.5 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
 | 依据 | `AGENTS.md`、ADR [0002](../adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../architecture-baseline.md)（INV-01…INV-16） |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准。任何实现方式、数据结构、接口形态、算法选择均不在本文件范围内，Architect 需要自行设计并接受本文件的验收。
@@ -569,10 +569,13 @@ Given 2 组订单，G1 发货、G2 未发
 Then 生命周期 ALLOCATED、履约投影 PARTIALLY_SHIPPED、G1 SHIPPED、G2 ALLOCATED
 
 **AC-27** 已退款未发组不卡住订单
-Given 拆量订单 G2 退款完成、G1 正常发货
-Then 订单投影按 G1 推进；G2 不得让订单停留在 ALLOCATED 或阻塞 G1 发货
-And G2 的预留释放/运单取消不构成 §6.6 禁止的组合；订单生命周期仍为 PAID/ALLOCATED/SHIPPED，
-    G2 的退款进度由 refund_state 表达
+- WHEN 拆量订单的 G2 已退款完成且 G1 正常发货，THE SYSTEM SHALL 按 G1 的履约进度推进订单投影；
+  G2 不得使订单停留在 `ALLOCATED`，也不得阻塞 G1 发货。
+- WHILE G2 已退款完成（`refund_state=REFUNDED` 且许可 `REVOKED` 或运单 `CANCELLED`），
+  THE SYSTEM SHALL 保持订单生命周期为 `PAID/ALLOCATED/SHIPPED` 之一，并只通过 `refund_state`
+  表达 G2 的退款进度；不得把退款进度写入 `orders.status`。
+- WHEN G2 的预留已释放或运单已取消，THE SYSTEM SHALL 按 SPEC-0001 §6.6/§6.6.1 判定该组合合法，
+  不构成 §6.6 的禁止组合。
 
 ### 知情与展示
 
@@ -690,6 +693,7 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | **v1.1（冻结）** | 2026-11-22 | ① 修正 AC-02：原场景"仓 2 有 5 件"与 §6.1 单仓优先冲突，判据改为"无单仓可满足"，并补反向判据；依据 ADR-0005 修订登记 A-01 与甲方裁决。② 新增 6.5.2 责任判定与运费挂起、INV-29、AC-31…33、D-08。影响：AC-02/AC-14 判定、退款运费分支 |
 | **v1.2（冻结）** | 2026-11-22 | 裁决 Architect P-01…P-18（逐条见第 15 节）：行优惠改为最大余数法、运费券只减运费、部分组运费按 `freight_share` 退、时限统一按小时并写明起点、申诉优先于自动确认、补发本期关闭、组号按 `warehouse_id`。新增 6.5.3 原因码/证据最小集、D-09/D-10、AC-34…38。影响：AC-03/04/14、6.4/6.5/6.6/6.8 |
 | **v1.3（冻结）** | 2026-11-23 | 限定 §6.6“已支付订单不得预留已释放”的适用对象为仍计划履约的组；新增 §6.6.1 组退款库存处置；AC-27 追加解释；修正 §7.1“已支付未发货可取消”的既有漂移；§7.5 增加 G2 退款备注。影响：INV-06 适用口径、INV-26/AC-27 组退款边界、§7.1/§7.5 状态投影；不删除/重编号任何 AC |
+| **v1.4（冻结）** | 2026-11-24 | 基线迁移：AC-27 由行首 Gherkin 步骤改为 EARS，业务语义不变；只覆盖 `refund_state=REFUNDED`（不把 `REFUNDING` 写进“已完成”）；不新增/删除/重编号 AC；登记 AC-27 台账复核。影响：仅 AC-27 语法；不改变 INV-01/06/26/38 与 §6.6/§6.6.1 |
 
 ---
 
@@ -704,6 +708,9 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | Product Owner | 回写 v1.2：裁决 Architect P-01…P-18，新增 6.5.3 原因码/证据、D-09/D-10、AC-34…38，第 15 节为裁决索引 | 2026-11-22 |
 | 甲方（业务） | 批准 v1.3：组退款释放预留的边界；解除 SPEC-0002 的 C-1 前置条件 | 2026-11-23 |
 | Product Owner | 原地升版 v1.3：§6.6 限定、§6.6.1、AC-27 解释、§7.1/§7.5 修正 | 2026-11-23 |
+| 甲方（业务） | 独立批准 SPEC-0001 v1.4：AC-27 EARS 基线迁移，业务语义不变 | 2026-11-24 |
+| Quality Checker | QC-14 `READY FOR HUMAN SPEC APPROVAL`；AC-27 仅语法迁移，无语义阻塞 | 2026-11-24 |
+| Product Owner | 原地升版 v1.4：仅替换 AC-27 为 EARS，更新 YAML/变更记录/批准记录；不修改其他正文 | 2026-11-24 |
 | System Architect | 已接收，产出 ADR-0005（accepted） | 2026-11-22 |
 | Developer | 实施中；偏差与待回写项见 [adr-0005-deviation-register.md](../implementation/adr-0005-deviation-register.md) | 2026-11-22 |
 

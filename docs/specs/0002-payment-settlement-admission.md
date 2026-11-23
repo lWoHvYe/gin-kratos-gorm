@@ -2,29 +2,29 @@
 id: SPEC-0002
 title: 支付结算与履约准入
 status: approved         # draft | in-review | approved | superseded
-version: 1.7
-updated_at: 2026-11-23
+version: 1.8
+updated_at: 2026-11-24
 owner: Product Owner
 approved_by: Director
-approved_at: 2026-11-23
+approved_at: 2026-11-24
 domain: payment
 supersedes: []
 superseded_by: null
-adr: []
+adr: [0007]
 ```
 
-# SPEC-0002 — 支付结算与履约准入（P0，工作草案）
+# SPEC-0002 — 支付结算与履约准入（P0，v1.8 approved）
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.7（已批准；INV-43 适用范围澄清：组级退款需准入，支付级退款为 capture correction） |
-| 日期 | 2026-11-23 |
-| 状态 | **已批准**：Director 2026-11-23 批准；可交 Architect 出 ADR-0007 |
-| 位置 | `docs/specs/`：批准时已由 Reviewer 同步 `ac-baseline.txt`/`ac-coverage.tsv`；AC-39…61 先以延期行登记 |
+| 版本 | v1.8（已批准：P-04/P-05/P-06、TCC Σ、`legacy_payment_resolution`/`COMPENSATING`、`order.settled` 影子、AC-40 收窄） |
+| 日期 | 2026-11-24 |
+| 状态 | **已批准**：Director 2026-11-24 批准；ADR-0007 Amendment 1 同日 accepted；QC-14 `READY FOR HUMAN SPEC APPROVAL` |
+| 位置 | `docs/specs/`：AC-40 收窄、AC-62…66 新增；按 Human 指示登记 AC-62…66 延期行；Reviewer 复核；AC-39…66 先以延期行登记 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件与 QC 报告，不接收口头补充） |
-| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` v1.3；`docs/ext-review-1123-triage.md` §7.4；`docs/review-tracking.md` 2026-11-23 裁决；`docs/collab/qc-reports/SPEC-0002-QC-01.md`、`SPEC-0002-QC-02.md`、`SPEC-0002-QC-03.md`、`SPEC-0002-QC-04.md`、`SPEC-0002-QC-05.md`、`SPEC-0002-QC-06.md`、`SPEC-0002-QC-07.md` |
-| 范围 | H1/H2 批准的业务口径：首次支付、结算、取消竞态、库存就绪、发货准入、退款统一准入、缺货、收货 |
+| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` v1.3/v1.4；`docs/adr/0007-payment-settlement-admission.md` Rev 1.0 + `0007-payment-settlement-admission-amd1.md` Amendment 1；`docs/lead/PAY-SETTLE-01/plan.md` C-02；`docs/review-tracking.md` 2026-11-24 裁决；QC-10…QC-14 |
+| 范围 | H1/H2 批准的业务口径：首次支付、结算、取消竞态、库存就绪、发货准入、退款统一准入、缺货、收货；v1.8 增加 P-04/P-05/P-06、TCC Σ、历史队列 `COMPENSATING`、`order.settled` shadow |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准（EARS）。**不定义**表结构、事件名、RPC 形态、事务边界、重试算法或开关实现；这些由 Architect 在 ADR 中设计并接受本文件验收。
 
@@ -32,7 +32,7 @@ adr: []
 
 ## 0. 一页决策摘要
 
-1. **首次支付必须足额**：生效支付金额严格等于 `pay_cent`；同一订单只有一个生效支付；重复/超额/少额捕获一律不生效并全额退款；零元单免捕获。**本期不做部分支付**。
+1. **首次支付必须足额**：生效支付金额严格等于 `pay_cent`；同一订单只有一个生效支付；重复/超额/少额捕获一律不生效并全额退款；零元单（无任何已捕获 intent）免捕获。**本期不做部分支付**。
 2. **钱一旦被捕获，系统自己负责把它送到终态**：要么结算并允许履约，要么自动退款。不得把“支付渠道会重放”“运维会手工补”当作唯一恢复手段。
 3. **`PAID` 只声明进入时刻的确认事实**：订单已接受支付、分配快照已冻结、所有行预留已确认；它不声明当前可履约、不表示可发货、不承担退款态，也不是新状态字段。发货仍要求该组实时可履约、无未解决缺货、许可为 `NONE`。
 4. **所有退款走同一个许可行裁决**：普通售后、TCC 补偿、SYSTEM 缺货退款共用同一准入；未发货组撤销未用许可，已授权未离仓组取消运单，已离仓组只退款。
@@ -77,6 +77,10 @@ adr: []
 | S7 缺货案件 | Order | `NOTIFIED / RESOLVED_WAIT / RESTOCKED / RESOLVED_REFUND`；`RESOLVED_WAIT` 带补货日期；`RESTOCKED` 表示补货到货可继续履约；`RESOLVED_REFUND` 为退款终态 | AfterSales、通知、用户展示 | 不直接打款；不代表退款已完成；`RESTOCKED` 不是退款 |
 | S8 退款申请与任务 | 该申请的唯一发起方（AfterSales 或 Order；每个 `refund_id` 只有一个所有者） | 每条申请有全局唯一 `refund_id`、金额、组、任务状态；`refund_id` 在创建时确定并终身不变；Payment 只负责执行 | Order 准入、Payment 执行、运营 | 不是打款事实；不拥有准入结果（准入结果归 Order）；不得因重复申请生成第二条记录 |
 | S9 组退款进度 | Order | `NONE → REFUNDING → REFUNDED`（沿用 SPEC-0001 S4）；已离仓组允许同组多次部分退款；未离仓组的退款受 AC-50/D-19 限制 | 用户展示、Fulfillment 读模型 | **不是禁发裁决点**；禁发看 S5 与 S4/S6/S7 |
+| **S15 退款承诺额度** | **Order** | 每个 `refund_id` 一条承诺，记录商品行/运费组成；`RESERVED`（占用可退额度）/`SETTLED`（Payment 已退款）/`RELEASED`（仅释放额度） | 退款准入、额度计算、对账、退款申请 | 不是打款事实；`RELEASED` 不等于退款完成或失败已处置；不得由 worker 自动写；不得把 `SETTLED` 回退 |
+| **S16 历史支付解析队列** | **Order 记录事实；运营/Director 作裁决** | `legacy_payment_resolution`，按 `order_no` 唯一；状态 `OPEN/RESOLVING/COMPENSATING/RESOLVED/EXPIRED_REFUND/EXPIRED_ZERO/EXPIRED_FINANCE/REJECTED`（顺序与 ADR A-04 对齐）；24h 到期按 D-22 已批准分支收敛；有捕获且无离仓组必须先经 `COMPENSATING` | 发货准入、退款准入、对账、运营 | 不是生效支付事实，不能替代 Payment `captured/refunded`；不得猜 `payment_no`；不得长期停留在 `OPEN` |
+| **S17 退款金额组成与责任** | **AfterSales（售后责任与行已退事实）+ 缺货事实（SYSTEM 缺货责任）**；Order 只拥有准入计算与在途承诺 | 行剩余、商品/运费组成、责任枚举与证据引用；`freight_refundable_cent` 由责任方产出 | Order 准入、Payment 执行、对账、用户展示 | Order 不得改责任、不得从自由文本推断责任；AfterSales 不得改准入结果；不得把商品金额与运费混算 |
+| **S18 `order.settled` 影子事实** | **Order 产出；Fulfillment 影子消费** | 影子消费记录/比对结果；**不是**发货准入事实 | 告警、对账、切换前比对 | 不建运单；不推进组；不放行发货；不得替代 `order.paid` 兼容路径或 permit/库存事实 |
 
 补充约束：
 
@@ -89,10 +93,14 @@ adr: []
 - **“离仓”判定**：已离仓 = 运单状态 `SHIPPED/RECEIVED`，或 `EXCEPTION` 且 `shipped_at` 非空；未离仓 = 无运单、`CREATED` 或 `CANCELLED`。该判定只用于退款准入，不改变许可状态机。
 - **退款准入结果持久化**：Order 在许可行/准入记录上按 `refund_id` 持久化准入结果（`PRE_SHIP_REVOKED` 或 `POST_SHIP_ALLOWED`）；发起方的退款申请只保存自己的任务状态，通过 `refund_id` 读取 Order 的准入结果，不得双写同一事实。重试先读 Order 的结果；结果缺失才重跑准入。重试时若已处于目标状态（许可 `REVOKED`、运单 `CANCELLED`、结果已持久化），视为成功并返回同一结果，不得再改状态。
 - **缺货案件期间预留**：`NOTIFIED/RESOLVED_WAIT` 期间该组预留保持 `CONFIRMED`，不因通知释放；`RESOLVED_REFUND` 后释放；`RESTOCKED` 后保持 `CONFIRMED`。
+- S15 的 `RESERVED→RELEASED` 只有 `AC-62` 列出的合法触发；释放只改变额度占用，不恢复许可、不重开退款、不改变订单生命周期。
+- S16 的 `RESOLVED` 必须回写生效支付并以幂等恢复命令继续被阻断的动作；`EXPIRED_*` 与 `REJECTED` 是终态，不得回退到 `OPEN`。
+- S17 的行级“已退”事实沿用 SPEC-0001 S14（AfterSales 唯一）；Order 的在途承诺是 S15，二者不得互相替代。订单/组剩余可退额 = 行实付 − S14 已退 − S15 在途，且不超过订单 Payment captured 剩余（INV-24）。
+- S18 的影子消费失败只影响告警/对账，不影响结算、发货准入和用户展示；默认关闭时不得以任何方式放行发货。
 
 ---
 
-## 3. 业务不变量（INV-30…INV-44）
+## 3. 业务不变量（INV-30…INV-49）
 
 > 基线 INV-01…16 与 SPEC-0001 INV-17…29 继续有效；本节新增或收窄，冲突时以更严格者为准，并在 §11 说明。
 
@@ -113,6 +121,11 @@ adr: []
 | INV-42 | **退款申请不丢失**：任何退款来源必须先留下以全局唯一 `refund_id` 标识的可恢复申请/任务；执行失败可重试；同一 `refund_id` 重复提交幂等；具体驱动机制由 ADR 定义 | 先打款后记录；失败后申请消失；同一申请出现两条记录 |
 | INV-43 | **先准入后打款（组级）**：组级退款（售后/TCC 补偿/缺货）未得到 `PRE_SHIP_REVOKED` 或 `POST_SHIP_ALLOWED` 前不得调用支付退款；支付级退款（非生效捕获/超少付/取消）是 capture correction，不经组许可，只受 Payment captured 上限约束 | 组级未准入先退款；支付级退款被错误要求组许可 |
 | INV-44 | **组退款后的库存处置有主**：未离仓组的预留由 Inventory 释放（`HELD` 直接释放，`CONFIRMED` 走基线 `CancelConfirm` 的补偿释放）；已离仓组的退货回库按 SPEC-0001 INV-03；释放/回库失败必须重试并告警；释放后 `available ≤ on_hand` 且行数量守恒（SPEC-0001 INV-17），不得超卖或重复退款 | 退款后预留无人处理；释放失败静默；释放后超卖 |
+| **INV-45** | **准入不可逆与承诺释放纪律**：组级准入一旦给出 `PRE_SHIP_REVOKED/POST_SHIP_ALLOWED`，该组 permit 终态不可恢复；退款承诺只能因“打款前 `REJECTED/CANCELLED`”或“`FAILED_PERMANENT`/人工放弃且取得人工授权”而 `RESERVED→RELEASED`；释放只释放额度，不恢复 permit；禁止 worker/重试/脚本静默释放 | 把 `REVOKED` 改回 `CONSUMED`；后台自动释放承诺导致额度虚增；把释放当作退款完成 |
+| **INV-46** | **历史支付解析收敛**：`PAID` 且生效支付为空的订单，必须先以 Payment 事实解析；唯一候选=`SUCCEEDED` 且 `captured == pay_cent`；零元单（**无任何已捕获 intent**）=`zero:<order_no>`；`pay_cent=0` 但有捕获时不得 zero，按 AC-40 保留的第二、三条/AC-39 支付级+人工队列；0/多候选进 `legacy_payment_resolution`，24h 到期必须离开 `OPEN/RESOLVING`（进入 `COMPENSATING` 或终态）；有捕获无离仓→先 `COMPENSATING`（撤 permit/CancelIfCreated/INV-44 释放，先持久化 `refund_applications(PENDING)`，Payment.Refund 最后）全部成功后→`EXPIRED_REFUND`（不写 `CANCELLED`）、有离仓→`EXPIRED_FINANCE`；补偿失败保持 `COMPENSATING`；不得猜测、不得按 0 额度、不得无限期 `OPEN` | 猜 `payment_no`；把无生效支付当 0 额度；把零元有捕获当零元单；队列长期 `OPEN`；用 `EXPIRED_FINANCE` 冒充已退款 |
+| **INV-47** | **行级额度、商品/运费组成与责任唯一**：每笔组级退款同时满足“行级 ≤ 行剩余可退额”和“合计 ≤ 订单 captured 剩余”（INV-24 双层）；金额拆为商品 + 可退运费；责任与可退运费只由 AfterSales / 缺货事实产出，Order 只校验与计算；`UNDETERMINED` 商品照退、运费挂起 ≤168h；后置补退同组、累计退运费 ≤ 用户实付运费 | 只查组总额不查行；Order 自行判责；商品退款被运费判定阻塞；补退新建案件或超退运费 |
+| **INV-48** | **TCC Σ 预检与逐组扇出**：改任何状态前，`Σ 活动组系统责任上限 == 订单剩余 captured`；不等则阻断+告警+人工，不得部分打款；每个活动组独立准入/打款；部分失败只补未完成组，崩溃续跑不得重退已完成组 | Σ 不等仍打款；用整单退款事件替代逐组准入；重跑时重复退款 |
+| **INV-49** | **`order.settled` 影子不具准入权威**：默认关闭；影子只记录/比对，不建单、不放行；影子不一致/失败只告警；切换必须经独立 release 门禁与人类批准；切换后 `order.paid` 不得再作准入依据 | 用 shadow 结果发货；shadow 失败阻断结算；默认 false 长期保留旧准入路径；未批准就切换 |
 
 ---
 
@@ -128,7 +141,8 @@ adr: []
 - IF 渠道侧仍成功捕获了 ≠ `pay_cent` 的金额，THEN THE SYSTEM SHALL 不把该捕获计入订单，并对其全额退款；向调用方返回 `PAYMENT_AMOUNT_MISMATCH`。
 
 **AC-40** 零元单
-- WHEN `pay_cent=0`，THE SYSTEM SHALL 不创建捕获事实，并按 AC-47 的预留确认后进入 `PAID`。
+- WHEN 订单 `pay_cent=0` 且不存在任何已捕获 intent，THE SYSTEM SHALL 不创建捕获事实，并按 AC-47 的预留确认后进入 `PAID`。
+- IF 订单 `pay_cent=0` 但存在任何已捕获 intent，THEN THE SYSTEM SHALL 不按零元单处理，不得解析为 `zero:<order_no>`、不得按零元单结算或发货；按 AC-40 保留的第二、三条与 AC-39 对该等捕获逐笔全额退款/支付级处理，并进入 `legacy_payment_resolution` 人工队列；IF 退款完成，THEN THE SYSTEM SHALL 将队列置 `RESOLVED` 并保留审计，不得重复退款；IF 退款未完成，THEN 24h 到期按有捕获分支处理（无离仓→`EXPIRED_REFUND`，有离仓→`EXPIRED_FINANCE`），不得置 `EXPIRED_ZERO`。
 - IF 零元单收到任何正金额捕获，THEN THE SYSTEM SHALL 全额退款，不改变订单金额。
 - WHEN 零元单发生取消/缺货/售后，THE SYSTEM SHALL 只释放或回库，不调用 Payment；退款申请以 0 元标记 `DONE(zero_amount)`，售后额度为 0。
 
@@ -282,6 +296,100 @@ adr: []
 - IF 退款任务永久失败、许可准入冲突或预留释放失败，THEN THE SYSTEM SHALL 告警并提供按 `payment_no/refund_id/after_sale_no` 的人工重放入口；用户侧显示“处理中”。
 - WHEN 每日对账，THE SYSTEM SHALL 对平 Payment `captured/refunded`、intent 级“已收未 PAID”资金（含时间窗口）、Order 投影、非生效捕获退款与未完成退款任务；差异 SHALL 告警并保留可重放记录。
 
+### 4.9 准入后生命周期、历史解析与行级退款
+
+**AC-62** 准入不可逆与退款承诺的人工释放
+
+- WHEN 组级退款已取得准入结果（`PRE_SHIP_REVOKED` 或 `POST_SHIP_ALLOWED`），THE SYSTEM SHALL 保持该组许可为终态；不得把 `REVOKED` 改回 `CONSUMED`，不得为同一组恢复可发货，也不得因退款失败/放弃而重建许可。
+- WHEN 退款执行进入 `FAILED_PERMANENT` 或运营决定放弃该笔退款，THE SYSTEM SHALL 保持该笔退款承诺为 `RESERVED`、继续占用可退额度，并进入人工授权队列；在人工授权完成前不得释放额度，也不得把该退款标成已退款/已完成。
+- WHEN 受理人工释放请求，THE SYSTEM SHALL 按 **D-24 已批准矩阵（HUMAN APPROVED 2026-11-24（默认））** 执行：仅授权角色可授权；金额 ≥1000 元必须双人复核；全量审计；并校验最小证据字段：授权单号、操作人/授权人、时间、金额、原因码、证据引用、有效期；IF 任一字段缺失、越权、超阈值未复核、授权过期/被撤销，THEN THE SYSTEM SHALL 拒绝 `RESERVED→RELEASED`，不得改变任何额度或状态，并返回 `REFUND_RELEASE_NOT_AUTHORIZED`。
+- IF 释放请求的 `refund_id` 不存在、承诺不属于该订单/组、或授权金额与承诺金额不一致，THEN THE SYSTEM SHALL 拒绝并返回 `REFUND_COMMITMENT_CONFLICT`，不得按最近记录猜测，也不得部分释放。
+- WHEN 人工授权释放同一 `refund_id`，THE SYSTEM SHALL 在满足版本/租约条件的前提下幂等执行**一次** `RESERVED→RELEASED`，只释放该笔承诺占用的额度，记录审计（授权人/时间/原因/释放前后额度/`refund_id`），并保持 permit 终态、退款申请 `FAILED_PERMANENT` 记录、组退款进度与订单生命周期不变。
+- IF 同一 `refund_id` 重复提交释放，THEN THE SYSTEM SHALL 返回首次释放结果，不重复释放额度；IF 两个执行者并发释放同一承诺，THEN THE SYSTEM SHALL 以版本化条件迁移与执行租约（CAS/lease）裁决，只允许一个成功，另一个返回当前状态且不得写状态。
+- IF 该承诺已 `SETTLED`（Payment 已退款）或已 `RELEASED`，THEN THE SYSTEM SHALL 拒绝再次释放并告警，不得双重扣减，也不得把已退金额退回额度；IF 释放金额与该承诺 `RESERVED` 金额不等，THEN THE SYSTEM SHALL 拒绝部分释放或超额释放，不得拆分承诺。
+- IF Payment 已有该 `refund_id` 的退款成功事实但承诺仍为 `RESERVED`（对账窗口），THEN THE SYSTEM SHALL 先按 Payment 事实收敛为 `SETTLED`，不得释放，也不得把已退金额重新计入可退余额。
+- WHILE 承诺仍为 `RESERVED`，THE SYSTEM SHALL 继续把它计入订单/组的在途占用，禁止同一额度再承诺给其他 `refund_id`；IF 同一额度被重复承诺，THEN THE SYSTEM SHALL 拒绝并告警。
+- IF 后台任务、重试、运维脚本或任何非人工授权入口尝试把 `RESERVED` 改为 `RELEASED`，THEN THE SYSTEM SHALL 拒绝并告警；**禁止任何 worker 静默释放**。
+- WHEN 释放完成，THE SYSTEM SHALL 只更新额度占用，不恢复发货、不把退款申请改为 `DONE`、不伪造组 `REFUNDED`；该退款仍需人工决定“重试/转其他处置”。
+- WHEN 释放完成，THE SYSTEM SHALL 将释放额度回到**同一订单/同一组**的可退余额；不得跨订单或跨组复用；新退款仍需新申请并重新执行准入；释放动作不得自动触发退款（**D-25 HUMAN APPROVED 2026-11-24（默认）**）。
+- WHEN 平台判定 `RESERVED→RELEASED` 是否合法，THE SYSTEM SHALL 只接受两类触发：①打款前退款申请被业务驳回或用户撤回（`REJECTED/CANCELLED`）；②`FAILED_PERMANENT` 或人工放弃且取得人工授权。IF Architect 认为还需要第三种触发，THEN 必须回 PO 升版并经人类批准，不得由实现自行新增。
+- WHEN 释放触发被标记为 `CANCELLED` 或 `REJECTED`，THE SYSTEM SHALL 只接受“退款申请在执行前被用户撤回/业务驳回”的退款申请状态，并校验 `refund_id`、操作人/授权人、原因、时间与证据；IF 仅订单 `CANCELLED`、售后关闭、运单取消或其他非退款申请的终止，THEN 不得作为 `RESERVED→RELEASED` 的触发，必须拒绝并告警。
+
+**AC-63** 历史 `PAID` 订单的生效支付解析与人工队列
+
+- WHEN 读取、发货、退款或对账遇到 `PAID` 且生效支付标识为空（`''`/`NULL`）的订单，THE SYSTEM SHALL 先解析生效支付；不得按 0 额度处理、不得猜测 `payment_no`、不得直接判定已退款，也不得因缺少历史事实直接放行。
+- WHEN 解析，THE SYSTEM SHALL 以 Payment 的支付事实为唯一依据，取该订单的全部支付 intent；候选必须同时满足 `status=SUCCEEDED` 且 `captured == 订单 pay_cent`；IF 订单号不匹配或金额不等的 intent，THEN 不得作为候选。
+- IF 恰好一个候选，THEN THE SYSTEM SHALL 仅当生效支付仍为空时条件写回该 `payment_no`，并继续原动作；IF 并发写回，THEN THE SYSTEM SHALL 只允许一个成功，其他读取同一结果，不得产生两个生效支付。
+- IF 订单 `pay_cent=0` 且不存在任何已捕获 intent，THEN THE SYSTEM SHALL 解析为 `zero:<order_no>`，不调用 Payment、不要求捕获；不得为凑候选而选择任意 intent。
+- IF 订单 `pay_cent=0` 但存在任何已捕获 intent，THEN THE SYSTEM SHALL 不得解析为 `zero:<order_no>`、不得按零元单结算或发货；按 AC-40 保留的第二、三条与 AC-39 对该等捕获逐笔全额退款/支付级处理，并进入 `legacy_payment_resolution` 人工队列；IF 退款完成，THEN THE SYSTEM SHALL 将队列置 `RESOLVED` 并保留审计，不得重复退款；IF 退款未完成，THEN 24h 到期按有捕获分支处理（无离仓→`EXPIRED_REFUND`，有离仓→`EXPIRED_FINANCE`），不得置 `EXPIRED_ZERO`。
+- IF 候选数为 0 或多于 1，THEN THE SYSTEM SHALL 阻断该单的未离仓组发货与全部退款，进入 `legacy_payment_resolution` 人工队列，并向用户展示“支付核验中”、向运营告警；不得按 0 额度放行，也不得无限期停留在 `OPEN`。
+- WHEN 进入队列，THE SYSTEM SHALL 以 `order_no` 唯一建立记录，初始 `OPEN`，记录进入时间、候选数量、`pay_cent`、阻断范围与证据；IF 同一订单重复触发，THEN THE SYSTEM SHALL 幂等复用同一条记录，不得重复建队列；IF 该订单已有终态队列记录，THEN THE SYSTEM SHALL 按既有终态处理，不得重开 `OPEN`。
+- WHEN 运营开始处理，THE SYSTEM SHALL 置 `RESOLVING`；WHILE `OPEN/RESOLVING` 且未满 24h，THE SYSTEM SHALL 继续阻断该单的未离仓组发货与退款，等待人工证据，不得自动放行；已离仓的履约事实保持不回滚。
+- WHEN 人工以唯一候选解析成功（含补录证据），THE SYSTEM SHALL 置 `RESOLVED`、写回生效支付、记录授权人与证据，并以幂等恢复命令继续此前被阻断的发货或退款；IF 恢复命令重复执行，THEN THE SYSTEM SHALL 返回同一结果，不得重复发货或重复退款。
+- WHEN 队列自进入起满 24h 仍未 `RESOLVED`，THE SYSTEM SHALL 按 D-22 已批准规则收敛，不得继续 `OPEN`：
+  - IF 无任何已捕获 intent 且 `pay_cent=0`，THEN THE SYSTEM SHALL 置 `EXPIRED_ZERO`，以 `zero:<order_no>` 收敛，不调用 Payment；恢复命令按零元单幂等继续。
+  - IF 无任何已捕获 intent 且 `pay_cent>0`，THEN THE SYSTEM SHALL 置 `EXPIRED_FINANCE`，转财务人工关闭，不发货、不退款、保留审计；不得显示为已退款（沿用 D-2 的无捕获分支）。
+  - IF 存在已捕获 intent 且**没有任何组已离仓**，THEN THE SYSTEM SHALL 先离开 `OPEN/RESOLVING` 进入 **`COMPENSATING`**，不得直接置 `EXPIRED_REFUND`；在 `COMPENSATING` 内完成：撤销未离仓组 permit → `CancelIfCreated` → 按 INV-44 释放预留；上述补偿完成后，**Payment.Refund 最后执行**；全部成功后才置 `EXPIRED_REFUND`，以支付级退款事实表达结果；**不写 `CANCELLED`，保留订单生命周期**；不得伪造订单级 `captured/refunded`（INV-37），不得发货。
+  - WHILE 处于 `COMPENSATING`，THE SYSTEM SHALL 只重试未完成步骤；IF 补偿失败/超时，THEN THE SYSTEM SHALL 保持 `COMPENSATING` 并告警，不得回到 `OPEN`、不得提前置 `EXPIRED_REFUND`；IF 该等捕获已按 AC-40 完成支付级退款，THEN THE SYSTEM SHALL 不重复退款，仅完成剩余补偿后置 `EXPIRED_REFUND`。
+- WHEN 调用 `Payment.Refund`，THE SYSTEM SHALL 必须先幂等持久化支付级 `refund_applications(PENDING)`；IF Payment 成功，THEN 才置该申请 `DONE`，且仅在全部未退完 intent 均成功后置队列 `EXPIRED_REFUND`；IF Payment 失败/超时/未知，THEN 保持 `COMPENSATING` 并告警，不得置 `DONE`/`EXPIRED_REFUND`；IF Payment 仅部分成功，THEN 已成功申请置 `DONE`，队列保持 `COMPENSATING` 继续未完成，不得提前 `EXPIRED_REFUND`。
+  - IF 存在已捕获 intent 且**存在已离仓组**，THEN THE SYSTEM SHALL 置 `EXPIRED_FINANCE`，转财务人工核定，不得自动批量退款，不得回滚已离仓事实，未离仓组保持禁发。
+- WHEN 队列进入 `EXPIRED_FINANCE`，THE SYSTEM SHALL 只允许财务/授权角色在 **7 天**最长处理时限内关闭；不得重开；IF 7 天内未关闭，THEN THE SYSTEM SHALL 升级至更高级授权角色并保持 `EXPIRED_FINANCE`，不得自动退款、自动结算、自动关闭或重开。
+- WHEN 关闭 `EXPIRED_FINANCE`，THE SYSTEM SHALL 记录操作人/授权人、时间、原因、金额/证据并保留审计；终态不可变。
+- IF 已解析出唯一生效支付且历史订单存在其他已捕获 intent（非生效捕获/重复捕获），THEN THE SYSTEM SHALL 逐笔按支付级退款或登记重复捕获事实，不得静默留存；其退款不计入订单级 `captured/refunded`（AC-53/INV-37）；IF 生效支付尚未解析，THEN 不得按本条自动退款，按队列分支处理。
+- IF 人工判定数据脏且无法收敛（订单与支付身份不可信），THEN THE SYSTEM SHALL 置 `REJECTED` 终态，禁止发货与退款，保留审计并告警；`REJECTED` 不得用于“暂时没查到”或“等待补证”。
+- IF 24h 到期定时器与人工 `RESOLVED` 并发，THEN THE SYSTEM SHALL 以队列状态版本条件迁移只接受一个终态；败者返回当前终态，不得把 `RESOLVED` 覆盖为 `EXPIRED_*`，也不得把 `EXPIRED_*` 改回 `OPEN`。
+- WHEN 队列进入任一终态，THE SYSTEM SHALL 记录终态、时间、操作者/依据，并进入对账；不得删除队列记录。
+
+> **D-22 已批准（HUMAN APPROVED 2026-11-24（默认））**：24h 到期按上述已批准分支执行——无捕获且零元→`EXPIRED_ZERO`；无捕获且 `pay_cent>0`→`EXPIRED_FINANCE`；有捕获且无离仓组→先 `COMPENSATING`（撤 permit/CancelIfCreated/INV-44 释放，Payment.Refund 最后）全部成功后→`EXPIRED_REFUND`（不写 `CANCELLED`，保留订单生命周期）；补偿失败保持 `COMPENSATING`；有离仓组→`EXPIRED_FINANCE`。**D-23 同时已批准**：`EXPIRED_FINANCE` 仅财务/授权角色可关闭，不得重开，最长 7 天，逾期升级授权角色并保持 `EXPIRED_FINANCE`，审计保留。
+
+**AC-64** 行级额度、商品/运费组成与责任唯一 Owner
+
+- WHEN 组级退款计算金额，THE SYSTEM SHALL 对每一退货行校验 `本次行退款 ≤ 行剩余可退额`，并对本次合计校验 `≤ 订单 captured 剩余`；行剩余 = 行实付 − AfterSales 已退（SPEC-0001 S14）− 该行 Order 在途承诺（S15，承诺必须带行组成）；两层都通过才可打款（INV-24 无例外）。
+- IF 本次退货数量超过行剩余数量，OR 任一行退款超过行剩余可退额，OR 本次合计超过订单 captured 剩余，THEN THE SYSTEM SHALL 返回 `REFUND_ADMISSION_CONFLICT`，不得改动许可/运单/承诺/打款。
+- IF 本次退货行不属于该订单/该履约组，OR 行数量/金额缺失或为负，THEN THE SYSTEM SHALL 拒绝本次申请，不得用其他行的剩余额度替代。
+- WHEN 组级退款金额组成，THE SYSTEM SHALL 拆分为“商品金额 + 可退运费”：商品金额 = Σ 本次退货行按 SPEC-0001 §6.5 R1–R4 计算的本次退款额（行实付单价 × 本次退货数量，封顶行剩余可退额）；可退运费 = 责任方按 SPEC-0001 §6.5.1/§6.5.2 判定的本次可退运费；不得把商品金额计入运费，也不得把不可退运费摊回商品。
+- IF 该组未离仓 AND 本次金额 < 整组退款金额（商品剩余 + 本次可退运费），THEN THE SYSTEM SHALL 返回 `PARTIAL_REFUND_REQUIRES_FULL_GROUP`，不得改动许可/运单/打款（沿用 AC-50/D-19）。
+- WHEN 责任为 `UNDETERMINED`，THE SYSTEM SHALL 允许商品部分按本次退货数量、在行剩余额度内照常退款，运费部分挂起、不进入本次打款；该组保持 `REFUNDING`，不得置 `REFUNDED`；用户展示“运费待判定”及 168h 期限，不得显示“已结清”。
+- IF 该组未离仓且运费为 `UNDETERMINED`，THEN THE SYSTEM SHALL 按“商品剩余 + 0 运费”计算本次整组退款金额，允许商品部分整组退；运费挂起并在判定后/168h 到期后于同一组补退，不得因运费未判定而拒绝商品整组退款。
+- WHEN 责任判定完成，THE SYSTEM SHALL 按结构化责任枚举、`reason_code` 与证据引用决定可退运费；IF 责任枚举缺失/非法/证据不足，THEN THE SYSTEM SHALL 拒绝该判定并保持 `UNDETERMINED`，不得默认商家责任（168h 到期除外），不得从自由文本/关键字推断责任（AC-33/INV-29）。
+- WHEN 计算 168h 挂起期限，THE SYSTEM SHALL 以**该组该次售后首次进入 `UNDETERMINED` 的时间**起算（**D-26 HUMAN APPROVED 2026-11-24（默认）**），并记录该时间、售后/组标识与证据引用；其他组或后续申请不得重置该计时，也不得按订单创建时间起算。
+- WHEN 运费挂起满 168h 仍未判定，THE SYSTEM SHALL 默认按 `MERCHANT_WAREHOUSE` 补退该组可退运费；补退必须在**同一组退款进度**内完成，使用可追溯的补退申请标识，不得新建案件/新生命周期。
+- WHEN 后置补退，THE SYSTEM SHALL 重新校验行/组/订单三层额度与“累计已退运费 ≤ 该组实付运费 ≤ 用户实付运费”；IF 超限，THEN THE SYSTEM SHALL 拒绝并告警，不得为补退突破 INV-24/INV-21。
+- IF 责任判定为 `CUSTOMER` 或其他不可退运费的责任，THEN THE SYSTEM SHALL 不把运费计入本次退款，也不得为“安抚”自行退运费；用户可见“运费不退”的依据。
+- IF 同一运费补退重复触发，THEN THE SYSTEM SHALL 幂等返回同一结果，不重复退款；IF 该组可退运费已全部退完，THEN THE SYSTEM SHALL 返回已完成，不重复补退。
+- WHEN 计算可退运费的责任，THE SYSTEM SHALL 只接受三类唯一来源：普通售后 = AfterSales 的结构化判定（按 0001 §6.5 本次责任是否可退）；支付后 SYSTEM 缺货 = 缺货事实按 0001 §6.5.2 自动落 `MERCHANT_WAREHOUSE`；TCC 系统补偿 = D-21 的系统责任（退该组全部未退运费，不做用户责任扣减）。Order 只做枚举/证据引用校验与额度计算，不得自行改责任，也不得从自由文本/关键字推断责任。
+- WHEN 已离仓组发生部分退款，THE SYSTEM SHALL 允许按本次退货数量在行剩余额度内部分退款，且只退该组已判定可退的 `freight_share`；累计退运费不得超过该组实付运费。
+- IF 该组已全额退款或组剩余为 0，THEN 新的普通组级退款请求 SHALL 返回 `REFUND_ADMISSION_CONFLICT`；运费后置补退按本条前述补退条款处理；零元单首次 0 元申请不视为“已全额退款”（沿用 AC-50）。
+
+**AC-65** TCC 补偿的 Σ 预检、逐组扇出与续跑
+
+- WHEN TCC 补偿退款开始，THE SYSTEM SHALL 在改变任何订单/许可/承诺/退款申请状态之前，以**同一份** Payment 权威 `captured/refunded` 快照计算“订单剩余 captured”与“Σ 活动组系统责任上限”；系统责任上限 = 该组商品剩余 + 该组全部未退 `freight_share`。
+- IF 订单无任何已捕获金额（零元或未捕获），THEN THE SYSTEM SHALL 不进入逐组退款、不调用 Payment，按 AC-46 取消或零元收敛；不得把 0 元组当作活动组。
+- IF `Σ 活动组系统责任上限 ≠ 订单剩余 captured`，THEN THE SYSTEM SHALL 在状态变更前阻断本次补偿，告警并转人工裁决；不得部分打款，不得把差额标记为“待退款”，不得改动 permit/commitment/订单退款态。
+- WHEN Σ 相等，THE SYSTEM SHALL 为每个活动组使用组级退款标识 `tcc:<payment_no>:<group_no>` 逐组申请 AC-50 的准入；不得用整单退款事件替代逐组准入。
+- IF 订单仍为 `PENDING_PAYMENT` 且已捕获，THEN THE SYSTEM SHALL 先在与取消相同的订单状态裁决点进入 `CANCELLED`；IF 该裁决失败（支付确认胜出），THEN THE SYSTEM SHALL 按 `PAID` 继续逐组准入，不得把已支付订单回退为未支付。
+- WHEN 定义活动组，THE SYSTEM SHALL 只纳入“系统责任上限 > 0 且未全额退款”的组；IF 无活动组，THEN 补偿幂等成功，不调用 Payment；IF 历史订单无履约组，THEN 按 G1 处理（金额=订单剩余 captured，必要时初始化 G1 许可），不得跳过。
+- WHEN 所有活动组均取得准入结果，THE SYSTEM SHALL 才允许逐组打款；IF 任一活动组未取得准入结果，THEN 不得打任何款，保留任务可重试，不得只对部分组退款后放行其余组。
+- WHEN 逐组打款，THE SYSTEM SHALL 按每组系统责任上限打款；IF 某组打款失败，THEN 已成功组的承诺置 `SETTLED`，失败组保留承诺与任务，只重试未完成组，不得重退已完成组。
+- WHEN 崩溃/超时/消息重放后重跑，THE SYSTEM SHALL 复用同一 `payment_no` 的 TCC 事务与组级 `refund_id`，跳过已 `SETTLED`/已退款组，只补未完成组；不得创建第二套退款标识导致重复退款。
+- IF 准入或打款期间订单级 captured 快照发生变化（新增捕获/退款事实），THEN THE SYSTEM SHALL 重新执行 Σ 预检；IF 仍不等，THEN 阻断并转人工，不得沿用旧快照继续打款。
+- IF 某组已离仓，THEN THE SYSTEM SHALL 按 `POST_SHIP_ALLOWED` 退款，不取消运单；IF 某组未离仓，THEN 按 `PRE_SHIP_REVOKED` 撤销/取消；不得对已离仓组回滚履约事实。
+- IF 某活动组已部分退款，THEN 本次只退该组剩余（商品剩余 + 未退运费），不得按原始组份额重复退款。
+
+**AC-66** `order.settled` 影子消费（默认不切换）
+
+- WHILE `order.settled` 影子消费开关处于关闭（生产默认），THE SYSTEM SHALL 只记录影子事实与比对结果，不创建运单、不推进履约组、不放行发货、不改变订单生命周期；发货准入仍只由许可、库存与缺货事实裁决。
+- WHEN 结算提交 `order.settled`，THE SYSTEM SHALL 在兼容期与 `order.paid` 保持同一结算事实下的双发；IF `order.settled` 缺失或延迟，THEN THE SYSTEM SHALL 不得因此阻断结算主链路、用户展示或 `order.paid` 的既有兼容消费。
+- WHEN 影子消费发现 `order.settled` 与 `order.paid`/订单权威事实不一致，THE SYSTEM SHALL 告警并记录差异（`order_no`、`payment_no`、差异字段），不得自动切换消费者、不得据此放行或阻断发货、不得修改结算事实。
+- IF 影子消费者自身失败、超时或崩溃，THEN THE SYSTEM SHALL 不影响结算、发货准入与用户展示，只在告警与对账中体现；不得把影子失败当作结算失败。
+- IF 收到未知版本或缺少必填字段的 `order.settled` 事件，THEN THE SYSTEM SHALL 拒绝该影子事实并告警，不得按默认值猜测。
+- WHEN 从 `OFF→SHADOW` 开启影子消费，THE SYSTEM SHALL 仅需 Director 影子批准，不要求 SPEC-0002 §7/G-4/五方终态/`--release --range` 的全量 release 门禁；`SHADOW` 仍只记录/比对，不建单、不放行。
+- WHEN 从 `SHADOW→ON` 切换为实际消费，THE SYSTEM SHALL 必须通过 SPEC-0002 §7 矩阵、G-4、五方终态核对、`--release --range`，并经 Director/人类批准；否则不得切换。
+- WHEN 从 `ON→SHADOW/OFF` 回滚，THE SYSTEM SHALL 经人类批准后执行；IF 非批准的开关变更（配置、运维、脚本、自动任务），THEN THE SYSTEM SHALL fail-closed 并告警，变更不生效，当前状态保持。
+- WHEN 切换完成，THE SYSTEM SHALL 以 `order.settled`（或经 ADR 批准的等价事实）作为履约建单/准入依据；`order.paid` 只保留 BFF/旧消费者兼容，不得再作为准入依据；IF 无移除日期或回滚路径，THEN 不得宣称切换完成。
+- IF 开关被误置为开启而门禁未通过，THEN THE SYSTEM SHALL fail-closed 并按关闭处理，告警；不得在门禁未通过时走新准入路径。
+- WHEN 已切换后回滚，THE SYSTEM SHALL 在人类批准后恢复 `order.paid` 的 BFF/旧消费者兼容消费并保留既有任务/退款申请可重放，不得重复建单、重复发货或重复退款；IF 回滚需要恢复建单，THEN 只允许经许可/库存/缺货判定的路径，不得把 `order.paid` 直接作为准入依据。
+
 ---
 
 ## 5. 状态机与非法迁移
@@ -318,6 +426,8 @@ PENDING_PAYMENT --取消(AC-46) / 捕获后结算失败退款(AC-47)--> CANCELLE
 - Ship 在运单已 `CANCELLED` 后到达：返回 `SHIPMENT_CANCELLED`；Ship 败给退款取消：返回 `SHIPMENT_CANCELLED`。
 - 重复 `NONE→CONSUMED`：同一 `shipment_no` 幂等；不同 `shipment_no` 返回 `FULFILLMENT_NOT_ALLOWED`。
 - 重复 `NONE→REVOKED`：幂等返回 `PRE_SHIP_REVOKED`。
+- 准入后的 `FAILED_PERMANENT`/人工放弃不改变许可终态；不得因退款失败而恢复可发货。
+- `RELEASED` 是**退款承诺**的状态，不是许可状态；不得把它画进许可机。
 
 ### 5.3 组退款进度（Order）
 
@@ -331,6 +441,9 @@ NONE --> REFUNDING --> REFUNDED
 - `REJECTED/CANCELLED` 释放其预占额度，不计入 `REFUNDED`。
 - 同一 `refund_id` 重复申请幂等；**已离仓**组的不同 `refund_id` 且仍有余额则允许；**未离仓**组不允许部分退款，必须整组退款（AC-50/D-19）；超出余额返回 `REFUND_ADMISSION_CONFLICT`。
 - 不允许回退；退款完成以 Payment 事实为准。
+- 运费责任为 `UNDETERMINED` 时，组保持 `REFUNDING`，即使商品部分已退；不得置 `REFUNDED`。
+- 后置补退属于同一组退款进度，不新建组、不新建案件、不改订单生命周期；补退完成后才允许组 `REFUNDED`。
+- `REFUNDED` 的充分条件沿用本节，并增加：该组可退运费已判定且已退完，或责任判定确认无可退运费。
 
 ### 5.4 缺货案件（Order）
 
@@ -379,8 +492,61 @@ PENDING --> PROCESSING --> DONE
 | `EVENT_OUT_OF_ORDER` | 消费者 | 乱序事件被拒绝，有限重试后死信告警 |
 | `TRANSIENT_ERROR` | Payment/Order | 本地持久化失败等可重试错误；不得 ack |
 | `ORDER_STATE_CONFLICT` | Order | 非法生命周期迁移 |
+| `REFUND_RELEASE_NOT_AUTHORIZED` | Order | 缺少可核验人工授权，拒绝 `RESERVED→RELEASED` |
+| `REFUND_COMMITMENT_CONFLICT` | Order | 承诺已 `SETTLED/RELEASED`、金额不符或并发释放失败 |
+| `LEGACY_PAYMENT_UNRESOLVED` | Order | 历史 `PAID` 无生效支付，队列未 `RESOLVED`/`COMPENSATING` 未完成，阻断发货/退款 |
+| `TCC_REFUND_SUM_MISMATCH` | Order | TCC Σ 活动组系统责任上限 ≠ 订单剩余 captured，阻断+人工 |
+| `REFUND_RESPONSIBILITY_INVALID` | Order | 责任枚举/证据/`reason_code` 非法，拒绝按该判定计算运费 |
 
 映射：AC-45 → `SETTLEMENT_CONFLICT`；AC-47 超时/失败 → `INVENTORY_NOT_READY`；AC-59 乱序 → `EVENT_OUT_OF_ORDER`；AC-44 已退款分支 → 幂等 ack，不再发起退款。
+
+### 5.7 退款承诺（Order）
+
+```text
+RESERVED --Payment 退款成功--> SETTLED（终态）
+RESERVED --打款前 REJECTED/CANCELLED--> RELEASED（终态）
+RESERVED --FAILED_PERMANENT/人工放弃 + 人工授权--> RELEASED（终态）
+
+禁止：SETTLED -> RELEASED；RELEASED -> RESERVED；任何 worker 自动 RELEASED
+```
+
+- 同一 `refund_id` 只有一条承诺；`SETTLED`/`RELEASED` 为终态。
+- `RELEASED` 只释放额度；不恢复许可、不重开退款、不改变订单/组已达成事实。
+- 释放必须记录授权与审计；无授权的迁移一律拒绝（`REFUND_RELEASE_NOT_AUTHORIZED`）。
+
+### 5.8 历史支付解析队列（Order）
+
+```text
+OPEN --运营开始处理--> RESOLVING --人工解析成功--> RESOLVED（终态）
+OPEN/RESOLVING --24h 到期（有捕获且无离仓组）--> COMPENSATING
+COMPENSATING --撤 permit + CancelIfCreated + INV-44 释放 + Payment.Refund 成功--> EXPIRED_REFUND（终态）
+OPEN/RESOLVING --24h 到期（无捕获且零元）--> EXPIRED_ZERO（终态）
+OPEN/RESOLVING --24h 到期（无捕获有金额/有离仓组）--> EXPIRED_FINANCE（终态，人工）
+OPEN/RESOLVING --人工判定脏数据--> REJECTED（终态）
+COMPENSATING --补偿失败/超时--> COMPENSATING（告警，重试未完成步骤）
+
+禁止：COMPENSATING -> OPEN；COMPENSATING -> EXPIRED_REFUND（补偿/退款未完成）；
+      EXPIRED_* -> OPEN；REJECTED -> OPEN；RESOLVED -> EXPIRED_*；终态删除记录
+```
+
+- 队列状态只表达“历史支付身份解析进度”，不是 Payment 的捕获事实，也不是退款完成事实。
+- `COMPENSATING` 是 `EXPIRED_REFUND` 的**中间态**，只用于“有捕获且无离仓组”的 24h 到期分支；进入后先撤销未离仓组 permit、`CancelIfCreated`、按 INV-44 释放预留；再幂等持久化支付级 `refund_applications(PENDING)`；最后执行 Payment.Refund；全部成功后才置 `EXPIRED_REFUND`。
+- `COMPENSATING` 内补偿失败/超时保持 `COMPENSATING` 并告警，只重试未完成步骤；不得回到 `OPEN` 或提前置 `EXPIRED_REFUND`。
+- `EXPIRED_REFUND` 是“按支付级退款收敛”的终态（D-22 已批准：有捕获且无离仓组，经 `COMPENSATING` 全部成功后使用）；`EXPIRED_ZERO` 是“按零元身份收敛”的终态（D-22 已批准：无捕获且零元时使用）；`EXPIRED_FINANCE` 是“财务人工关闭/核定”的终态（D-22 已批准：无捕获有金额、或有离仓组、或无法自动收敛时使用；仅财务/授权角色 7 天内关闭，不重开，逾期升级）；`REJECTED` 只用于脏数据。
+- 24h 按系统计时（小时），起点=进入 `OPEN`；有捕获且无离仓组必须先进入 `COMPENSATING`，不得直接 `EXPIRED_REFUND`；`EXPIRED_FINANCE` 由财务/授权角色在 7 天内关闭，逾期升级并保持该终态；并发到期/人工解析只允许一个终态。
+
+### 5.9 `order.settled` 影子开关（业务状态）
+
+```text
+OFF（生产默认） --Director 影子批准--> SHADOW（只记录/比对）
+SHADOW --SPEC-0002 §7/G-4/五方终态/--release --range + Director--> ON（以 order.settled 为履约准入依据）
+ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migration）
+```
+
+- `OFF→SHADOW` 仅需 Director 影子批准，不要求全量 release 门禁；`SHADOW` 仍只记录/比对，不建单、不放行。
+- `SHADOW→ON` 必须通过 SPEC-0002 §7 矩阵、G-4、五方终态核对、`--release --range` 与 Director/人类批准；`ON` 必须写明移除日期与回滚路径。
+- `ON→SHADOW/OFF` 回滚须经人类批准；非批准变更 fail-closed 并告警。
+- `OFF/SHADOW` 均不得以 `order.settled` 建单或放行发货；切换不在本 Spec 的默认批准范围，默认 false 不得改变。
 
 ---
 
@@ -394,6 +560,12 @@ PENDING --> PROCESSING --> DONE
 | 退款申请 | 全局唯一 `refund_id`（AfterSales 用 `after_sale_no`；TCC 每组 `tcc:<payment_no>:<group_no>`；SYSTEM 用 `after_sale_no`；历史无售后单用 `legacy:<order_no>:<refund_seq>`） | 发起方 | 同键幂等；不同键按 AC-50 余额规则 |
 | 退款执行 | `refund_id` + `payment_no` | Payment | 同键幂等；失败可重试 |
 | 缺货案件 | `(order_no, group_no, case_seq)`；`case_seq` 由 Order 按 `order+group` 从 1 递增分配；上报输入必须带唯一 `event_id` | Order | 同 `event_id` 幂等/`CLOSED`；新 `event_id` 新 `case_seq`；终态后返回 `SHORTAGE_CASE_CLOSED` |
+| 人工释放承诺 | `refund_id + 授权单号` | Order（记录人工授权） | 同键幂等；不同键但同 `refund_id` 仍只允许一次有效释放 |
+| 历史支付解析队列 | `order_no` | Order | 同键复用同一条；终态后不得重开 |
+| 历史解析恢复命令 | `order_no + resolution_id` | Order/运营 | 同键幂等；只继续被阻断的动作，不重复发货/退款 |
+| TCC 补偿 | `payment_no + group_no`（组级 `refund_id=tcc:<payment_no>:<group_no>`） | Order | 同键幂等；重跑跳过已 `SETTLED` 组 |
+| 运费后置补退 | 原组 + 原售后/补退序号（可追溯的补退申请标识） | AfterSales/Order（按来源） | 同键幂等；不得复用已 `DONE` 的退款申请 |
+| `order.settled` 影子比对 | `order_no + payment_no` | Fulfillment 影子消费者 | 重复事件只记录一次差异；不产生资金/库存事实 |
 
 具体存储与唯一约束由 ADR 设计；业务要求是：**重复投递/重试不得产生第二条资金或库存事实**。
 
@@ -426,6 +598,16 @@ PENDING --> PROCESSING --> DONE
 | E19 | 已授权未离仓退款 | 未打款 | 取消 `CREATED` 运单，按 `PRE_SHIP_REVOKED` | 释放 | — | 运单 `CANCELLED`，不再发 |
 | E20 | 补货到货（用户未选前） | — | `NOTIFIED→RESTOCKED` | 保持 `CONFIRMED` | — | 可申请许可 |
 | E21 | 退款后的迟到补货 | — | 拒绝并告警，保持 `RESOLVED_REFUND` | 不恢复 | — | 不建运单 |
+| E22 | 准入后 `FAILED_PERMANENT`/人工放弃 | 不重复退款 | permit 保持终态；承诺保持 `RESERVED` 或经人工授权 `RELEASED`；不恢复发货 | 不恢复预留 | — | 不重建运单 |
+| E23 | 人工释放与重试并发 | 未打款 | 只有一个释放成功；另一个返回当前状态；额度只释放一次 | — | — | — |
+| E24 | 历史 `PAID` 无生效支付（0/多候选） | 以已捕获 intent 为准 | 进 `legacy_payment_resolution`；未离仓组禁发、退款阻断；不猜、不按 0 额度 | 保持现状，不释放 | — | 不建新运单 |
+| E25 | 历史队列 24h 到期 | 无捕获零元→`EXPIRED_ZERO`；无捕获有金额/有离仓组→`EXPIRED_FINANCE`；有捕获无离仓→先 `COMPENSATING`，完成撤 permit/CancelIfCreated/INV-44 释放后，先幂等持久化 `refund_applications(PENDING)`、再 Payment.Refund 最后执行，全部成功→`EXPIRED_REFUND`；失败/超时保持 `COMPENSATING` 告警 | `EXPIRED_REFUND` 只能由 `COMPENSATING` 全部成功进入；未离仓组保持禁发；不伪造已退款 | 仅在 `COMPENSATING` 完成撤 permit/取消运单后按 INV-44 释放 | — | `CancelIfCreated` 在 `COMPENSATING` 内完成；不建新运单 |
+| E26 | TCC Σ 不等 | 以快照为准 | 任何状态变更前阻断；告警+人工；不部分打款 | — | — | 不建单 |
+| E27 | TCC 部分组打款失败/崩溃续跑 | 已成功组已退 | 已成功组 `SETTLED`；失败组保留 `RESERVED`+任务；只补未完成组 | — | — | 已离仓组不回滚 |
+| E28 | 行级/运费超限或责任非法 | 未打款 | 拒绝 `REFUND_ADMISSION_CONFLICT`/`REFUND_RESPONSIBILITY_INVALID`；不改许可/承诺 | — | — | 不取消运单 |
+| E29 | 运费 168h 到期 | 补退运费 | 按 `MERCHANT_WAREHOUSE` 补退；同组进度；累计不超实付运费；重复触发幂等 | — | — | — |
+| E30 | `order.settled` 影子不一致/失败 | — | 结算事实不变 | — | — | 只告警/记录；不建单、不放行 |
+| E31 | 队列到期与人工 `RESOLVED` 并发 | — | 版本条件迁移只接受一个终态；败者返回当前状态 | — | — | — |
 
 ---
 
@@ -441,8 +623,21 @@ PENDING --> PROCESSING --> DONE
 | 预留释放/回库失败 | “退款处理中” | 告警：组、预留、失败原因；重试/人工补偿 |
 | 缺货 | 二选一页面 + 补货日期 | 4h/48h 超时告警、案件终态 |
 | 发货被拒 | “备货中/退款处理中” | `FULFILLMENT_NOT_ALLOWED` 原因（库存/许可/缺货/退款） |
+| 历史支付未解析 | “支付核验中”/“退款处理中” | 队列 `legacy_payment_resolution` 告警；24h 到期按 D-22 已批准分支；有捕获无离仓进入 `COMPENSATING`，失败/超时保持并告警；`EXPIRED_FINANCE` 财务 7 天时限；可按 `order_no` 人工重放 |
+| 退款承诺待人工释放 | “退款处理中” | 人工授权队列、审计记录；按 `refund_id` 重放；禁止 worker 自动关闭 |
+| 运费待判定 | “运费待判定”，最长 168h | 判责超时告警；到期按商家责任补退 |
+| TCC Σ 不等 | “退款处理中” | 告警：`payment_no`、Σ 与订单剩余 captured、差额；人工裁决，不部分打款 |
+| 影子比对差异 | 无用户可见变化 | 告警：`order_no/payment_no/差异字段`；只记录，不自动切换 |
 
 对账口径：Payment 订单级 captured/refunded、intent 级“已收未 PAID”资金（含时间窗口）、非生效捕获退款、Order 投影、未完成退款任务、预留释放结果每日对平；差异必须告警并保留可重放记录。
+
+**v1.8 对账增补**：
+
+- 每日对平 `legacy_payment_resolution` 的进入/终态计数、`EXPIRED_*` 与 `REJECTED` 的审计、阻断订单清单；不得长期停留在 `OPEN/RESOLVING`。
+- 每日对平 `RELEASED` 承诺的授权记录与额度变化；任何无授权释放视为差异并告警。
+- 每批 TCC 对平 Σ 预检快照、逐组打款与 `SETTLED` 承诺；差异告警并保留可重放记录。
+- 每日对平行级/运费组成：行已退（S14）+ 在途承诺（S15）+ 行剩余 = 行实付；累计退运费 ≤ 用户实付运费。
+- 影子期对平 `order.settled` 与 `order.paid`/订单事实；差异只告警，不自动修复。
 
 ---
 
@@ -456,9 +651,9 @@ PENDING --> PROCESSING --> DONE
 
 ---
 
-## 10. 待裁决问题（D）
+## 10. 决策与待裁决问题（D）
 
-| ID | 问题 | 建议 | 影响 |
+| ID | 问题 | 决策/建议 | 影响 |
 |---|---|---|---|
 | D-11 | 库存确认等待上限（技术失败/超时） | **2 小时**（可配）；到时仍未终态按明确失败处理：整单退款 + `CANCELLED` + 告警 | AC-47/E5；需甲方确认 |
 | D-12 | 重复支付退款是否收费、是否退运费 | **不收费、退全部非生效捕获**（用户无过错） | AC-41；需甲方确认 |
@@ -471,21 +666,43 @@ PENDING --> PROCESSING --> DONE
 | D-19 | 未离仓组的部分退款 | **不允许部分退款；必须整组退款**（避免“已退款但余量永不发”）；后续若要保留余量履约，另立 ADR 支持运单重建/许可恢复 | AC-50/§5.3；需甲方确认 |
 | D-20 | 历史单“无法确认”或缺货路径 | 按 AC-60 收敛；历史单缺货属新业务口径，需甲方确认是否沿用 §6.6 | AC-60；需甲方确认 |
 | D-21 | TCC 系统补偿是否退全部未退运费 | **退全部未退运费**（系统/平台原因，用户无过错） | AC-51；需甲方确认 |
+| D-22 | 历史队列 24h 到期后的终态分支、已离仓组处置、`EXPIRED_REFUND` 后订单生命周期终态；零元单有捕获的边界 | **HUMAN APPROVED 2026-11-24（默认）**：无捕获且零元→`EXPIRED_ZERO`；无捕获且 `pay_cent>0`→`EXPIRED_FINANCE`；有捕获且无离仓组→先 `COMPENSATING`（撤 permit/CancelIfCreated/INV-44 释放，先持久化 `refund_applications(PENDING)`，Payment.Refund 最后）全部成功后→`EXPIRED_REFUND`（**不写 `CANCELLED`**，保留订单生命周期）；补偿失败保持 `COMPENSATING`；有离仓组→`EXPIRED_FINANCE`；`pay_cent=0` 但存在已捕获 intent 时不得 `EXPIRED_ZERO`，按 AC-40 保留的第二、三条/AC-39 支付级+人工队列 | AC-63/E25/AC-60/AC-40/AC-39/AC-46/AC-25/INV-37 |
+| D-23 | `EXPIRED_FINANCE` 的处置权限、是否可重开、最长关闭时限 | **HUMAN APPROVED 2026-11-24（默认）**：仅财务/授权角色可关闭；不得重开；最长 7 天；逾期升级至更高级授权角色并保持 `EXPIRED_FINANCE`；全量审计 | AC-63/S16 |
+| D-24 | 人工释放权限矩阵（谁可授权、金额阈值、是否双人复核/审计） | **HUMAN APPROVED 2026-11-24（默认）**：仅授权角色可授权；金额 ≥1000 元必须双人复核；全量审计；按 AC-62 的最小证据字段校验 | AC-62/INV-45 |
+| D-25 | `RELEASED` 后额度是否可立即被同一订单的新退款申请使用 | **HUMAN APPROVED 2026-11-24（默认）**：释放额度可回到**同一订单/同一组**的可退余额；不得跨订单/跨组复用；新退款仍需新申请并重新准入；释放动作不得自动触发退款 | AC-62/AC-64 |
+| D-26 | 168h 运费挂起在多组/多次售后/后置补退场景的计时起点 | **HUMAN APPROVED 2026-11-24（默认）**：从该组该次售后**首次进入 `UNDETERMINED`** 的时间起算并记录证据；其他组/后续申请不重置；不按订单创建时间起算 | AC-64/AC-31/AC-32 |
+| D-27 | `order.settled` shadow 的字段/版本/比对口径、切换步骤与移除日期 | **ADR-0007 Amendment 1（accepted 2026-11-24）A-09/A-10 已决策**：本 Spec 不切换；`OFF→SHADOW` 仅 Director 影子批准；`SHADOW→ON` 需 SPEC §7/G-4/五方/`--release --range` + Director；`ON→SHADOW/OFF` 回滚需人类批准；非批准变更 fail-closed | AC-66/D-4 |
+| D-28 | `legacy_payment_resolution` 与“`PAID` 空 `settlement_payment_no`”的写入竞态、唯一键、队列 owner | **ADR-0007 Amendment 1（accepted 2026-11-24）A-04 已决策**：Order 唯一写队列；运营/Director 唯一裁决；不得由 Payment 写订单队列 | AC-63/S16/C-05 |
+| D-29 | 代码中的 `GRANTED` 许可值与 v1.7 `<NONE/CONSUMED/REVOKED>` 枚举漂移如何收敛 | **ADR-0007 Amendment 1（accepted 2026-11-24）A-11 已决策**：以 v1.7 为准；`GRANTED` 若为历史兼容值必须显式映射，不得成为第二许可状态；不得改 Spec 迁就代码 | v1.7 §2/§5.2 |
+
+**零元边界（B-3）**：`EXPIRED_ZERO` 只适用于 `pay_cent=0` 且**不存在任何已捕获 intent**；`pay_cent=0` 但存在已捕获 intent 时不得 `zero:<order_no>`/`EXPIRED_ZERO`，必须按 AC-40 保留的第二、三条与 AC-39 支付级处理并进 `legacy_payment_resolution` 人工队列。
+
+**裁决状态**：D-22…D-26 已 **HUMAN APPROVED 2026-11-24（默认）**；D-27…D-29 已由 **ADR-0007 Amendment 1（accepted 2026-11-24）** 决策。
 
 ---
 
-## 11. 与既有契约的关系及需要的升版
+## 11. 与既有契约的关系
 
-- 基线 INV-01…16、SPEC-0001 INV-17…29 继续有效；本 Spec 不废止任何 INV/AC，但依赖 SPEC-0001 v1.3 对 0001:287 的限定（D-17）。
+- 基线 INV-01…16、SPEC-0001 INV-17…29 继续有效；本 Spec 不废止任何 INV/AC，但依赖 SPEC-0001 v1.3 对 0001:287 的限定（D-17）与 v1.4 的 AC-27 EARS 迁移。
 - 明确沿用的口径：
   1. **`PAID` 前置条件**：沿用基线 INV-06“确认在标记支付之前”，收窄为“所有订单行预留 `CONFIRMED` 才能 `PAID`”。
   2. **许可枚举**：沿用 SPEC-0001 S5 与基线 §3.4 的 `NONE/CONSUMED/REVOKED`；不新增 `ALLOWED`，`FulfillmentAllowed` 只是发货时刻谓词。
   3. **签收事实**：沿用 SPEC-0001 S7；Fulfillment 落签收证据，Order 只消费与投影。
   4. **取消**：沿用 SPEC-0001 §6.7；已支付订单不提供取消，只能走售后/退款。
-- **需要 SPEC-0001 升版的冲突（D-17，不能由本 Spec 静默改写）**：
+- **SPEC-0001 升版冲突（D-17，已解决）**：
   - `docs/specs/0001` 第 287 行明文禁止“预留已释放但订单仍为已支付”。本 Spec 的组退款（普通售后/缺货）在未离仓时必然释放该组预留，同时订单生命周期仍为 `PAID`（退款态由 `refund_state` 投影表达，不存在 `PARTIALLY_REFUNDED` 生命周期值）。二者只能通过升版 0001 解决：把该禁止限定为“仍计划履约的组”，并明确组退款释放库存的合法性；否则只能改为“任何组退款都整单退款”，但这会与 AC-27/INV-38 冲突。
-  - 该升版必须由甲方批准，并在 0001 变更记录写明影响的 INV-06/INV-26/AC-27；未批准前本 Spec 不得进入 `approved`。
+  - 该升版已由 SPEC-0001 v1.3（2026-11-23 批准）完成，并在 0001 变更记录写明影响的 INV-06/INV-26/AC-27；SPEC-0001 v1.4（2026-11-24）完成 AC-27 的 EARS 迁移。
 - 本 Spec 如与上述条款冲突，以更严格且更晚批准的条款为准，并在 §13 记录影响的 INV/AC。
+
+**v1.8 与既有契约的关系**：
+
+1. 本 Spec v1.8 不废止 v1.7 的任何 INV/AC；新增 S15…S18、INV-45…49、AC-62…66，并收窄 AC-40（不重编号）。
+2. SPEC-0001 v1.3 的 D-17 组退款释放口径继续有效；v1.4 完成 AC-27 的 EARS 基线迁移（C-01，独立批准）。P-06 的行级/运费/责任必须与 0001 §6.5.1/§6.5.2/§6.5.3/§6.6.1 一致。
+3. ADR-0007 Rev 1.0 继续有效；ADR-0007 Amendment 1（accepted 2026-11-24）逐条映射 AC-62…66，并关闭 D-27…D-29；两者冲突时以 Amendment 1 为准。ADR 文件状态头由 Architect 同步；本 Spec 记录 Human 批准事实。
+4. 宪法 II.5：permit 恢复与 commitment 释放由本 Spec + ADR Amendment 1 规定；实现不得自行恢复 `REVOKED` permit 或静默释放承诺。
+5. D-4：本 Spec 不切换 `order.settled`，只做 shadow；默认 false；AC-66 不授权任何默认开启。
+6. D-5：`order.refund_requested` 保留 subject 兼容；Payment 消费者改为观察/告警、不得直接 `Refund` 的移除日期与回滚由 ADR Amendment 1 定义。
+7. 非目标不变：不引入多仓行为、部分支付、新支付渠道、Kafka/Temporal/新 ORM；不改变 0001 的拆量/选仓/签收；不改变 AI 权限。
 
 ---
 
@@ -511,6 +728,7 @@ PENDING --> PROCESSING --> DONE
 | v1.6-draft | 2026-11-23 | 按 QC-07 整改：TCC 补偿改为系统责任、每组全额（商品剩余 + 全部未退运费）、不做分摊；Σ组上限≠订单剩余 captured 时阻断告警；REFUNDED 要求运费责任已定；零元单 `DONE(zero_amount)`；历史无许可行初始化 G1；新增 D-21 | AC-50/51/§5.3/§5.5 收紧；待 QC-08 确认 |
 | **v1.6（冻结）** | 2026-11-23 | 甲方批准 v1.6；C-1（SPEC-0001 v1.3）已先行批准；D-11…D-21 全部按建议默认生效；C-9 落库（台账/索引/提交） | 新增 INV-30…44、AC-39…61；ADR-0007 启动 |
 | **v1.7（冻结）** | 2026-11-23 | 甲方批准 ADR-0007 v0.4 时同步澄清 INV-43 适用范围：组级退款需准入；支付级退款（非生效/超少付/取消）是 capture correction，不经组许可 | 仅澄清 INV-43 适用边界；不删除/重编号 AC；ADR-0007 引用 v1.7 |
+| **v1.8（冻结）** | 2026-11-24 | 甲方批准 v1.8：P-04 历史 `PAID` 解析/`legacy_payment_resolution`/`COMPENSATING`；P-05 准入不可逆与人工释放；P-06 行级 INV-24/商品运费组成/责任/168h/后置补退；TCC Σ 预检与逐组扇出；`order.settled` shadow；AC-40 零元边界收窄；新增 S15…S18、INV-45…49、AC-62…66、E22…E31、D-22…D-29；ADR-0007 Amendment 1 accepted 同日 | 影响 INV-01/04/05/06/07/14/21/24/26/30…44 + 新增 INV-45…49；既有 AC-50/51/52/53/60/61 收窄；基线回归 AC-14/21/25/27/31/32；AC-62…66 以延期行登记；不删除/重编号 AC |
 
 
 ---
@@ -525,3 +743,6 @@ PENDING --> PROCESSING --> DONE
 | Product Owner | 移入 `docs/specs/`、更新索引与 AC 台账指针 | 2026-11-23 |
 | Quality Checker | QC-08 `PASS WITH CONDITIONS`；C-1/C-8/C-9 关闭后无代码级 BLOCKER | 2026-11-23 |
 | 甲方（业务） | 批准 ADR-0007 v0.4；确认 INV-43 仅约束组级退款，支付级退款为 capture correction | 2026-11-23 |
+| 甲方（Director） | 批准 SPEC-0002 v1.8；同时批准 SPEC-0001 v1.4 与 ADR-0007 Amendment 1 | 2026-11-24 |
+| Quality Checker | QC-14 `READY FOR HUMAN SPEC APPROVAL`（0 BLOCKER；2 条非阻断待批准记录） | 2026-11-24 |
+| Product Owner | 将已批准的 v1.8 变更应用为 `docs/specs/` v1.8 approved；更新变更记录/批准记录；按 Human 指示登记 AC-62…66 延期行，Reviewer 复核 | 2026-11-24 |

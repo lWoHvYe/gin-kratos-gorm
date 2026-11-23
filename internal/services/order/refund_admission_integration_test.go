@@ -119,3 +119,29 @@ func TestAdmitRefundConsumedPermitTwoPhase(t *testing.T) {
 		t.Fatalf("shipped result=%q, want POST", reply.GetResult())
 	}
 }
+
+func TestAdmitRefundZeroAmountOrder(t *testing.T) {
+	db := orderTestDB(t)
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(nil, &fakeFulfillmentPort{status: "CANCELLED"})
+	ctx := context.Background()
+	if _, err := db.Exec(`INSERT INTO orders
+		(order_no,user_id,status,total_cent,pay_cent,paid_cent,settlement_payment_no,expire_at,applied_promotions_json)
+		VALUES ('ORD-ZADM',1,'PAID',100,0,0,'zero:ORD-ZADM',NOW(3),'[]')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no,line_no,sku_id,name,quantity,warehouse_id,fulfillment_group_no,line_paid_cent,unit_paid_cent)
+		VALUES ('ORD-ZADM',1,1,'x',1,1,'G1',0,0)`); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "R-ZERO", OrderNo: "ORD-ZADM", GroupNo: "G1", AmountCent: 0, Source: "system_zero",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply.GetResult() != refundResultPre {
+		t.Fatalf("zero refund result=%q, want PRE", reply.GetResult())
+	}
+}

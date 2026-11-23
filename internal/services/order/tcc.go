@@ -171,6 +171,7 @@ func recordWithStatus(record *orderRecord, status string) *orderRecord {
 // caller's refund decision.
 func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentRequest) (*pb.Empty, error) {
 	orderNo := strings.TrimSpace(req.GetOrderNo())
+	paymentNo := strings.TrimSpace(req.GetPaymentNo())
 	if orderNo == "" {
 		return nil, apperr.Invalid("order_no is required")
 	}
@@ -254,6 +255,27 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 	})
 	if err != nil {
 		return nil, apperr.Internal("tcc cancel paid", err)
+	}
+	// TCC compensation must also close unshipped groups. The full admission
+	// fan-out is still pending, but shipping must not be allowed to proceed
+	// while the captured money is being refunded.
+	groups, gerr := loadFulfillmentGroups(ctx, s.db, orderNo)
+	if gerr != nil {
+		return nil, apperr.Internal("load groups for tcc cancel", gerr)
+	}
+	groupNos := make([]string, 0, len(groups))
+	for _, group := range groups {
+		groupNos = append(groupNos, group.GroupNo)
+	}
+	if len(groupNos) == 0 {
+		groupNos = []string{"G1"}
+	}
+	for _, groupNo := range groupNos {
+		if _, berr := s.BlockShipmentForRefund(ctx, &pb.ShipmentPermitRequest{
+			OrderNo: orderNo, AfterSaleNo: "tcc:" + paymentNo, FulfillmentGroupNo: groupNo,
+		}); berr != nil {
+			return nil, apperr.Unavailable("block shipping for tcc cancel", berr)
+		}
 	}
 	return &pb.Empty{}, nil
 }

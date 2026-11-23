@@ -74,18 +74,25 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	if record.Status != statusPaid && record.Status != statusAllocated && record.Status != statusShipped && record.Status != statusCompleted {
 		return nil, apperr.Failed("order cannot accept refunds in status " + record.Status)
 	}
-	if s.payments == nil {
-		return nil, apperr.Unavailable("payment client is required for refund admission", nil)
-	}
-	if record.SettlementPaymentNo == "" {
-		return nil, apperr.Failed("order has no settlement payment; resolve historical payment first")
-	}
-	intent, err := s.payments.GetIntent(ctx, &pb.GetIntentRequest{PaymentNo: record.SettlementPaymentNo})
-	if err != nil {
-		return nil, apperr.Unavailable("load authoritative captured amount", err)
-	}
-	if intent.GetCapturedCent() <= 0 {
-		return nil, apperr.Failed("effective payment has no captured amount")
+	var captured, refunded int64
+	if strings.HasPrefix(record.SettlementPaymentNo, "zero:") {
+		// Zero-amount orders have no Payment intent; their captured amount is
+		// zero by definition and the group cap is zero.
+	} else {
+		if s.payments == nil {
+			return nil, apperr.Unavailable("payment client is required for refund admission", nil)
+		}
+		if record.SettlementPaymentNo == "" {
+			return nil, apperr.Failed("order has no settlement payment; resolve historical payment first")
+		}
+		intent, ierr := s.payments.GetIntent(ctx, &pb.GetIntentRequest{PaymentNo: record.SettlementPaymentNo})
+		if ierr != nil {
+			return nil, apperr.Unavailable("load authoritative captured amount", ierr)
+		}
+		if intent.GetCapturedCent() <= 0 {
+			return nil, apperr.Failed("effective payment has no captured amount")
+		}
+		captured, refunded = intent.GetCapturedCent(), intent.GetRefundedCent()
 	}
 
 	// Resume a two-phase admission after a crash before touching the permit.
@@ -121,9 +128,9 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		WHERE order_no = ? AND state = ?`, orderNo, "RESERVED").Scan(&reserved); err != nil {
 		return nil, apperr.Internal("sum refund commitments", err)
 	}
-	if req.GetAmountCent()+reserved > intent.GetCapturedCent()-intent.GetRefundedCent() {
+	if req.GetAmountCent()+reserved > captured-refunded {
 		return nil, apperr.Failed("refund exceeds the remaining captured amount").
-			WithDetails(map[string]any{"captured_cent": intent.GetCapturedCent(), "refunded_cent": intent.GetRefundedCent(), "reserved_cent": reserved})
+			WithDetails(map[string]any{"captured_cent": captured, "refunded_cent": refunded, "reserved_cent": reserved})
 	}
 	var groupPaid, groupFreight, groupConsumed int64
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(line_paid_cent),0) FROM order_items
@@ -243,4 +250,3 @@ func appendRefundAdmitted(ctx context.Context, tx *sql.Tx, refundID, orderNo, gr
 		},
 	})
 }
-

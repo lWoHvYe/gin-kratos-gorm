@@ -292,6 +292,13 @@ func (s *Service) AuthorizeShipment(ctx context.Context, req *pb.ShipmentPermitR
 	if orderNo == "" || shipmentNo == "" {
 		return nil, apperr.Invalid("order_no and shipment_no are required")
 	}
+	items, err := loadOrderItems(ctx, s.db, orderNo)
+	if err != nil {
+		return nil, apperr.Internal("load order items for shipment", err)
+	}
+	if err := s.checkOrderReady(ctx, orderNo, items); err != nil {
+		return nil, err
+	}
 	if err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
 		record, err := findOrderForUpdate(ctx, tx, orderNo)
 		if err != nil {
@@ -318,6 +325,24 @@ func (s *Service) AuthorizeShipment(ctx context.Context, req *pb.ShipmentPermitR
 		}
 		if record.RefundState == refundStateFull {
 			return apperr.Failed("order is fully refunded; shipping is blocked")
+		}
+		var groupRefundState string
+		err = tx.QueryRowContext(ctx, `SELECT refund_state FROM order_fulfillment_groups
+			WHERE order_no = ? AND group_no = ?`, orderNo, groupNo).Scan(&groupRefundState)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return apperr.Internal("load group refund state", err)
+		}
+		if groupRefundState == "REFUNDING" || groupRefundState == "REFUNDED" {
+			return apperr.Failed("group refund is in progress; shipping is blocked")
+		}
+		var shortageStatus string
+		err = tx.QueryRowContext(ctx, `SELECT status FROM order_shortage_cases
+			WHERE order_no = ? AND group_no = ?`, orderNo, groupNo).Scan(&shortageStatus)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return apperr.Internal("load shortage case", err)
+		}
+		if shortageStatus == "NOTIFIED" || shortageStatus == "RESOLVED_WAIT" {
+			return apperr.Failed("group has an open shortage case; shipping is blocked")
 		}
 		switch permit.state {
 		case permitConsumed:

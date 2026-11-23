@@ -347,6 +347,22 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 		return err
 	}
+	// Refund admission is a remote Order call; do it before opening the local
+	// line-ledger transaction. It is idempotent by after_sale_no, so the
+	// ordinary Refund path and this worker converge on one admission result.
+	if s.orders != nil {
+		amount := row.effectiveAmountCent
+		if amount <= 0 {
+			amount = row.amountCent
+		}
+		if _, err := s.orders.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+			RefundId: afterSaleNo, OrderNo: row.orderNo, GroupNo: groupNo,
+			AmountCent: amount, Source: "aftersale",
+		}); err != nil {
+			s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+			return apperr.Unavailable("refund admission", err)
+		}
+	}
 	// Hold the line ledger row locks across the idempotent Payment call. This
 	// serializes concurrent after-sales on the same line; a timeout rolls back
 	// and the durable task retries with the same after_sale_no.

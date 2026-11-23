@@ -15,8 +15,8 @@ Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未
 
 ## Phase 1 — P-01 TCC 补偿 / P-03 零元回归（Owner: Developer；依赖: T0.7）
 
-- [ ] **T1.0** P-03 回归：零元 `SettleZero`/`AdmitRefund`/0 元售后；确认不调 Payment，AC-40 证据
-- [ ] **T1.1** Σ 预检：事务外 Payment 快照；Tx1 订单锁下用同一快照复核；不等不改状态，告警+人工
+- [ ] **T1.0** P-03 回归：Order 侧 `SettleZero`/`AdmitRefund` 已测；**AC-40 零元售后端到端 BLOCKED**（见 Phase 1a checkpoint）
+- [x] **T1.1** Σ 预检 helper + 测试（未接线 `TccCancelMarkPaid`；T1.2 接线）
 - [ ] **T1.2** Tx1：REFUNDING + batch；`NONE→REVOKED`，`CONSUMED` 只写 PENDING_REMOTE + commitment（不得写 REVOKED）
 - [ ] **T1.3** 持久 batch/task；`REFUNDING` 不早退；崩溃重跑只补未完成组
 - [ ] **T1.4** 逐组 `AdmitRefund`；全部成功后才打款；已发货组 POST
@@ -70,3 +70,13 @@ Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未
 - Reviewer FAIL → 冻结 `PAY-SETTLE-01`；不得新 id/hotfix 绕过。
 - AC 矩阵无 AC 编号/owner/evidence → 不得进入 Phase 5。
 - 默认开关未过 Director release 门禁 → 保持 false。
+
+## Phase 1a checkpoint (2026-11-24)
+
+- Implemented: `internal/services/order/tcc_precheck.go` (pure precheck, 13 tests) and AC-40 `SettleZero` capture check; commit `053896b`; build/gates OK.
+- **Contract gap (stop condition)**: zero after-sales end-to-end cannot be represented:
+  - `internal/services/aftersales/settlement.go` rejects zero-pay orders with no captured payment;
+  - `workers.go` rejects `refundCent <= 0`;
+  - `after_sales.amount_state` has no `DONE(zero_amount)` value.
+- No code was invented. Needs PO/Architect amendment: define where `DONE(zero_amount)` lives (recommended: Order `refund_applications(source=system_zero, amount=0, DONE)` as execution ledger; AfterSales projects `REFUNDED` with zero amount).
+- T1.2 (batch/permit) paused until this gap is ruled, per Plan stop condition.

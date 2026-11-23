@@ -9,6 +9,14 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-24 Phase 1 parallel authorization
+
+Director authorized T1.2/T1.3 (TCC batch + permit Tx1 + resume) to proceed in
+parallel with the AC-40 zero after-sales amendment. This is a scoped waiver of
+the "any contract gap stops implementation" rule for this isolated gap. T1.0
+Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
+Architect amendment is approved. No AC-VERIFIED or Release PASS.
+
 ## 2026-11-24 human decisions: constitution v1.2.0
 
 - Director approved constitution v1.2.0 and set the hierarchy:

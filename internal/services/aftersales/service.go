@@ -601,10 +601,15 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.orders.BlockShipmentForRefund(ctx, &pb.ShipmentPermitRequest{
-		OrderNo: pre.orderNo, AfterSaleNo: afterSaleNo, FulfillmentGroupNo: groupNo,
+	refundAmount := pre.effectiveAmountCent
+	if refundAmount <= 0 {
+		refundAmount = pre.amountCent
+	}
+	if _, err := s.orders.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: afterSaleNo, OrderNo: pre.orderNo, GroupNo: groupNo,
+		AmountCent: refundAmount, Source: "aftersale",
 	}); err != nil {
-		return nil, apperr.Unavailable("block shipping for refund", err)
+		return nil, apperr.Unavailable("refund admission", err)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)

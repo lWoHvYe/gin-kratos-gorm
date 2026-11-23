@@ -108,6 +108,7 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 	if o.AllocationFrozenAt.Valid {
 		out.AllocationFrozenAtUnix = o.AllocationFrozenAt.Time.Unix()
 	}
+	out.SettlementPaymentNo = o.SettlementPaymentNo
 	if len(groups) == 0 {
 		out.ShipmentStatus = shipmentStatus(o.Status)
 	} else {

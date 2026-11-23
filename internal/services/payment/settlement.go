@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"time"
 
+	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/id"
 )
 
@@ -152,13 +154,74 @@ func runSettlementOnce(ctx context.Context, database *sql.DB, svc *Service, logg
 		return releaseSettlementTask(ctx, database, task.PaymentNo, "intent is not SUCCEEDED")
 	}
 	if err := svc.markPaidTCC(ctx, in); err != nil {
-		_ = releaseSettlementTask(ctx, database, task.PaymentNo, err.Error())
-		return err
+		handled, herr := svc.handleSettlementFailure(ctx, in)
+		if herr != nil {
+			_ = releaseSettlementTask(ctx, database, task.PaymentNo, herr.Error())
+			return herr
+		}
+		if !handled {
+			_ = releaseSettlementTask(ctx, database, task.PaymentNo, err.Error())
+			return err
+		}
+		return finishSettlementTask(ctx, database, task.PaymentNo, settlementDone, "")
 	}
 	if err := finishSettlementTask(ctx, database, task.PaymentNo, settlementDone, ""); err != nil {
 		if logger != nil {
 			logger.Error("mark settlement task done", "payment_no", task.PaymentNo, "error", err)
 		}
+	}
+	return nil
+}
+
+// handleSettlementFailure turns the two non-retryable settlement outcomes into
+// payment-level refunds. It never asks Order to admit a refund: duplicate
+// captures and cancelled orders are capture corrections, not fulfillment
+// refunds (ADR-0007 D-08/Q-06).
+func (s *Service) handleSettlementFailure(ctx context.Context, in *intent) (bool, error) {
+	if s.orders == nil {
+		return false, nil
+	}
+	order, err := s.orders.GetOrder(ctx, &pb.GetOrderRequest{OrderNo: in.OrderNo, Admin: true})
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case order.GetStatus() == "PAID" && order.GetSettlementPaymentNo() != "" && order.GetSettlementPaymentNo() != in.PaymentNo:
+		return true, s.refundNonEffective(ctx, in, "duplicate")
+	case order.GetStatus() == "CANCELLED":
+		return true, s.refundNonEffective(ctx, in, "cancel")
+	default:
+		return false, nil
+	}
+}
+
+func (s *Service) refundNonEffective(ctx context.Context, in *intent, reason string) error {
+	amount := in.CapturedCent
+	if amount <= 0 {
+		amount = in.AmountCent
+	}
+	if amount <= 0 {
+		return nil
+	}
+	key := "pay:" + in.PaymentNo + ":" + reason
+	if reason == "duplicate" {
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO payment_duplicate_captures
+			(payment_no, order_no, amount_cent, refund_id, state, version)
+			VALUES (?, ?, ?, ?, 'PENDING', 1)
+			ON DUPLICATE KEY UPDATE refund_id = refund_id`,
+			in.PaymentNo, in.OrderNo, amount, key); err != nil {
+			return apperr.Internal("record duplicate capture", err)
+		}
+	}
+	_, err := s.Refund(ctx, &pb.RefundRequest{
+		PaymentNo: in.PaymentNo, AmountCent: amount, Reason: "payment " + reason,
+		IdempotencyKey: key, NonEffectiveCapture: true,
+	})
+	if err != nil {
+		return err
+	}
+	if reason == "duplicate" {
+		_, _ = s.db.ExecContext(ctx, `UPDATE payment_duplicate_captures SET state = 'REFUNDED', version = version + 1 WHERE payment_no = ?`, in.PaymentNo)
 	}
 	return nil
 }

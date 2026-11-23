@@ -386,6 +386,7 @@
   "Order.refund_state": 20,
   "Order.refund_status": 17,
   "Order.refunded_cent": 16,
+  "Order.settlement_payment_no": 28,
   "Order.shipment_status": 22,
   "Order.status": 3,
   "Order.total_cent": 4,

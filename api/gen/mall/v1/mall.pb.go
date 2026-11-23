@@ -5732,8 +5732,10 @@ type Order struct {
 	PackageCount           int32                    `protobuf:"varint,25,opt,name=package_count,json=packageCount,proto3" json:"package_count,omitempty"`
 	WarehouseCount         int32                    `protobuf:"varint,26,opt,name=warehouse_count,json=warehouseCount,proto3" json:"warehouse_count,omitempty"`
 	AllocationFrozenAtUnix int64                    `protobuf:"varint,27,opt,name=allocation_frozen_at_unix,json=allocationFrozenAtUnix,proto3" json:"allocation_frozen_at_unix,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// Effective payment identity; empty for historical orders until resolved.
+	SettlementPaymentNo string `protobuf:"bytes,28,opt,name=settlement_payment_no,json=settlementPaymentNo,proto3" json:"settlement_payment_no,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *Order) Reset() {
@@ -5953,6 +5955,13 @@ func (x *Order) GetAllocationFrozenAtUnix() int64 {
 		return x.AllocationFrozenAtUnix
 	}
 	return 0
+}
+
+func (x *Order) GetSettlementPaymentNo() string {
+	if x != nil {
+		return x.SettlementPaymentNo
+	}
+	return ""
 }
 
 type CreateOrderRequest struct {
@@ -8042,13 +8051,14 @@ func (x *VerifyPaymentReply) GetIntentStatus() string {
 }
 
 type RefundRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	PaymentNo      string                 `protobuf:"bytes,1,opt,name=payment_no,json=paymentNo,proto3" json:"payment_no,omitempty"`
-	AmountCent     int64                  `protobuf:"varint,2,opt,name=amount_cent,json=amountCent,proto3" json:"amount_cent,omitempty"`
-	Reason         string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
-	IdempotencyKey string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	PaymentNo           string                 `protobuf:"bytes,1,opt,name=payment_no,json=paymentNo,proto3" json:"payment_no,omitempty"`
+	AmountCent          int64                  `protobuf:"varint,2,opt,name=amount_cent,json=amountCent,proto3" json:"amount_cent,omitempty"`
+	Reason              string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	IdempotencyKey      string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	NonEffectiveCapture bool                   `protobuf:"varint,5,opt,name=non_effective_capture,json=nonEffectiveCapture,proto3" json:"non_effective_capture,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *RefundRequest) Reset() {
@@ -8107,6 +8117,13 @@ func (x *RefundRequest) GetIdempotencyKey() string {
 		return x.IdempotencyKey
 	}
 	return ""
+}
+
+func (x *RefundRequest) GetNonEffectiveCapture() bool {
+	if x != nil {
+		return x.NonEffectiveCapture
+	}
+	return false
 }
 
 type Refund struct {
@@ -16720,7 +16737,7 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	" \x01(\x03R\funitPaidCent\"E\n" +
 	"\x10OrderGroupAction\x12\x19\n" +
 	"\bgroup_no\x18\x01 \x01(\tR\agroupNo\x12\x16\n" +
-	"\x06action\x18\x02 \x01(\tR\x06action\"\xc7\b\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\"\xfb\b\n" +
 	"\x05Order\x12\x19\n" +
 	"\border_no\x18\x01 \x01(\tR\aorderNo\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x16\n" +
@@ -16750,7 +16767,8 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\rgroup_actions\x18\x18 \x03(\v2\x19.mall.v1.OrderGroupActionR\fgroupActions\x12#\n" +
 	"\rpackage_count\x18\x19 \x01(\x05R\fpackageCount\x12'\n" +
 	"\x0fwarehouse_count\x18\x1a \x01(\x05R\x0ewarehouseCount\x129\n" +
-	"\x19allocation_frozen_at_unix\x18\x1b \x01(\x03R\x16allocationFrozenAtUnix\"\x8a\x02\n" +
+	"\x19allocation_frozen_at_unix\x18\x1b \x01(\x03R\x16allocationFrozenAtUnix\x122\n" +
+	"\x15settlement_payment_no\x18\x1c \x01(\tR\x13settlementPaymentNo\"\x8a\x02\n" +
 	"\x12CreateOrderRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x19\n" +
 	"\bquote_id\x18\x02 \x01(\tR\aquoteId\x12\x1d\n" +
@@ -16936,14 +16954,15 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\x0eorder_prepared\x18\x01 \x01(\bR\rorderPrepared\x12-\n" +
 	"\x12inventory_prepared\x18\x02 \x01(\bR\x11inventoryPrepared\x12)\n" +
 	"\x10pricing_prepared\x18\x03 \x01(\bR\x0fpricingPrepared\x12#\n" +
-	"\rintent_status\x18\x04 \x01(\tR\fintentStatus\"\x90\x01\n" +
+	"\rintent_status\x18\x04 \x01(\tR\fintentStatus\"\xc4\x01\n" +
 	"\rRefundRequest\x12\x1d\n" +
 	"\n" +
 	"payment_no\x18\x01 \x01(\tR\tpaymentNo\x12\x1f\n" +
 	"\vamount_cent\x18\x02 \x01(\x03R\n" +
 	"amountCent\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12'\n" +
-	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"\xd8\x01\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x122\n" +
+	"\x15non_effective_capture\x18\x05 \x01(\bR\x13nonEffectiveCapture\"\xd8\x01\n" +
 	"\x06Refund\x12\x1b\n" +
 	"\trefund_no\x18\x01 \x01(\tR\brefundNo\x12\x1d\n" +
 	"\n" +

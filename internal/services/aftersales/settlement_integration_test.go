@@ -190,11 +190,15 @@ func (f *fakeOrderService) GetOrder(context.Context, *pb.GetOrderRequest, ...grp
 	return f.order, nil
 }
 
-func (f *fakeOrderService) BlockShipmentForRefund(_ context.Context, in *pb.ShipmentPermitRequest, _ ...grpc.CallOption) (*pb.Empty, error) {
+func (f *fakeOrderService) AdmitRefund(_ context.Context, in *pb.AdmitRefundRequest, _ ...grpc.CallOption) (*pb.AdmitRefundReply, error) {
 	f.blockCalls++
-	f.blocked = append(f.blocked, in.GetAfterSaleNo())
-	f.blockedGroups = append(f.blockedGroups, in.GetFulfillmentGroupNo())
-	return &pb.Empty{}, f.blockErr
+	f.blocked = append(f.blocked, in.GetRefundId())
+	f.blockedGroups = append(f.blockedGroups, in.GetGroupNo())
+	result := "PRE_SHIP_REVOKED"
+	if f.blockErr == nil && f.order != nil && f.order.GetStatus() == "SHIPPED" {
+		result = "POST_SHIP_ALLOWED"
+	}
+	return &pb.AdmitRefundReply{RefundId: in.GetRefundId(), Result: result, State: result}, f.blockErr
 }
 
 type fakePaymentService struct {

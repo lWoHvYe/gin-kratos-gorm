@@ -45,6 +45,11 @@ func RunRefundConsumer(ctx context.Context, client *mq.Client, svc *Service, log
 // must never change the lifecycle status; refund_state/refund_status are
 // orthogonal to PAID/ALLOCATED/SHIPPED/COMPLETED.
 func applyPaymentRefunded(ctx context.Context, svc *Service, event paymentRefundedEvent) error {
+	if event.NonEffectiveCapture {
+		// Duplicate/over-under capture money never enters the order's
+		// captured/refunded facts, and therefore never enters a commitment.
+		return nil
+	}
 	err := db.WithTx(ctx, svc.db, func(tx *sql.Tx) error {
 		var current int64
 		var status, refundStatus string

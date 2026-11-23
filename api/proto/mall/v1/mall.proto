@@ -575,6 +575,8 @@ message Order {
   int32 package_count = 25;
   int32 warehouse_count = 26;
   int64 allocation_frozen_at_unix = 27;
+  // Effective payment identity; empty for historical orders until resolved.
+  string settlement_payment_no = 28;
 }
 message CreateOrderRequest {
   int64 user_id = 1;
@@ -746,7 +748,7 @@ message VerifyPaymentReply {
   bool pricing_prepared = 3;
   string intent_status = 4;
 }
-message RefundRequest { string payment_no = 1; int64 amount_cent = 2; string reason = 3; string idempotency_key = 4; }
+message RefundRequest { string payment_no = 1; int64 amount_cent = 2; string reason = 3; string idempotency_key = 4; bool non_effective_capture = 5; }
 message Refund {
   string refund_no = 1;
   string payment_no = 2;

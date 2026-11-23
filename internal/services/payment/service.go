@@ -408,7 +408,7 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 				UserID: in.UserID, AmountCent: amount, RefundedCent: totalRefunded,
 				OrderRefundedCent: orderRefunded, CapturedCent: captured,
 				Reason: reason, Channel: in.Channel, Status: nextStatus,
-				IdempotencyKey: idempotencyKey,
+				IdempotencyKey: idempotencyKey, NonEffectiveCapture: req.GetNonEffectiveCapture(),
 			},
 		})
 	})

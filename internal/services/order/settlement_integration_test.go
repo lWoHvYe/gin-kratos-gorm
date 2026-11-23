@@ -58,6 +58,7 @@ func orderTestDB(t *testing.T) *sql.DB {
 			discount_cent BIGINT NOT NULL DEFAULT 0, promotion_discount_cent BIGINT NOT NULL DEFAULT 0,
 			applied_promotions_json TEXT NOT NULL, freight_cent BIGINT NOT NULL DEFAULT 0,
 			pay_cent BIGINT NOT NULL DEFAULT 0, paid_cent BIGINT NOT NULL DEFAULT 0,
+			settlement_payment_no VARCHAR(64) NOT NULL DEFAULT '',
 			refunded_cent BIGINT NOT NULL DEFAULT 0, refund_status VARCHAR(32) NOT NULL DEFAULT '',
 			refund_state VARCHAR(16) NOT NULL DEFAULT 'NONE',
 			receiver_name VARCHAR(64) NOT NULL DEFAULT '', receiver_phone VARCHAR(32) NOT NULL DEFAULT '',

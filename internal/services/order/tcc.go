@@ -88,18 +88,32 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 	if paymentNo != "" {
 		operator = truncate("payment:"+paymentNo, 64)
 	}
+	if err := s.checkOrderReady(ctx, orderNo, items); err != nil {
+		return nil, err
+	}
+	settled := false
 	err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		affected, err := updateOrderStatus(ctx, tx, orderNo, statusPendingPayment, statusPaid, paid)
+		// The TCC order branch uses the same freeze/CAS primitive as the direct
+		// path. It must not mark PAID unless every reservation is confirmed;
+		// checkOrderReady above is the synchronous gate for that.
+		affected, err := freezeAllocationTx(ctx, tx, orderNo, paid, paymentNo)
 		if err != nil {
 			return err
 		}
 		if affected == 0 {
 			return nil
 		}
+		settled = true
 		if err := insertStatusLog(ctx, tx, orderNo, statusPendingPayment, statusPaid, "payment "+paymentNo, operator); err != nil {
 			return err
 		}
 		if err := setFulfillmentGroupStatus(ctx, tx, orderNo, statusAllocated); err != nil {
+			return err
+		}
+		if err := appendAllocationFrozenEvent(ctx, tx, orderNo, record.AllocationHash, record.PackageCount, record.WarehouseCount); err != nil {
+			return err
+		}
+		if err := appendOrderSettledEvent(ctx, tx, record, paymentNo); err != nil {
 			return err
 		}
 		return outbox.Append(ctx, tx, outbox.Event{
@@ -113,6 +127,22 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 	})
 	if err != nil {
 		return nil, apperr.Internal("tcc confirm paid", err)
+	}
+	if !settled {
+		latest, err := findOrder(ctx, s.db, orderNo)
+		if err != nil {
+			return nil, apperr.Internal("reload order after tcc confirm", err)
+		}
+		if latest == nil {
+			return nil, apperr.NotFound("order not found")
+		}
+		if latest.Status == statusPaid && latest.SettlementPaymentNo == paymentNo {
+			return &pb.Empty{}, nil
+		}
+		if latest.Status == statusCancelled {
+			return nil, apperr.Failed("order was cancelled before payment confirmation")
+		}
+		return nil, apperr.Conflict(fmt.Sprintf("order cannot be paid in status %s", latest.Status))
 	}
 	if record = recordWithStatus(record, statusPaid); record != nil {
 		s.afterPaid(ctx, record)

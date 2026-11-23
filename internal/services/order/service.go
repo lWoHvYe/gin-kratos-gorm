@@ -608,11 +608,11 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	// leave the reservation in HELD state where the expiry sweeper could
 	// release it and oversell the SKU. Confirm is idempotent, so a payment
 	// callback retry is safe.
+	items, err := loadOrderItems(ctx, s.db, orderNo)
+	if err != nil {
+		return nil, apperr.Internal("load order items before payment", err)
+	}
 	if s.inventory != nil {
-		items, err := loadOrderItems(ctx, s.db, orderNo)
-		if err != nil {
-			return nil, apperr.Internal("load order items before payment", err)
-		}
 		confirmed := make([]*pb.OrderItem, 0, len(items))
 		for _, item := range items {
 			if _, err := s.inventory.Confirm(ctx, &pb.ReserveRequest{
@@ -636,6 +636,9 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 			confirmed = append(confirmed, item)
 		}
 	}
+	if err := s.checkOrderReady(ctx, orderNo, items); err != nil {
+		return nil, err
+	}
 	paymentNo := strings.TrimSpace(req.GetPaymentNo())
 	operator := "payment"
 	if paymentNo != "" {
@@ -650,7 +653,7 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 		if err := ensureAllocationSnapshotTx(ctx, tx, record); err != nil {
 			return err
 		}
-		affected, err := freezeAllocationTx(ctx, tx, orderNo, paidCent)
+		affected, err := freezeAllocationTx(ctx, tx, orderNo, paidCent, paymentNo)
 		if err != nil {
 			return err
 		}
@@ -665,6 +668,9 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 			return err
 		}
 		if err := appendAllocationFrozenEvent(ctx, tx, orderNo, record.AllocationHash, record.PackageCount, record.WarehouseCount); err != nil {
+			return err
+		}
+		if err := appendOrderSettledEvent(ctx, tx, record, paymentNo); err != nil {
 			return err
 		}
 		return outbox.Append(ctx, tx, outbox.Event{
@@ -790,6 +796,33 @@ func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *order
 // afterPaid confirms the inventory reservations and consumes the quote coupon.
 // Both calls are idempotent on the remote side; failures are logged because the
 // order is already paid and must not be rolled back.
+// checkOrderReady is the ADR-0007 readiness gate. It is a synchronous,
+// fail-closed check: if Inventory is configured and not ready, settlement must
+// not proceed. A nil client is only possible in unit tests that never wire
+// Inventory; production cmd/order always wires it.
+func (s *Service) checkOrderReady(ctx context.Context, orderNo string, items []*pb.OrderItem) error {
+	if s.inventory == nil {
+		return nil
+	}
+	req := &pb.CheckOrderReadyRequest{OrderNo: orderNo}
+	for _, item := range items {
+		req.Lines = append(req.Lines, &pb.CheckOrderReadyLineRef{
+			LineNo: item.GetLineNo(), SkuId: item.GetSkuId(),
+			WarehouseId: item.GetWarehouseId(), Quantity: item.GetQuantity(),
+		})
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	reply, err := s.inventory.CheckOrderReady(checkCtx, req)
+	if err != nil {
+		return apperr.Unavailable("inventory readiness check failed", err)
+	}
+	if !reply.GetReady() {
+		return apperr.Failed("inventory is not ready for settlement")
+	}
+	return nil
+}
+
 func (s *Service) afterPaid(ctx context.Context, record *orderRecord) {
 	items, err := loadOrderItems(ctx, s.db, record.OrderNo)
 	if err != nil {

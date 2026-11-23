@@ -35,12 +35,12 @@ func TestListOrdersScansAllColumns(t *testing.T) {
 
 	if _, err := db.ExecContext(ctx, `INSERT INTO orders
 		(order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent,
-		 applied_promotions_json, freight_cent, pay_cent, paid_cent, refunded_cent, refund_status,
+		 applied_promotions_json, freight_cent, pay_cent, paid_cent, settlement_payment_no, refunded_cent, refund_status,
 		 refund_state, receiver_name, receiver_phone, receiver_address, quote_id, client_request_id,
 		 allocation_frozen_at, allocation_hash, package_count, warehouse_count, created_at, expire_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		orderNo, userID, statusAllocated, totalCent, discountCent, promotionCent,
-		`[{"promotion_id":7,"discount_cent":500}]`, freightCent, payCent, paidCent, refundedCent, "PARTIAL",
+		`[{"promotion_id":7,"discount_cent":500}]`, freightCent, payCent, paidCent, "PAY-LIST", refundedCent, "PARTIAL",
 		"NONE", "Ada Lovelace", "13800000000", "1 Analytical Engine Way", "QUOTE-1", "client-req-1",
 		frozenAt, allocationHash, packageCount, warehouseCount, createdAt, expireAt); err != nil {
 		t.Fatalf("insert order fixture: %v", err)

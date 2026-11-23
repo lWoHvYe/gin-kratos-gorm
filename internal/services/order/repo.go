@@ -62,6 +62,7 @@ type orderRecord struct {
 	FreightCent           int64
 	PayCent               int64
 	PaidCent              int64
+	SettlementPaymentNo   string
 	RefundedCent          int64
 	RefundStatus          string
 	RefundState           string
@@ -135,7 +136,7 @@ func (o *orderRecord) toProto(items []*pb.OrderItem, groups []*fulfillmentGroup)
 }
 
 const orderColumns = `order_no, user_id, status, total_cent, discount_cent, promotion_discount_cent, applied_promotions_json,
-	freight_cent, pay_cent, paid_cent, refunded_cent, refund_status, refund_state, receiver_name, receiver_phone, receiver_address,
+	freight_cent, pay_cent, paid_cent, settlement_payment_no, refunded_cent, refund_status, refund_state, receiver_name, receiver_phone, receiver_address,
 	quote_id, client_request_id, allocation_frozen_at, allocation_hash, package_count, warehouse_count, created_at, expire_at`
 
 // orderScanDest returns the scan destinations for orderColumns in the exact
@@ -145,7 +146,7 @@ const orderColumns = `order_no, user_id, status, total_cent, discount_cent, prom
 func orderScanDest(o *orderRecord) []any {
 	return []any{
 		&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
-		&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent,
+		&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.SettlementPaymentNo, &o.RefundedCent,
 		&o.RefundStatus, &o.RefundState, &o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress,
 		&o.QuoteID, &o.ClientRequestID, &o.AllocationFrozenAt, &o.AllocationHash,
 		&o.PackageCount, &o.WarehouseCount, &o.CreatedAt, &o.ExpireAt,

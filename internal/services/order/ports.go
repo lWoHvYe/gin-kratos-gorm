@@ -18,6 +18,7 @@ type inventoryPort interface {
 	CreateSeckillReservation(ctx context.Context, in *pb.CreateSeckillReservationRequest, opts ...grpc.CallOption) (*pb.ReserveReply, error)
 	ReleaseSeckillReservation(ctx context.Context, in *pb.ReleaseSeckillReservationRequest, opts ...grpc.CallOption) (*pb.Empty, error)
 	TccCancelConfirm(ctx context.Context, in *pb.TccPaymentRequest, opts ...grpc.CallOption) (*pb.Empty, error)
+	CheckOrderReady(ctx context.Context, in *pb.CheckOrderReadyRequest, opts ...grpc.CallOption) (*pb.CheckOrderReadyReply, error)
 }
 
 type pricingPort interface {

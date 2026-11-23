@@ -360,11 +360,11 @@ func insertAllocationSnapshotTx(ctx context.Context, tx *sql.Tx, req *pb.CreateO
 // freezeAllocationTx is the single freeze point: the same transaction that
 // flips PENDING_PAYMENT -> PAID sets allocation_frozen_at and seals the
 // snapshot. A second writer gets zero affected rows and the caller reloads.
-func freezeAllocationTx(ctx context.Context, tx *sql.Tx, orderNo string, paidCent int64) (int64, error) {
+func freezeAllocationTx(ctx context.Context, tx *sql.Tx, orderNo string, paidCent int64, paymentNo string) (int64, error) {
 	res, err := tx.ExecContext(ctx, `UPDATE orders
-		SET status = ?, paid_cent = ?, allocation_frozen_at = NOW(3), version = version + 1, updated_at = NOW(3)
+		SET status = ?, paid_cent = ?, settlement_payment_no = ?, allocation_frozen_at = NOW(3), version = version + 1, updated_at = NOW(3)
 		WHERE order_no = ? AND status = ? AND allocation_frozen_at IS NULL`,
-		statusPaid, paidCent, orderNo, statusPendingPayment)
+		statusPaid, paidCent, paymentNo, orderNo, statusPendingPayment)
 	if err != nil {
 		return 0, apperr.Internal("freeze order allocation", err)
 	}
@@ -426,6 +426,32 @@ func appendAllocationFrozenEvent(ctx context.Context, tx *sql.Tx, orderNo, hash 
 		Payload: map[string]any{
 			"order_no": orderNo, "allocation_hash": hash, "package_count": packageCount,
 			"warehouse_count": warehouseCount, "frozen_at": time.Now().Unix(),
+		},
+	})
+}
+
+const topicOrderSettled = "shop.order.settled.v1"
+
+// appendOrderSettledEvent emits the new settlement fact alongside the legacy
+// order.paid event. Fulfillment consumes this event, never order.paid, for
+// admission.
+func appendOrderSettledEvent(ctx context.Context, tx *sql.Tx, record *orderRecord, paymentNo string) error {
+	groups, err := loadFulfillmentGroupsTx(ctx, tx, record.OrderNo)
+	if err != nil {
+		return err
+	}
+	groupNos := make([]string, 0, len(groups))
+	for _, group := range groups {
+		groupNos = append(groupNos, group.GroupNo)
+	}
+	return outbox.Append(ctx, tx, outbox.Event{
+		Topic: topicOrderSettled, AggregateType: "order", AggregateID: record.OrderNo,
+		EventType: "order.settled",
+		Payload: map[string]any{
+			"order_no": record.OrderNo, "payment_no": paymentNo,
+			"settled_at": time.Now().Unix(), "allocation_hash": record.AllocationHash,
+			"package_count": record.PackageCount, "warehouse_count": record.WarehouseCount,
+			"groups": groupNos,
 		},
 	})
 }

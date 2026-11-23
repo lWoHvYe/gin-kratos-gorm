@@ -61,7 +61,11 @@ func main() {
 		CarrierRegistryEnabled:     cfg.CarrierRegistryEnabled,
 		DeliveryAutoConfirmEnabled: cfg.DeliveryAutoConfirmEnabled,
 	})
-	workers.Go(func(ctx context.Context) { fulfillment.RunOrderPaidConsumer(ctx, client, svc, logger) })
+	if cfg.FulfillmentConsumeOrderSettled {
+		workers.Go(func(ctx context.Context) { fulfillment.RunOrderSettledConsumer(ctx, client, svc, logger) })
+	} else {
+		workers.Go(func(ctx context.Context) { fulfillment.RunOrderPaidConsumer(ctx, client, svc, logger) })
+	}
 	workers.Go(func(ctx context.Context) { fulfillment.RunAfterSaleRefundConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { fulfillment.RunRefundAdmittedConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) {

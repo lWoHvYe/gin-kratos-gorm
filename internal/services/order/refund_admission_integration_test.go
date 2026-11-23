@@ -37,8 +37,13 @@ func TestAdmitRefundPreShipAndIdempotent(t *testing.T) {
 		 'A','1','R','','',NOW(3),'h',1,1,NOW(3),NOW(3))`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no,line_no,sku_id,name,quantity,warehouse_id,fulfillment_group_no,line_paid_cent,unit_paid_cent)
+		VALUES ('ORD-ADM',1,1,'x',1,1,'G1',10000,10000)`); err != nil {
+		t.Fatal(err)
+	}
 	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-ADM-1", OrderNo: "ORD-ADM", GroupNo: "G1", AmountCent: 1000, Source: "aftersale",
+		RefundId: "R-ADM-1", OrderNo: "ORD-ADM", GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +59,7 @@ func TestAdmitRefundPreShipAndIdempotent(t *testing.T) {
 		t.Fatalf("permit=%q, want REVOKED", permitState)
 	}
 	again, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-ADM-1", OrderNo: "ORD-ADM", GroupNo: "G1", AmountCent: 1000, Source: "aftersale",
+		RefundId: "R-ADM-1", OrderNo: "ORD-ADM", GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
 	})
 	if err != nil || again.GetResult() != refundResultPre {
 		t.Fatalf("idempotent retry = (%v, %v)", again, err)
@@ -76,6 +81,11 @@ func TestAdmitRefundConsumedPermitTwoPhase(t *testing.T) {
 		 'A','1','R','','',NOW(3),'h',1,1,NOW(3),NOW(3))`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no,line_no,sku_id,name,quantity,warehouse_id,fulfillment_group_no,line_paid_cent,unit_paid_cent)
+		VALUES ('ORD-ADM2',1,1,'x',1,1,'G1',10000,10000)`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(`INSERT INTO order_shipping_permits (order_no, fulfillment_group_no, state)
 		VALUES ('ORD-ADM2','G1','CONSUMED')`); err != nil {
 		t.Fatal(err)
@@ -95,6 +105,9 @@ func TestAdmitRefundConsumedPermitTwoPhase(t *testing.T) {
 	}
 	_, _ = db.Exec(`INSERT INTO orders (order_no,user_id,status,total_cent,pay_cent,paid_cent,settlement_payment_no,expire_at,applied_promotions_json)
 		VALUES ('ORD-ADM3',1,'PAID',10000,10000,10000,'PAY-1',NOW(3),'[]')`)
+	_, _ = db.Exec(`INSERT INTO order_items
+		(order_no,line_no,sku_id,name,quantity,warehouse_id,fulfillment_group_no,line_paid_cent,unit_paid_cent)
+		VALUES ('ORD-ADM3',1,1,'x',1,1,'G1',10000,10000)`)
 	fake.status = "ALREADY_SHIPPED"
 	reply, err = svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
 		RefundId: "R-ADM-3", OrderNo: "ORD-ADM3", GroupNo: "G1", AmountCent: 1000,

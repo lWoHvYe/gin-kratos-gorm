@@ -22,16 +22,24 @@ type orderPaidEvent struct {
 	} `json:"items"`
 }
 
-// RunOrderPaidConsumer creates a CREATED shipment as soon as an order is paid.
-// The consumer is durable and idempotent: CreateShipment is keyed by order_no.
-// An operator still assigns carrier/tracking and calls Ship.
+// RunOrderPaidConsumer is the legacy settlement consumer. During the ADR-0007
+// rollout it can be replaced by RunOrderSettledConsumer via
+// FULFILLMENT_CONSUME_ORDER_SETTLED.
 func RunOrderPaidConsumer(ctx context.Context, client *mq.Client, svc *Service, logger *slog.Logger) {
+	runOrderSettlementConsumer(ctx, client, svc, logger, "shop.order.paid.v1", "fulfillment-order-paid", "fulfillment-auto-shipment")
+}
+
+// RunOrderSettledConsumer creates a CREATED shipment from the new settlement
+// fact. It still checks FulfillmentAllowed before creating anything.
+func RunOrderSettledConsumer(ctx context.Context, client *mq.Client, svc *Service, logger *slog.Logger) {
+	runOrderSettlementConsumer(ctx, client, svc, logger, "shop.order.settled.v1", "fulfillment-order-settled", "")
+}
+
+func runOrderSettlementConsumer(ctx context.Context, client *mq.Client, svc *Service, logger *slog.Logger, subject, durable, queue string) {
 	err := consumer.Subscribe(ctx, client, logger, consumer.Config{
-		Subject: "shop.order.paid.v1",
-		Durable: "fulfillment-order-paid",
-		// Legacy queue name must be preserved: the durable consumer already
-		// exists with this deliver group.
-		Queue:      "fulfillment-auto-shipment",
+		Subject:    subject,
+		Durable:    durable,
+		Queue:      queue,
 		MaxDeliver: 5,
 	}, func(hctx context.Context, msg *nats.Msg) error {
 		var event orderPaidEvent

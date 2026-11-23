@@ -72,6 +72,13 @@ func applyPaymentRefunded(ctx context.Context, svc *Service, event paymentRefund
 		if err := insertStatusLog(ctx, tx, event.OrderNo, status, status, "payment refund "+refundStatus, "payment"); err != nil {
 			return err
 		}
+		if event.RefundID != "" && !event.NonEffectiveCapture {
+			if _, err := tx.ExecContext(ctx, `UPDATE order_refund_commitments
+				SET state = ?, version = version + 1, updated_at = NOW(3)
+				WHERE refund_id = ? AND state = ?`, "SETTLED", event.RefundID, "RESERVED"); err != nil {
+				return apperr.Internal("settle refund commitment", err)
+			}
+		}
 		return outbox.Append(ctx, tx, outbox.Event{
 			Topic: "shop.order.refund_projected.v1", AggregateType: "order", AggregateID: event.OrderNo,
 			EventType: "order.refund_projected",

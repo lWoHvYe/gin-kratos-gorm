@@ -36,16 +36,18 @@ type AfterSaleCompleted struct {
 
 // PaymentRefunded is the canonical payment refund fact consumed by Order.
 type PaymentRefunded struct {
-	PaymentNo         string `json:"payment_no"`
-	OrderNo           string `json:"order_no"`
-	RefundNo          string `json:"refund_no"`
-	UserID            int64  `json:"user_id,omitempty"`
-	AmountCent        int64  `json:"amount_cent"`
-	RefundedCent      int64  `json:"refunded_cent"`
-	OrderRefundedCent int64  `json:"order_refunded_cent,omitempty"`
-	CapturedCent      int64  `json:"captured_cent"`
-	Reason            string `json:"reason,omitempty"`
-	Channel           string `json:"channel,omitempty"`
-	Status            string `json:"status,omitempty"`
-	IdempotencyKey    string `json:"idempotency_key,omitempty"`
+	PaymentNo           string `json:"payment_no"`
+	OrderNo             string `json:"order_no"`
+	RefundNo            string `json:"refund_no"`
+	RefundID            string `json:"refund_id,omitempty"`
+	UserID              int64  `json:"user_id,omitempty"`
+	AmountCent          int64  `json:"amount_cent"`
+	RefundedCent        int64  `json:"refunded_cent"`
+	OrderRefundedCent   int64  `json:"order_refunded_cent,omitempty"`
+	CapturedCent        int64  `json:"captured_cent"`
+	Reason              string `json:"reason,omitempty"`
+	Channel             string `json:"channel,omitempty"`
+	Status              string `json:"status,omitempty"`
+	IdempotencyKey      string `json:"idempotency_key,omitempty"`
+	NonEffectiveCapture bool   `json:"non_effective_capture,omitempty"`
 }

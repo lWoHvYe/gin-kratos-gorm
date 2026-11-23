@@ -404,7 +404,7 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 			AggregateID:   in.PaymentNo,
 			EventType:     eventRefunded,
 			Payload: events.PaymentRefunded{
-				RefundNo: ref.RefundNo, PaymentNo: in.PaymentNo, OrderNo: in.OrderNo,
+				RefundNo: ref.RefundNo, RefundID: idempotencyKey, PaymentNo: in.PaymentNo, OrderNo: in.OrderNo,
 				UserID: in.UserID, AmountCent: amount, RefundedCent: totalRefunded,
 				OrderRefundedCent: orderRefunded, CapturedCent: captured,
 				Reason: reason, Channel: in.Channel, Status: nextStatus,

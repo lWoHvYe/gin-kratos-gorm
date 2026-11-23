@@ -125,6 +125,31 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		return nil, apperr.Failed("refund exceeds the remaining captured amount").
 			WithDetails(map[string]any{"captured_cent": intent.GetCapturedCent(), "refunded_cent": intent.GetRefundedCent(), "reserved_cent": reserved})
 	}
+	var groupPaid, groupFreight, groupConsumed int64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(line_paid_cent),0) FROM order_items
+		WHERE order_no = ? AND fulfillment_group_no = ?`, orderNo, groupNo).Scan(&groupPaid); err != nil {
+		return nil, apperr.Internal("sum group paid amount", err)
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(freight_share_cent),0) FROM order_fulfillment_groups
+		WHERE order_no = ? AND group_no = ?`, orderNo, groupNo).Scan(&groupFreight); err != nil {
+		return nil, apperr.Internal("load group freight share", err)
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(amount_cent),0) FROM order_refund_commitments
+		WHERE order_no = ? AND group_no = ? AND state IN ('RESERVED','SETTLED')`, orderNo, groupNo).Scan(&groupConsumed); err != nil {
+		return nil, apperr.Internal("sum group refund commitments", err)
+	}
+	groupRemaining := groupPaid + groupFreight - groupConsumed
+	if groupRemaining < 0 {
+		groupRemaining = 0
+	}
+	if req.GetAmountCent() > groupRemaining {
+		return nil, apperr.Failed("refund exceeds the group remaining amount").
+			WithDetails(map[string]any{"group_remaining_cent": groupRemaining, "requested_cent": req.GetAmountCent()})
+	}
+	if permit.state != permitConsumed && req.GetAmountCent() != groupRemaining {
+		return nil, apperr.Failed("partial refund of an unshipped group requires a full-group refund").
+			WithDetails(map[string]any{"group_remaining_cent": groupRemaining, "requested_cent": req.GetAmountCent()})
+	}
 
 	result := refundResultPre
 	state := refundResultPre

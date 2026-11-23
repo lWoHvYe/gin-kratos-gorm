@@ -6,11 +6,11 @@ Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未
 ## Phase 0 — Contract（批准前不进入 Phase 1）
 
 - [x] **T0.1** D-1..D-5 人类/PO 裁决记录（Owner: PO + Human；依赖: 无；验收: 写入 SPEC/ADR 变更记录）—— Director approved 2026-11-24
-- [ ] **T0.2** SPEC-0001 v1.4：AC-27 EARS（只禁行首 Gherkin；句内 AND/OR 允许）；登记迁移（Owner: PO；依赖: T0.1）
-- [ ] **T0.3** SPEC-0002 v1.8：P-04/P-05/P-06、Σ 预检、人工释放、行/运费/责任、AC-62+（Owner: PO；依赖: T0.1）
-- [ ] **T0.4** ADR-0007 Amendment 1：TCC batch/扇出、Σ 预检、permit 冻结顺序、`refund_applications`、`legacy_payment_resolution`、commitment 行/组成、消费者切换（Owner: Architect；依赖: T0.3）
-- [ ] **T0.5** proto 增量字段与 RPC（Architect owner；Developer 只消费；依赖: T0.4）
-- [ ] **T0.6** migrations：`refund_applications`、commitment lines、`legacy_payment_resolution`、`refund_seq`；真实迁移测试（Owner: Developer；依赖: T0.4）
+- [x] **T0.2** SPEC-0001 v1.4：AC-27 EARS（只禁行首 Gherkin；句内 AND/OR 允许）；登记迁移（Owner: PO；依赖: T0.1）
+- [x] **T0.3** SPEC-0002 v1.8：P-04/P-05/P-06、Σ 预检、人工释放、行/运费/责任、AC-62+（Owner: PO；依赖: T0.1）
+- [x] **T0.4** ADR-0007 Amendment 1（accepted 2026-11-24）：TCC batch/扇出、Σ 预检、permit 冻结顺序、`refund_applications`、`legacy_payment_resolution`、commitment 行/组成、消费者切换（Owner: Architect；依赖: T0.3）
+- [ ] **T0.5** proto 增量字段与 RPC（C-04，进行中）（Architect owner；Developer 只消费；依赖: T0.4）
+- [ ] **T0.6** migrations（C-05，进行中）：`refund_applications`、commitment lines、`legacy_payment_resolution`、`refund_seq`；真实迁移测试（Owner: Developer；依赖: T0.4）
 - [ ] **T0.7** QC/Reviewer/PO/Architect/Human 批准 Phase 0（Owner: Lead 组织；依赖: T0.2–T0.6）
 
 ## Phase 1 — P-01 TCC 补偿 / P-03 零元回归（Owner: Developer；依赖: T0.7）

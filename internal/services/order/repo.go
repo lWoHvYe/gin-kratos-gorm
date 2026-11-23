@@ -138,13 +138,23 @@ const orderColumns = `order_no, user_id, status, total_cent, discount_cent, prom
 	freight_cent, pay_cent, paid_cent, refunded_cent, refund_status, refund_state, receiver_name, receiver_phone, receiver_address,
 	quote_id, client_request_id, allocation_frozen_at, allocation_hash, package_count, warehouse_count, created_at, expire_at`
 
+// orderScanDest returns the scan destinations for orderColumns in the exact
+// column order declared above. Every SELECT of orderColumns goes through this
+// helper, so adding or reordering a column cannot leave one read path behind:
+// the single SELECT and the single destination list live side by side.
+func orderScanDest(o *orderRecord) []any {
+	return []any{
+		&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
+		&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent,
+		&o.RefundStatus, &o.RefundState, &o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress,
+		&o.QuoteID, &o.ClientRequestID, &o.AllocationFrozenAt, &o.AllocationHash,
+		&o.PackageCount, &o.WarehouseCount, &o.CreatedAt, &o.ExpireAt,
+	}
+}
+
 func scanOrder(row *sql.Row) (*orderRecord, error) {
 	var o orderRecord
-	err := row.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
-		&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.RefundState,
-		&o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
-		&o.ClientRequestID, &o.AllocationFrozenAt, &o.AllocationHash, &o.PackageCount,
-		&o.WarehouseCount, &o.CreatedAt, &o.ExpireAt)
+	err := row.Scan(orderScanDest(&o)...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -289,10 +299,7 @@ func listOrders(ctx context.Context, q querier, where string, args []any, orderB
 	var records []*orderRecord
 	for rows.Next() {
 		var o orderRecord
-		if err := rows.Scan(&o.OrderNo, &o.UserID, &o.Status, &o.TotalCent, &o.DiscountCent, &o.PromotionDiscountCent,
-			&o.AppliedPromotionsJSON, &o.FreightCent, &o.PayCent, &o.PaidCent, &o.RefundedCent, &o.RefundStatus, &o.RefundState,
-			&o.ReceiverName, &o.ReceiverPhone, &o.ReceiverAddress, &o.QuoteID,
-			&o.ClientRequestID, &o.CreatedAt, &o.ExpireAt); err != nil {
+		if err := rows.Scan(orderScanDest(&o)...); err != nil {
 			return nil, err
 		}
 		records = append(records, &o)

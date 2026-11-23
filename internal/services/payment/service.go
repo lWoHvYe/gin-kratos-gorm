@@ -96,6 +96,28 @@ func (s *Service) CreateIntent(ctx context.Context, req *pb.CreateIntentRequest)
 	if req.GetAmountCent() <= 0 {
 		return nil, apperr.Invalid("amount_cent must be greater than 0")
 	}
+	// ADR-0007 D-03: the payment authority must verify the order identity and
+	// exact payable amount before opening a channel intent. The nil check is
+	// only for tests that never wire the Order client; production always wires
+	// it in cmd/payment.
+	if s.orders != nil {
+		callCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		order, err := s.orders.GetOrder(callCtx, &pb.GetOrderRequest{OrderNo: orderNo, Admin: true})
+		cancel()
+		if err != nil {
+			return nil, apperr.Unavailable("load order for payment intent", err)
+		}
+		if order.GetUserId() != req.GetUserId() {
+			return nil, apperr.Forbidden("order belongs to another user")
+		}
+		if order.GetStatus() != "PENDING_PAYMENT" {
+			return nil, apperr.Failed("order cannot accept payment in status " + order.GetStatus())
+		}
+		if req.GetAmountCent() != order.GetPayCent() {
+			return nil, apperr.Invalid("amount_cent must equal order pay_cent").
+				WithDetails(map[string]any{"pay_cent": order.GetPayCent()})
+		}
+	}
 	channel := strings.TrimSpace(req.GetChannel())
 	if channel == "" {
 		channel = defaultChannel

@@ -27,6 +27,17 @@ old table still described P2#10 as rejected and Phase 7 as not started.
   implementation approval.
 - Contract debt: SPEC-0001 AC-27 使用 Given/Then/And，下一次 SPEC-0001 版本升级 MUST
   改为 EARS 并登记基线迁移；在此之前不得把 AC-27 标为 AC-VERIFIED。
+- 2026-11-24: Director approved D-22..D-26 defaults:
+  - D-22: 24h terminal — no capture/zero -> `EXPIRED_ZERO`; captured and no shipped group ->
+    `EXPIRED_REFUND` (does not write `CANCELLED`); shipped group -> `EXPIRED_FINANCE`;
+  - D-23: `EXPIRED_FINANCE` only finance/authorized role; no reopen; max 7 days;
+  - D-24: authorized role; >=1000 CNY dual review; full audit;
+  - D-25: `RELEASED` quota reusable for the same order/group; new refund still needs a new
+    application + admission;
+  - D-26: 168h starts at the group's first `UNDETERMINED` for that after-sale; other groups/
+    later applications do not reset.
+  These are business decisions only; SPEC-0002 v1.8 still needs QC/Reviewer and human
+  `SPEC_APPROVED`, and D-27..D-29 remain Architect decisions.
 
 ## P1
 

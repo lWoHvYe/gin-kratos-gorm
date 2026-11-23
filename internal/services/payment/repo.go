@@ -227,6 +227,27 @@ func (r *repo) intentByOrder(ctx context.Context, q querier, orderNo string) (*i
 	return rows[len(rows)-1], nil
 }
 
+// allIntentsByOrder returns every intent for an order, regardless of status.
+// It is the read-only source for Order's historical effective-payment
+// resolution; it never mutates state.
+func (r *repo) allIntentsByOrder(ctx context.Context, q querier, orderNo string) ([]*intent, error) {
+	rows, err := q.QueryContext(ctx, `SELECT `+intentColumns+` FROM payment_intents
+		WHERE order_no = ? ORDER BY id ASC`, orderNo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]*intent, 0, 2)
+	for rows.Next() {
+		in, err := scanIntent(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, in)
+	}
+	return out, rows.Err()
+}
+
 // intentsByOrder returns every settled intent for an order in deterministic
 // creation order. A single order may have multiple captured intents (retries or
 // channel fallbacks); refund allocation and captured facts must aggregate them.

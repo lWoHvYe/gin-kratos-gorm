@@ -1426,6 +1426,7 @@ const (
 	InventoryService_TccConfirm_FullMethodName                = "/mall.v1.InventoryService/TccConfirm"
 	InventoryService_TccCancelConfirm_FullMethodName          = "/mall.v1.InventoryService/TccCancelConfirm"
 	InventoryService_TccQueryConfirm_FullMethodName           = "/mall.v1.InventoryService/TccQueryConfirm"
+	InventoryService_CheckOrderReady_FullMethodName           = "/mall.v1.InventoryService/CheckOrderReady"
 	InventoryService_AllocateSeckillStock_FullMethodName      = "/mall.v1.InventoryService/AllocateSeckillStock"
 	InventoryService_ReleaseSeckillStock_FullMethodName       = "/mall.v1.InventoryService/ReleaseSeckillStock"
 	InventoryService_GetSeckillStock_FullMethodName           = "/mall.v1.InventoryService/GetSeckillStock"
@@ -1459,6 +1460,9 @@ type InventoryServiceClient interface {
 	TccConfirm(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccCancelConfirm(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*Empty, error)
 	TccQueryConfirm(ctx context.Context, in *TccPaymentRequest, opts ...grpc.CallOption) (*TccQueryReply, error)
+	// Read-only readiness check used by Order settlement: all requested lines
+	// must be CONFIRMED before an order may become PAID. It never mutates stock.
+	CheckOrderReady(ctx context.Context, in *CheckOrderReadyRequest, opts ...grpc.CallOption) (*CheckOrderReadyReply, error)
 	// Seckill stock is carved out of normal inventory before a sale starts.
 	// Allocation/release are idempotent by activity_id.
 	AllocateSeckillStock(ctx context.Context, in *AllocateSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error)
@@ -1628,6 +1632,16 @@ func (c *inventoryServiceClient) TccQueryConfirm(ctx context.Context, in *TccPay
 	return out, nil
 }
 
+func (c *inventoryServiceClient) CheckOrderReady(ctx context.Context, in *CheckOrderReadyRequest, opts ...grpc.CallOption) (*CheckOrderReadyReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckOrderReadyReply)
+	err := c.cc.Invoke(ctx, InventoryService_CheckOrderReady_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *inventoryServiceClient) AllocateSeckillStock(ctx context.Context, in *AllocateSeckillStockRequest, opts ...grpc.CallOption) (*SeckillStock, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SeckillStock)
@@ -1722,6 +1736,9 @@ type InventoryServiceServer interface {
 	TccConfirm(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccCancelConfirm(context.Context, *TccPaymentRequest) (*Empty, error)
 	TccQueryConfirm(context.Context, *TccPaymentRequest) (*TccQueryReply, error)
+	// Read-only readiness check used by Order settlement: all requested lines
+	// must be CONFIRMED before an order may become PAID. It never mutates stock.
+	CheckOrderReady(context.Context, *CheckOrderReadyRequest) (*CheckOrderReadyReply, error)
 	// Seckill stock is carved out of normal inventory before a sale starts.
 	// Allocation/release are idempotent by activity_id.
 	AllocateSeckillStock(context.Context, *AllocateSeckillStockRequest) (*SeckillStock, error)
@@ -1785,6 +1802,9 @@ func (UnimplementedInventoryServiceServer) TccCancelConfirm(context.Context, *Tc
 }
 func (UnimplementedInventoryServiceServer) TccQueryConfirm(context.Context, *TccPaymentRequest) (*TccQueryReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TccQueryConfirm not implemented")
+}
+func (UnimplementedInventoryServiceServer) CheckOrderReady(context.Context, *CheckOrderReadyRequest) (*CheckOrderReadyReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckOrderReady not implemented")
 }
 func (UnimplementedInventoryServiceServer) AllocateSeckillStock(context.Context, *AllocateSeckillStockRequest) (*SeckillStock, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AllocateSeckillStock not implemented")
@@ -2098,6 +2118,24 @@ func _InventoryService_TccQueryConfirm_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_CheckOrderReady_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckOrderReadyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).CheckOrderReady(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_CheckOrderReady_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).CheckOrderReady(ctx, req.(*CheckOrderReadyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InventoryService_AllocateSeckillStock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AllocateSeckillStockRequest)
 	if err := dec(in); err != nil {
@@ -2290,6 +2328,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TccQueryConfirm",
 			Handler:    _InventoryService_TccQueryConfirm_Handler,
+		},
+		{
+			MethodName: "CheckOrderReady",
+			Handler:    _InventoryService_CheckOrderReady_Handler,
 		},
 		{
 			MethodName: "AllocateSeckillStock",
@@ -3796,6 +3838,7 @@ const (
 	PaymentService_CreateIntent_FullMethodName      = "/mall.v1.PaymentService/CreateIntent"
 	PaymentService_GetIntent_FullMethodName         = "/mall.v1.PaymentService/GetIntent"
 	PaymentService_GetPaymentByOrder_FullMethodName = "/mall.v1.PaymentService/GetPaymentByOrder"
+	PaymentService_ListOrderIntents_FullMethodName  = "/mall.v1.PaymentService/ListOrderIntents"
 	PaymentService_Callback_FullMethodName          = "/mall.v1.PaymentService/Callback"
 	PaymentService_Refund_FullMethodName            = "/mall.v1.PaymentService/Refund"
 	PaymentService_RefundOrder_FullMethodName       = "/mall.v1.PaymentService/RefundOrder"
@@ -3815,6 +3858,9 @@ type PaymentServiceClient interface {
 	// captured intent for an order; only captured/partially-refunded/refunded
 	// intents are eligible.
 	GetPaymentByOrder(ctx context.Context, in *GetPaymentByOrderRequest, opts ...grpc.CallOption) (*Intent, error)
+	// Read-only list of every intent for an order. Used by Order to resolve a
+	// historical effective payment; it never mutates state.
+	ListOrderIntents(ctx context.Context, in *ListOrderIntentsRequest, opts ...grpc.CallOption) (*IntentList, error)
 	Callback(ctx context.Context, in *CallbackRequest, opts ...grpc.CallOption) (*CallbackReply, error)
 	Refund(ctx context.Context, in *RefundRequest, opts ...grpc.CallOption) (*Empty, error)
 	RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*RefundOrderReply, error)
@@ -3854,6 +3900,16 @@ func (c *paymentServiceClient) GetPaymentByOrder(ctx context.Context, in *GetPay
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Intent)
 	err := c.cc.Invoke(ctx, PaymentService_GetPaymentByOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) ListOrderIntents(ctx context.Context, in *ListOrderIntentsRequest, opts ...grpc.CallOption) (*IntentList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IntentList)
+	err := c.cc.Invoke(ctx, PaymentService_ListOrderIntents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3922,6 +3978,9 @@ type PaymentServiceServer interface {
 	// captured intent for an order; only captured/partially-refunded/refunded
 	// intents are eligible.
 	GetPaymentByOrder(context.Context, *GetPaymentByOrderRequest) (*Intent, error)
+	// Read-only list of every intent for an order. Used by Order to resolve a
+	// historical effective payment; it never mutates state.
+	ListOrderIntents(context.Context, *ListOrderIntentsRequest) (*IntentList, error)
 	Callback(context.Context, *CallbackRequest) (*CallbackReply, error)
 	Refund(context.Context, *RefundRequest) (*Empty, error)
 	RefundOrder(context.Context, *RefundOrderRequest) (*RefundOrderReply, error)
@@ -3945,6 +4004,9 @@ func (UnimplementedPaymentServiceServer) GetIntent(context.Context, *GetIntentRe
 }
 func (UnimplementedPaymentServiceServer) GetPaymentByOrder(context.Context, *GetPaymentByOrderRequest) (*Intent, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPaymentByOrder not implemented")
+}
+func (UnimplementedPaymentServiceServer) ListOrderIntents(context.Context, *ListOrderIntentsRequest) (*IntentList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListOrderIntents not implemented")
 }
 func (UnimplementedPaymentServiceServer) Callback(context.Context, *CallbackRequest) (*CallbackReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Callback not implemented")
@@ -4032,6 +4094,24 @@ func _PaymentService_GetPaymentByOrder_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PaymentServiceServer).GetPaymentByOrder(ctx, req.(*GetPaymentByOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_ListOrderIntents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrderIntentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).ListOrderIntents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_ListOrderIntents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).ListOrderIntents(ctx, req.(*ListOrderIntentsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4144,6 +4224,10 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPaymentByOrder",
 			Handler:    _PaymentService_GetPaymentByOrder_Handler,
+		},
+		{
+			MethodName: "ListOrderIntents",
+			Handler:    _PaymentService_ListOrderIntents_Handler,
 		},
 		{
 			MethodName: "Callback",
@@ -4845,6 +4929,7 @@ var PromotionService_ServiceDesc = grpc.ServiceDesc{
 const (
 	FulfillmentService_CreateShipment_FullMethodName        = "/mall.v1.FulfillmentService/CreateShipment"
 	FulfillmentService_Ship_FullMethodName                  = "/mall.v1.FulfillmentService/Ship"
+	FulfillmentService_CancelIfCreated_FullMethodName       = "/mall.v1.FulfillmentService/CancelIfCreated"
 	FulfillmentService_Receive_FullMethodName               = "/mall.v1.FulfillmentService/Receive"
 	FulfillmentService_GetShipment_FullMethodName           = "/mall.v1.FulfillmentService/GetShipment"
 	FulfillmentService_GetShipmentByOrder_FullMethodName    = "/mall.v1.FulfillmentService/GetShipmentByOrder"
@@ -4868,6 +4953,9 @@ const (
 type FulfillmentServiceClient interface {
 	CreateShipment(ctx context.Context, in *CreateShipmentRequest, opts ...grpc.CallOption) (*Shipment, error)
 	Ship(ctx context.Context, in *ShipRequest, opts ...grpc.CallOption) (*Shipment, error)
+	// Refund admission: cancel a CREATED shipment, or report that it already
+	// left the warehouse. Idempotent by refund_id.
+	CancelIfCreated(ctx context.Context, in *CancelIfCreatedRequest, opts ...grpc.CallOption) (*CancelIfCreatedReply, error)
 	Receive(ctx context.Context, in *ReceiveRequest, opts ...grpc.CallOption) (*Shipment, error)
 	GetShipment(ctx context.Context, in *GetShipmentRequest, opts ...grpc.CallOption) (*Shipment, error)
 	GetShipmentByOrder(ctx context.Context, in *GetShipmentByOrderRequest, opts ...grpc.CallOption) (*Shipment, error)
@@ -4905,6 +4993,16 @@ func (c *fulfillmentServiceClient) Ship(ctx context.Context, in *ShipRequest, op
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Shipment)
 	err := c.cc.Invoke(ctx, FulfillmentService_Ship_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) CancelIfCreated(ctx context.Context, in *CancelIfCreatedRequest, opts ...grpc.CallOption) (*CancelIfCreatedReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelIfCreatedReply)
+	err := c.cc.Invoke(ctx, FulfillmentService_CancelIfCreated_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5049,6 +5147,9 @@ func (c *fulfillmentServiceClient) ListCarriers(ctx context.Context, in *Empty, 
 type FulfillmentServiceServer interface {
 	CreateShipment(context.Context, *CreateShipmentRequest) (*Shipment, error)
 	Ship(context.Context, *ShipRequest) (*Shipment, error)
+	// Refund admission: cancel a CREATED shipment, or report that it already
+	// left the warehouse. Idempotent by refund_id.
+	CancelIfCreated(context.Context, *CancelIfCreatedRequest) (*CancelIfCreatedReply, error)
 	Receive(context.Context, *ReceiveRequest) (*Shipment, error)
 	GetShipment(context.Context, *GetShipmentRequest) (*Shipment, error)
 	GetShipmentByOrder(context.Context, *GetShipmentByOrderRequest) (*Shipment, error)
@@ -5077,6 +5178,9 @@ func (UnimplementedFulfillmentServiceServer) CreateShipment(context.Context, *Cr
 }
 func (UnimplementedFulfillmentServiceServer) Ship(context.Context, *ShipRequest) (*Shipment, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ship not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) CancelIfCreated(context.Context, *CancelIfCreatedRequest) (*CancelIfCreatedReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelIfCreated not implemented")
 }
 func (UnimplementedFulfillmentServiceServer) Receive(context.Context, *ReceiveRequest) (*Shipment, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Receive not implemented")
@@ -5170,6 +5274,24 @@ func _FulfillmentService_Ship_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(FulfillmentServiceServer).Ship(ctx, req.(*ShipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_CancelIfCreated_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelIfCreatedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).CancelIfCreated(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_CancelIfCreated_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).CancelIfCreated(ctx, req.(*CancelIfCreatedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5422,6 +5544,10 @@ var FulfillmentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ship",
 			Handler:    _FulfillmentService_Ship_Handler,
+		},
+		{
+			MethodName: "CancelIfCreated",
+			Handler:    _FulfillmentService_CancelIfCreated_Handler,
 		},
 		{
 			MethodName: "Receive",

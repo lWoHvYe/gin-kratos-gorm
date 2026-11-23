@@ -253,6 +253,9 @@ service InventoryService {
   rpc TccConfirm (TccPaymentRequest) returns (Empty);
   rpc TccCancelConfirm (TccPaymentRequest) returns (Empty);
   rpc TccQueryConfirm (TccPaymentRequest) returns (TccQueryReply);
+  // Read-only readiness check used by Order settlement: all requested lines
+  // must be CONFIRMED before an order may become PAID. It never mutates stock.
+  rpc CheckOrderReady (CheckOrderReadyRequest) returns (CheckOrderReadyReply);
   // Seckill stock is carved out of normal inventory before a sale starts.
   // Allocation/release are idempotent by activity_id.
   rpc AllocateSeckillStock (AllocateSeckillStockRequest) returns (SeckillStock);
@@ -302,6 +305,30 @@ message ReserveRequest {
   int64 ttl_seconds = 5;
 }
 message ReserveReply { string reservation_no = 1; int64 expires_at_unix = 2; }
+
+message CheckOrderReadyLineRef {
+  int32 line_no = 1;
+  int64 sku_id = 2;
+  int64 warehouse_id = 3;
+  int32 quantity = 4;
+}
+message CheckOrderReadyRequest {
+  string order_no = 1;
+  repeated CheckOrderReadyLineRef lines = 2;
+}
+message CheckOrderReadyLineStatus {
+  int32 line_no = 1;
+  int64 sku_id = 2;
+  int64 warehouse_id = 3;
+  int32 quantity = 4;
+  string status = 5;
+  int64 version = 6;
+}
+message CheckOrderReadyReply {
+  bool ready = 1;
+  repeated CheckOrderReadyLineStatus lines = 2;
+  int64 reservation_version = 3;
+}
 message AdminAdjustStockRequest {
   int64 sku_id = 1;
   int64 warehouse_id = 2;
@@ -639,6 +666,9 @@ service PaymentService {
   // captured intent for an order; only captured/partially-refunded/refunded
   // intents are eligible.
   rpc GetPaymentByOrder (GetPaymentByOrderRequest) returns (Intent);
+  // Read-only list of every intent for an order. Used by Order to resolve a
+  // historical effective payment; it never mutates state.
+  rpc ListOrderIntents (ListOrderIntentsRequest) returns (IntentList);
   rpc Callback (CallbackRequest) returns (CallbackReply);
   rpc Refund (RefundRequest) returns (Empty);
   rpc RefundOrder (RefundOrderRequest) returns (RefundOrderReply);
@@ -665,6 +695,8 @@ message CreateIntentRequest {
 }
 message GetIntentRequest { string payment_no = 1; }
 message GetPaymentByOrderRequest { string order_no = 1; }
+message ListOrderIntentsRequest { string order_no = 1; }
+message IntentList { repeated Intent intents = 1; }
 message CallbackRequest {
   string payment_no = 1;
   string channel = 2;
@@ -849,6 +881,9 @@ message PromotionReservationList { repeated PromotionReservation reservations = 
 service FulfillmentService {
   rpc CreateShipment (CreateShipmentRequest) returns (Shipment);
   rpc Ship (ShipRequest) returns (Shipment);
+  // Refund admission: cancel a CREATED shipment, or report that it already
+  // left the warehouse. Idempotent by refund_id.
+  rpc CancelIfCreated (CancelIfCreatedRequest) returns (CancelIfCreatedReply);
   rpc Receive (ReceiveRequest) returns (Shipment);
   rpc GetShipment (GetShipmentRequest) returns (Shipment);
   rpc GetShipmentByOrder (GetShipmentByOrderRequest) returns (Shipment);
@@ -893,6 +928,17 @@ message CreateShipmentRequest {
   string carrier_code = 7;
 }
 message ShipRequest { string shipment_no = 1; }
+
+message CancelIfCreatedRequest {
+  string order_no = 1;
+  string group_no = 2;
+  string shipment_no = 3;
+  string refund_id = 4;
+}
+message CancelIfCreatedReply {
+  // CANCELLED | ALREADY_SHIPPED | RECEIVED | TRANSIENT_ERROR
+  string status = 1;
+}
 message ReceiveRequest { string shipment_no = 1; }
 message GetShipmentRequest { string shipment_no = 1; }
 message GetShipmentByOrderRequest { string order_no = 1; }

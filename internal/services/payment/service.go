@@ -197,6 +197,25 @@ func (s *Service) GetPaymentByOrder(ctx context.Context, req *pb.GetPaymentByOrd
 	return aggregate, nil
 }
 
+// ListOrderIntents is a read-only view of every intent for an order. Order uses
+// it to resolve the effective payment of a historical PAID order; it never
+// mutates state.
+func (s *Service) ListOrderIntents(ctx context.Context, req *pb.ListOrderIntentsRequest) (*pb.IntentList, error) {
+	orderNo := strings.TrimSpace(req.GetOrderNo())
+	if orderNo == "" {
+		return nil, apperr.Invalid("order_no is required")
+	}
+	intents, err := newRepo(s.db).allIntentsByOrder(ctx, s.db, orderNo)
+	if err != nil {
+		return nil, apperr.Internal("list order intents", err)
+	}
+	out := &pb.IntentList{Intents: make([]*pb.Intent, 0, len(intents))}
+	for _, in := range intents {
+		out.Intents = append(out.Intents, in.toPB())
+	}
+	return out, nil
+}
+
 // Callback applies a channel event to an intent. A (channel, event_id) pair is
 // processed at most once; replaying it is a successful no-op that still
 // reconciles the order, so a callback retried after a MarkPaid failure is able

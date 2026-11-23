@@ -44,6 +44,7 @@ func orderTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	for _, table := range []string{"order_refund_admissions", "order_refund_commitments",
+		"order_refund_commitment_lines", "refund_applications", "refund_batches",
 		"order_shipping_permits", "order_fulfillment_groups", "order_items",
 		"order_allocation_snapshots", "order_allocation_decisions", "order_shortage_cases",
 		"order_reconciliation_diffs", "order_status_logs", "orders", "outbox_events"} {
@@ -120,11 +121,51 @@ func orderTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE IF NOT EXISTS order_refund_commitments (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL,
 			group_no VARCHAR(64) NOT NULL, refund_id VARCHAR(128) NOT NULL,
-			amount_cent BIGINT NOT NULL, state VARCHAR(16) NOT NULL DEFAULT 'RESERVED',
+			amount_cent BIGINT NOT NULL, goods_cent BIGINT NOT NULL DEFAULT 0,
+			freight_cent BIGINT NOT NULL DEFAULT 0, composition_known TINYINT(1) NOT NULL DEFAULT 0,
+			composition_source VARCHAR(16) NOT NULL DEFAULT 'legacy',
+			state VARCHAR(16) NOT NULL DEFAULT 'RESERVED',
 			version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_order_refund_commitment (order_no, group_no, refund_id))`,
+		// C-05 migrations/order/0017_refund_batch_ledger.sql (test projection).
+		`CREATE TABLE IF NOT EXISTS refund_batches (
+			batch_id VARCHAR(96) NOT NULL, source VARCHAR(24) NOT NULL,
+			order_no VARCHAR(64) NOT NULL, payment_no VARCHAR(64) NOT NULL,
+			attempt_seq INT NOT NULL DEFAULT 1, state VARCHAR(24) NOT NULL,
+			captured_snapshot_cent BIGINT NOT NULL DEFAULT 0,
+			refunded_snapshot_cent BIGINT NOT NULL DEFAULT 0,
+			sum_group_cap_cent BIGINT NOT NULL DEFAULT 0,
+			remaining_captured_cent BIGINT NOT NULL DEFAULT 0,
+			attempts INT NOT NULL DEFAULT 0, lease_owner VARCHAR(64) NOT NULL DEFAULT '',
+			lease_until DATETIME(3) NULL, last_error VARCHAR(1024) NOT NULL DEFAULT '',
+			version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+			PRIMARY KEY (batch_id),
+			KEY idx_refund_batch_lookup (source, order_no, payment_no, state))`,
+		`CREATE TABLE IF NOT EXISTS refund_applications (
+			refund_id VARCHAR(128) NOT NULL, batch_id VARCHAR(96) NULL, source VARCHAR(24) NOT NULL,
+			order_no VARCHAR(64) NOT NULL, group_no VARCHAR(64) NULL,
+			non_effective_capture TINYINT(1) NOT NULL DEFAULT 0,
+			amount_cent BIGINT NOT NULL DEFAULT 0, goods_cent BIGINT NOT NULL DEFAULT 0,
+			freight_cent BIGINT NOT NULL DEFAULT 0, state VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+			admission_result VARCHAR(24) NOT NULL DEFAULT '', attempts INT NOT NULL DEFAULT 0,
+			lease_owner VARCHAR(64) NOT NULL DEFAULT '', lease_until DATETIME(3) NULL,
+			last_error VARCHAR(1024) NOT NULL DEFAULT '', version BIGINT NOT NULL DEFAULT 1,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+			PRIMARY KEY (refund_id),
+			UNIQUE KEY uk_refund_app_batch_group (batch_id, group_no),
+			KEY idx_refund_app_order_state (order_no, state))`,
+		// C-05 migrations/order/0018_refund_commitment_composition.sql (test projection).
+		`CREATE TABLE IF NOT EXISTS order_refund_commitment_lines (
+			refund_id VARCHAR(128) NOT NULL, line_no INT NOT NULL,
+			quantity INT NOT NULL DEFAULT 0, goods_cent BIGINT NOT NULL DEFAULT 0,
+			freight_cent BIGINT NOT NULL DEFAULT 0,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			PRIMARY KEY (refund_id, line_no))`,
 		`CREATE TABLE IF NOT EXISTS order_allocation_snapshots (
 			order_no VARCHAR(64) NOT NULL PRIMARY KEY, allocation_hash CHAR(64) NOT NULL DEFAULT '',
 			lines_json JSON NOT NULL, groups_json JSON NOT NULL, frozen_at DATETIME(3) NULL,
@@ -170,7 +211,9 @@ func orderTestDB(t *testing.T) *sql.DB {
 	}
 	for _, table := range []string{"order_allocation_decisions", "order_allocation_snapshots", "order_shortage_cases",
 		"order_reconciliation_diffs", "order_fulfillment_groups", "order_items", "order_shipping_permits",
-		"order_status_logs", "orders", "outbox_events"} {
+		"order_status_logs", "orders", "outbox_events",
+		"refund_applications", "refund_batches", "order_refund_commitment_lines",
+		"order_refund_commitments", "order_refund_admissions"} {
 		if _, err := db.Exec("DELETE FROM " + table); err != nil {
 			t.Fatal(err)
 		}
@@ -386,9 +429,10 @@ func containsAction(actions []string, want string) bool {
 
 func TestTccCancelKeepsLifecycleAndSetsRefundState(t *testing.T) {
 	db := orderTestDB(t)
-	svc := settlementService(db)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 1000})
 	ctx := context.Background()
 	seedSettlementOrder(t, db, "ORD-TCC-PENDING", statusPendingPayment, 1000, 0, refundStateNone)
+	seedTccLine(t, db, "ORD-TCC-PENDING", 1, defaultGroupNo, 1000)
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
 		OrderNo: "ORD-TCC-PENDING", PaymentNo: "PAY-1", PaidCent: 1000,
 	}); err != nil {
@@ -403,15 +447,22 @@ func TestTccCancelKeepsLifecycleAndSetsRefundState(t *testing.T) {
 	if status != statusPaid || refundState != refundStateRefunding || paid != 1000 {
 		t.Fatalf("pending tcc cancel = %s/%s/%d", status, refundState, paid)
 	}
-	var topic string
-	if err := db.QueryRow(`SELECT topic FROM outbox_events ORDER BY id DESC LIMIT 1`).Scan(&topic); err != nil {
+	// T1.2: the legacy order.refund_requested trigger is gone; refunds go
+	// through the durable batch/admission ledger instead.
+	var refundRequested int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM outbox_events WHERE topic = ?`, topicOrderRefundRequested).
+		Scan(&refundRequested); err != nil {
 		t.Fatal(err)
 	}
-	if topic != topicOrderRefundRequested {
-		t.Fatalf("outbox topic = %s", topic)
+	if refundRequested != 0 {
+		t.Fatalf("tcc cancel still emits order.refund_requested (%d rows)", refundRequested)
 	}
 
 	seedSettlementOrder(t, db, "ORD-TCC-PAID", statusPaid, 1000, 0, refundStateNone)
+	seedTccLine(t, db, "ORD-TCC-PAID", 1, defaultGroupNo, 1000)
+	if _, err := db.Exec(`UPDATE orders SET settlement_payment_no = 'PAY-2' WHERE order_no = 'ORD-TCC-PAID'`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
 		OrderNo: "ORD-TCC-PAID", PaymentNo: "PAY-2", PaidCent: 1000,
 	}); err != nil {
@@ -428,7 +479,7 @@ func TestTccCancelKeepsLifecycleAndSetsRefundState(t *testing.T) {
 
 func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
 	db := orderTestDB(t)
-	svc := settlementService(db)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 1000})
 	ctx := context.Background()
 	seedSettlementOrder(t, db, "ORD-GROUP", statusPendingPayment, 1000, 0, refundStateNone)
 	tx, err := db.BeginTx(ctx, nil)
@@ -480,7 +531,7 @@ func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
 
 func TestMultiGroupShadowAllocatedTogether(t *testing.T) {
 	db := orderTestDB(t)
-	svc := settlementService(db)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 1000})
 	ctx := context.Background()
 	seedSettlementOrder(t, db, "ORD-MULTI", statusPendingPayment, 1000, 0, refundStateNone)
 	tx, err := db.BeginTx(ctx, nil)

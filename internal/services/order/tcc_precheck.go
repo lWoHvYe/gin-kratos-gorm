@@ -154,6 +154,16 @@ func (s *Service) readTccPaymentSnapshot(ctx context.Context, record *orderRecor
 // snapshot. It performs no writes and no remote calls, so Tx1 can call it with
 // *sql.Tx after locking the order row (ADR §4.1.2 step 3).
 func computeTccPrecheck(ctx context.Context, q querier, record *orderRecord, snapshot *tccPaymentSnapshot) (*tccPrecheck, error) {
+	return computeTccPrecheckExcluding(ctx, q, record, snapshot, "")
+}
+
+// computeTccPrecheckExcluding is computeTccPrecheck with a refund_id prefix to
+// ignore when summing existing commitments. Resume (T1.3) re-runs the Σ
+// equation for a batch that already reserved its groups: those commitments are
+// the amount being compensated, so counting them again would always show a
+// shortfall. The prefix is `tcc:<payment_no>:`, i.e. this compensation's own
+// group refund identities; it never excludes another flow's commitments.
+func computeTccPrecheckExcluding(ctx context.Context, q querier, record *orderRecord, snapshot *tccPaymentSnapshot, excludeRefundPrefix string) (*tccPrecheck, error) {
 	if record == nil || snapshot == nil {
 		return nil, apperr.Internal("TCC precheck requires an order and a payment snapshot", nil)
 	}
@@ -202,7 +212,7 @@ func computeTccPrecheck(ctx context.Context, q querier, record *orderRecord, sna
 	if err != nil {
 		return nil, apperr.Internal("sum group line paid amount", err)
 	}
-	committedByGroup, err := loadGroupCommittedCent(ctx, q, record.OrderNo)
+	committedByGroup, err := loadGroupCommittedCentFiltered(ctx, q, record.OrderNo, excludeRefundPrefix)
 	if err != nil {
 		return nil, apperr.Internal("sum group refund commitments", err)
 	}
@@ -309,22 +319,42 @@ func validateTccSum(result *tccPrecheck) error {
 // together with the error so the caller can log/audit the numbers; no table,
 // event or state is modified.
 func (s *Service) precheckTccSum(ctx context.Context, orderNo, paymentNo string) (*tccPrecheck, error) {
+	result, _, err := s.precheckTccSumWithSnapshot(ctx, orderNo, paymentNo)
+	return result, err
+}
+
+// precheckTccSumWithSnapshot also returns the Payment snapshot so Tx1 can
+// re-run the Σ equation with exactly the same facts (ADR §4.1.2 step 1/3).
+func (s *Service) precheckTccSumWithSnapshot(ctx context.Context, orderNo, paymentNo string) (*tccPrecheck, *tccPaymentSnapshot, error) {
 	orderNo = strings.TrimSpace(orderNo)
 	if orderNo == "" {
-		return nil, apperr.Invalid("order_no is required")
+		return nil, nil, apperr.Invalid("order_no is required")
 	}
 	record, err := findOrder(ctx, s.db, orderNo)
 	if err != nil {
-		return nil, apperr.Internal("load order for TCC precheck", err)
+		return nil, nil, apperr.Internal("load order for TCC precheck", err)
 	}
 	if record == nil {
-		return nil, apperr.NotFound("order not found")
+		return nil, nil, apperr.NotFound("order not found")
 	}
 	snapshot, err := s.readTccPaymentSnapshot(ctx, record, paymentNo)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	result, err := computeTccPrecheck(ctx, s.db, record, snapshot)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := validateTccSum(result); err != nil {
+		return result, snapshot, err
+	}
+	return result, snapshot, nil
+}
+
+// recheckTccSumLocked re-runs the Σ precheck against an already locked order
+// row with the same Payment snapshot. It performs no remote call (ADR §4.1.2).
+func (s *Service) recheckTccSumLocked(ctx context.Context, q querier, record *orderRecord, snapshot *tccPaymentSnapshot) (*tccPrecheck, error) {
+	result, err := computeTccPrecheck(ctx, q, record, snapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +379,24 @@ func (s *Service) recheckTccSumTx(ctx context.Context, tx *sql.Tx, orderNo strin
 	if record == nil {
 		return nil, apperr.NotFound("order not found")
 	}
-	result, err := computeTccPrecheck(ctx, tx, record, snapshot)
+	return s.recheckTccSumLocked(ctx, tx, record, snapshot)
+}
+
+// recheckTccSumTxExcluding is the resume recheck (T1.3): the same equation, but
+// this compensation's own commitments are ignored because they are the quota
+// being resumed, not quota that another refund already took.
+func (s *Service) recheckTccSumTxExcluding(ctx context.Context, tx *sql.Tx, orderNo string, snapshot *tccPaymentSnapshot, excludeRefundPrefix string) (*tccPrecheck, error) {
+	if tx == nil {
+		return nil, apperr.Internal("TCC resume recheck requires a transaction", nil)
+	}
+	record, err := findOrderForUpdate(ctx, tx, orderNo)
+	if err != nil {
+		return nil, apperr.Internal("lock order for TCC resume recheck", err)
+	}
+	if record == nil {
+		return nil, apperr.NotFound("order not found")
+	}
+	result, err := computeTccPrecheckExcluding(ctx, tx, record, snapshot, excludeRefundPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -385,20 +432,31 @@ func loadGroupPaidCent(ctx context.Context, q querier, orderNo string) (map[stri
 }
 
 func loadGroupCommittedCent(ctx context.Context, q querier, orderNo string) (map[string]int64, error) {
-	rows, err := q.QueryContext(ctx, `SELECT group_no, COALESCE(SUM(amount_cent),0)
+	return loadGroupCommittedCentFiltered(ctx, q, orderNo, "")
+}
+
+// loadGroupCommittedCentFiltered sums RESERVED/SETTLED commitment headers.
+// excludeRefundPrefix (optional) ignores this compensation's own refund_ids so
+// a resume recheck sees the quota it is about to refund (T1.3).
+func loadGroupCommittedCentFiltered(ctx context.Context, q querier, orderNo, excludeRefundPrefix string) (map[string]int64, error) {
+	query := `SELECT group_no, refund_id, COALESCE(SUM(amount_cent),0)
 		FROM order_refund_commitments
 		WHERE order_no = ? AND state IN ('RESERVED','SETTLED')
-		GROUP BY group_no`, orderNo)
+		GROUP BY group_no, refund_id`
+	rows, err := q.QueryContext(ctx, query, orderNo)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := make(map[string]int64, 2)
 	for rows.Next() {
-		var groupNo string
+		var groupNo, refundID string
 		var amount int64
-		if err := rows.Scan(&groupNo, &amount); err != nil {
+		if err := rows.Scan(&groupNo, &refundID, &amount); err != nil {
 			return nil, err
+		}
+		if excludeRefundPrefix != "" && strings.HasPrefix(strings.TrimSpace(refundID), excludeRefundPrefix) {
+			continue
 		}
 		out[strings.TrimSpace(groupNo)] += amount
 	}

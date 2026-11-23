@@ -2,11 +2,11 @@
 id: SPEC-0001
 title: 多仓按数量拆行、选仓优先级与承运商签收
 status: approved          # draft | in-review | approved | superseded
-version: 1.2
-updated_at: 2026-11-22
+version: 1.3
+updated_at: 2026-11-23
 owner: Product Owner
 approved_by: 甲方
-approved_at: 2026-11-22
+approved_at: 2026-11-23
 domain: fulfillment
 supersedes: []
 superseded_by: null
@@ -17,12 +17,12 @@ adr: [0005]               # Architect 出稿后回填
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.2（已冻结） |
-| 日期 | 2026-11-22（v1.1 修正 AC-02/判责；v1.2 裁决 Architect P-01…P-18） |
-| 状态 | **已批准**：甲方 2026-11-22 批准 v1.0；v1.1、v1.2 为回写裁决，见第 13、15 节 |
+| 版本 | v1.3（已冻结） |
+| 日期 | 2026-11-23（v1.1 修正 AC-02/判责；v1.2 裁决 P-01…P-18；v1.3 组退款释放口径） |
+| 状态 | **已批准**：甲方 2026-11-22 批准 v1.0；v1.1、v1.2 为回写裁决；v1.3 于 2026-11-23 批准，见第 13、14、15 节 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件，不接收口头补充） |
-| 冻结规则 | v1.2 后任何业务口径变更必须升版为 v1.3 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
+| 冻结规则 | v1.3 后任何业务口径变更必须升版为 v1.4 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
 | 依据 | `AGENTS.md`、ADR [0002](../adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../architecture-baseline.md)（INV-01…INV-16） |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准。任何实现方式、数据结构、接口形态、算法选择均不在本文件范围内，Architect 需要自行设计并接受本文件的验收。
@@ -284,7 +284,15 @@ adr: [0005]               # Architect 出稿后回填
 | 付款前下单校验失败 | 明确返回"库存已变化"并附新预览；用户不接受则下单失败，不扣款 |
 | 付款后、发货前发现仓内实物不足 | **禁止**换仓/加组/降级；系统必须在**缺货确认后 4 小时内**（系统计时，起点=该组进入缺货待处理）自动通知用户，二选一：等待补货（给出明确日期）或该组退款；用户自**通知发出后 48 小时**内未选择，默认该组退款（fail-safe，不扣用户）。4 小时是系统计时口径，不是人工 SLA |
 | 发货后发现少发 | **本期只做该部分退款，不做补发**（D-09）；不得跨仓调拨 |
-| 已支付订单 | 不得出现"预留已释放但订单仍为已支付"的状态组合（基线 INV-06） |
+| 已支付订单 | **仍计划履约的组**不得出现"预留已释放且仍可继续发货"的状态组合（基线 INV-06）；已进入组级退款（`refund_state=REFUNDING/REFUNDED`）且许可已 `REVOKED`/运单已 `CANCELLED` 的组，其预留由退款准入释放或补偿释放，是合法结果，不构成该禁止组合 |
+
+#### 6.6.1 组退款后的库存处置
+
+- 组退款来源包括：普通售后退款、TCC 补偿退款、SYSTEM 缺货退款；三者共用同一组级退款准入。
+- 未离仓组（无运单 / 运单 `CREATED` / `CANCELLED`）：由 Inventory 释放该组预留；`HELD` 直接释放，`CONFIRMED` 走基线 `CancelConfirm` 的补偿释放。
+- 已离仓组（运单 `SHIPPED/RECEIVED` 或带离仓时间的 `EXCEPTION`）：不得释放预留来“冲销”已发事实；退货回库仍按 INV-03，回库成功后再退款。
+- 释放/回库失败必须重试并告警；释放后 `available <= on_hand`，且行数量守恒（INV-17），不得超卖或重复退款。
+- 组退款不改变订单生命周期；退款进度只写 `refund_state`，不得写回 `orders.status`（INV-01/AC-25）。
 
 ### 6.7 取消与退款边界
 
@@ -357,8 +365,9 @@ CREATED → SHIPPED(已揽收) → IN_TRANSIT(运输中) → OUT_FOR_DELIVERY(�
 
 ```text
 PENDING_PAYMENT --支付确认--> PAID --首组发货--> ALLOCATED --全部发货--> SHIPPED --全部收货--> COMPLETED
-       │                        │
-       └──取消/超时/补偿──> CANCELLED <──取消（仅未发货）──┘
+       │
+       └──取消/超时/结算失败退款──> CANCELLED
+（仅 PENDING_PAYMENT 可取消；PAID 后不提供用户取消；TCC 补偿/结算失败可进入 CANCELLED，见 §6.7）
 ```
 
 ### 7.2 履约组
@@ -396,6 +405,8 @@ CREATED --发货--> SHIPPED --签收--> RECEIVED
 | G2 退款（未发） | ALLOCATED | PARTIALLY_SHIPPED | G1 SHIPPED / G2 CANCELLED | G2 REFUNDED |
 | 全部退款（未发） | ALLOCATED | UNSHIPPED | CANCELLED×2 | REFUNDED×2 |
 | 全部退款（未发）对外展示 | — | — | — | **"已关闭（全部退款）"，不写 status** |
+
+> 注：G2 退款（未发）行的 `G2 REFUNDED` 表示其预留已由退款准入释放（§6.6.1），该释放合法，不构成 §6.6 禁止组合；订单生命周期仍为 ALLOCATED/PAID，G2 的退款态由 `refund_state` 表达。
 
 ---
 
@@ -560,6 +571,8 @@ Then 生命周期 ALLOCATED、履约投影 PARTIALLY_SHIPPED、G1 SHIPPED、G2 A
 **AC-27** 已退款未发组不卡住订单
 Given 拆量订单 G2 退款完成、G1 正常发货
 Then 订单投影按 G1 推进；G2 不得让订单停留在 ALLOCATED 或阻塞 G1 发货
+And G2 的预留释放/运单取消不构成 §6.6 禁止的组合；订单生命周期仍为 PAID/ALLOCATED/SHIPPED，
+    G2 的退款进度由 refund_state 表达
 
 ### 知情与展示
 
@@ -676,6 +689,7 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | **v1.0（冻结）** | 2026-11-22 | 甲方确认 D-01…D-07 全部按默认值生效；状态转为"已批准"，可交 Architect 出 ADR |
 | **v1.1（冻结）** | 2026-11-22 | ① 修正 AC-02：原场景"仓 2 有 5 件"与 §6.1 单仓优先冲突，判据改为"无单仓可满足"，并补反向判据；依据 ADR-0005 修订登记 A-01 与甲方裁决。② 新增 6.5.2 责任判定与运费挂起、INV-29、AC-31…33、D-08。影响：AC-02/AC-14 判定、退款运费分支 |
 | **v1.2（冻结）** | 2026-11-22 | 裁决 Architect P-01…P-18（逐条见第 15 节）：行优惠改为最大余数法、运费券只减运费、部分组运费按 `freight_share` 退、时限统一按小时并写明起点、申诉优先于自动确认、补发本期关闭、组号按 `warehouse_id`。新增 6.5.3 原因码/证据最小集、D-09/D-10、AC-34…38。影响：AC-03/04/14、6.4/6.5/6.6/6.8 |
+| **v1.3（冻结）** | 2026-11-23 | 限定 §6.6“已支付订单不得预留已释放”的适用对象为仍计划履约的组；新增 §6.6.1 组退款库存处置；AC-27 追加解释；修正 §7.1“已支付未发货可取消”的既有漂移；§7.5 增加 G2 退款备注。影响：INV-06 适用口径、INV-26/AC-27 组退款边界、§7.1/§7.5 状态投影；不删除/重编号任何 AC |
 
 ---
 
@@ -688,6 +702,8 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | Product Owner | v1.0 提交并冻结 | 2026-11-22 |
 | Product Owner | 回写 v1.1：修正 AC-02，新增 6.5.2 责任判定、INV-29、AC-31…33、D-08（D-08 待甲方追认，未追认按默认执行） | 2026-11-22 |
 | Product Owner | 回写 v1.2：裁决 Architect P-01…P-18，新增 6.5.3 原因码/证据、D-09/D-10、AC-34…38，第 15 节为裁决索引 | 2026-11-22 |
+| 甲方（业务） | 批准 v1.3：组退款释放预留的边界；解除 SPEC-0002 的 C-1 前置条件 | 2026-11-23 |
+| Product Owner | 原地升版 v1.3：§6.6 限定、§6.6.1、AC-27 解释、§7.1/§7.5 修正 | 2026-11-23 |
 | System Architect | 已接收，产出 ADR-0005（accepted） | 2026-11-22 |
 | Developer | 实施中；偏差与待回写项见 [adr-0005-deviation-register.md](../implementation/adr-0005-deviation-register.md) | 2026-11-22 |
 

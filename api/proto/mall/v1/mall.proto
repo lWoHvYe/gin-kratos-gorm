@@ -491,6 +491,12 @@ service OrderService {
   // AdmitRefund is the group-level refund admission gate (ADR-0007). It is
   // idempotent by refund_id and never moves money.
   rpc AdmitRefund (AdmitRefundRequest) returns (AdmitRefundReply);
+  // Legacy payment resolution queue (ADR-0007 Amendment 1 §5). Get is
+  // read-only and never creates a queue row; Resolve/Resume are ops/Director
+  // commands and Payment never writes this queue.
+  rpc GetLegacyResolution (GetLegacyResolutionRequest) returns (LegacyResolution);
+  rpc ResolveLegacyResolution (ResolveLegacyResolutionRequest) returns (LegacyResolution);
+  rpc ResumeLegacyResolution (ResumeLegacyResolutionRequest) returns (LegacyResolution);
   // Post-payment shortage: explicit wait/refund choice, never silent re-route.
   rpc ReportGroupShortage (ReportGroupShortageRequest) returns (ShortageCase);
   rpc ChooseShortageResolution (ChooseShortageResolutionRequest) returns (ShortageCase);
@@ -506,12 +512,37 @@ message TccPaymentRequest {
 }
 message TccQueryReply { bool prepared = 1; }
 
+message RefundLine {
+  // line_no is the order line number; 0 is the freight line and is not a
+  // goods line.
+  int32 line_no = 1;
+  // quantity is this refund's returned quantity for the line.
+  int32 quantity = 2;
+  // goods_cent is this line's goods amount for the request; it must not
+  // exceed the line's remaining refundable amount.
+  int64 goods_cent = 3;
+}
 message AdmitRefundRequest {
   string refund_id = 1;
   string order_no = 2;
   string group_no = 3;
   int64 amount_cent = 4;
   string source = 5;
+  // lines is the line composition of this refund. It is required for
+  // post-departure partial refunds; an unshipped group still has to match its
+  // remaining goods composition (ADR-0007 Amendment 1 §4.4).
+  repeated RefundLine lines = 6;
+  // responsibility is a closed enum produced by the after-sales/shortage fact
+  // owner. Order validates it and never infers it from free text.
+  string responsibility = 7;
+  // reason_code is the closed reason enum paired with responsibility.
+  string reason_code = 8;
+  // freight_refundable_cent is the freight amount made refundable by this
+  // request, produced by the responsibility owner; it must not be negative.
+  int64 freight_refundable_cent = 9;
+  // batch_id links the request to a TCC/compensation batch; empty for
+  // non-batch (ordinary after-sales) requests.
+  string batch_id = 10;
 }
 message AdmitRefundReply {
   string refund_id = 1;
@@ -519,6 +550,52 @@ message AdmitRefundReply {
   string state = 3;
   int64 amount_cent = 4;
   int64 version = 5;
+  // batch_id echoes the accepted batch, empty when the request had none.
+  string batch_id = 6;
+  // goods_cent plus freight_cent is the accepted composition of amount_cent.
+  int64 goods_cent = 7;
+  int64 freight_cent = 8;
+}
+
+message GetLegacyResolutionRequest { string order_no = 1; }
+message ResolveLegacyResolutionRequest {
+  string order_no = 1;
+  string resolution_id = 2;
+  string payment_no = 3;
+  string operator = 4;
+  string authorized_by = 5;
+  string evidence_ref = 6;
+}
+message ResumeLegacyResolutionRequest {
+  string order_no = 1;
+  string resolution_id = 2;
+}
+// LegacyResolution is the Order-owned legacy payment resolution view.
+// state is OPEN/RESOLVING/COMPENSATING/RESOLVED/EXPIRED_REFUND/EXPIRED_ZERO/
+// EXPIRED_FINANCE/REJECTED; resolution_id is set only for terminal states.
+message LegacyResolution {
+  string order_no = 1;
+  string state = 2;
+  int32 candidate_count = 3;
+  string resolution_id = 4;
+  // pay_cent is the order amount under resolution (orders.pay_cent).
+  int64 pay_cent = 5;
+  // blocked_scope is UNSHIPPED_GROUPS_AND_REFUND, FINANCE_HOLD,
+  // REJECTED_HOLD or NONE (ADR-0007 Amendment 1 §5.4).
+  string blocked_scope = 6;
+  // resolution_kind is empty while OPEN/RESOLVING/COMPENSATING; otherwise
+  // MANUAL, EXPIRED_ZERO, EXPIRED_REFUND, EXPIRED_FINANCE or REJECTED.
+  string resolution_kind = 7;
+  // expires_at_unix is the queue's 24h deadline.
+  int64 expires_at_unix = 8;
+  // resolved_payment_no is the effective payment written back by RESOLVED.
+  string resolved_payment_no = 9;
+  // operator/authorized_by identify the ops/Director command that wrote a
+  // terminal state; empty for queue rows without a manual command.
+  string operator = 10;
+  string authorized_by = 11;
+  // version is the queue row version used by conditional state transitions.
+  int64 version = 12;
 }
 
 message OrderItem {
@@ -697,6 +774,12 @@ service PaymentService {
   rpc RefundOrder (RefundOrderRequest) returns (RefundOrderReply);
   rpc VerifyPayment (VerifyPaymentRequest) returns (VerifyPaymentReply);
   rpc ListRefunds (ListRefundsRequest) returns (RefundList);
+  // GetRefundByKey returns the refund fact keyed by (payment_no, refund_id).
+  // It is the read-only lazy-reconciliation API for refund admission; the
+  // caller must key by refund_id and never guess it from refund_no. The
+  // return type is package-qualified because the legacy Refund method name
+  // shadows the unqualified Refund message in protoc name resolution.
+  rpc GetRefundByKey (GetRefundByKeyRequest) returns (.mall.v1.Refund);
 }
 message Intent {
   string payment_no = 1;
@@ -748,7 +831,15 @@ message VerifyPaymentReply {
   bool pricing_prepared = 3;
   string intent_status = 4;
 }
-message RefundRequest { string payment_no = 1; int64 amount_cent = 2; string reason = 3; string idempotency_key = 4; bool non_effective_capture = 5; }
+message RefundRequest {
+  string payment_no = 1;
+  int64 amount_cent = 2;
+  string reason = 3;
+  // idempotency_key carries the caller's refund_id; Payment stores it
+  // verbatim and emits it as payment.refunded.refund_id.
+  string idempotency_key = 4;
+  bool non_effective_capture = 5;
+}
 message Refund {
   string refund_no = 1;
   string payment_no = 2;
@@ -757,9 +848,14 @@ message Refund {
   string reason = 5;
   string status = 6;
   int64 created_at_unix = 7;
+  // refund_id is the stable idempotency key of this refund (the supplied
+  // RefundRequest.idempotency_key, or Payment's deterministic key when it was
+  // omitted); read-only and never a substitute for refund_no.
+  string refund_id = 8;
 }
 message ListRefundsRequest { string payment_no = 1; string order_no = 2; int32 page = 3; int32 page_size = 4; }
 message RefundList { repeated Refund refunds = 1; int64 total = 2; }
+message GetRefundByKeyRequest { string payment_no = 1; string refund_id = 2; }
 
 // ---------------------------------------------------------------- promotion
 

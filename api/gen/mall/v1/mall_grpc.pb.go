@@ -3090,6 +3090,9 @@ const (
 	OrderService_AuthorizeShipment_FullMethodName        = "/mall.v1.OrderService/AuthorizeShipment"
 	OrderService_BlockShipmentForRefund_FullMethodName   = "/mall.v1.OrderService/BlockShipmentForRefund"
 	OrderService_AdmitRefund_FullMethodName              = "/mall.v1.OrderService/AdmitRefund"
+	OrderService_GetLegacyResolution_FullMethodName      = "/mall.v1.OrderService/GetLegacyResolution"
+	OrderService_ResolveLegacyResolution_FullMethodName  = "/mall.v1.OrderService/ResolveLegacyResolution"
+	OrderService_ResumeLegacyResolution_FullMethodName   = "/mall.v1.OrderService/ResumeLegacyResolution"
 	OrderService_ReportGroupShortage_FullMethodName      = "/mall.v1.OrderService/ReportGroupShortage"
 	OrderService_ChooseShortageResolution_FullMethodName = "/mall.v1.OrderService/ChooseShortageResolution"
 	OrderService_GetShortageCase_FullMethodName          = "/mall.v1.OrderService/GetShortageCase"
@@ -3125,6 +3128,12 @@ type OrderServiceClient interface {
 	// AdmitRefund is the group-level refund admission gate (ADR-0007). It is
 	// idempotent by refund_id and never moves money.
 	AdmitRefund(ctx context.Context, in *AdmitRefundRequest, opts ...grpc.CallOption) (*AdmitRefundReply, error)
+	// Legacy payment resolution queue (ADR-0007 Amendment 1 §5). Get is
+	// read-only and never creates a queue row; Resolve/Resume are ops/Director
+	// commands and Payment never writes this queue.
+	GetLegacyResolution(ctx context.Context, in *GetLegacyResolutionRequest, opts ...grpc.CallOption) (*LegacyResolution, error)
+	ResolveLegacyResolution(ctx context.Context, in *ResolveLegacyResolutionRequest, opts ...grpc.CallOption) (*LegacyResolution, error)
+	ResumeLegacyResolution(ctx context.Context, in *ResumeLegacyResolutionRequest, opts ...grpc.CallOption) (*LegacyResolution, error)
 	// Post-payment shortage: explicit wait/refund choice, never silent re-route.
 	ReportGroupShortage(ctx context.Context, in *ReportGroupShortageRequest, opts ...grpc.CallOption) (*ShortageCase, error)
 	ChooseShortageResolution(ctx context.Context, in *ChooseShortageResolutionRequest, opts ...grpc.CallOption) (*ShortageCase, error)
@@ -3309,6 +3318,36 @@ func (c *orderServiceClient) AdmitRefund(ctx context.Context, in *AdmitRefundReq
 	return out, nil
 }
 
+func (c *orderServiceClient) GetLegacyResolution(ctx context.Context, in *GetLegacyResolutionRequest, opts ...grpc.CallOption) (*LegacyResolution, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LegacyResolution)
+	err := c.cc.Invoke(ctx, OrderService_GetLegacyResolution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orderServiceClient) ResolveLegacyResolution(ctx context.Context, in *ResolveLegacyResolutionRequest, opts ...grpc.CallOption) (*LegacyResolution, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LegacyResolution)
+	err := c.cc.Invoke(ctx, OrderService_ResolveLegacyResolution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orderServiceClient) ResumeLegacyResolution(ctx context.Context, in *ResumeLegacyResolutionRequest, opts ...grpc.CallOption) (*LegacyResolution, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LegacyResolution)
+	err := c.cc.Invoke(ctx, OrderService_ResumeLegacyResolution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orderServiceClient) ReportGroupShortage(ctx context.Context, in *ReportGroupShortageRequest, opts ...grpc.CallOption) (*ShortageCase, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ShortageCase)
@@ -3369,6 +3408,12 @@ type OrderServiceServer interface {
 	// AdmitRefund is the group-level refund admission gate (ADR-0007). It is
 	// idempotent by refund_id and never moves money.
 	AdmitRefund(context.Context, *AdmitRefundRequest) (*AdmitRefundReply, error)
+	// Legacy payment resolution queue (ADR-0007 Amendment 1 §5). Get is
+	// read-only and never creates a queue row; Resolve/Resume are ops/Director
+	// commands and Payment never writes this queue.
+	GetLegacyResolution(context.Context, *GetLegacyResolutionRequest) (*LegacyResolution, error)
+	ResolveLegacyResolution(context.Context, *ResolveLegacyResolutionRequest) (*LegacyResolution, error)
+	ResumeLegacyResolution(context.Context, *ResumeLegacyResolutionRequest) (*LegacyResolution, error)
 	// Post-payment shortage: explicit wait/refund choice, never silent re-route.
 	ReportGroupShortage(context.Context, *ReportGroupShortageRequest) (*ShortageCase, error)
 	ChooseShortageResolution(context.Context, *ChooseShortageResolutionRequest) (*ShortageCase, error)
@@ -3433,6 +3478,15 @@ func (UnimplementedOrderServiceServer) BlockShipmentForRefund(context.Context, *
 }
 func (UnimplementedOrderServiceServer) AdmitRefund(context.Context, *AdmitRefundRequest) (*AdmitRefundReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AdmitRefund not implemented")
+}
+func (UnimplementedOrderServiceServer) GetLegacyResolution(context.Context, *GetLegacyResolutionRequest) (*LegacyResolution, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLegacyResolution not implemented")
+}
+func (UnimplementedOrderServiceServer) ResolveLegacyResolution(context.Context, *ResolveLegacyResolutionRequest) (*LegacyResolution, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResolveLegacyResolution not implemented")
+}
+func (UnimplementedOrderServiceServer) ResumeLegacyResolution(context.Context, *ResumeLegacyResolutionRequest) (*LegacyResolution, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResumeLegacyResolution not implemented")
 }
 func (UnimplementedOrderServiceServer) ReportGroupShortage(context.Context, *ReportGroupShortageRequest) (*ShortageCase, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReportGroupShortage not implemented")
@@ -3770,6 +3824,60 @@ func _OrderService_AdmitRefund_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OrderService_GetLegacyResolution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLegacyResolutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).GetLegacyResolution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_GetLegacyResolution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).GetLegacyResolution(ctx, req.(*GetLegacyResolutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OrderService_ResolveLegacyResolution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveLegacyResolutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).ResolveLegacyResolution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_ResolveLegacyResolution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).ResolveLegacyResolution(ctx, req.(*ResolveLegacyResolutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _OrderService_ResumeLegacyResolution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeLegacyResolutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).ResumeLegacyResolution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_ResumeLegacyResolution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).ResumeLegacyResolution(ctx, req.(*ResumeLegacyResolutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _OrderService_ReportGroupShortage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReportGroupShortageRequest)
 	if err := dec(in); err != nil {
@@ -3900,6 +4008,18 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _OrderService_AdmitRefund_Handler,
 		},
 		{
+			MethodName: "GetLegacyResolution",
+			Handler:    _OrderService_GetLegacyResolution_Handler,
+		},
+		{
+			MethodName: "ResolveLegacyResolution",
+			Handler:    _OrderService_ResolveLegacyResolution_Handler,
+		},
+		{
+			MethodName: "ResumeLegacyResolution",
+			Handler:    _OrderService_ResumeLegacyResolution_Handler,
+		},
+		{
 			MethodName: "ReportGroupShortage",
 			Handler:    _OrderService_ReportGroupShortage_Handler,
 		},
@@ -3926,6 +4046,7 @@ const (
 	PaymentService_RefundOrder_FullMethodName       = "/mall.v1.PaymentService/RefundOrder"
 	PaymentService_VerifyPayment_FullMethodName     = "/mall.v1.PaymentService/VerifyPayment"
 	PaymentService_ListRefunds_FullMethodName       = "/mall.v1.PaymentService/ListRefunds"
+	PaymentService_GetRefundByKey_FullMethodName    = "/mall.v1.PaymentService/GetRefundByKey"
 )
 
 // PaymentServiceClient is the client API for PaymentService service.
@@ -3948,6 +4069,12 @@ type PaymentServiceClient interface {
 	RefundOrder(ctx context.Context, in *RefundOrderRequest, opts ...grpc.CallOption) (*RefundOrderReply, error)
 	VerifyPayment(ctx context.Context, in *VerifyPaymentRequest, opts ...grpc.CallOption) (*VerifyPaymentReply, error)
 	ListRefunds(ctx context.Context, in *ListRefundsRequest, opts ...grpc.CallOption) (*RefundList, error)
+	// GetRefundByKey returns the refund fact keyed by (payment_no, refund_id).
+	// It is the read-only lazy-reconciliation API for refund admission; the
+	// caller must key by refund_id and never guess it from refund_no. The
+	// return type is package-qualified because the legacy Refund method name
+	// shadows the unqualified Refund message in protoc name resolution.
+	GetRefundByKey(ctx context.Context, in *GetRefundByKeyRequest, opts ...grpc.CallOption) (*Refund, error)
 }
 
 type paymentServiceClient struct {
@@ -4048,6 +4175,16 @@ func (c *paymentServiceClient) ListRefunds(ctx context.Context, in *ListRefundsR
 	return out, nil
 }
 
+func (c *paymentServiceClient) GetRefundByKey(ctx context.Context, in *GetRefundByKeyRequest, opts ...grpc.CallOption) (*Refund, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Refund)
+	err := c.cc.Invoke(ctx, PaymentService_GetRefundByKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentServiceServer is the server API for PaymentService service.
 // All implementations must embed UnimplementedPaymentServiceServer
 // for forward compatibility.
@@ -4068,6 +4205,12 @@ type PaymentServiceServer interface {
 	RefundOrder(context.Context, *RefundOrderRequest) (*RefundOrderReply, error)
 	VerifyPayment(context.Context, *VerifyPaymentRequest) (*VerifyPaymentReply, error)
 	ListRefunds(context.Context, *ListRefundsRequest) (*RefundList, error)
+	// GetRefundByKey returns the refund fact keyed by (payment_no, refund_id).
+	// It is the read-only lazy-reconciliation API for refund admission; the
+	// caller must key by refund_id and never guess it from refund_no. The
+	// return type is package-qualified because the legacy Refund method name
+	// shadows the unqualified Refund message in protoc name resolution.
+	GetRefundByKey(context.Context, *GetRefundByKeyRequest) (*Refund, error)
 	mustEmbedUnimplementedPaymentServiceServer()
 }
 
@@ -4104,6 +4247,9 @@ func (UnimplementedPaymentServiceServer) VerifyPayment(context.Context, *VerifyP
 }
 func (UnimplementedPaymentServiceServer) ListRefunds(context.Context, *ListRefundsRequest) (*RefundList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRefunds not implemented")
+}
+func (UnimplementedPaymentServiceServer) GetRefundByKey(context.Context, *GetRefundByKeyRequest) (*Refund, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRefundByKey not implemented")
 }
 func (UnimplementedPaymentServiceServer) mustEmbedUnimplementedPaymentServiceServer() {}
 func (UnimplementedPaymentServiceServer) testEmbeddedByValue()                        {}
@@ -4288,6 +4434,24 @@ func _PaymentService_ListRefunds_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentService_GetRefundByKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRefundByKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).GetRefundByKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_GetRefundByKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).GetRefundByKey(ctx, req.(*GetRefundByKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentService_ServiceDesc is the grpc.ServiceDesc for PaymentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4330,6 +4494,10 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListRefunds",
 			Handler:    _PaymentService_ListRefunds_Handler,
+		},
+		{
+			MethodName: "GetRefundByKey",
+			Handler:    _PaymentService_GetRefundByKey_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

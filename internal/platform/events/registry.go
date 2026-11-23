@@ -105,6 +105,9 @@ type orderSettledEvent struct {
 	PackageCount   int32    `json:"package_count"`
 	WarehouseCount int32    `json:"warehouse_count"`
 	Groups         []string `json:"groups"`
+	// SchemaVersion is optional on the v1 subject; absent means 1. Shadow
+	// consumers reject versions greater than 1 instead of guessing.
+	SchemaVersion int32 `json:"schema_version,omitempty"`
 }
 
 type orderRefundAdmittedEvent struct {

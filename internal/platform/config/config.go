@@ -16,6 +16,14 @@ const (
 	RedisModeCluster    = "cluster"
 )
 
+// Settlement consumer modes (ADR-0007 Amendment 1 §3.2). R1 defaults to paid;
+// shadow and settled are gated by settlement_switch_approvals.
+const (
+	FulfillmentSettleConsumerPaid    = "paid"
+	FulfillmentSettleConsumerShadow  = "shadow"
+	FulfillmentSettleConsumerSettled = "settled"
+)
+
 const (
 	defaultMySQLMaxOpenConns = 30
 	defaultMySQLMaxIdleConns = 10
@@ -46,8 +54,18 @@ type Config struct {
 	// PricingConfirmationWorkerEnabled drives the durable coupon/promotion
 	// confirmation worker (ADR-0007). Default false.
 	PricingConfirmationWorkerEnabled bool
-	// FulfillmentConsumeOrderSettled switches Fulfillment from order.paid to
-	// order.settled for auto shipment creation. Default false.
+	// FulfillmentSettleConsumerMode is the three-state settlement consumer
+	// switch: paid (legacy order.paid path, R1 default), shadow (dual-consume,
+	// record/compare only), settled (order.settled admits fulfillment).
+	FulfillmentSettleConsumerMode string
+	// SettleReleaseApprovalID names the settlement_switch_approvals row that
+	// authorizes a settled request. Required when the requested mode is
+	// settled; Fulfillment verifies the row's target/status/expiry/range at
+	// startup (C-05/service), not in this package.
+	SettleReleaseApprovalID string
+	// FulfillmentConsumeOrderSettled is the legacy boolean projection of
+	// FulfillmentSettleConsumerMode (true only for settled). It remains for
+	// the current fulfillment wiring until that wiring reads the mode enum.
 	FulfillmentConsumeOrderSettled bool
 	// WarehouseAllocationShadow enables the checkout allocator dual-read. It
 	// never changes the quote or order; phase 2b wires warehouse quote lines.
@@ -171,6 +189,9 @@ func Load(service string) (*Config, error) {
 		EmbeddingDim:       256,
 		AICircuitFailures:  5,
 		AICircuitCooldown:  60 * time.Second,
+		// R1 settlement default is the legacy paid consumer; shadow/settled
+		// need an explicit env switch plus a valid approval row.
+		FulfillmentSettleConsumerMode: FulfillmentSettleConsumerPaid,
 	}
 	// Bootstrap endpoints are needed before the config center can be read.
 	if v := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS")); v != "" {
@@ -442,13 +463,6 @@ func applyEnv(c *Config) error {
 	if v := os.Getenv("PAYMENT_SECRET"); v != "" {
 		c.PaymentSecret = v
 	}
-	if v, ok := os.LookupEnv("FULFILLMENT_CONSUME_ORDER_SETTLED"); ok && strings.TrimSpace(v) != "" {
-		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
-		if err != nil {
-			return fmt.Errorf("FULFILLMENT_CONSUME_ORDER_SETTLED must be a boolean (got %q)", v)
-		}
-		c.FulfillmentConsumeOrderSettled = parsed
-	}
 	if v, ok := os.LookupEnv("PRICING_CONFIRMATION_WORKER_ENABLED"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
 		if err != nil {
@@ -679,6 +693,64 @@ func applyEnv(c *Config) error {
 	if v := os.Getenv("AI_PRICE_COMPLETION_CENTS_PER_1K"); v != "" {
 		c.AIPriceCompletionPer1K = int64(EnvInt("AI_PRICE_COMPLETION_CENTS_PER_1K", int(c.AIPriceCompletionPer1K)))
 	}
+	if err := applySettlementConsumerEnv(c); err != nil {
+		return err
+	}
+	return nil
+}
+
+// applySettlementConsumerEnv resolves the three-state settlement switch and
+// the legacy boolean. The legacy switch is only an input mapping: false maps
+// to paid, true maps to a gated settled request, and it can never select
+// shadow. A conflicting new/legacy pair, an unknown mode, or a settled request
+// without SETTLE_RELEASE_APPROVAL_ID fails startup instead of silently picking
+// a mode.
+func applySettlementConsumerEnv(c *Config) error {
+	mode := FulfillmentSettleConsumerPaid
+	modeSet := false
+	if v, ok := os.LookupEnv("FULFILLMENT_SETTLE_CONSUMER_MODE"); ok {
+		modeSet = true
+		mode = strings.TrimSpace(v)
+	}
+	if v, ok := os.LookupEnv("SETTLE_RELEASE_APPROVAL_ID"); ok {
+		c.SettleReleaseApprovalID = strings.TrimSpace(v)
+	}
+	legacySet := false
+	legacySettled := false
+	if v, ok := os.LookupEnv("FULFILLMENT_CONSUME_ORDER_SETTLED"); ok && strings.TrimSpace(v) != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("FULFILLMENT_CONSUME_ORDER_SETTLED must be a boolean (got %q)", v)
+		}
+		legacySet = true
+		legacySettled = parsed
+	}
+	if !modeSet {
+		if legacySet && legacySettled {
+			mode = FulfillmentSettleConsumerSettled
+		}
+	}
+	switch mode {
+	case FulfillmentSettleConsumerPaid, FulfillmentSettleConsumerShadow, FulfillmentSettleConsumerSettled:
+	default:
+		return fmt.Errorf("FULFILLMENT_SETTLE_CONSUMER_MODE must be paid, shadow or settled (got %q)", mode)
+	}
+	if modeSet && legacySet {
+		legacyMode := FulfillmentSettleConsumerPaid
+		if legacySettled {
+			legacyMode = FulfillmentSettleConsumerSettled
+		}
+		if legacyMode != mode {
+			return fmt.Errorf("FULFILLMENT_SETTLE_CONSUMER_MODE=%q conflicts with FULFILLMENT_CONSUME_ORDER_SETTLED=%t; unset the legacy switch", mode, legacySettled)
+		}
+	}
+	if mode == FulfillmentSettleConsumerSettled && c.SettleReleaseApprovalID == "" {
+		return fmt.Errorf("SETTLE_RELEASE_APPROVAL_ID is required when FULFILLMENT_SETTLE_CONSUMER_MODE=%s", FulfillmentSettleConsumerSettled)
+	}
+	c.FulfillmentSettleConsumerMode = mode
+	// The legacy field stays for the current wiring; shadow support belongs to
+	// the consumer switch and is not represented by this boolean.
+	c.FulfillmentConsumeOrderSettled = mode == FulfillmentSettleConsumerSettled
 	return nil
 }
 

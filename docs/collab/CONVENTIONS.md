@@ -64,6 +64,14 @@ MEMORY 不复制当前线程状态、PASS、commit、expiry 或发布状态；�
 - 描述性文档与代码现状不一致：以代码事实为准并修正文档漂移。
 - 不允许用“代码已经这样”静默废止 Spec，也不允许用过期文档描述冒充当前实现。
 
+### 2.2 外部复审/审计输入
+
+外部 Agent、顾问或自动审计的结论**只能作为问题提案**，不得直接成为契约或 AC 依据。
+
+- 引用必须指向当前 HEAD 中存在的文件与行号；找不到的标 `[不确定]`，不得作为需求引用。
+- 每条结论按所有者分流：业务口径回 PO，设计回 Architect，实现回 Developer，验收语义回 Reviewer。
+- 分流前必须核对是否已被既有 Spec/ADR/INV 裁决；已裁决的只能按文档漂移处理。
+
 ---
 
 ## 3. 变更输入包与 integration owner
@@ -88,6 +96,8 @@ Reviewer 开始审查前再记录精确 `head`。审查期间 HEAD 变化，必�
 
 - `不涉及`：说明判断依据；或
 - 列出受影响的既有链路、baseline invariant/AC 和对应回归证据。
+
+无论哪种，都必须列出受影响的 **`INV-xx`**（基线 `docs/architecture-baseline.md` 与 Spec 中的业务不变量）；`不涉及` 也必须写“为什么不影响任何 INV”。金额、库存、权限、履约准入相关变更不得只写“不涉及”。
 
 后续 SDD 不得只验证新增 AC 而忽略旧交付、取消、库存、退款等基线链路。
 
@@ -115,10 +125,13 @@ spec_version / adr_revision
 integration_owner
 review_scope
 baseline_impact
+INV: INV-xx, INV-yy（或“不涉及 + 依据”）
 affected_AC
 verification
 release_status
 ```
+
+`INV:` 为必填：至少列出本范围可能影响的业务不变量；没有影响时写 `INV: 不涉及（依据）`。
 
 ---
 

@@ -2,13 +2,14 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT — not approved** |
+| Status | **APPROVED (Plan) — implementation not started** |
+| Approved | 2026-11-24（Human / Director） |
 | change_id | `PAY-SETTLE-01`（**原 change_id**；不使用新 id 绕过 Review-01 冻结） |
 | Review base/head | `d38f282..03a0717`（Review-01 FAIL）；补救 `6550a2c`；当前治理 head `3afdfe2` |
 | Scope | P0-A/P0-B 实现修复；不含 0012 协议扩展，只读其已冻结的分配事实；不含 Release |
 | Integration owner | **Director**（人类）；deputy: TBD |
 | Plan owner | Lead |
-| Approvals | **PO**（P-04/P-05/P-06 业务语义）；Architect；QC；Developer；Reviewer；Human |
+| Approvals | Human **APPROVED** 2026-11-24；QC **RESOLVED**；Architect **RESOLVED**；PO/Developer/Reviewer Phase 0 sign-off tracked below |
 | Allowed paths | `docs/specs/0001*`、`docs/specs/0002*`、`docs/adr/0007*`、`api/proto/mall/v1/**`、`api/gen/**`、`internal/services/{payment,order,aftersales,fulfillment}/**`、`migrations/{payment,order}/**`、`cmd/**`、`internal/platform/{events,config}/**`、对应测试 |
 | Baseline impact | `INV-01/04/05/06/07/14/24/26/30…44`；`AC-39…61`；基线 `AC-14/21/25/27/31/32` 回归 |
 | Current WIP | 按人类裁决 B：保留在 main、冻结、不合并 release、不发布 |
@@ -112,9 +113,9 @@ Phase 0 退出标准：C-01..C-05 全部经 QC/Reviewer/人类批准；否则不
 
 | 角色 | 结论 | 日期 | 备注 |
 |---|---|---|---|
-| PO | TBD | | D-1..D-3、C-01/C-02 |
-| Architect | TBD | | C-03/C-04 |
-| QC | TBD | | 异常分支/测试矩阵 |
-| Developer | TBD | | 可执行性/风险 |
-| Reviewer | TBD | | 可验证性 |
-| Human | TBD | | Plan 批准 |
+| PO | Human approved D-1..D-5; SPEC authoring pending | 2026-11-24 | C-01/C-02 |
+| Architect | Review RESOLVED; Amendment authoring pending | 2026-11-24 | C-03/C-04 |
+| QC | Review RESOLVED | 2026-11-24 | 异常分支/测试矩阵 |
+| Developer | Phase 0 sign-off pending | | 可执行性/风险 |
+| Reviewer | Phase 0 sign-off pending | | 可验证性 |
+| Human | **APPROVED** | 2026-11-24 | D-1..D-5、Plan |

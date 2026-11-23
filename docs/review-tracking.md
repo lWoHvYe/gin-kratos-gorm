@@ -20,6 +20,11 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 - Ratification gate work: G1 AGENTS/CONVENTIONS hierarchy aligned; G2 G-1
   change_id/Actor/Reviewed-by + G-1 check added; G3 ac-coverage columns added;
   G4 this record. G5 human approval recorded here.
+- 2026-11-24: Director approved the PAY-SETTLE-01 remediation Plan and
+  decisions D-1..D-5 (audited release, 24h legacy terminal states, AfterSales
+  freight-responsibility owner, `order.settled` shadow/default false,
+  `order.refund_requested` observe-only). Phase 0 contract authoring only; no
+  implementation approval.
 - Contract debt: SPEC-0001 AC-27 使用 Given/Then/And，下一次 SPEC-0001 版本升级 MUST
   改为 EARS 并登记基线迁移；在此之前不得把 AC-27 标为 AC-VERIFIED。
 

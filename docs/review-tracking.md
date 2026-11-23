@@ -73,6 +73,24 @@ AC-39…61 remain deferred; AC-62…66 are newly registered as deferred
 implementation/release still requires Reviewer verdict, AC evidence, affected
 baseline regression (AC-14/21/25/27/31/32), and human `RELEASE_APPROVED`.
 
+### 2026-11-24 zero after-sale amendment: SPEC-0002 v1.9
+
+Director approved the zero after-sale amendment on 2026-11-24; PO applied it to
+`docs/specs/0002-payment-settlement-admission.md` **v1.9 approved**.
+
+- Formalized **S19** (zero refund execution, `refund_applications(source=system_zero)`),
+  **INV-50**, and **AC-67/AC-68**; AC-55 gains a formal zero-only exception
+  (`pay_cent=0` and no captured intent) while positive refunds keep Payment-fact
+  priority unchanged.
+- Zero after-sale uses `AdmitRefund` zero short-circuit: same-transaction S19
+  `DONE`, no `PENDING`; AfterSales final `REFUNDED/0/CONSUMED/refund_no=''`.
+- QC-18: `READY FOR HUMAN ZERO AMENDMENT APPROVAL` (0 BLOCKER).
+
+**Scope**: contract approval only, not AC-VERIFIED, not implementation PASS, not
+Release PASS. AC-67/68 are registered as deferred for Developer
+(expiry 2026-12-31, `developer-reviewer/T-002`); implementation/C-05 remain
+separate gates.
+
 ## P1
 
 | ID | Status | Evidence / remaining gap |

@@ -2,7 +2,7 @@
 id: SPEC-0002
 title: 支付结算与履约准入
 status: approved         # draft | in-review | approved | superseded
-version: 1.6
+version: 1.7
 updated_at: 2026-11-23
 owner: Product Owner
 approved_by: Director
@@ -17,7 +17,7 @@ adr: []
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.6（已批准；QC-08 `PASS WITH CONDITIONS`，条件 C-1/C-8/C-9 已由甲方裁决） |
+| 版本 | v1.7（已批准；INV-43 适用范围澄清：组级退款需准入，支付级退款为 capture correction） |
 | 日期 | 2026-11-23 |
 | 状态 | **已批准**：Director 2026-11-23 批准；可交 Architect 出 ADR-0007 |
 | 位置 | `docs/specs/`：批准时已由 Reviewer 同步 `ac-baseline.txt`/`ac-coverage.tsv`；AC-39…61 先以延期行登记 |
@@ -111,7 +111,7 @@ adr: []
 | INV-40 | **缺货不静默与终态**：支付后实物缺货必须在 4h 内通知、48h 未选默认退款；等待补货必须给日期，到期未补货转退款；补货到货（含用户未选择前）转 `RESTOCKED` 并恢复履约；`RESTOCKED/RESOLVED_REFUND` 为终态，同一案件不得被重复上报重开；同一 `(order_no, group_no)` 同时只有一个活动案件，新的缺货事件使用新 `case_seq`；已退款后的迟到补货不得恢复发货 | 缺货静默、案件被重开、等待补货无到期动作、补货到货仍禁发、退款后补货又发货 |
 | INV-41 | **收货来源与守卫**：签收/收货事实只能来自承运商签收事件或用户确认；`CREATED/CANCELLED` 运单不得确认收货；已确认后的争议不回滚收货事实（SPEC-0001 P-07） | `CREATED` 可确认收货；争议回滚收货 |
 | INV-42 | **退款申请不丢失**：任何退款来源必须先留下以全局唯一 `refund_id` 标识的可恢复申请/任务；执行失败可重试；同一 `refund_id` 重复提交幂等；具体驱动机制由 ADR 定义 | 先打款后记录；失败后申请消失；同一申请出现两条记录 |
-| INV-43 | **先准入后打款**：退款准入未得到 `PRE_SHIP_REVOKED` 或 `POST_SHIP_ALLOWED` 前，不得调用支付退款；准入冲突必须阻断并告警 | 未准入先退款；冲突被静默忽略 |
+| INV-43 | **先准入后打款（组级）**：组级退款（售后/TCC 补偿/缺货）未得到 `PRE_SHIP_REVOKED` 或 `POST_SHIP_ALLOWED` 前不得调用支付退款；支付级退款（非生效捕获/超少付/取消）是 capture correction，不经组许可，只受 Payment captured 上限约束 | 组级未准入先退款；支付级退款被错误要求组许可 |
 | INV-44 | **组退款后的库存处置有主**：未离仓组的预留由 Inventory 释放（`HELD` 直接释放，`CONFIRMED` 走基线 `CancelConfirm` 的补偿释放）；已离仓组的退货回库按 SPEC-0001 INV-03；释放/回库失败必须重试并告警；释放后 `available ≤ on_hand` 且行数量守恒（SPEC-0001 INV-17），不得超卖或重复退款 | 退款后预留无人处理；释放失败静默；释放后超卖 |
 
 ---
@@ -510,6 +510,7 @@ PENDING --> PROCESSING --> DONE
 | v1.5-draft | 2026-11-23 | 按 QC-06 整改：额度口径纳入 `freight_share`；未离仓整组退款金额与上限；TCC 按组剩余（非原始份额）拆分并跳过已全退组；§6 TCC 键补组号；错误码表修复；零元单不调用 Payment；历史无组按 G1 | AC-50/51/§6/§5.6 收紧；待 QC-07 确认 |
 | v1.6-draft | 2026-11-23 | 按 QC-07 整改：TCC 补偿改为系统责任、每组全额（商品剩余 + 全部未退运费）、不做分摊；Σ组上限≠订单剩余 captured 时阻断告警；REFUNDED 要求运费责任已定；零元单 `DONE(zero_amount)`；历史无许可行初始化 G1；新增 D-21 | AC-50/51/§5.3/§5.5 收紧；待 QC-08 确认 |
 | **v1.6（冻结）** | 2026-11-23 | 甲方批准 v1.6；C-1（SPEC-0001 v1.3）已先行批准；D-11…D-21 全部按建议默认生效；C-9 落库（台账/索引/提交） | 新增 INV-30…44、AC-39…61；ADR-0007 启动 |
+| **v1.7（冻结）** | 2026-11-23 | 甲方批准 ADR-0007 v0.4 时同步澄清 INV-43 适用范围：组级退款需准入；支付级退款（非生效/超少付/取消）是 capture correction，不经组许可 | 仅澄清 INV-43 适用边界；不删除/重编号 AC；ADR-0007 引用 v1.7 |
 
 
 ---
@@ -523,3 +524,4 @@ PENDING --> PROCESSING --> DONE
 | 甲方（业务） | 批准本 Spec v1.6 与 C-9 落库（台账/索引/提交） | 2026-11-23 |
 | Product Owner | 移入 `docs/specs/`、更新索引与 AC 台账指针 | 2026-11-23 |
 | Quality Checker | QC-08 `PASS WITH CONDITIONS`；C-1/C-8/C-9 关闭后无代码级 BLOCKER | 2026-11-23 |
+| 甲方（业务） | 批准 ADR-0007 v0.4；确认 INV-43 仅约束组级退款，支付级退款为 capture correction | 2026-11-23 |

@@ -7,7 +7,7 @@
 | 编号 | 标题 | 状态 | 版本 | 文件 |
 |---|---|---|---|---|
 | SPEC-0001 | 多仓按数量拆行、选仓优先级与承运商签收 | approved | 1.3 | [0001-fulfillment-quantity-split.md](docs/specs/0001-fulfillment-quantity-split.md) |
-| SPEC-0002 | 支付结算与履约准入 | approved | 1.6 | [0002-payment-settlement-admission.md](docs/specs/0002-payment-settlement-admission.md) |
+| SPEC-0002 | 支付结算与履约准入 | approved | 1.7 | [0002-payment-settlement-admission.md](docs/specs/0002-payment-settlement-admission.md) |
 
 ## 新增 Spec 的命名规则
 

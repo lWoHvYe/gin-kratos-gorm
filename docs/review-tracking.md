@@ -140,7 +140,7 @@ Spec/ADR/CONVENTIONS.
 
 | # | Decision | Status |
 |---|---|---|
-| H1 | First payment must be exact (`captured == pay_cent`), one active payment per order, duplicate capture refunded, `pay_cent=0` exempt, **no partial payment this phase** | approved; SPEC-0002 v1.6 approved + landed; ADR-0007 v0.4 awaiting human approval |
+| H1 | First payment must be exact (`captured == pay_cent`), one active payment per order, duplicate capture refunded, `pay_cent=0` exempt, **no partial payment this phase** | approved; SPEC-0002 v1.7 approved; ADR-0007 accepted 2026-11-23; implementation next |
 | H2 | Payment-settlement + fulfillment-admission is a P0 project (`change_id=PAY-SETTLE-01`), split P0-A funds / P0-B admission / P0-C three deterministic release errors; production switches stay false; UAT split may stay but is **not** release evidence | approved; freeze in effect |
 | H3 | Integration owner: **Director** (name provided 2026-11-23); Architect acts as design owner/secretary; one payment/order Developer as deputy; no per-service split ownership | approved; Director named, deputy TBD |
 | H4 | Withdraw the `c-warehouse-review` “functionally complete” release implication, keep history | approved; doc amended 2026-11-23 |
@@ -152,12 +152,12 @@ CLOSED, AC-REF counts, or the historical C/UAT results. Unfreeze only when the
 §7.3 matrix in the triage doc, G-4, explicit `--release --range`, and the
 five-party final-state check all pass.
 
-**Next gate**: SPEC-0002 v1.6 + SPEC-0001 v1.3 are **approved and landed**
-(commits `9dc38b6`, `6aa12f3`). ADR-0007 v0.4 (`docs/adr/0007-payment-settlement-admission.md`) is ready for
-human approval. QC-ADR-01/02 `BLOCKED` (20 findings) were remediated;
-QC-ADR-03 found no code-level blocker, with Q-31/Q-32 fixed in v0.4 and Q-33
-(INV-43 scope) as a human approval condition. After ADR approval, P0-A/P0-B
-implementation may start.
+**Next gate**: ADR-0007 v0.4 is **accepted** (Director 2026-11-23); SPEC-0002 is
+v1.7 (INV-43 scope clarified). P0-A/P0-B implementation starts with the C-1…C-9
+preconditions: `CheckOrderReady`/`CancelIfCreated`/`GetIntent(intents[])` proto
+contracts, event registry, worker assembly, migration review, and the Inventory
+CONFIRMED-release check. Until those contracts land, keep the production flags
+false and do not claim AC-VERIFIED.
 
 **C-1/C-8/C-9 closed**: Director approved 2026-11-23; SPEC-0001 v1.3 and
 SPEC-0002 v1.6 approved; AC-39…61 registered as deferrals

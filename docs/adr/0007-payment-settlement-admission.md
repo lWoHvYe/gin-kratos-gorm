@@ -1,8 +1,10 @@
 # ADR 0007: 支付结算与履约准入（P0-A / P0-B）
 
-- Status: **proposed**（Architect 设计稿 v0.4；QC-ADR-01/02/03 整改；待人类批准，QC-ADR-04 可选）
+- Status: **accepted**（Director 2026-11-23 批准；QC-ADR-01/02/03 整改）
+- Approved: 2026-11-23（含 INV-43 组级适用范围）
+- Revision: **1.0**
 - Date: 2026-11-23
-- Spec: [SPEC-0002 v1.6](../specs/0002-payment-settlement-admission.md)（approved）
+- Spec: [SPEC-0002 v1.7](../specs/0002-payment-settlement-admission.md)（approved）
 - Integration owner: **Director**（人类）；设计 owner/秘书：System Architect；deputy：待指派
 - Related: [architecture-baseline.md](../architecture-baseline.md)（INV-01…16）、[ADR 0005](0005-fulfillment-quantity-split.md)（履约/售后基线）、[ADR 0006](0006-collab-gates.md)、[ext-review-1123-triage.md](../ext-review-1123-triage.md)
 - Change ID: `PAY-SETTLE-01`
@@ -535,7 +537,7 @@ AC 映射：
 
 ## 17. 批准
 
-- Status: **proposed v0.4**；QC-ADR-03 无代码级 BLOCKER；Q-31/Q-32/Q-34…Q-37 已整改；Q-33（INV-43 范围）为人类批准条件。
+- Status: **accepted v1.0**；Director 2026-11-23 批准；INV-43 组级范围已由 SPEC-0002 v1.7 确认。
 - 批准前置（C-1…C-9）：
   1. `CheckOrderReady` 的 proto/字段/owner 评审通过（Inventory + platform）。
   2. `CancelIfCreated` 的 proto/字段/owner 评审通过（Fulfillment）。
@@ -546,5 +548,5 @@ AC 映射：
   7. 迁移评审（新表/列/唯一键/金额类型/索引）通过。
   8. Inventory 核查：不得自行释放 `CONFIRMED` 预留；`HELD` TTL 释放保留。
   9. 人类确认 INV-43 适用范围（组级退款；支付级退款为 capture correction）——若不认可，需另立 synthetic admission 并回写 SPEC-0002（PO 升版）。
-- 批准后：Developer 按本 ADR 实现；`AC-39…61` 逐条 AC-VERIFIED；Reviewer 出具有范围 verdict。
+- 批准（2026-11-23）：Developer 按本 ADR 实现；`AC-39…61` 逐条 AC-VERIFIED；Reviewer 出具有范围 verdict。
 - 未批准前：不得写支付/结算/退款/准入协议代码。

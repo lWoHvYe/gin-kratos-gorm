@@ -131,6 +131,25 @@ old table still described P2#10 as rejected and Phase 7 as not started.
   new migrations were validated on scratch data, not against the deployed
   `mall_order`/`mall_aftersales` databases.
 
+## 2026-11-24 PAY-SETTLE-01 implementation review: FAIL
+
+Reviewer scoped review of `d38f282..03a0717` (report
+`docs/collab/qc-reports/PAY-SETTLE-01-Review-01.md`) returned **FAIL**,
+release_status FAIL. Six contract-level blockers:
+
+1. TCC compensation bypasses group refund admission; refund and shipping can
+   both proceed.
+2. Shortage groups can still ship (no permit revoke / no shortage or readiness
+   check in AuthorizeShipment).
+3. Zero-amount refund/shortage path is blocked by `captured > 0`.
+4. Historical PAID orders without `settlement_payment_no` cannot refund.
+5. Commitments have no RELEASED path; quota is permanently reserved.
+6. Group quota does not filter freight by responsibility.
+
+No `[ARCHITECTURAL_FLAW]`: ADR-0007 D-08/D-09/D-10 and §6.1 already specify the
+required behavior; these are implementation deviations. The goal remains active;
+P0-A/P0-B is **not complete** and no Release PASS may be claimed.
+
 ## 2026-11-23 human decisions: payment settlement & fulfillment admission (P0)
 
 Source: external review `docs/ext-review-1123.md`; classification and evidence in

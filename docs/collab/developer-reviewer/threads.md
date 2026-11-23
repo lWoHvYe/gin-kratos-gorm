@@ -6,7 +6,7 @@
 | 编号 | 主题 | 发起 | 阻塞 | 状态 | 落点 | 文件 |
 |---|---|---|---|---|---|---|
 | T-001 | SPEC-0001 v1.2 实施审查（P0-1…P0-7） | Reviewer 2026-11-22 | 是 | **CLOSED** | P0-7 修复 `f162ecf`；Reviewer 复跑 **PASS**；P0-6 到期项按 `ac-coverage.tsv` 跟踪 | [T-001.md](threads/T-001.md) |
-| T-002 | SPEC-0002 v1.7 实施审查与 AC-39…61 延期跟踪 | Reviewer 2026-11-23 | 否 | **OPEN** | 待 ADR-0007；AC-39…61 以延期行跟踪（expiry 2026-12-31） | [T-002.md](threads/T-002.md) |
+| T-002 | SPEC-0002 v1.7 实施审查与 AC-39…61 延期跟踪 | Reviewer 2026-11-23 | 否 | **OPEN** | Review-01 **FAIL**（P-01…P-06）；AC-39…61 延期跟踪 | [T-002.md](threads/T-002.md) |
 
 ## 状态统计
 

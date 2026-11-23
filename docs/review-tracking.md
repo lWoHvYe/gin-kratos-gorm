@@ -150,6 +150,15 @@ No `[ARCHITECTURAL_FLAW]`: ADR-0007 D-08/D-09/D-10 and §6.1 already specify the
 required behavior; these are implementation deviations. The goal remains active;
 P0-A/P0-B is **not complete** and no Release PASS may be claimed.
 
+### 2026-11-24 remediation after Review-01
+
+At head `6550a2c`: P-01 safety net (TCC cancel blocks all groups; full fan-out
+admission still missing), P-02 fixed (AuthorizeShipment checks readiness, group
+refund state and open shortage), P-03 fixed (zero-amount admission). P-04
+(historical PAID resolution), P-05 (RELEASED) and P-06 (freight responsibility)
+remain open. Review-01 remains FAIL; no Release PASS until a fresh scoped review
+at a new head.
+
 ## 2026-11-23 human decisions: payment settlement & fulfillment admission (P0)
 
 Source: external review `docs/ext-review-1123.md`; classification and evidence in

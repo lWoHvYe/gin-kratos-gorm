@@ -1,308 +1,238 @@
-# 多 Agent 协作约定 v2（执行细则）
 
-> 本文件是 [`AGENTS.md`](../../AGENTS.md) 的**执行细则**，不改变角色边界；两者冲突时以 `AGENTS.md` 为准。
-> **所有 Agent 会话开始必须读本文件**，并与自己的角色段落对照执行。
+# 多 Agent 协作约定 v3 (执行细则)
 
----
-
-## 0. 一句话
-
-**业务结论只活在 Spec，设计结论只活在 ADR；线程只是过程指针；每条验收项必须能在测试里被找到；每次改动必须能按编号反查。**
+> 本文件是 [`AGENTS.md`](../../AGENTS.md) 的执行细则，不改变角色边界；冲突时以 `AGENTS.md` 为准。
+> 所有 Agent 会话开始必须读取 `AGENTS.md`、本文件和自己的角色 prompt。
 
 ---
 
-## 1. 产物与所有权
+## 0. 原则
 
-| 产物 | 路径 | 唯一作者 | 其他角色可以做什么 |
+1. **业务结论只活在 Spec，设计结论只活在 ADR**；线程只记录问题、裁决和指针，不得成为第二契约。
+2. **机器只检查客观事实，人判断语义**。正则阀门不能证明断言充分、架构正确或可以发布。
+3. **每次结论必须绑定范围**。线程 CLOSED、实现 PASS、代码合入和发布放行是四种不同状态。
+4. **宁可少而可靠的门禁，不要多而虚假的安全感**。新增机器限制必须客观、稳定、低误判，并有明确维护者。
+
+---
+
+## 1. 角色、产物与所有权
+
+| 角色/产物 | 路径 | 唯一作者 | 其他角色 |
 |---|---|---|---|
-| 业务规格 | `docs/specs/**` | Product Owner | 只读；要改 → 开线程 |
-| 设计决策 | `docs/adr/**` | System Architect | 只读；要改 → 开线程 |
-| 实现偏差 | `docs/implementation/**` | Developer | 只读；PO/Architect 通过线程要求改 |
-| 协作线程 | `docs/collab/*/threads/**` | 双方各自追加 | 不改对方已写内容 |
-| 代码与测试 | `internal/**`、`cmd/**`、`api/**`… | Developer | Reviewer 只提议，不直接改 |
-| PO 记忆 | `docs/po/**` | Product Owner | 只读 |
-| Architect 记忆 | `docs/architect/**` | System Architect | 只读 |
-| Developer 记忆 | `docs/developer/**` | Developer | 只读 |
-| Reviewer 记忆 | `docs/reviewer/**` | Reviewer | 只读 |
-| 审查线程 | `docs/collab/developer-reviewer/threads/**` | 双方各自追加 | 不改对方已写内容 |
-| 闸门基线/覆盖台账 | `docs/collab/ac-baseline.txt`、`docs/collab/ac-coverage.tsv` | Reviewer | 只读（变更需 Reviewer 记录） |
+| 业务规格 | `docs/specs/**` | Product Owner | 只读；要改就开线程 |
+| 质量审查报告 | `docs/collab/qc-reports/**` | Quality Checker | 只读；不代替 PO/Architect 改文档 |
+| 设计决策 | `docs/adr/**` | System Architect | 只读；要改就开线程 |
+| 角色 prompt | `prompt/**` | System Architect | Reviewer 必须复核；角色边界变化需人类批准 |
+| 协作约定 | `docs/collab/CONVENTIONS.md` | System Architect | Reviewer 必须复核；流程原则变化需人类批准 |
+| 实现偏差 | `docs/implementation/**` | Developer | 只读；通过线程要求修改 |
+| 代码与测试 | `internal/**`、`cmd/**`、`api/**`、`migrations/**` 等 | Developer | Reviewer 只审查，不直接改 |
+| 协作线程 | `docs/collab/<pair>/threads/**` | 双方各自追加 | 不改对方已写内容 |
+| AC 引用/延期台账 | `docs/collab/ac-baseline.txt`、`ac-coverage.tsv` | Reviewer | Developer 不得通过改台账规避阀门 |
+| 角色记忆 | `docs/<role>/MEMORY.md` | 对应角色 | 只保留稳定经验和 canonical 链接 |
 
-**禁止**：任何角色直接编辑他人产物。需要对方改，只能开线程。
+**禁止**直接编辑他人产物。需要修改时开线程，由所有者回写。
+
+MEMORY 不复制当前线程状态、PASS、commit、expiry 或发布状态；这些动态事实只认 canonical 产物。
 
 ---
 
-## 2. 单一事实源阶梯
+## 2. SDD 主流程与批准点
 
 ```text
-Spec（业务） > ADR（设计） > 代码
+业务想法
+ -> PO 输出 Spec Draft
+ -> QC 审查 Spec
+ -> 人类批准 SPEC_APPROVED
+ -> Architect 输出 ADR Draft
+ -> QC 审查 ADR
+ -> 人类批准 ADR_APPROVED
+ -> Developer 实现代码与测试
+ -> Reviewer 审查指定 base/head
+ -> integration owner 组织基线与组合验证
+ -> 发布门禁/人类决定 RELEASE_APPROVED
 ```
 
-- 过程文档（`register`、`threads`、`implementation/`）**只放指针，不得承载新的业务规则**。
-- 一条规则如果只存在于聊天或线程里，等于**没定**。
-- 代码与 Spec 冲突时以 Spec 为准（Spec 与基线冲突时，看 Spec 是否显式废止该基线条目）。
+- Spec 未批准，不得开始 ADR；ADR 未批准，不得开始实现。
+- QC 只报告遗漏、矛盾和异常分支，不代写 Spec/ADR。
+- PO 和 Architect 的批准是业务与架构批准，不等于代码验收。
+- 文档错别字、链接修复等非行为变更可走轻量路径，不伪造 Spec/ADR 流程。
+- 阻塞线程只冻结其影响范围，不机械停止无关工作。
+
+### 2.1 规范性契约与描述性文档
+
+- 代码与已批准 Spec/ADR 冲突：停止相关交付，由所有者判断应修代码还是按流程修契约。
+- 描述性文档与代码现状不一致：以代码事实为准并修正文档漂移。
+- 不允许用“代码已经这样”静默废止 Spec，也不允许用过期文档描述冒充当前实现。
 
 ---
 
-## 3. 线程协议（一文件一线程）
+## 3. 变更输入包与 integration owner
 
-**路径**：`docs/collab/<pair>/threads/T-NNN.md`；**索引**：同目录 `threads.md` 只放一张表，不放正文。
+每个跨服务变更必须指定一名 **integration owner**，由现有服务 Owner 或 Architect 兼任，不新增角色。
 
-- 编号 `T-NNN` 三位递增，**永不复用**；一问一线程。
-- 状态机：`OPEN`（等对方） → `ANSWERED`（已答复，等回写） → `CLOSED`（已回写并证实）。
-- 文首 YAML 必填：`id / title / opened_by / opened_at / blocking / status / spec / adr / closed_by`。
-- 正文必填：现象、Spec 原文引用（带章节）、ADR 现处理、影响（金额/用户承诺/契约/数据）、选项与建议、**裁决（结论 + 落点章节 + 影响 INV/AC）**、**回写（改了哪节 + commit）**。
-- `BLOCKING: true`：PO **48 小时内**给口径；未裁决**不得开工**（fail-closed）。非阻塞项按 Spec 默认值执行。
-- **关闭三条件**（缺一不可）：
-  1. 裁决已写入 Spec，版本号已升，变更记录注明影响面；
-  2. ADR 已回写，且删除所有"待裁决"标记；
-  3. 偏差登记对应条目已 `closed` 或已有明确排期。
-
----
-
-## 4. 三条闸门
-
-### 4.1 验收闸门：AC ↔ 测试
-
-- 每条 `AC-NN` 必须至少被一个测试引用：测试函数名含 `TestAC<NN>`，或测试文件内注释含 `AC-<NN>`。
-- 命名示例：`func TestAC14_FreightRefundByGroup(t *testing.T)`。
-- Reviewer 核对（在仓库根执行）：
-
-  ```bash
-  for n in $(seq -w 1 38); do
-    c=$(grep -rl "AC-$n" --include='*_test.go' . | wc -l | tr -d ' ')
-    [ "$c" = "0" ] && echo "MISSING AC-$n"
-  done
-  ```
-
-- 没有测试的 AC 一律标 `[未覆盖]`，**不得判 done**。
-
-### 4.2 版本闸门
-
-- Spec 业务内容变更：`version` 升版 + 变更记录写影响 INV/AC + 索引表同步 + commit。
-- ADR 变更：新增 `Amendment N` 或 supersede，**不原地改写已接受的结论**。
-- 仅错别字/链接修正：可不升版，但 commit 必须注明 `non-normative`。
-
-### 4.3 所有权闸门
-
-- 提交前自查 `git diff --name-only`；出现不属于自己的产物路径 → 停止，改走线程。
-- 有 CI 时，路径所有权检查失败即红（由 Architect 出方案、Developer 实现）。
-- Reviewer 复核是否混提、是否越权。
-
-### 4.4 闸门能力边界（T-003，2026-11-23）
-
-- **绿 = 引用存在 + 规则未违反**；**不等于**断言充分，更不等于业务正确。
-- G-3 只证明存在 `TestAC<NN>`/`AC-<NN>` 引用；输出 `AC-REF n/N (references only)`，`DEFERRED` 是债务清单，不是质量证书。
-- G-4 只证明到期项未逾期/状态未关闭；不判断测试深度。
-- `[mixed]` 是历史提示；不证明整条分支干净。
-- 断言深度由 **Reviewer 按 ADR-0005 §14 人工判定**，并在审查线程留证据；`ac-coverage.tsv` 只登记延期，不替代审查。
-- **禁止**：删除 deferred 行、把 `status` 直接改 `closed` 而实际未完成、批量后移 `expiry`（>3 条）来变绿、把 `AC-REF` 改回 `coverage`。
-
----
-
-## 5. Commit 约定
-
-格式：`<type>(<scope>): <摘要>`，结尾追加 trailers：
+Developer 开始实现前，必须能确定：
 
 ```text
-docs(spec): SPEC-0001 v1.1 -> v1.2 裁决 P-01…P-18
-
-<正文：为什么改、影响什么>
-
-Spec: SPEC-0001 v1.2
-ADR: ADR-0005
-Thread: T-001
-AC: AC-14, AC-31
-Role: PO
+change_id
+base
+spec_version / adr_revision
+integration_owner
+baseline_impact
+affected_AC
+allowed_paths
 ```
 
-- trailer 键：`Spec` / `ADR` / `Thread` / `AC` / `Role` / `Expiry-Renewal`。
-- 一笔 commit 只做一件事；**Spec 不与代码同笔提交**（目录首次建立除外）。
-- 反查：`git log --grep 'Thread: T-001'`、`git log --grep 'AC: AC-14'`。
-- `Expiry-Renewal: <理由>`：仅用于延期 `ac-coverage.tsv` / 偏差登记中的 `expiry`；必须非空，且同一次运行后移不得超过 3 条（G-4 阻断批量续期）。
+Reviewer 开始审查前再记录精确 `head`。审查期间 HEAD 变化，必须重新确认差异和受影响验证。
 
-### 5.1 scope 词表（2026-11-22 补充）
+`baseline_impact` 只能写：
 
-scope 按**主产物路径**取，不按作者角色命名；小写，允许连字符。
+- `不涉及`：说明判断依据；或
+- 列出受影响的既有链路、baseline invariant/AC 和对应回归证据。
 
-| scope | 主路径 | 说明 |
-|---|---|---|
-| `docs(spec)` | `docs/specs/**` | 业务规格 |
-| `docs(adr)` | `docs/adr/**` | 设计决策/Amendment |
-| `docs(impl)` | `docs/implementation/**` | 实现偏差登记 |
-| `docs(po)` | `docs/po/**` | PO 记忆区 |
-| `docs(architect)` | `docs/architect/**` | Architect 记忆区 |
-| `docs(developer)` | `docs/developer/**` | Developer 记忆区 |
-| `docs(reviewer)` | `docs/reviewer/**` | Reviewer 记忆区 |
-| `docs(collab)` | `docs/collab/**` | 协作约定、线程、索引、闸门台账 |
-| `docs(meta)` | `AGENTS.md`、`README.md`、`docs/*.md`（非上述目录） | 全局说明/索引 |
-
-规则：
-
-1. `docs(po)` 只用于 `docs/po/**`；`docs(reviewer)` 只用于 `docs/reviewer/**`；`docs(collab)` 只用于 `docs/collab/**`；三者不能互代，也不能用 `docs(docs)` 兜底。
-2. 一个 commit 只允许一个主 scope；同时改 ADR 与线程时，**拆成 `docs(adr)` + `docs(collab)` 两笔**，不要用 `docs(collab)` 把 ADR 混进去。
-3. 不可避免的跨产物的机械同步（如回填 commit hash）：scope 取主产物，正文列出次产物，Reviewer 标 `[mixed]`；不得把业务/设计变更塞进 `[mixed]`。
-4. 历史提交不回改；本表只约束新提交。Reviewer 按 §4.3 把混提作为审查项。
-5. `feat`/`fix` 的 scope 仍按服务/模块名（如 `feat(order)`），不适用本表；Developer 的补充 scope 见 §5.2。
-
-### 5.2 Developer 提交 scope（2026-11-22 补充）
-
-已有服务/模块 scope 已能满足单服务改动，不另造同义词。Developer 额外约定以下 scope：
-
-| scope | 适用主路径/场景 | 示例 |
-|---|---|---|
-| `order` / `pricing` / `inventory` / `fulfillment` / `aftersales` / `payment` / `gateway` / `admin` / `catalog` / `cart` / `identity` / `seckill` / `ai` | 单服务代码与测试（既有 scope，无需新增） | `feat(order): ...`、`test(fulfillment): ...` |
-| `contracts` | `api/proto/**`、`api/gen/**`、跨服务事件契约（如 `internal/platform/events/registry.go`） | `feat(contracts): ...` |
-| `migrations` | `migrations/**` | `feat(migrations): ...` |
-| `gates` | `scripts/check-collab-gates.sh`、`scripts/collab_gates.py`、`scripts/test-collab-gates.sh`、CI 闸门 job | `ci(gates): ...`；**不含台账** |
-| `tooling` | `Makefile`、非闸门 `scripts/**` | `chore(tooling): ...` |
-| `docs(developer)` | Developer 记忆区（只放指针/状态，不放业务规则） | `docs(developer): ...` |
-| `docs(impl)` | `docs/implementation/**` 偏差登记（既有 scope） | `docs(impl): ...` |
-
-规则：
-
-1. 单服务改动用服务/模块 scope；**不得**为同一服务另造 `core`、`backend`、`misc` 等含混 scope。
-2. proto/生成物/跨服务事件契约用 `contracts`；若同时改业务服务，拆成 `contracts` + 服务 scope 两笔，不混提。
-3. `gates` 只放流程基础设施，不得夹带业务代码；`docs(developer)` 只放记忆/指针，不得承载业务规则。
-4. `test` 类型仍按被测服务取 scope（如 `test(aftersales)`），不新增 `test(ac)`。
-5. 历史提交不回改；本表只约束新提交。
-6. 闸门自测用 `ci(gates)`，不使用 `test(collab)`；`ac-baseline.txt`/`ac-coverage.tsv` 属 Reviewer（§1），Developer 只读。
-
-**追认（2026-11-22）**：本表由 Architect 在 `architect-developer/T-002` 中追认；`be11508` 由 Developer 直接改写本文件属越权，历史不回改。后续 Developer 不得直接改 CONVENTIONS，需开 `architect-developer/T-NNN` 线程。当前台账缺口行由 Reviewer 复核后接管。
+后续 SDD 不得只验证新增 AC 而忽略旧交付、取消、库存、退款等基线链路。
 
 ---
 
-## 6. 偏差与兼容（防止 shim 变永久债）
+## 4. 线程协议
 
-- 每条偏差**必须**具备：`owner`、原因、`expiry`（到期日）、复审节奏。
-- 到期未清 → 自动升级为 `BLOCKING` 线程；**不得静默续期**。
-- 允许"临时兼容"，不允许"无主兼容"。
+**路径**：`docs/collab/<pair>/threads/T-NNN.md`；**引用**：始终写 `pair/T-NNN`，不使用可能跨目录撞名的裸 `T-NNN`。
 
----
+- 一问一线程；编号在所属 pair 内递增且永不复用。
+- 状态：`OPEN -> ANSWERED -> CLOSED`。
+- 文首 YAML 最少包含：`id / title / opened_by / opened_at / blocking / status / spec / adr / closed_by`。
+- 正文写清：现象、契约引用、影响、选项、裁决、canonical 回写位置。
+- 新业务规则必须回写 Spec，新设计规则必须回写 ADR；线程里的临时结论不是契约。
 
-## 7. 各角色最小动作
+`CLOSED` 只表示本次沟通已回写且没有待回复事项，不代表代码通过或可以发布。
 
-| 角色 | 开场必读 | 交付物 | 绝对不做 |
-|---|---|---|---|
-| Product Owner | `AGENTS.md`、本文件、`docs/po/MEMORY.md`、线程索引 | 升版 Spec（YAML + 变更记录 + 索引） | 写代码、改 ADR/代码、在聊天里定规则 |
-| System Architect | `AGENTS.md`、本文件、Spec 当前版本、线程索引 | ADR / Amendment | 写业务代码、改 Spec |
-| Developer | `AGENTS.md`、本文件、Spec + ADR + 偏差登记 | 代码、测试（带 AC 编号）、偏差登记（带 owner/expiry） | 改 Spec/ADR、无主 shim、`// TODO` 掩盖冲突 |
-| Reviewer | `AGENTS.md`、本文件、Spec、ADR、`docs/reviewer/MEMORY.md`、线程索引 | 审查结论（按 AC 逐条 + 红队问题，落 `docs/collab/developer-reviewer/threads/T-NNN.md`） | 微观完美主义阻断交付、放过未覆盖 AC、写代码/代替 Developer 实施 |
+### 4.1 Reviewer 审查附加元数据
 
----
-
-## 8. 给人类的启动指令（可直接粘贴）
-
-**通用开场（每个 Agent 都先说这句）**
+Developer⇄Reviewer 的审查线程还必须包含：
 
 ```text
-先读 AGENTS.md 和 docs/collab/CONVENTIONS.md，按你的角色执行；
-不要修改别人的产物，需要改动就开线程。
-```
-
-**给 Product Owner**
-
-```text
-你是 PO。读 AGENTS.md、docs/collab/CONVENTIONS.md、docs/po/MEMORY.md、
-docs/collab/po-architect/threads.md。有 OPEN 且 BLOCKING 的线程先裁决。
-产出/升版 Spec 必须：YAML 版本 + 变更记录（写明影响 INV/AC）+ 索引同步 + commit（带 trailers），
-升版后做二次确认（时限单位、非目标 vs 正文、编号连续性、索引同步、跨节引用）。
-```
-
-**给 System Architect**
-
-```text
-你是 Architect。读 AGENTS.md、docs/collab/CONVENTIONS.md、当前 Spec 版本、
-docs/collab/po-architect/threads.md、docs/collab/architect-developer/threads.md。OPEN 线程按"提问四要素"回复；已 ANSWERED 的
-线程负责回写 ADR 并标 CLOSED。ADR 变更用 Amendment，不许原地改写已接受结论；
-不许改 docs/specs 与 docs/po。commit 带 Spec:/ADR:/Thread: trailers。
-```
-
-**给 Developer**
-
-```text
-你是 Developer。读 AGENTS.md、docs/collab/CONVENTIONS.md、当前 Spec、对应 ADR、
-docs/collab/architect-developer/threads.md、docs/implementation/ 偏差登记。每条 AC 至少一个测试且测试名含 TestAC<NN>；
-实现与 ADR 不符时不许自己发明规则，开线程问。偏差必须登记 owner + expiry；
-不许改 Spec/ADR。commit 带 Spec:/ADR:/AC: trailers。
-```
-
-**给 Reviewer**
-
-```text
-你是 Reviewer。读 AGENTS.md、docs/collab/CONVENTIONS.md、Spec、ADR、
-docs/reviewer/MEMORY.md、docs/collab/developer-reviewer/threads.md（以及实施侧
-docs/collab/architect-developer/threads.md）。
-逐条核对 AC 是否有测试（用 CONVENTIONS §4.1 的命令），检查偏差是否有 owner/expiry，
-检查是否混提/越权；结论（PASS/FAIL + AC 逐条 + 红队问题）写入
-docs/collab/developer-reviewer/threads/T-NNN.md，并同步线程索引与
-docs/collab/ac-coverage.tsv。不要直接改代码/Developer 产物；发现问题开线程。
+base / head
+spec_version / adr_revision
+integration_owner
+review_scope
+baseline_impact
+affected_AC
+verification
+release_status
 ```
 
 ---
 
-## 9. 反模式清单（出现即打回）
+## 5. 验收状态语义
 
-- 在聊天里定业务规则，Spec 不更新。
-- 线程里写了裁决，Spec/ADR 没回写。
-- 一个字段承载多个业务含义（已收货 / 已回库 / 可退款压成一个状态）。
-- 用 `try-catch` 吞异常、用 `// TODO` 掩盖冲突。
-- 偏差无 owner、无到期日。
-- Spec 与代码同一笔提交。
-- 用"技术上难"作为简化业务规则的理由。
+| 状态                       | 唯一含义                                      | 不能推出                     |
+| -------------------------- | --------------------------------------------- | ---------------------------- |
+| `thread_status=CLOSED`     | 沟通闭环                                      | 实现正确或发布通过           |
+| `review_verdict=PASS/FAIL` | 对指定 base/head、review_scope 的实现审查结论 | Spec 全量验收或 Release PASS |
+| `merge_status=ALLOWED`     | 允许合入当前变更                              | 业务 AC 全部完成             |
+| `release_status=PASS`      | 精确 HEAD 满足发布证据要求                    | 后续提交自动继承通过         |
 
+- Reviewer 输出 PASS 时必须写明审查类型和范围；存在未处置的阻断 AC，不得写 Spec 全量验收 PASS。
+- Release PASS 至少需要：精确 base/head、阻断项清零、延期项已处置、受影响基线非回归、要求的测试/环境证据。
+- 非核心 Lint、日志风格等不得与资金、库存、权限、数据迁移阻断项同级。
 
 ---
 
-## 附录 A：闸门可执行化（G-1 / G-2 / G-3 / G-4）
+## 6. AC、测试与延期
 
-> 设计依据：[ADR 0006](../adr/0006-collab-gates.md)。本附录只写调用方式与日常规则；检查细节以实现与 ADR 为准。
+### 6.1 两种不同证据
 
-### A.1 调用
+- **AC-REF**：测试代码中存在 `TestAC<NN>` 或 `AC-<NN>` 引用。只证明可追溯。
+- **AC-VERIFIED**：在指定 HEAD 和环境中实际执行，结果通过，且 Reviewer 核对了断言与 AC 语义。
+
+AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行结果；未运行、SKIP、FAIL 均不算 AC-VERIFIED。ADR 指定浏览、集群或故障注入的 AC，不能用一条 Go 注释替代。
+
+### 6.2 测试按风险选择
+
+- 所有行为变更必须有与风险相称的测试。
+- 资金、库存、权限和跨服务恢复必须包含并发竞态或故障注入等重灾区验证。
+- 不为数量建立 AC×环境笛卡尔积；优先覆盖支付×取消×库存失败、多组退款×金额序列等高价值组合。
+
+### 6.3 延期
+
+每条延期必须有 `owner / expiry / reason / thread / status`。延期是显式债务，不是通过证书；到期未关闭必须阻断对应范围，不得删行或批量续期规避。
+
+---
+
+## 7. 机器门禁：只保留少量客观检查
+
+### 7.1 门禁边界
+
+| 阀门            | 机器适合检查                                    | 机器不能证明                             |
+| --------------- | ----------------------------------------------- | ---------------------------------------- |
+| G-1 所有权/范围 | 受管路径、Role/Exception 是否存在、线程是否存在 | 跨提交 Role 并集能证明实际作者；架构合理 |
+| G-2 契约版本    | Spec version、索引、变更记录                    | 业务规则正确                             |
+| G-3 AC-REF      | AC 编号、测试引用、延期字段                     | 测试已执行、未 SKIP、断言充分            |
+| G-4 到期        | owner/expiry/status、到期和续期记录             | 延期是否合理、残余风险是否可接受         |
+
+默认不继续增加 G-5、G-6。新增门禁前必须回答：是否客观、是否低误判、是否有明确 owner、误伤成本是否低于收益。
+
+**不交给机器强制判断**：架构优劣、断言深度、业务折中、commit scope 词表、每个 AC 的测试环境数量，以及是否允许发布。
+
+### 7.2 当前执行器能力
+
+当前 Makefile 提供的统一入口只有：
 
 ```bash
-make gates          # warn：打印违规/引用数/延期，不阻断；已并入 make verify
-make gates-strict   # strict：违规/到期即 exit 1；CI 与合并前使用
-make gates-test     # 合成仓库自测 A1…A5，不碰真实历史
-
-# 发布/合并必须显式范围（默认 HEAD^..HEAD 仅用于日常）
-./scripts/check-collab-gates.sh --mode=strict --release --range=origin/main..HEAD
+make gates
+make gates-strict
+make gates-test
 ```
 
-- 输出第一行固定为 `SCAN RANGE <base>..<head>`；staged 为 `SCAN RANGE STAGED`。
-- G-3 输出 `AC-REF n/N (references only)`；strict 另输出 `DEFERRED n` / `OVERDUE n`。
-- 到期项由 **G-4** 阻断：`ac-coverage.tsv` + 偏差登记中 `expiry <= today` 且非 `closed` 即失败，列出条目与 owner。
-- 续期必须用 commit trailer `Expiry-Renewal: <理由>`；同次后移 >3 条直接失败。
-- pre-commit：`scripts/check-collab-gates.sh --staged --role=Developer --mode=strict`。
-- `GATES_MODE` 只切换 warn/strict，**不能跳过**；不存在 `SKIP_GATES`。
+当前 `scripts/collab_gates.py` 仍有以下限制：
 
-### A.2 两档模式
+- 只实现 G-1/G-2/G-3，尚未实现 G-4 和 `--release`。
+- 仍输出 `AC coverage`，目标措辞 `AC-REF` 尚未落地。
+- 默认范围为 `HEAD^..HEAD`，不能覆盖整个 PR 或 release range。
+- G-1 将 range 内 Role 做并集，结果只能作为提示，不能单独作为发布所有权证明。
+- Makefile 尚未透传 `RANGE/RELEASE`，CI 也未覆盖全部 docs/prompt 变化。
 
-| 模式 | 场景 | 未覆盖 AC / 延期 | 到期 G-4 | 违规 |
-|---|---|---|---|---|
-| warn | 日常 `make verify` | 打印，不阻断 | 打印，不阻断 | 打印，不阻断 |
-| strict | CI / 合并 / 发布 | 无有效台账即阻断 | 逾期/未续期即阻断 | 阻断 |
+因此，**文档中的目标规则不得被描述成已经通过的机器能力**，但在可接受范围内。
 
-### A.3 豁免键
+---
 
-| 键 | 作用域 | 规则 |
-|---|---|---|
-| `Role:` | G-1 | 多值；受管路径的所有者必须出现；缺失在 strict 下阻断 |
-| `Exception: T-NNN` | 仅 G-1 | 线程必须存在且未 CLOSED；输出必须打印；禁止静态路径白名单 |
-| `Non-normative: true` | 仅 G-2 | 只用于链接/错别字；输出必须打印；A6 人工判断是否滥用 |
+## 8. Commit 与交付
 
-`Exception:` 不能豁免 G-2/G-3；`Non-normative:` 不能豁免 G-1。
+- 推荐使用 Conventional Commit 和必要 trailer (如 `Spec/ADR/Thread/AC/Role`)，服务/模块 scope 保持简单。
+- 不维护庞大的强制 scope 词表，不为满足形式机械拆分提交。
+- Spec/ADR 的业务或设计变更必须独立评审批；不要把未批准契约与实现混在一起。
+- 已批准契约的实现允许一个原子行为提交包含 proto、生成物、服务代码、迁移和对应测试。
+- Developer 交付必须包含代码 Diff、实际测试日志、`【测试范围】`、`【未覆盖范围】` 和返工影响声明。
+- Reviewer 对核心契约 FAIL 时必须引用具体 Spec/ADR 条款；架构缺陷标 `[ARCHITECTURAL_FLAW]`，不得诱导局部补丁。
 
-### A.4 AC 基线/覆盖台账
+---
 
-- `docs/collab/ac-baseline.txt`：AC 编号只增不减；当前 Spec 必须与 baseline 一致。
-- `docs/collab/ac-coverage.tsv`：`ac	owner	expiry	reason	thread	[status]`；`status=closed` 不计数；过期/缺 owner/reason 即 strict 失败。
-- 台账由 Reviewer 维护；Developer 不得改台账来过闸门；不得删 AC/测试/注释。
-- 偏差登记中含 `owner`+`expiry` 的表同样由 G-4 扫描；关闭时把 `status` 置 `closed`，不得用删行/批量延后代替。
+## 9. 各角色最小动作
 
-### A.5 Reviewer A1…A5
+| 角色             | 开场必读                                 | 必须交付                                | 绝对不做                       |
+| ---------------- | ---------------------------------------- | --------------------------------------- | ------------------------------ |
+| Product Owner    | AGENTS、本文件、角色 prompt、相关线程    | 升级 Spec、EARS AC、State Ownership     | 写代码/ADR、在聊天里定规则     |
+| Quality Checker  | AGENTS、本文件、待审 Spec 或 ADR         | QC-Report：遗漏、矛盾、异常分支         | 代写契约、写业务代码           |
+| System Architect | AGENTS、本文件、已批准 Spec、QC 报告     | ADR/Amendment、状态机、恢复协议         | 写业务代码、擅自改 Spec        |
+| Developer        | AGENTS、本文件、Spec+ADR、变更输入包     | 代码、测试日志、偏差与影响声明          | 私自发明规则、用 TODO 掩盖冲突 |
+| Reviewer         | AGENTS、本文件、精确 base/head、Spec+ADR | 有范围的 verdict、AC/基线证据、延期台账 | 用 AC-REF 代替验收、直接改代码 |
 
-按 [ADR 0006](../adr/0006-collab-gates.md) 的 A1…A5 执行，把终端输出贴进 T-002“验证”段；A6 人工兜底。
+通用启动语：
 
-### A.6 绕过禁令
+```text
+先读 AGENTS.md、docs/collab/CONVENTIONS.md 和你的角色 prompt。
+只修改自己拥有的产物；需要他人修改就开线程。
+所有结论绑定精确 Spec/ADR 版本和代码范围，不把线程 CLOSED 或 AC-REF 当作发布通过。
+```
 
-删除/重编号 AC、删唯一测试、改 baseline 删除条目、堆 `Exception`、把 Spec 挪出受管目录、用 `Non-normative` 掩盖业务变更、改闸门脚本让检查恒真、CI 改 warn——一律打回。闸门脚本改动需 Architect + Reviewer 双方复核。
+---
+
+## 10. 反模式清单
+
+- QC 未审就批准 Spec/ADR，或人类批准后被静默改契约。
+- 在聊天/线程里定业务规则，不回写 Spec/ADR。
+- 用历史线程 PASS、默认 HEAD^..HEAD 或 AC 引用数作为 Release PASS。
+- 删除/重编号 AC、删唯一测试、删 deferred 行、批量续期或修改阀门使其恒真。
+- 让不同 Agent 在移动 HEAD 上各读各的“当前版本”。
+- 用分布式锁、额外状态字段或场景专用 `if` 回避状态所有权和协议设计。
+- 为 commit 形式机械拆分一个原子行为变更。
+- 用更多文档状态或正则规则替代真实组合验证。

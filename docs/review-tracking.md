@@ -130,3 +130,72 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 - Transaction A has no cluster rollout, live DTM smoke, or browser E2E; the
   new migrations were validated on scratch data, not against the deployed
   `mall_order`/`mall_aftersales` databases.
+
+## 2026-11-23 human decisions: payment settlement & fulfillment admission (P0)
+
+Source: external review `docs/ext-review-1123.md`; classification and evidence in
+`docs/ext-review-1123-triage.md`. Human approved the H1–H6 recommendations on
+2026-11-23. This section records status and pointers; normative text lives in
+Spec/ADR/CONVENTIONS.
+
+| # | Decision | Status |
+|---|---|---|
+| H1 | First payment must be exact (`captured == pay_cent`), one active payment per order, duplicate capture refunded, `pay_cent=0` exempt, **no partial payment this phase** | approved; SPEC-0002 v1.6 draft INV-30…44 / AC-39…61; **QC-08 `PASS WITH CONDITIONS`**; remaining C-1 (0001 v1.3), C-8 (D-11…D-21), C-9 (ledger/index/commit) |
+| H2 | Payment-settlement + fulfillment-admission is a P0 project (`change_id=PAY-SETTLE-01`), split P0-A funds / P0-B admission / P0-C three deterministic release errors; production switches stay false; UAT split may stay but is **not** release evidence | approved; freeze in effect |
+| H3 | Integration owner: **Director** (name provided 2026-11-23); Architect acts as design owner/secretary; one payment/order Developer as deputy; no per-service split ownership | approved; Director named, deputy TBD |
+| H4 | Withdraw the `c-warehouse-review` “functionally complete” release implication, keep history | approved; doc amended 2026-11-23 |
+| H5 | Mesh narrowing now (security, not an AI feature); production `ai.enabled=false` until live Mesh UAT; AI-0 design may follow P0, AI-1…5 deferred | approved; static config changed, live UAT pending |
+| H6 | Approve `INV:` in reviewer metadata / `baseline_impact` (G1) and the QC crash-window checklist (G2); no new machine gates | approved; CONVENTIONS §2.2/§3/§4.1 and `prompt/Quality-Checker.md` updated |
+
+**Freeze / release hold**: no Release PASS may cite `make gates-strict`, thread
+CLOSED, AC-REF counts, or the historical C/UAT results. Unfreeze only when the
+§7.3 matrix in the triage doc, G-4, explicit `--release --range`, and the
+five-party final-state check all pass.
+
+**Next gate**: SPEC-0002 `v1.5` draft (`docs/po/drafts/0002-payment-settlement-admission.md`)
+→ QC-01 `BLOCKED` → v1.0 → QC-02 `BLOCKED` → v1.1 → QC-03 `PASS WITH CONDITIONS`
+→ v1.2 → QC-04 `BLOCKED` (N-37…N-40) → v1.3 → QC-05 `BLOCKED` (N-50) → v1.4
+→ QC-06 `BLOCKED` (N-58/59) → v1.5 → QC-07 `BLOCKED` (N-66) → v1.6 →
+**QC-08 `PASS WITH CONDITIONS`** → awaiting human C-1/C-8/C-9 → `SPEC_APPROVED`.
+
+**C-1 prerequisite**: SPEC-0001 must be upgraded to v1.3 first. Draft amendment:
+`docs/po/drafts/0001-v1.3-amendment-group-refund-release.md` (limits §6.6
+"预留已释放但订单仍已支付" to groups still intended to ship; adds §6.6.1
+group-refund release/restock rules). Until the human approves v1.3, SPEC-0002
+must not be `approved` and ADR-0007 must not start.
+
+**C-8 pending human**: D-11…D-21 in the draft (inventory wait bound, duplicate
+payment fee, shortage new-case, 30-minute visibility, restock expiry, historical
+backfill, INV-06 amendment, release-not-blocking-refund, pre-ship partial refund,
+historical shortage, TCC full-freight refund). These are business decisions; no
+code/ADR may assume them before approval.
+
+**ADR-0007 handoff (R-1…R-4, from QC-08)**: (R-1) Σ group caps ≠ order remaining
+captured needs an owner/action for manual adjudication; (R-2) choose accounting
+for order-level cancellation refunds vs group caps; (R-3) historical no-group
+orders use the whole remaining amount for G1; (R-4) TCC refunds freight first, so
+a later responsibility ruling must not double-refund (shared group ledger).
+
+**2026-11-23 approvals and landing**: Director approved C-1 (SPEC-0001 v1.3),
+C-8 (D-11…D-21 all defaults), and C-9 (ledger + move + commit). SPEC-0001 v1.3
+and SPEC-0002 v1.6 are approved; AC-39…61 are registered in
+`ac-baseline.txt`/`ac-coverage.tsv` as deferrals (developer-reviewer/T-002,
+expiry 2026-12-31). ADR-0007 is the next gate.
+
+**2026-11-23 0012 decision**: long-term split chain (not the operator bridge).
+Audit: dev `mall-data` and UAT `mall-uat-data` applied only up to
+`aftersales/0011_group_items.sql`; no 0012 row/attempt. Local compose has no
+`schema_migrations` and no `line_no`. So 0012 can be replaced before any
+persistent environment applies it; implementation still needs Architect sign-off,
+a backfill tool and a disposable-DB rehearsal.
+
+**Gate note (not a release claim)**: to keep `make gates-strict` honest while
+the Spec is unapproved, the draft lives in `docs/po/drafts/` (PO-owned) and is
+**not** indexed in `docs/specs/README.md` or `Spec.md`. On `SPEC_APPROVED`,
+Reviewer adds AC-39…61 to `docs/collab/ac-baseline.txt` and `ac-coverage.tsv`
+(owner + expiry + thread), the PO moves the file into `docs/specs/`, updates both
+indexes, and the approval is committed as `docs(spec): SPEC-0002 v1.x ...` in the
+same round. Do not index or commit the draft before that sync.
+
+P0-C (order list scan, aftersales migration ordering, Helm flag plumbing) may
+start independently because it implements already-approved contracts.

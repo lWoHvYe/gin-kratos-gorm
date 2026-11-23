@@ -3,6 +3,7 @@
 - Status: **accepted**（Director 2026-11-23 批准；QC-ADR-01/02/03 整改）
 - Approved: 2026-11-23（含 INV-43 组级适用范围）
 - Revision: **1.0**
+- Amended by: [0007-payment-settlement-admission-amd1.md](0007-payment-settlement-admission-amd1.md)（accepted 2026-11-24）
 - Date: 2026-11-23
 - Spec: [SPEC-0002 v1.7](../specs/0002-payment-settlement-admission.md)（approved）
 - Integration owner: **Director**（人类）；设计 owner/秘书：System Architect；deputy：待指派

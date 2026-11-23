@@ -2,22 +2,21 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT — 未批准、未生效；不得据此写代码** |
+| Status | **accepted**（Director 2026-11-24 批准；Amendment 1） |
+| Approved | **2026-11-24** |
 | Base | **ADR-0007 Rev 1.0**（accepted，2026-11-23）；本文件**不修改** Rev 1.0 正文 |
-| Revision | 0.5-draft（r5；QC-13/QC-14 收口：Payment 成功后才终态；SPEC r6 对齐说明） |
+| Revision | **1.0**（Amendment 1；原 r5 定稿；QC-13/QC-14 收口：Payment 成功后才终态） |
 | Date | 2026-11-24 |
-| Target Spec | **SPEC-0002 v1.8-draft-r5**（FINAL CANDIDATE；QC-13/QC-14 **READY FOR HUMAN SPEC+ADR APPROVAL**，`SPEC_APPROVED` 待定）；AC-63 零元精确条件、AC-66 三级开关门禁、`COMPENSATING` 已于 r5 对齐；SPEC-0001 v1.4-draft（C-01，仅 AC-27 语法迁移） |
+| Target Spec | **SPEC-0002 v1.8（approved 2026-11-24）**；QC-13/QC-14 已复核；AC-63 零元精确条件、AC-66 三级开关门禁、`COMPENSATING` 已对齐；SPEC-0001 v1.4（approved 2026-11-24，C-01） |
 | Change ID | `PAY-SETTLE-01` |
 | Integration owner | **Director**（人类）；deputy: TBD |
 | Design owner | System Architect |
 | 触发 | Plan C-03；QC/Reviewer 对 P-04/P-05/P-06 的阻断；Plan D-1…D-5；本 Amendment 的 D-27…D-29 |
 | 覆盖 | AC-62、AC-63、AC-64、AC-65、AC-66；INV-45…INV-49；S15…S18；C-03 全部条目 |
-| 生效前置 | ① SPEC-0002 v1.8 经 QC/Reviewer + Human `SPEC_APPROVED`；② 本 Amendment 经 QC + Human `ADR_APPROVED`；③ C-04/C-05 契约与迁移评审通过。三者缺一不得实现。 |
+| 生效前置 | ① 本 Amendment **accepted 2026-11-24**；② SPEC-0002 v1.8 **approved 2026-11-24**；③ C-04/C-05 契约与迁移评审通过。未满足前不得实现。 |
 | 与 Rev 1.0 的关系 | 本文件是**增量 Amendment**。凡本文件明确“替代/收窄/补充”的条款，以本文件为准；未列出的 Rev 1.0 条款继续有效。Rev 1.0 原文不删除、不重写。 |
 
-> **门禁声明**：本文件是 Architect 的**草案**，不是已批准 ADR，不是实现依据。SPEC-0002 v1.8 仍是 `draft`；本 Amendment 在 `SPEC_APPROVED` 与 `ADR_APPROVED` 前只能用于 QC/Reviewer 审阅，不得进入 C-04/C-05 之外的实现。
->
-> **流程说明**：PO 草案（v1.8-draft-r5 §0/§14）要求 `SPEC_APPROVED` 后才交 Architect 出 ADR Amendment；本文件是按 Lead 的明确指令提前准备的**预审草案**，不构成正式 C-03 交付。若 PO/QC 坚持严格顺序，本文件仅作为评审材料，待 `SPEC_APPROVED` 后由 Architect 重新确认/升版；在重新确认前不得作为实现依据。
+> **生效声明**：本文件是 **ADR-0007 Amendment 1（accepted 2026-11-24）**，不是实现依据；SPEC-0002 v1.8 已 approved，实现前仍需 C-04/C-05 评审通过。Rev 1.0 的已批准正文不被本文件重写。
 
 ---
 
@@ -91,7 +90,7 @@
 | AC | 关键实现点 | 失败语义 |
 |---|---|---|
 | AC-62 | 释放命令只接受人工授权；`RESERVED→RELEASED` CAS；permit 不恢复；`SETTLED` 优先收敛 | `REFUND_RELEASE_NOT_AUTHORIZED` / `REFUND_COMMITMENT_CONFLICT` |
-| AC-63 | 事务外解析；CAS 写回；0/多候选队列；24h 先 `COMPENSATING`（离开 OPEN）→ 先撤 permit/取消 CREATED 运单/INV-44 释放 → 持久化退款意图 → `Payment.Refund`；**Payment 成功后才 `EXPIRED_REFUND`**；恢复命令；零元精确条件（r5） | `LEGACY_PAYMENT_UNRESOLVED` |
+| AC-63 | 事务外解析；CAS 写回；0/多候选队列；24h 先 `COMPENSATING`（离开 OPEN）→ 先撤 permit/取消 CREATED 运单/INV-44 释放 → 持久化退款意图 → `Payment.Refund`；**Payment 成功后才 `EXPIRED_REFUND`**；恢复命令；零元精确条件（v1.8） | `LEGACY_PAYMENT_UNRESOLVED` |
 | AC-64 | 行级三层额度；商品/运费组成；责任枚举；168h 挂起；同组补退 | `REFUND_ADMISSION_CONFLICT` / `PARTIAL_REFUND_REQUIRES_FULL_GROUP` / `REFUND_RESPONSIBILITY_INVALID` |
 | AC-65 | 事务外快照；Tx1 锁内复核；分状态 permit；batch 续跑；部分打款只补未完成 | `TCC_REFUND_SUM_MISMATCH` / `REFUND_ADMISSION_CONFLICT` |
 | AC-66 | 影子双消费、只记录；默认 paid；切换门禁；回滚 | 影子失败只告警；开关未批准 fail-closed |
@@ -755,7 +754,7 @@ Legacy queue:  OPEN -> RESOLVING -> RESOLVED
 
 ## 11. 【假设与不确定性】（强制）
 
-1. **SPEC 未批准**：本 Amendment 以 v1.8-draft-r5 为靶；若批准时 AC-62…66/INV-45…49 文本变化，本 Amendment 必须重新映射，不得直接实现。
+1. **SPEC 基线**：本 Amendment 以 **SPEC-0002 v1.8（approved 2026-11-24）** 为靶；若后续 SPEC 修订改变 AC-62…66/INV-45…49，本 Amendment 必须重新映射，不得直接实现。
 2. **Payment 退款查询 API 缺口**：当前 proto 只有 `ListRefunds`（按 payment_no/order_no，返回 `refund_no`），没有按 `refund_id` 或 `idempotency_key` 的查询；C-04 必须新增 `GetRefundByKey`（或给 `Refund` 增 `refund_id`）。在 API 落地前，惰性对账只能降级为“按订单列表 + 严格匹配/人工”，不得猜测。
 3. **`settlement_payment_no` 语义**：当前列 `NOT NULL DEFAULT ''`，ADR Rev 1.0 写 NULL 兼容历史；本 Amendment 统一用 `''` 表示空，避免 `NULL` 比较陷阱。
 4. **`order.settled` 负载**：当前只发送 `groups []string`；本 Amendment 不要求新增必填字段；影子比对依赖 `Order.GetOrder`，不是事件快照。若未来要事件自包含，必须 additive/版本化。
@@ -767,7 +766,7 @@ Legacy queue:  OPEN -> RESOLVING -> RESOLVED
 10. **DTM/渠道**：不假设补偿顺序、渠道无限重放；以持久 batch/application/admission 为恢复入口。
 11. **`allowed_paths` 缺口**：D-27 表在 Fulfillment DB；Plan 的 C-05 允许路径需扩展 `migrations/fulfillment/**`，否则 C-05 无法落地。
 12. **`order.paid` 移除日期**：R1 不切换、不填具体日期；ON 批准时必须写入移除日期（建议 ≤ON+30d，超出需 Director 书面批准）；未写不得 ON。
-13. **AC-63 零元精确条件**：PO 已在 **v1.8-draft-r5** 修订为“`pay_cent=0` 且无任何已捕获 intent 才 zero；有捕获则退款/人工队列”；本 Amendment §5.1/§4.5 与 r5 一致。批准版必须保持该精确条件；若批准版删改，本 Amendment 须回 PO 重映射，不得作为实现依据。
+13. **AC-63 零元精确条件**：SPEC-0002 **v1.8 approved 2026-11-24** 已含“`pay_cent=0` 且无任何已捕获 intent 才 zero；有捕获则退款/人工队列”；本 Amendment §5.1/§4.5 与其一致。后续修订若删改该条件，本 Amendment 须回 PO 重映射，不得作为实现依据。
 
 ---
 
@@ -810,26 +809,26 @@ Legacy queue:  OPEN -> RESOLVING -> RESOLVED
 
 ---
 
-## 15. 对 SPEC-0002 v1.8-draft-r5 的架构判断
+## 15. 对 SPEC-0002 v1.8（approved 2026-11-24）的架构判断
 
-**未发现需要打回 Architect 的 `[ARCHITECTURAL_FLAW]`。** r5 的 S15…S18、INV-45…INV-49、AC-62…AC-66 可被本 Amendment 实现；D-22…D-26 是已批准的 business 裁决，本 Amendment 不重新裁决。
+**未发现需要打回 Architect 的 `[ARCHITECTURAL_FLAW]`。** v1.8 的 S15…S18、INV-45…INV-49、AC-62…AC-66 可被本 Amendment 实现；D-22…D-26 是已批准的 business 裁决，本 Amendment 不重新裁决。
 
-但以下 4 个边界必须由 QC/PO 在批准前确认；它们不是本 Amendment 自行改变的业务规则：
+但以下 4 个边界由 QC/PO 在实现前确认；它们不是本 Amendment 自行改变的业务规则：
 
 1. **AC-60“不得永久阻断” vs `EXPIRED_FINANCE` 终态禁发/禁退**：本 Amendment 按“不得无限期 `OPEN`”解释；`EXPIRED_FINANCE` 是财务终态，但订单仍可能长期 PAID/不可发。若 QC/PO 认为这违反 AC-60，必须回 PO 修订 AC-60/AC-63，本 Amendment 随之重映射。
-2. **零元 + 已捕获**：AC-63 的零元规则与 AC-40 的“零元单收到正金额捕获须全额退款”可能冲突。**PO 已在 v1.8-draft-r5 修订为“`pay_cent=0` 且无任何已捕获 intent 才 zero；有捕获则按 AC-40/AC-39 退款 + 人工队列”；本 Amendment §5.1 与 r5 一致**，不再保留宽解释。
+2. **零元 + 已捕获**：AC-63 的零元规则与 AC-40 的“零元单收到正金额捕获须全额退款”可能冲突。**SPEC v1.8（approved 2026-11-24）已含“`pay_cent=0` 且无任何已捕获 intent 才 zero；有捕获则按 AC-40/AC-39 退款 + 人工队列”；本 Amendment §5.1 与其一致**，不再保留宽解释。
 3. **`refund_applications` 所有权**：本 Amendment 将 Order 作为组级/Order 发起退款的执行账本 owner，收窄 Rev 1.0 §5.1 的“统一表”；AfterSales 的业务申请仍归 AfterSales。若 QC/Reviewer 认为违反 S8“唯一发起方”，需回 PO 澄清“申请”与“执行账本”的边界。
-4. **OFF→SHADOW / SHADOW→ON 门禁**：PO 已在 **v1.8-draft-r5** 区分——`OFF→SHADOW` = Director 影子批准 + 影子就绪清单；`SHADOW→ON` = 全量 §7/G-4/五方/`--release --range` + Director；`ON→SHADOW/OFF` = Director + 回滚计划/事件单。本 Amendment 按同一映射，**不保留“任何开关都全量门禁”的宽解释**；若 PO 批准文本不同，以 PO 文本为准并重映射，不由实现选择。
+4. **OFF→SHADOW / SHADOW→ON 门禁**：SPEC v1.8（approved 2026-11-24）已区分——`OFF→SHADOW` = Director 影子批准 + 影子就绪清单；`SHADOW→ON` = 全量 §7/G-4/五方/`--release --range` + Director；`ON→SHADOW/OFF` = Director + 回滚计划/事件单。本 Amendment 按同一映射，**不保留“任何开关都全量门禁”的宽解释**；若 PO 批准文本不同，以 PO 文本为准并重映射，不由实现选择。
 
 上述任一项被 QC 判定为契约缺陷 → 回 PO 修订，本 Amendment 不得由实现自行选择；在修订前不得进入 C-04/C-05/实现。
 
 ## 16. 批准
 
-- **Status: DRAFT**。本 Amendment 需 **Human `ADR_APPROVED`**；同时 SPEC-0002 v1.8 必须已 `SPEC_APPROVED`（**r5 已含 AC-63、AC-66 与 `COMPENSATING`；批准版须保持**）；否则不得作为实现依据。
-- **评审状态**：QC-13 已关闭 Payment/终态顺序；QC-14 结论为 **`READY FOR HUMAN SPEC+ADR APPROVAL`**（2026-11-24）；仍需 Human `ADR_APPROVED` 与 SPEC `SPEC_APPROVED`，本文件不构成批准。
-- **SPEC 对齐**：SPEC r5 已确认；SPEC r6 将显式写“先持久化 `refund_applications(PENDING)` 再 `Payment.Refund`”，与本 Amendment §4.5/§5.3 一致；批准版必须保持该顺序。
-- 批准前：不得写代码/迁移/测试，不得把本文件作为实现依据，不得切换 `order.settled`。
-- 批准后：C-04（proto）与 C-05（迁移）仍需各自评审；Developer 按 C-03/C-04/C-05 实现，Reviewer 按精确 base/head 复审。
+- **Status: accepted**（Director 2026-11-24 批准；Revision 1.0 / Amendment 1）。
+- **评审状态**：QC-13 已关闭 Payment/终态顺序；QC-14 结论为 **`READY FOR HUMAN SPEC+ADR APPROVAL`**（2026-11-24）；ADR 已获批准，SPEC-0002 v1.8 已 approved 2026-11-24；C-04/C-05 仍待各自流程。
+- **SPEC 对齐**：SPEC-0002 **v1.8 approved 2026-11-24** 已显式写“先持久化 `refund_applications(PENDING)` 再 `Payment.Refund`”，与本 Amendment §4.5/§5.3 一致；后续修订必须保持该顺序。
+- 实现前：不得写代码/迁移/测试，不得把本文件作为实现依据，不得切换 `order.settled`。
+- 后续：C-04（proto）与 C-05（迁移）仍需各自评审；Developer 按 C-03/C-04/C-05 实现，Reviewer 按精确 base/head 复审。
 - 本 Amendment 不改变 Rev 1.0 的已批准正文；所有变更以本文件增补条款为准。
 
 ## 17. 变更记录
@@ -841,3 +840,4 @@ Legacy queue:  OPEN -> RESOLVING -> RESOLVED
 | **0.3-draft（r3）** | 2026-11-24 | 按 QC-12 B-1 整改：`legacy_payment_resolution` 增 `COMPENSATING`；24h 先 `OPEN/RESOLVING→COMPENSATING`（离开 OPEN），补偿完成才 `COMPENSATING→EXPIRED_REFUND`，补偿失败保持 `COMPENSATING` 告警、不回 OPEN/不提前退款；`EXPIRED_REFUND` 仍先撤 permit/`CancelIfCreated`/INV-44 释放，Payment.Refund 最后。Target Spec 升为 **v1.8-draft-r4**，删除 B-3 待修订措辞；补 `resolution_kind/blocked_scope` CHECK 与 `refund_batches` 唯一性说明。Status 仍 DRAFT | 未改 Rev 1.0/Spec/代码（注：r4 已改为 Payment 成功后才 `EXPIRED_REFUND`） |
 | **0.4-draft（r4）** | 2026-11-24 | 按 QC-13 B-1 整改：`COMPENSATING` 内先幂等持久化 `refund_applications(PENDING)`，再调用 `Payment.Refund`；**Payment 全部成功后才 CAS `COMPENSATING→EXPIRED_REFUND`**；打款失败/超时保持 `COMPENSATING` 告警/重试，不得提前终态、不得回 OPEN；撤 permit/`CancelIfCreated`/INV-44 释放仍在打款前。Target Spec 升为 **v1.8-draft-r5**；同步 §4.5/§5.1/§5.2/§5.3/§8/D-28 | Status 仍 DRAFT；未改 Rev 1.0/Spec/代码 |
 | **0.5-draft（r5）** | 2026-11-24 | 按 QC-14 收口：Revision 升 r5；Target Spec 确认 r5；§16 引用 QC-13/QC-14 `READY FOR HUMAN SPEC+ADR APPROVAL`；记录“SPEC r6 将显式写先持久化 `refund_applications(PENDING)` 再 Payment”，与 §4.5/§5.3 一致；Status 仍 DRAFT | 未改语义/Rev1.0/Spec/代码 |
+| **1.0（accepted）** | 2026-11-24 | Director 批准 ADR-0007 Amendment 1：Status accepted、Approved 2026-11-24、Revision 1.0；§16 引用 QC-13/QC-14；Target Spec 确认；记录“SPEC r6 将显式写先持久化 `refund_applications(PENDING)` 再 Payment”，与 §4.5/§5.3 一致 | 生效前置：SPEC v1.8 approved 2026-11-24 + C-04/C-05 评审；保留 r1–r5 变更记录 |

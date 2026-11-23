@@ -10,7 +10,7 @@
 | Integration owner | **Director**（人类）；deputy: TBD |
 | Plan owner | Lead |
 | Approvals | Human **APPROVED** 2026-11-24；QC **RESOLVED**；Architect **RESOLVED**；PO/Developer/Reviewer Phase 0 sign-off tracked below |
-| Allowed paths | `docs/specs/0001*`、`docs/specs/0002*`、`docs/adr/0007*`、`api/proto/mall/v1/**`、`api/gen/**`、`internal/services/{payment,order,aftersales,fulfillment}/**`、`migrations/{payment,order}/**`、`cmd/**`、`internal/platform/{events,config}/**`、对应测试 |
+| Allowed paths | `docs/specs/0001*`、`docs/specs/0002*`、`docs/adr/0007*`、`api/proto/mall/v1/**`、`api/gen/**`、`internal/services/{payment,order,aftersales,fulfillment}/**`、`migrations/{payment,order,fulfillment}/**`、`cmd/**`、`internal/platform/{events,config}/**`、对应测试 |
 | Baseline impact | `INV-01/04/05/06/07/14/24/26/30…44`；`AC-39…61`；基线 `AC-14/21/25/27/31/32` 回归 |
 | Current WIP | 按人类裁决 B：保留在 main、冻结、不合并 release、不发布 |
 

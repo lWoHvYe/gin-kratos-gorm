@@ -68,6 +68,10 @@ CREATE TABLE IF NOT EXISTS refund_applications (
   CONSTRAINT chk_refund_app_state CHECK (state IN
     ('PENDING','PROCESSING','DONE','FAILED_PERMANENT','CANCELLED','REJECTED')),
   CONSTRAINT chk_refund_app_non_effective CHECK (non_effective_capture IN (0,1)),
+  -- QC-15: source is a closed enum (ADR §4.2/§6.2); the composite constraint
+  -- below additionally pins payment/legacy_expired to non-effective captures.
+  CONSTRAINT chk_refund_app_source CHECK (source IN
+    ('aftersale','tcc','system_shortage','system_zero','payment','legacy_expired')),
   CONSTRAINT chk_refund_app_non_effective_source CHECK (
     (source IN ('payment','legacy_expired') AND non_effective_capture = 1)
     OR (source NOT IN ('payment','legacy_expired') AND non_effective_capture = 0)

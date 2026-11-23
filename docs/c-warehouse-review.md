@@ -99,9 +99,20 @@ rollout is still gated.
 
 ## Verdict
 
-C is **functionally complete and enabled in dev and UAT**. The isolated UAT
-stack passed fresh migration, single/split E2E, admin/storefront split UI,
-targeted concurrency, draft cancellation and group refund. Production remains
-intentionally off because there is no large-scale production rollout; the
-runbook and hardened migration runner are retained for the eventual change
-window.
+> **2026-11-23 修订（H4 裁决）**：原结论「functionally complete」仅描述当轮功能面，不能作为发布验收；已按外部复审与 `docs/ext-review-1123-triage.md` §4 改写。历史记录保留在下方引用块中。
+
+C 的 phase 1–6 happy path 已在 dev/UAT 验证：fresh migration、single/split E2E、admin/storefront split UI、定向并发、draft cancellation 与 group refund 均通过。生产保持关闭。
+
+**但它不具备发布条件**：支付结算（足额支付、持久 settlement、CAS 幂等、统一 freeze）、退款统一准入（普通售后/TCC/SYSTEM 缺货）、事件与恢复身份（cancel/confirm/compensation/replay 丢 `warehouse_id`、received 事件缺组号）、Catalog 多仓投影仍有阻断项，详见 `docs/ext-review-1123-triage.md` §4。在 `change_id=PAY-SETTLE-01` 的 P0-A/P0-B 验收矩阵通过前，不得把本文件当作 Release PASS 证据。
+
+<details>
+<summary>历史结论（2026-11-22，已修订）</summary>
+
+> C is **functionally complete and enabled in dev and UAT**. The isolated UAT
+> stack passed fresh migration, single/split E2E, admin/storefront split UI,
+> targeted concurrency, draft cancellation and group refund. Production remains
+> intentionally off because there is no large-scale production rollout; the
+> runbook and hardened migration runner are retained for the eventual change
+> window.
+
+</details>

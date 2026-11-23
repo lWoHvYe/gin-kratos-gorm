@@ -23,7 +23,7 @@ adr: []
 | 位置 | `docs/specs/`：批准时已由 Reviewer 同步 `ac-baseline.txt`/`ac-coverage.tsv`；AC-39…61 先以延期行登记 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件与 QC 报告，不接收口头补充） |
-| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` v1.2；`docs/ext-review-1123-triage.md` §7.4；`docs/review-tracking.md` 2026-11-23 裁决；`docs/collab/qc-reports/SPEC-0002-QC-01.md`、`SPEC-0002-QC-02.md`、`SPEC-0002-QC-03.md`、`SPEC-0002-QC-04.md`、`SPEC-0002-QC-05.md`、`SPEC-0002-QC-06.md`、`SPEC-0002-QC-07.md` |
+| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` v1.3；`docs/ext-review-1123-triage.md` §7.4；`docs/review-tracking.md` 2026-11-23 裁决；`docs/collab/qc-reports/SPEC-0002-QC-01.md`、`SPEC-0002-QC-02.md`、`SPEC-0002-QC-03.md`、`SPEC-0002-QC-04.md`、`SPEC-0002-QC-05.md`、`SPEC-0002-QC-06.md`、`SPEC-0002-QC-07.md` |
 | 范围 | H1/H2 批准的业务口径：首次支付、结算、取消竞态、库存就绪、发货准入、退款统一准入、缺货、收货 |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准（EARS）。**不定义**表结构、事件名、RPC 形态、事务边界、重试算法或开关实现；这些由 Architect 在 ADR 中设计并接受本文件验收。

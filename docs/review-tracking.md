@@ -140,7 +140,7 @@ Spec/ADR/CONVENTIONS.
 
 | # | Decision | Status |
 |---|---|---|
-| H1 | First payment must be exact (`captured == pay_cent`), one active payment per order, duplicate capture refunded, `pay_cent=0` exempt, **no partial payment this phase** | approved; SPEC-0002 v1.6 draft INV-30…44 / AC-39…61; **QC-08 `PASS WITH CONDITIONS`**; remaining C-1 (0001 v1.3), C-8 (D-11…D-21), C-9 (ledger/index/commit) |
+| H1 | First payment must be exact (`captured == pay_cent`), one active payment per order, duplicate capture refunded, `pay_cent=0` exempt, **no partial payment this phase** | approved; SPEC-0002 v1.6 approved + landed; ADR-0007 v0.4 awaiting human approval |
 | H2 | Payment-settlement + fulfillment-admission is a P0 project (`change_id=PAY-SETTLE-01`), split P0-A funds / P0-B admission / P0-C three deterministic release errors; production switches stay false; UAT split may stay but is **not** release evidence | approved; freeze in effect |
 | H3 | Integration owner: **Director** (name provided 2026-11-23); Architect acts as design owner/secretary; one payment/order Developer as deputy; no per-service split ownership | approved; Director named, deputy TBD |
 | H4 | Withdraw the `c-warehouse-review` “functionally complete” release implication, keep history | approved; doc amended 2026-11-23 |
@@ -152,23 +152,16 @@ CLOSED, AC-REF counts, or the historical C/UAT results. Unfreeze only when the
 §7.3 matrix in the triage doc, G-4, explicit `--release --range`, and the
 five-party final-state check all pass.
 
-**Next gate**: SPEC-0002 `v1.5` draft (`docs/po/drafts/0002-payment-settlement-admission.md`)
-→ QC-01 `BLOCKED` → v1.0 → QC-02 `BLOCKED` → v1.1 → QC-03 `PASS WITH CONDITIONS`
-→ v1.2 → QC-04 `BLOCKED` (N-37…N-40) → v1.3 → QC-05 `BLOCKED` (N-50) → v1.4
-→ QC-06 `BLOCKED` (N-58/59) → v1.5 → QC-07 `BLOCKED` (N-66) → v1.6 →
-**QC-08 `PASS WITH CONDITIONS`** → awaiting human C-1/C-8/C-9 → `SPEC_APPROVED`.
+**Next gate**: SPEC-0002 v1.6 + SPEC-0001 v1.3 are **approved and landed**
+(commits `9dc38b6`, `6aa12f3`). ADR-0007 v0.4 (`docs/adr/0007-payment-settlement-admission.md`) is ready for
+human approval. QC-ADR-01/02 `BLOCKED` (20 findings) were remediated;
+QC-ADR-03 found no code-level blocker, with Q-31/Q-32 fixed in v0.4 and Q-33
+(INV-43 scope) as a human approval condition. After ADR approval, P0-A/P0-B
+implementation may start.
 
-**C-1 prerequisite**: SPEC-0001 must be upgraded to v1.3 first. Draft amendment:
-`docs/po/drafts/0001-v1.3-amendment-group-refund-release.md` (limits §6.6
-"预留已释放但订单仍已支付" to groups still intended to ship; adds §6.6.1
-group-refund release/restock rules). Until the human approves v1.3, SPEC-0002
-must not be `approved` and ADR-0007 must not start.
-
-**C-8 pending human**: D-11…D-21 in the draft (inventory wait bound, duplicate
-payment fee, shortage new-case, 30-minute visibility, restock expiry, historical
-backfill, INV-06 amendment, release-not-blocking-refund, pre-ship partial refund,
-historical shortage, TCC full-freight refund). These are business decisions; no
-code/ADR may assume them before approval.
+**C-1/C-8/C-9 closed**: Director approved 2026-11-23; SPEC-0001 v1.3 and
+SPEC-0002 v1.6 approved; AC-39…61 registered as deferrals
+(developer-reviewer/T-002, expiry 2026-12-31); commits `9dc38b6`, `6aa12f3`.
 
 **ADR-0007 handoff (R-1…R-4, from QC-08)**: (R-1) Σ group caps ≠ order remaining
 captured needs an owner/action for manual adjudication; (R-2) choose accounting

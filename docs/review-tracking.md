@@ -17,6 +17,14 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-25 T1.4b1-R FAIL — B2/B3
+
+- B1 external refund/atomicity closed; B2 lazy reconcile is not persistent and
+  does not update order amount projection; B3 Plan/selfcheck not bound to
+  `198c623`.
+- T1.4b1-R frozen; T1.4b1-R2 required: persistent reconcile worker + order
+  projection in same tx + canonical selfcheck/Plan status. No merge.
+
 ### 2026-11-24 C-04 RefundBatch accepted
 
 Director accepted the C-04 `RefundBatch` contract (expected_total/new-only

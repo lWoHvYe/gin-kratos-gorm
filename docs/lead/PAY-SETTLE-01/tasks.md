@@ -96,3 +96,11 @@ Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `
 - [ ] R-5 B2 self-check canonical（Developer）
 - [x] R-6 M3 Plan 状态（Lead）
 - [ ] R-7 Reviewer 复审（Reviewer）
+
+## T1.4b1-R2 (Reviewer B2/B3)
+
+- [ ] R2-1 persistent TCC reconcile worker: scan ADMITTED/PAYING batches, GetRefundByKey, update commitment/app/batch + order amount projection in one tx; no event required; config interval.
+- [ ] R2-2 order projection: refunded_cent/refund_status/refund_state monotonic; active batch REFUNDING; all done PARTIAL/FULL.
+- [ ] R2-3 no-event fault-injection test: batch DONE + order FULL/PARTIAL without payment.refunded.
+- [ ] R2-4 canonical selfcheck bound to new HEAD; Plan approval rows.
+- [ ] R2-5 Reviewer re-review.

@@ -233,6 +233,11 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   移除 `collab-gates` job（`verify` 保留）。G-1…G-4 降级为 `CONVENTIONS §7` 的人工检查清单；
   `ADR-0006` 标记 retired，`ADR-0008`/Amendment 1 标记 withdrawn。GOV-COST-01 正式撤回，
   不再推进 P0a 之后的任何实现。测试/构建/迁移/proto 门禁不变；Release 仍由人类放行。
+- **2026-11-25 artifact cleanup**: 已删除 GOV-COST-01 的全部产物——
+  SPEC-0003、ADR-0008、Amendment 1、9 份相关 QC 报告、`docs/lead/GOV-COST-01/`；
+  AC-69…AC-112 从 `ac-baseline.txt`/`ac-coverage.tsv` 移除（台账回到 AC-01…68 / 36 行），
+  `docs/specs/README.md` 的 SPEC-0003 索引行移除。仅保留本决策记录与
+  `docs/cost-reduction-proposal.md` 作为历史；不再有任何门禁/脚本引用它们。
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

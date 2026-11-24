@@ -26,6 +26,12 @@ WP-I2 release, WP-I3 restock, WP-B1/B2 backfill, WP-E1..E4 compatibility,
 WP-V1 evidence. Each WP owns one invariant, one branch, one scoped Reviewer.
 T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
 
+### 2026-11-25 T1.4b2a P0-R2 PASS (scoped)
+
+- Reviewer PASS for `60130e1..1de09e3`: group_count=1, single-group release,
+  multi-group reserved/P1, no scan/backfill. T1.4b2a scoped close; T1.4 still
+  WIP. No merge/Release; T1.5/T1.6 next with Amendments.
+
 ### 2026-11-25 P0 simplification: single-group physical release only (Tier L2)
 
 Director accepted: for P0, only single-group orders emit an immediate full

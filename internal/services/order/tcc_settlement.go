@@ -91,6 +91,45 @@ func tccPendingCapturedError(orderNo, paymentNo string, paidCent int64) error {
 		})
 }
 
+// tccErrCancelledCaptured is the identifiable error for a CANCELLED order that
+// still holds captured money. T1.6 owns the payment-level cancel refund; a
+// T1.2 compensation must not report success without refunding (Plan T1.2-R B1).
+const tccErrCancelledCaptured = "TCC_CANCELLED_CAPTURED_NOT_IMPLEMENTED"
+
+func tccCancelledCapturedError(orderNo, paymentNo string, paidCent int64) error {
+	return apperr.Failed("TCC compensation for a captured CANCELLED order belongs to T1.6").
+		WithDetails(map[string]any{
+			"tcc_error": tccErrCancelledCaptured,
+			"order_no":  orderNo, "payment_no": paymentNo, "paid_cent": paidCent,
+		})
+}
+
+// tccErrStatusUnsupported fails closed for lifecycle states a TCC compensation
+// must not silently skip (Plan T1.2-R B1: no silent return).
+const tccErrStatusUnsupported = "TCC_ORDER_STATUS_UNSUPPORTED"
+
+func tccUnsupportedStatusError(orderNo, paymentNo, status string) error {
+	return apperr.Failed("TCC compensation cannot determine a safe refund branch for the order status").
+		WithDetails(map[string]any{
+			"tcc_error": tccErrStatusUnsupported,
+			"order_no":  orderNo, "payment_no": paymentNo, "status": status,
+		})
+}
+
+// tccErrBatchManual is returned when the durable batch is parked for manual
+// handling. T1.2 must never resume MANUAL_HOLD/FAILED_PERMANENT automatically
+// (Plan T1.2-R R-1, ADR §6.1/AC-62).
+const tccErrBatchManual = "TCC_BATCH_REQUIRES_MANUAL_HANDLING"
+
+func tccBatchManualError(batch *tccRefundBatch) error {
+	return apperr.Failed("TCC refund batch requires manual handling; automatic resume is disabled").
+		WithDetails(map[string]any{
+			"tcc_error": tccErrBatchManual,
+			"batch_id":  batch.BatchID, "state": batch.State,
+			"order_no": batch.OrderNo, "payment_no": batch.PaymentNo,
+		})
+}
+
 // tccSumMismatch carries a failed Σ equation out of Tx1 so the audit batch
 // (PRECHECK_FAILED) can be written after the transaction rolled back
 // (ADR-0007 Amd1 §4.1.2 step 2; Addendum 2 R-1).
@@ -229,18 +268,31 @@ func (s *Service) freezeTccCompensationTx(ctx context.Context, tx *sql.Tx, order
 	if locked == nil {
 		return apperr.NotFound("order not found")
 	}
-	if locked.RefundState == refundStateFull || locked.Status == statusCancelled {
+	if locked.RefundState == refundStateFull {
 		return nil
 	}
-	if locked.Status != statusPendingPayment && locked.Status != statusPaid {
+	switch locked.Status {
+	case statusPaid, statusAllocated, statusShipped, statusCompleted:
+		// Captured money is still refundable after the lifecycle advanced.
+	case statusCancelled:
+		// T1.6 owns CANCELLED + captured; a captured CANCELLED order must not
+		// be reported as a completed compensation (Plan T1.2-R B1).
+		if snapshot.CapturedCent > 0 {
+			return tccCancelledCapturedError(locked.OrderNo, snapshot.PaymentNo, snapshot.CapturedCent)
+		}
 		return nil
-	}
-	// Addendum 2 R-3: PENDING_PAYMENT with captured money is T1.6's
-	// CAS->CANCELLED + payment-level cancel-refund branch. Until it lands this
-	// guard must not write PAID/REFUNDING/batch/permit/application. (The entry
-	// point also guards on the request's paid_cent without a Payment call.)
-	if locked.Status == statusPendingPayment && snapshot.CapturedCent > 0 {
-		return tccPendingCapturedError(locked.OrderNo, snapshot.PaymentNo, snapshot.CapturedCent)
+	case statusPendingPayment:
+		// Addendum 2 R-3: PENDING_PAYMENT with captured money is T1.6's
+		// CAS->CANCELLED + payment-level cancel-refund branch. Until it lands
+		// this guard must not write PAID/REFUNDING/batch/permit/application.
+		if snapshot.CapturedCent > 0 {
+			return tccPendingCapturedError(locked.OrderNo, snapshot.PaymentNo, snapshot.CapturedCent)
+		}
+		// No captured money: the local-cancel branch is decided before Tx1.
+		return apperr.Failed("PENDING_PAYMENT has no group refund branch").
+			WithDetails(map[string]any{"order_no": locked.OrderNo, "payment_no": snapshot.PaymentNo})
+	default:
+		return tccUnsupportedStatusError(locked.OrderNo, snapshot.PaymentNo, locked.Status)
 	}
 
 	batch, completed, err := findTccBatchForResume(ctx, tx, orderNo, snapshot.PaymentNo)
@@ -268,6 +320,12 @@ func (s *Service) createTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 			return &tccSumMismatch{result: rechecked, err: err}
 		}
 		return err
+	}
+	// Plan T1.2-R M2: the Σ equation above must be evaluated BEFORE the
+	// no-active shortcut. With Σ == remaining == 0 there is nothing to refund:
+	// idempotent success, no REFUNDING write, no empty FROZEN batch.
+	if rechecked.SumGroupCapCent == 0 && rechecked.RemainingCapturedCent == 0 {
+		return nil
 	}
 	if rechecked.NoCaptured {
 		// AC-65: no captured money is a cancel/zero-converge branch, never a
@@ -305,20 +363,18 @@ func (s *Service) resumeTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 	}
 	rechecked, err := s.recheckTccSumTxExcluding(ctx, tx, locked.OrderNo, snapshot, tccCommitmentPrefix(snapshot.PaymentNo))
 	if err != nil {
+		if rechecked != nil {
+			// Plan T1.2-R R-4 (m1): a resume Σ failure is audited exactly like
+			// a fresh precheck failure; the transaction rolls back first.
+			return &tccSumMismatch{result: rechecked, err: err}
+		}
 		return err
-	}
-	if rechecked.NoCaptured {
-		return apperr.Failed("TCC compensation resume has no captured amount").
-			WithDetails(map[string]any{
-				"order_no": locked.OrderNo, "batch_id": batch.BatchID,
-				"payment_no": snapshot.PaymentNo, "captured_cent": rechecked.CapturedCent,
-			})
 	}
 	if rechecked.SumGroupCapCent != batch.SumGroupCapCent || rechecked.RemainingCapturedCent != batch.RemainingCapturedCent {
 		// AC-65: the authoritative captured/refunded facts changed since the
-		// batch froze. Do not extend it by guessing; stop for manual review
-		// (T1.4 owns MANUAL_HOLD for the paying phase).
-		return apperr.Failed("TCC compensation snapshot changed since the batch was frozen").
+		// batch froze. Do not extend it by guessing; record the audit batch
+		// (R-4) and stop for manual review (T1.4 owns MANUAL_HOLD).
+		return &tccSumMismatch{result: rechecked, err: apperr.Failed("TCC compensation snapshot changed since the batch was frozen").
 			WithDetails(map[string]any{
 				"order_no": locked.OrderNo, "batch_id": batch.BatchID, "payment_no": snapshot.PaymentNo,
 				"batch_sum_group_cap_cent":      batch.SumGroupCapCent,
@@ -327,7 +383,12 @@ func (s *Service) resumeTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 				"recomputed_remaining_captured": rechecked.RemainingCapturedCent,
 				"recomputed_active_group_count": rechecked.ActiveGroupCount,
 				"recomputed_refunded_captured":  rechecked.RefundedCent,
-			})
+			})}
+	}
+	if rechecked.SumGroupCapCent == 0 && rechecked.RemainingCapturedCent == 0 && rechecked.ActiveGroupCount == 0 {
+		// M2: an existing ledger that is now fully refunded/zero-cap has
+		// nothing to fill; idempotent success without an empty batch write.
+		return nil
 	}
 	return s.writeTccBatchGroupsTx(ctx, tx, batch, snapshot, shipments, rechecked.Groups, tccCommitmentPrefix(snapshot.PaymentNo))
 }
@@ -444,8 +505,13 @@ func findTccBatchForResume(ctx context.Context, tx *sql.Tx, orderNo, paymentNo s
 			return nil, false, apperr.Internal("scan tcc refund batch", err)
 		}
 		switch batch.State {
-		case refundBatchFrozen, "ADMITTING", "ADMITTED", "PAYING", "MANUAL_HOLD", "FAILED_PERMANENT":
+		case refundBatchFrozen, "ADMITTING", "ADMITTED", "PAYING":
 			resumable = append(resumable, batch)
+		case "MANUAL_HOLD", "FAILED_PERMANENT":
+			// Plan T1.2-R R-1/m2: human-owned states must not be resumed by an
+			// automatic TCC retry; T1.4 owns their state CAS.
+			_ = rows.Close()
+			return nil, false, tccBatchManualError(batch)
 		case refundBatchDone:
 			completed = true
 		case refundBatchFailedPre:
@@ -535,15 +601,28 @@ func (s *Service) writeTccBatchGroupsTx(ctx context.Context, tx *sql.Tx, batch *
 		if comp == nil {
 			comp = &tccGroupComposition{}
 		}
-		goodsCap := group.PaidCent - comp.CommittedGoods
-		freightCap := group.FreightCent - comp.CommittedFreight
+		// Plan T1.2-R M1: for historical/pre-line-composition commitments
+		// (composition_known=0) the group cap is
+		// groupPaid + freight_share - RESERVED/SETTLED (the precheck value),
+		// never the old commitment amount. Only a whole-group refund is allowed;
+		// line attribution must not be invented.
+		var goodsCap, freightCap int64
+		if comp.UnknownComposition {
+			goodsCap = group.PaidCent - comp.CommittedAmount
+			freightCap = group.FreightCent
+		} else {
+			goodsCap = group.PaidCent - comp.CommittedGoods
+			freightCap = group.FreightCent - comp.CommittedFreight
+		}
 		if goodsCap < 0 || freightCap < 0 || goodsCap+freightCap != group.CapCent {
 			return apperr.Failed("tcc group composition does not match the prechecked cap").
 				WithDetails(map[string]any{
 					"order_no": batch.OrderNo, "group_no": group.GroupNo, "batch_id": batch.BatchID,
 					"goods_cap_cent": goodsCap, "freight_cap_cent": freightCap,
-					"group_cap_cent":       group.CapCent,
-					"committed_goods_cent": comp.CommittedGoods, "committed_freight_cent": comp.CommittedFreight,
+					"group_cap_cent":        group.CapCent,
+					"composition_known":     !comp.UnknownComposition,
+					"committed_amount_cent": comp.CommittedAmount,
+					"committed_goods_cent":  comp.CommittedGoods, "committed_freight_cent": comp.CommittedFreight,
 				})
 		}
 
@@ -589,7 +668,7 @@ func (s *Service) writeTccBatchGroupsTx(ctx context.Context, tx *sql.Tx, batch *
 			return err
 		}
 		if err := ensureTccCommitmentTx(ctx, tx, batch.OrderNo, group.GroupNo, refundID,
-			group.CapCent, goodsCap, freightCap, comp, linesByGroup[group.GroupNo]); err != nil {
+			group.CapCent, !comp.UnknownComposition, goodsCap, freightCap, comp, linesByGroup[group.GroupNo]); err != nil {
 			return err
 		}
 	}
@@ -745,21 +824,32 @@ func ensureTccRemoteAdmissionTx(ctx context.Context, tx *sql.Tx, orderNo, groupN
 }
 
 // ensureTccCommitmentTx reserves the group's quota before the remote admission
-// (AC-64/INV-24): header composition plus one line per order line and the
-// freight line. It is idempotent and verifies that a resumed row still equals
-// the prechecked composition.
-func ensureTccCommitmentTx(ctx context.Context, tx *sql.Tx, orderNo, groupNo, refundID string, amount, goodsCap, freightCap int64, comp *tccGroupComposition, lines []tccOrderLine) error {
-	expected, err := buildTccCommitmentLines(comp, lines, goodsCap, freightCap)
-	if err != nil {
-		return err
+// (AC-64/INV-24). A composition_known=1 commitment is written with its line
+// composition and verified; a composition_known=0 (historical/pre-line) group
+// gets only the quota header with no lines, because Plan T1.2-R M1 forbids
+// guessing a line attribution for a whole-group TCC refund.
+func ensureTccCommitmentTx(ctx context.Context, tx *sql.Tx, orderNo, groupNo, refundID string,
+	amount int64, known bool, goodsCap, freightCap int64, comp *tccGroupComposition, lines []tccOrderLine) error {
+	headerGoods, headerFreight, knownValue := goodsCap, freightCap, 1
+	var expected []tccCommitmentLine
+	if known {
+		var err error
+		expected, err = buildTccCommitmentLines(comp, lines, headerGoods, headerFreight)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Migration/ADR convention for an unattributed legacy commitment:
+		// goods=amount, freight=0, composition_known=0, no lines.
+		headerGoods, headerFreight, knownValue = amount, 0, 0
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO order_refund_commitments
 		(order_no, group_no, refund_id, amount_cent, goods_cent, freight_cent,
 		 composition_known, composition_source, state, version)
-		VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 1)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 		ON DUPLICATE KEY UPDATE refund_id = refund_id`,
-		orderNo, groupNo, refundID, amount, goodsCap, freightCap,
-		refundApplicationSourceTCC, commitmentReserved); err != nil {
+		orderNo, groupNo, refundID, amount, headerGoods, headerFreight,
+		knownValue, refundApplicationSourceTCC, commitmentReserved); err != nil {
 		return apperr.Internal("insert tcc refund commitment", err)
 	}
 	var (
@@ -772,18 +862,31 @@ func ensureTccCommitmentTx(ctx context.Context, tx *sql.Tx, orderNo, groupNo, re
 		Scan(&existingAmount, &existingGoods, &existingFreight, &compositionKnown, &state, &source); err != nil {
 		return apperr.Internal("load tcc refund commitment", err)
 	}
-	if existingAmount != amount || existingGoods != goodsCap || existingFreight != freightCap || compositionKnown != 1 {
+	if existingAmount != amount || compositionKnown != knownValue {
 		return apperr.Failed("tcc refund commitment conflicts with the prechecked composition").
 			WithDetails(map[string]any{
 				"order_no": orderNo, "group_no": groupNo, "refund_id": refundID,
 				"amount_cent": existingAmount, "goods_cent": existingGoods, "freight_cent": existingFreight,
 				"composition_known": compositionKnown,
-				"want_amount_cent":  amount, "want_goods_cent": goodsCap, "want_freight_cent": freightCap,
+				"want_amount_cent":  amount, "want_composition_known": knownValue,
+			})
+	}
+	if known && (existingGoods != headerGoods || existingFreight != headerFreight) {
+		return apperr.Failed("tcc refund commitment conflicts with the prechecked composition").
+			WithDetails(map[string]any{
+				"order_no": orderNo, "group_no": groupNo, "refund_id": refundID,
+				"goods_cent": existingGoods, "freight_cent": existingFreight,
+				"want_goods_cent": headerGoods, "want_freight_cent": headerFreight,
 			})
 	}
 	if state != commitmentReserved && state != commitmentSettled {
 		return apperr.Failed("tcc refund commitment is not resumable in its current state").
 			WithDetails(map[string]any{"order_no": orderNo, "group_no": groupNo, "refund_id": refundID, "state": state})
+	}
+	if !known {
+		// No line rows by design; a legacy whole-group refund is represented by
+		// the quota header only (ADR §4.3).
+		return nil
 	}
 	for _, line := range expected {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO order_refund_commitment_lines
@@ -899,17 +1002,24 @@ type tccGroupComposition struct {
 	CommittedAmount  int64
 	CommittedGoods   int64
 	CommittedFreight int64
-	LineGoods        map[int]int64
-	LineQuantity     map[int]int64
+	// UnknownComposition is true when at least one RESERVED/SETTLED commitment
+	// of the group predates line composition (composition_known=0, e.g. the
+	// order/0018 migration backfill goods=amount/freight=0 with no lines). Such
+	// a group may only be refunded as a whole; Plan T1.2-R M1 forbids inventing
+	// a line attribution for it.
+	UnknownComposition bool
+	LineGoods          map[int]int64
+	LineQuantity       map[int]int64
 }
 
-// loadTccGroupComposition reads commitments and their lines. A header whose
-// goods+freight does not equal the committed amount (legacy row, or an old
-// writer that never filled composition) cannot be attributed safely; the
-// caller stops instead of inventing an attribution (ADR §4.3).
+// loadTccGroupComposition reads the RESERVED/SETTLED commitment headers and,
+// only for groups whose commitments all have composition_known=1, their line
+// attribution. A composition_known=0 row is not an error: it marks the group as
+// whole-group-only and its stored goods/freight are not used as attribution
+// (Plan T1.2-R M1, ADR §4.3).
 func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRefundPrefix string) (map[string]*tccGroupComposition, error) {
 	out := make(map[string]*tccGroupComposition, 2)
-	rows, err := q.QueryContext(ctx, `SELECT group_no, refund_id, amount_cent, goods_cent, freight_cent
+	rows, err := q.QueryContext(ctx, `SELECT group_no, refund_id, amount_cent, goods_cent, freight_cent, composition_known
 		FROM order_refund_commitments WHERE order_no = ? AND state IN (?, ?)`,
 		orderNo, commitmentReserved, commitmentSettled)
 	if err != nil {
@@ -918,11 +1028,24 @@ func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRef
 	for rows.Next() {
 		var groupNo, refundID string
 		var amount, goods, freight int64
-		if err := rows.Scan(&groupNo, &refundID, &amount, &goods, &freight); err != nil {
+		var compositionKnown int
+		if err := rows.Scan(&groupNo, &refundID, &amount, &goods, &freight, &compositionKnown); err != nil {
 			_ = rows.Close()
 			return nil, apperr.Internal("scan refund commitment composition", err)
 		}
 		if excludeRefundPrefix != "" && strings.HasPrefix(strings.TrimSpace(refundID), excludeRefundPrefix) {
+			continue
+		}
+		groupNo = strings.TrimSpace(groupNo)
+		comp := out[groupNo]
+		if comp == nil {
+			comp = &tccGroupComposition{LineGoods: map[int]int64{}, LineQuantity: map[int]int64{}}
+			out[groupNo] = comp
+		}
+		comp.CommittedAmount += amount
+		if compositionKnown == 0 {
+			// Legacy/pre-line commitment: quota is the only fact we may use.
+			comp.UnknownComposition = true
 			continue
 		}
 		if amount != goods+freight {
@@ -933,13 +1056,6 @@ func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRef
 					"goods_cent": goods, "freight_cent": freight,
 				})
 		}
-		groupNo = strings.TrimSpace(groupNo)
-		comp := out[groupNo]
-		if comp == nil {
-			comp = &tccGroupComposition{LineGoods: map[int]int64{}, LineQuantity: map[int]int64{}}
-			out[groupNo] = comp
-		}
-		comp.CommittedAmount += amount
 		comp.CommittedGoods += goods
 		comp.CommittedFreight += freight
 	}
@@ -958,11 +1074,13 @@ func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRef
 	lineGoods := map[lineKey]int64{}
 	lineFreight := map[string]int64{}
 	lineQuantity := map[lineKey]int64{}
+	// Only composition_known=1 commitments have line attribution; unknown
+	// whole-group commitments are deliberately excluded from line math.
 	lineRows, err := q.QueryContext(ctx, `SELECT c.group_no, c.refund_id, l.line_no,
 		COALESCE(SUM(l.goods_cent),0), COALESCE(SUM(l.freight_cent),0), COALESCE(SUM(l.quantity),0)
 		FROM order_refund_commitment_lines l
 		JOIN order_refund_commitments c ON c.refund_id = l.refund_id
-		WHERE c.order_no = ? AND c.state IN (?, ?)
+		WHERE c.order_no = ? AND c.state IN (?, ?) AND c.composition_known = 1
 		GROUP BY c.group_no, c.refund_id, l.line_no`, orderNo, commitmentReserved, commitmentSettled)
 	if err != nil {
 		return nil, apperr.Internal("load refund commitment lines", err)
@@ -995,6 +1113,10 @@ func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRef
 		return nil, apperr.Internal("close refund commitment lines", err)
 	}
 	for groupNo, comp := range out {
+		if comp.UnknownComposition {
+			// Whole-group only: no line verification, no attribution.
+			continue
+		}
 		var goods, freight int64
 		for key, value := range lineGoods {
 			if key.groupNo == groupNo {

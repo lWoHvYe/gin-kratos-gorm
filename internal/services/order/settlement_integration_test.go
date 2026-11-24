@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -121,51 +123,12 @@ func orderTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE IF NOT EXISTS order_refund_commitments (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL,
 			group_no VARCHAR(64) NOT NULL, refund_id VARCHAR(128) NOT NULL,
-			amount_cent BIGINT NOT NULL, goods_cent BIGINT NOT NULL DEFAULT 0,
-			freight_cent BIGINT NOT NULL DEFAULT 0, composition_known TINYINT(1) NOT NULL DEFAULT 0,
-			composition_source VARCHAR(16) NOT NULL DEFAULT 'legacy',
+			amount_cent BIGINT NOT NULL,
 			state VARCHAR(16) NOT NULL DEFAULT 'RESERVED',
 			version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_order_refund_commitment (order_no, group_no, refund_id))`,
-		// C-05 migrations/order/0017_refund_batch_ledger.sql (test projection).
-		`CREATE TABLE IF NOT EXISTS refund_batches (
-			batch_id VARCHAR(96) NOT NULL, source VARCHAR(24) NOT NULL,
-			order_no VARCHAR(64) NOT NULL, payment_no VARCHAR(64) NOT NULL,
-			attempt_seq INT NOT NULL DEFAULT 1, state VARCHAR(24) NOT NULL,
-			captured_snapshot_cent BIGINT NOT NULL DEFAULT 0,
-			refunded_snapshot_cent BIGINT NOT NULL DEFAULT 0,
-			sum_group_cap_cent BIGINT NOT NULL DEFAULT 0,
-			remaining_captured_cent BIGINT NOT NULL DEFAULT 0,
-			attempts INT NOT NULL DEFAULT 0, lease_owner VARCHAR(64) NOT NULL DEFAULT '',
-			lease_until DATETIME(3) NULL, last_error VARCHAR(1024) NOT NULL DEFAULT '',
-			version BIGINT NOT NULL DEFAULT 1,
-			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-			PRIMARY KEY (batch_id),
-			KEY idx_refund_batch_lookup (source, order_no, payment_no, state))`,
-		`CREATE TABLE IF NOT EXISTS refund_applications (
-			refund_id VARCHAR(128) NOT NULL, batch_id VARCHAR(96) NULL, source VARCHAR(24) NOT NULL,
-			order_no VARCHAR(64) NOT NULL, group_no VARCHAR(64) NULL,
-			non_effective_capture TINYINT(1) NOT NULL DEFAULT 0,
-			amount_cent BIGINT NOT NULL DEFAULT 0, goods_cent BIGINT NOT NULL DEFAULT 0,
-			freight_cent BIGINT NOT NULL DEFAULT 0, state VARCHAR(24) NOT NULL DEFAULT 'PENDING',
-			admission_result VARCHAR(24) NOT NULL DEFAULT '', attempts INT NOT NULL DEFAULT 0,
-			lease_owner VARCHAR(64) NOT NULL DEFAULT '', lease_until DATETIME(3) NULL,
-			last_error VARCHAR(1024) NOT NULL DEFAULT '', version BIGINT NOT NULL DEFAULT 1,
-			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-			PRIMARY KEY (refund_id),
-			UNIQUE KEY uk_refund_app_batch_group (batch_id, group_no),
-			KEY idx_refund_app_order_state (order_no, state))`,
-		// C-05 migrations/order/0018_refund_commitment_composition.sql (test projection).
-		`CREATE TABLE IF NOT EXISTS order_refund_commitment_lines (
-			refund_id VARCHAR(128) NOT NULL, line_no INT NOT NULL,
-			quantity INT NOT NULL DEFAULT 0, goods_cent BIGINT NOT NULL DEFAULT 0,
-			freight_cent BIGINT NOT NULL DEFAULT 0,
-			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-			PRIMARY KEY (refund_id, line_no))`,
 		`CREATE TABLE IF NOT EXISTS order_allocation_snapshots (
 			order_no VARCHAR(64) NOT NULL PRIMARY KEY, allocation_hash CHAR(64) NOT NULL DEFAULT '',
 			lines_json JSON NOT NULL, groups_json JSON NOT NULL, frozen_at DATETIME(3) NULL,
@@ -209,6 +172,16 @@ func orderTestDB(t *testing.T) *sql.DB {
 			t.Fatalf("create order test table: %v", err)
 		}
 	}
+	// The refund batch/application/commitment-composition schema comes from the
+	// real C-05 migrations, not a hand-written projection (Plan T1.2-R R-2 /
+	// Review m6). This exercises the order/0017 and order/0018 DDL (CHECK
+	// constraints, columns, indexes) in every order integration test.
+	for _, migration := range []string{
+		"0017_refund_batch_ledger.sql",
+		"0018_refund_commitment_composition.sql",
+	} {
+		applyOrderTestMigration(t, db, migration)
+	}
 	for _, table := range []string{"order_allocation_decisions", "order_allocation_snapshots", "order_shortage_cases",
 		"order_reconciliation_diffs", "order_fulfillment_groups", "order_items", "order_shipping_permits",
 		"order_status_logs", "orders", "outbox_events",
@@ -219,6 +192,37 @@ func orderTestDB(t *testing.T) *sql.DB {
 		}
 	}
 	return db
+}
+
+// applyOrderTestMigration executes a real migrations/order/*.sql file against
+// the test database. The C-05 files are plain statements (no DELIMITER blocks);
+// splitting on ";" lets database/sql run them without multiStatements=true.
+func applyOrderTestMigration(t *testing.T, db *sql.DB, name string) {
+	t.Helper()
+	path := filepath.Join("..", "..", "..", "migrations", "order", name)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read migration %s: %v", name, err)
+	}
+	// Drop full-line SQL comments first: the header comments contain ";" and
+	// would otherwise be split into invalid fragments.
+	var cleaned strings.Builder
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "--") {
+			continue
+		}
+		cleaned.WriteString(line)
+		cleaned.WriteString("\n")
+	}
+	for _, statement := range strings.Split(cleaned.String(), ";") {
+		statement = strings.TrimSpace(statement)
+		if statement == "" {
+			continue
+		}
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatalf("apply migration %s: %v\n%s", name, err, statement)
+		}
+	}
 }
 
 func seedSettlementOrder(t *testing.T, db *sql.DB, orderNo, status string, paid, refunded int64, refundState string) {

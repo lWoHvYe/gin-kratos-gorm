@@ -187,11 +187,9 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 	if record == nil {
 		return &pb.Empty{}, nil
 	} // nothing was created
-	if record.RefundState == refundStateFull || record.Status == statusCancelled {
-		return &pb.Empty{}, nil
-	}
-	from := record.Status
-	if from != statusPendingPayment && from != statusPaid {
+	// A fully refunded order has nothing to compensate; this is idempotent
+	// success (AC-51/AC-65 "all groups already refunded").
+	if record.RefundState == refundStateFull {
 		return &pb.Empty{}, nil
 	}
 
@@ -199,6 +197,24 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 	paid := req.GetPaidCent()
 	if paid <= 0 {
 		paid = record.PaidCent
+	}
+	from := record.Status
+	switch from {
+	case statusCancelled:
+		// T1.6 owns CANCELLED + captured (payment-level cancel refund). Until
+		// it lands this must not look like a completed compensation.
+		if paid > 0 {
+			return nil, tccCancelledCapturedError(orderNo, paymentNo, paid)
+		}
+		return &pb.Empty{}, nil
+	case statusPendingPayment, statusPaid, statusAllocated, statusShipped, statusCompleted:
+		// Every lifecycle state that can hold a captured payment must be
+		// compensable; T1.2-R B1 removed the old silent success for
+		// ALLOCATED/SHIPPED/COMPLETED.
+	default:
+		// Unknown/terminal lifecycle states fail closed instead of pretending
+		// the compensation completed (B1: no silent return).
+		return nil, tccUnsupportedStatusError(orderNo, paymentNo, from)
 	}
 	// Addendum 2 R-3: PENDING_PAYMENT with captured money belongs to T1.6
 	// (CAS->CANCELLED + payment-level cancel refund). Until it lands this
@@ -379,12 +395,16 @@ func tccCancelDecision(status string, paid int64) tccCancelAction {
 			return tccCancelLocal
 		}
 		return tccCancelRefund
-	case statusPaid:
+	case statusPaid, statusAllocated, statusShipped, statusCompleted:
+		// T1.2-R B1: the captured payment is still refundable after the
+		// lifecycle advanced (groups already shipped are POST_SHIP_ALLOWED).
 		if paid <= 0 {
 			return tccCancelKeepPaid
 		}
 		return tccCancelRefund
 	default:
+		// CANCELLED and unsupported states are decided before this mapping
+		// (fail-closed/T1.6); tccCancelNone is not a silent-success path.
 		return tccCancelNone
 	}
 }

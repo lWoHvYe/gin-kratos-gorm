@@ -17,6 +17,16 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-25 T1.4b2 FAIL — group/reservation identity
+
+- B1 [ARCHITECTURAL_FLAW]: release event carries group quantity, but Inventory
+  reservations are order/sku/warehouse totals and Release/TccCancelConfirm
+  require the full reservation. A partial group refund cannot release a shared
+  reservation; DLQ, INV-44 not executed.
+- B2: SYSTEM shortage source is sent as `aftersale`, not `system_shortage`.
+- B3: existing PRE admissions/S19 have no release/backfill path.
+- T1.4b2 frozen; Architect ruling required before code; no merge.
+
 ### 2026-11-25 T1.4b1-R2 PASS (scoped)
 
 - B2 persistent reconcile worker/order projection and B3 selfcheck closed;

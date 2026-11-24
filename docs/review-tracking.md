@@ -17,6 +17,15 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-25 T1.4 re-decomposition (Option A accepted)
+
+Director accepted re-decomposition instead of patching T1.4b2. The draft is
+`docs/lead/PAY-SETTLE-01/decomposition-review.md`: WP-R1 Payment refund,
+WP-R2 Order refund ledger, WP-R3 Zero, WP-I1 group reservation identity,
+WP-I2 release, WP-I3 restock, WP-B1/B2 backfill, WP-E1..E4 compatibility,
+WP-V1 evidence. Each WP owns one invariant, one branch, one scoped Reviewer.
+T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
+
 ### 2026-11-25 T1.4b2 FAIL — group/reservation identity
 
 - B1 [ARCHITECTURAL_FLAW]: release event carries group quantity, but Inventory

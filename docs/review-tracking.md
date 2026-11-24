@@ -219,6 +219,13 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   while governance ACs are verified incrementally, without treating NOT-RUN as
   PASS. Requires ADR-0008 **Amendment 1** + QC + Director approval before T-B7
   wiring; until then P0b is not committed.
+- **2026-11-25 scope reduction (Director)**: 门禁**大幅放宽**——「作为一环没必要做那么复杂」。
+  `GOV-COST-01` **冻结在 P0a**（已提交 `0d57398`/`3cac054`）；P0b（G-4、Release
+  模式、CI 退出码映射、自保护 IV）、P1（分级/联签）、P2（QC delta/scaffold）全部
+  **deferred**。未提交的 P0b/CI/Makefile/执行器改动已**回退**；Amendment 1 保留为
+  未实现的草案（`docs/adr/0008-governance-cost-reduction-amd1.md`），不作为契约执行。
+  运行时门禁保持 G-1/G-2/G-3 + 人类 Release：治理 AC 的 `NOT-RUN` 仅提示、不阻断
+  提交；Release 仍由人类放行。不新增 CI workflow，不改 `go.yml`。
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

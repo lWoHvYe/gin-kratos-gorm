@@ -3,7 +3,7 @@
 | 项 | 值 |
 |---|---|
 | change_id | `GOV-COST-01` |
-| Status | **APPROVED — Director 2026-11-24**；**P0a DONE**（commit `0d57398`，gates-strict exit 0，44 条治理 AC NOT-RUN）。P0b/P1/P2 待执行 |
+| Status | **FROZEN at P0a — Director 2026-11-25**（门禁大幅放宽，不继续复杂化）。P0a DONE（`0d57398`/`3cac054`，gates 绿）；**P0b/P1/P2 全部 DEFERRED**；未提交的 P0b/CI 改动已回退；Amendment 1 不执行 |
 | Drafted | 2026-11-24 |
 | Plan owner | Lead |
 | Integration owner | System Architect（治理/工具链落点）|

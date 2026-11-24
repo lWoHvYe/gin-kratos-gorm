@@ -1,5 +1,7 @@
 # GOV-COST-01 Tasks
 
+> **2026-11-25 决定：GOV-COST-01 冻结在 P0a。** T-B*/T-C*/T-D* 全部 DEFERRED（门禁大幅放宽，不再实施 P0b/P1/P2）。下方状态保留为历史记录。
+
 > Owner: Lead。状态：`TODO | WIP | BLOCKED | DONE`。每个任务必须有 AC 引用与证据路径。
 > 计划依据：`plan.md`、SPEC-0003 v1.4（approved）、ADR-0008 Rev 1.1（approved）。
 

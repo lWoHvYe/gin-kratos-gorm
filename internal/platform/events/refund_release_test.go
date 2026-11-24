@@ -7,15 +7,14 @@ import (
 
 func refundReleasePayload() map[string]any {
 	return map[string]any{
-		"schema_version":    1,
-		"release_scope":     RefundReleaseScopeOrderReservationFull,
-		"release_id":        "rr:AS-1",
-		"refund_id":         "AS-1",
-		"order_no":          "ORD-1",
-		"group_no":          "G2",
-		"covered_group_nos": []any{"G1", "G2"},
-		"source":            RefundReleaseSourceAfterSale,
-		"reason":            RefundReleaseReasonAfterSaleRefund,
+		"schema_version": 1,
+		"release_scope":  RefundReleaseScopeOrderReservationFull,
+		"release_id":     "rr:AS-1",
+		"refund_id":      "AS-1",
+		"order_no":       "ORD-1",
+		"group_no":       "G1",
+		"source":         RefundReleaseSourceAfterSale,
+		"reason":         RefundReleaseReasonAfterSaleRefund,
 		"items": []any{
 			map[string]any{"sku_id": 1, "quantity": 2, "warehouse_id": 1},
 			map[string]any{"sku_id": 2, "quantity": 1, "warehouse_id": 3},

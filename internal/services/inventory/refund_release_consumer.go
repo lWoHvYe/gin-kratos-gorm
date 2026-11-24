@@ -60,6 +60,13 @@ func handleRefundRelease(ctx context.Context, svc refundReleaseExecutor, data []
 	if err := json.Unmarshal(data, &event); err != nil {
 		return consumer.Permanent(err)
 	}
+	if len(event.CoveredGroupNos) > 1 {
+		// P0 only emits single-group releases. A multi-group event is a contract
+		// violation from a stale/foreign producer; releasing would touch stock
+		// that must stay reserved for P1/manual handling.
+		return consumer.Permanent(fmt.Errorf(
+			"refund release %s: multi-group event is not supported (group_count>1)", event.ReleaseID))
+	}
 	for _, item := range event.Items {
 		status, quantity, err := svc.refundReleaseReservation(ctx, event.OrderNo, item.SkuID, item.WarehouseID)
 		if err != nil {

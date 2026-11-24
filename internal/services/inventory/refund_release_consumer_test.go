@@ -206,3 +206,28 @@ func TestRefundReleaseHandlerRejectsUnknownReservationStatus(t *testing.T) {
 		t.Fatal("unknown reservation status was ACKed")
 	}
 }
+
+// A stale/foreign producer could send a multi-group release. P0 only supports
+// single-group releases, so the consumer must fail closed instead of touching
+// stock that belongs to other groups.
+func TestRefundReleaseHandlerRejectsMultiGroupEvent(t *testing.T) {
+	fake := newFakeRefundRelease()
+	fake.statuses[[2]int64{1, 1}] = statusHeld
+	raw := releasePayload(t, "ORD-MULTI", "rr:R-MULTI", "R-MULTI",
+		events.RefundReleaseItem{SkuID: 1, Quantity: 1, WarehouseID: 1})
+	var ev events.RefundReleaseRequested
+	if err := json.Unmarshal(raw, &ev); err != nil {
+		t.Fatal(err)
+	}
+	ev.CoveredGroupNos = []string{"G1", "G2"}
+	raw, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := handleRefundRelease(context.Background(), fake, raw); err == nil {
+		t.Fatal("multi-group release event was accepted")
+	}
+	if len(fake.releaseCalls) != 0 || len(fake.cancelCalls) != 0 {
+		t.Fatal("multi-group event reached the executor")
+	}
+}

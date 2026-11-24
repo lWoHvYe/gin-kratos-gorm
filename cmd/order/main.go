@@ -37,9 +37,6 @@ func main() {
 	workers.Go(func(ctx context.Context) {
 		order.RunTccReconcileWorker(ctx, bundle.Service, bundle.Logger, cfg.TccReconcileInterval)
 	})
-	workers.Go(func(ctx context.Context) {
-		order.RunRefundReleaseReconcileWorker(ctx, bundle.Service, bundle.Logger, time.Minute)
-	})
 	workers.Go(func(ctx context.Context) { order.RunAfterSaleConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger) })
 	if cfg.PricingConfirmationWorkerEnabled {
 		workers.Go(func(ctx context.Context) {

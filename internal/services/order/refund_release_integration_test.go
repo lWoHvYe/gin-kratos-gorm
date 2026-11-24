@@ -170,59 +170,74 @@ func TestRefundReleaseSourceMapping(t *testing.T) {
 	}
 }
 
-func TestOrderLevelFullReleaseAfterLastGroup(t *testing.T) {
+// Multi-group orders never emit a release: a full reservation release would
+// touch other groups' stock. The admission succeeds and reservations stay.
+func TestMultiGroupRefundDoesNotWriteRelease(t *testing.T) {
 	db := orderTestDB(t)
 	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
 	svc.EnableSettlementClients(&fakePaymentPort{captured: 10000}, &fakeFulfillmentPort{status: "CANCELLED"})
 	ctx := context.Background()
-	// Shared reservation key (sku 1, warehouse 1) split across two groups:
-	// the full release must aggregate the whole order quantity, not G2's 1.
-	seedReleaseOrder(t, db, "ORD-ONE", 10000, 10000, "PAY-1", []releaseTestItem{
+	seedReleaseOrder(t, db, "ORD-MULTI", 10000, 10000, "PAY-1", []releaseTestItem{
 		{lineNo: 1, skuID: 1, quantity: 2, warehouseID: 1, paidCent: 6000, groupNo: "G1"},
 		{lineNo: 2, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 4000, groupNo: "G2"},
 	}, "")
-	seedReleaseGroup(t, db, "ORD-ONE", "G1", 1, "ALLOCATED", refundStateNone)
-	seedReleaseGroup(t, db, "ORD-ONE", "G2", 2, "ALLOCATED", refundStateNone)
-	if _, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-ONE-G1", OrderNo: "ORD-ONE", GroupNo: "G1", AmountCent: 6000, Source: "aftersale",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got := len(loadRefundReleaseEvents(t, db, "ORD-ONE")); got != 0 {
-		t.Fatalf("G1 (not last) wrote %d release event(s)", got)
-	}
-	markGroupRefunded(t, db, "ORD-ONE", "G1")
+	seedReleaseGroup(t, db, "ORD-MULTI", "G1", 1, "ALLOCATED", refundStateNone)
+	seedReleaseGroup(t, db, "ORD-MULTI", "G2", 2, "ALLOCATED", refundStateNone)
 	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-ONE-G2", OrderNo: "ORD-ONE", GroupNo: "G2", AmountCent: 4000, Source: "aftersale",
+		RefundId: "R-MULTI-G1", OrderNo: "ORD-MULTI", GroupNo: "G1", AmountCent: 6000, Source: "aftersale",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if reply.GetResult() != refundResultPre {
-		t.Fatalf("G2 admission=%q, want PRE", reply.GetResult())
+		t.Fatalf("result=%q, want PRE", reply.GetResult())
 	}
-	releases := loadRefundReleaseEvents(t, db, "ORD-ONE")
-	if len(releases) != 1 {
-		t.Fatalf("release events=%d, want 1", len(releases))
+	if _, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "R-MULTI-G2", OrderNo: "ORD-MULTI", GroupNo: "G2", AmountCent: 4000, Source: "aftersale",
+	}); err != nil {
+		t.Fatal(err)
 	}
-	ev := releases[0]
-	if ev.ReleaseScope != events.RefundReleaseScopeOrderReservationFull {
-		t.Fatalf("release_scope=%q", ev.ReleaseScope)
+	if got := len(loadRefundReleaseEvents(t, db, "ORD-MULTI")); got != 0 {
+		t.Fatalf("multi-group refund wrote %d release event(s)", got)
 	}
-	if ev.ReleaseID != "rr:R-ONE-G2" || ev.GroupNo != "G2" || ev.OrderNo != "ORD-ONE" {
-		t.Fatalf("release identity = %+v", ev)
+	if refundAdmittedCount(t, db, "ORD-MULTI") != 2 {
+		t.Fatalf("refund_admitted=%d, want 2", refundAdmittedCount(t, db, "ORD-MULTI"))
 	}
-	if len(ev.Items) != 1 || ev.Items[0] != (events.RefundReleaseItem{SkuID: 1, Quantity: 3, WarehouseID: 1}) {
-		t.Fatalf("items=%+v, want order-level {1 3 1}", ev.Items)
+}
+
+// Concurrent refunds of two groups stay reserved and never race into a release.
+func TestMultiGroupConcurrentRefundsDoNotWriteRelease(t *testing.T) {
+	db := orderTestDB(t)
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(&serialPaymentPort{fakePaymentPort: &fakePaymentPort{captured: 10000}}, &fakeFulfillmentPort{status: "CANCELLED"})
+	ctx := context.Background()
+	seedReleaseOrder(t, db, "ORD-MULTI-CONC", 10000, 10000, "PAY-1", []releaseTestItem{
+		{lineNo: 1, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 5000, groupNo: "G1"},
+		{lineNo: 2, skuID: 2, quantity: 1, warehouseID: 2, paidCent: 5000, groupNo: "G2"},
+	}, "")
+	seedReleaseGroup(t, db, "ORD-MULTI-CONC", "G1", 1, "ALLOCATED", refundStateNone)
+	seedReleaseGroup(t, db, "ORD-MULTI-CONC", "G2", 2, "ALLOCATED", refundStateNone)
+	reqs := []*pb.AdmitRefundRequest{
+		{RefundId: "R-MC-G1", OrderNo: "ORD-MULTI-CONC", GroupNo: "G1", AmountCent: 5000, Source: "aftersale"},
+		{RefundId: "R-MC-G2", OrderNo: "ORD-MULTI-CONC", GroupNo: "G2", AmountCent: 5000, Source: "aftersale"},
 	}
-	if len(ev.CoveredGroupNos) != 2 || ev.CoveredGroupNos[0] != "G1" || ev.CoveredGroupNos[1] != "G2" {
-		t.Fatalf("covered_group_nos=%v", ev.CoveredGroupNos)
+	var wg sync.WaitGroup
+	errs := make([]error, len(reqs))
+	for i, req := range reqs {
+		wg.Add(1)
+		go func(i int, req *pb.AdmitRefundRequest) {
+			defer wg.Done()
+			_, errs[i] = svc.AdmitRefund(ctx, req)
+		}(i, req)
 	}
-	if ev.Source != events.RefundReleaseSourceAfterSale || ev.Reason != events.RefundReleaseReasonAfterSaleRefund {
-		t.Fatalf("source/reason=%s/%s", ev.Source, ev.Reason)
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("admission %d: %v", i, err)
+		}
 	}
-	if refundAdmittedCount(t, db, "ORD-ONE") != 2 {
-		t.Fatalf("refund_admitted=%d, want 2", refundAdmittedCount(t, db, "ORD-ONE"))
+	if got := len(loadRefundReleaseEvents(t, db, "ORD-MULTI-CONC")); got != 0 {
+		t.Fatalf("concurrent multi-group refund wrote %d release event(s)", got)
 	}
 }
 
@@ -258,89 +273,6 @@ func TestAdmitRefundSingleGroupEmitsImmediately(t *testing.T) {
 // Two active groups: both admissions defer, and the scan emits exactly one
 // order-level release after both groups are refunded. Concurrent scans must not
 // double append.
-func TestDeferredReleaseScanEmitsOnceAfterBothGroups(t *testing.T) {
-	db := orderTestDB(t)
-	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
-	svc.EnableSettlementClients(&serialPaymentPort{fakePaymentPort: &fakePaymentPort{captured: 10000}}, &fakeFulfillmentPort{status: "CANCELLED"})
-	ctx := context.Background()
-	seedReleaseOrder(t, db, "ORD-SCAN", 10000, 10000, "PAY-1", []releaseTestItem{
-		{lineNo: 1, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 5000, groupNo: "G1"},
-		{lineNo: 2, skuID: 2, quantity: 1, warehouseID: 1, paidCent: 5000, groupNo: "G2"},
-	}, "")
-	seedReleaseGroup(t, db, "ORD-SCAN", "G1", 1, "ALLOCATED", refundStateNone)
-	seedReleaseGroup(t, db, "ORD-SCAN", "G2", 2, "ALLOCATED", refundStateNone)
-	for _, req := range []*pb.AdmitRefundRequest{
-		{RefundId: "R-SCAN-G1", OrderNo: "ORD-SCAN", GroupNo: "G1", AmountCent: 5000, Source: "aftersale"},
-		{RefundId: "R-SCAN-G2", OrderNo: "ORD-SCAN", GroupNo: "G2", AmountCent: 5000, Source: "aftersale"},
-	} {
-		if _, err := svc.AdmitRefund(ctx, req); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := len(loadRefundReleaseEvents(t, db, "ORD-SCAN")); got != 0 {
-		t.Fatalf("deferred admissions wrote %d release event(s)", got)
-	}
-	markGroupRefunded(t, db, "ORD-SCAN", "G1")
-	markGroupRefunded(t, db, "ORD-SCAN", "G2")
-	var wg sync.WaitGroup
-	errs := make([]error, 3)
-	for i := range errs {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			errs[i] = svc.runRefundReleaseReconcileOnce(ctx)
-		}(i)
-	}
-	wg.Wait()
-	for i, err := range errs {
-		if err != nil {
-			t.Fatalf("scan %d: %v", i, err)
-		}
-	}
-	releases := loadRefundReleaseEvents(t, db, "ORD-SCAN")
-	if len(releases) != 1 {
-		t.Fatalf("release events=%d, want exactly 1", len(releases))
-	}
-	if len(releases[0].Items) != 2 {
-		t.Fatalf("full items=%+v", releases[0].Items)
-	}
-	if err := svc.runRefundReleaseReconcileOnce(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if got := len(loadRefundReleaseEvents(t, db, "ORD-SCAN")); got != 1 {
-		t.Fatalf("rescan appended duplicate release events=%d", got)
-	}
-}
-
-// One POST/shipped group blocks automatic full release; the admission still
-// succeeds and the scan stays manual.
-func TestSharedPOSTGroupBlocksAutomaticRelease(t *testing.T) {
-	db := orderTestDB(t)
-	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
-	svc.EnableSettlementClients(&fakePaymentPort{captured: 10000}, &fakeFulfillmentPort{status: "CANCELLED"})
-	ctx := context.Background()
-	seedReleaseOrder(t, db, "ORD-POSTSHARE", 10000, 10000, "PAY-1", []releaseTestItem{
-		{lineNo: 1, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 5000, groupNo: "G1"},
-		{lineNo: 2, skuID: 2, quantity: 1, warehouseID: 2, paidCent: 5000, groupNo: "G2"},
-	}, "")
-	seedReleaseGroup(t, db, "ORD-POSTSHARE", "G1", 1, "ALLOCATED", refundStateNone)
-	seedReleaseGroup(t, db, "ORD-POSTSHARE", "G2", 2, statusShipped, refundStateNone)
-	if _, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-POSTSHARE-G1", OrderNo: "ORD-POSTSHARE", GroupNo: "G1", AmountCent: 5000, Source: "aftersale",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if got := len(loadRefundReleaseEvents(t, db, "ORD-POSTSHARE")); got != 0 {
-		t.Fatalf("POST group allowed %d automatic release event(s)", got)
-	}
-	if err := svc.runRefundReleaseReconcileOnce(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if got := len(loadRefundReleaseEvents(t, db, "ORD-POSTSHARE")); got != 0 {
-		t.Fatalf("scan released %d event(s) despite a POST group", got)
-	}
-}
-
 func TestAdmitRefundPostDoesNotWriteReleaseOutbox(t *testing.T) {
 	db := orderTestDB(t)
 	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
@@ -545,41 +477,6 @@ func TestAdmitRefundSystemShortageSource(t *testing.T) {
 
 // The deferred scan reconstructs system_shortage from the resolved shortage
 // case when there is no refund_applications row.
-func TestDeferredReleaseScanUsesShortageSource(t *testing.T) {
-	db := orderTestDB(t)
-	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
-	svc.EnableSettlementClients(&fakePaymentPort{captured: 10000}, &fakeFulfillmentPort{status: "CANCELLED"})
-	ctx := context.Background()
-	seedReleaseOrder(t, db, "ORD-SHORT-SCAN", 10000, 10000, "PAY-1", []releaseTestItem{
-		{lineNo: 1, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 5000, groupNo: "G1"},
-		{lineNo: 2, skuID: 2, quantity: 1, warehouseID: 2, paidCent: 5000, groupNo: "G2"},
-	}, "")
-	seedReleaseGroup(t, db, "ORD-SHORT-SCAN", "G1", 1, "ALLOCATED", refundStateNone)
-	seedReleaseGroup(t, db, "ORD-SHORT-SCAN", "G2", 2, "ALLOCATED", refundStateNone)
-	if _, err := db.Exec(`INSERT INTO order_shortage_cases
-		(order_no,group_no,status,resolution,reason,version,created_at,updated_at)
-		VALUES ('ORD-SHORT-SCAN','G1','RESOLVED_REFUND','REFUND','shortage',1,NOW(3),NOW(3))`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-SHORT-SCAN-G1", OrderNo: "ORD-SHORT-SCAN", GroupNo: "G1", AmountCent: 5000, Source: "system_shortage",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	markGroupRefunded(t, db, "ORD-SHORT-SCAN", "G1")
-	markGroupRefunded(t, db, "ORD-SHORT-SCAN", "G2")
-	if err := svc.runRefundReleaseReconcileOnce(ctx); err != nil {
-		t.Fatal(err)
-	}
-	releases := loadRefundReleaseEvents(t, db, "ORD-SHORT-SCAN")
-	if len(releases) != 1 {
-		t.Fatalf("release events=%d, want 1", len(releases))
-	}
-	if releases[0].Source != events.RefundReleaseSourceSystemShortage {
-		t.Fatalf("scan source=%q, want system_shortage (refund_id=%s)", releases[0].Source, releases[0].RefundID)
-	}
-}
-
 func TestAdmitRefundMissingWarehouseRejectsRelease(t *testing.T) {
 	db := orderTestDB(t)
 	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
@@ -635,5 +532,38 @@ func TestAdmitRefundNoOrderItemsFailsClosed(t *testing.T) {
 	}
 	if releaseAdmissionCount(t, db, "R-NOITEM") != 0 || len(loadRefundReleaseEvents(t, db, "ORD-NOITEM")) != 0 {
 		t.Fatal("no-items admission leaked rows")
+	}
+}
+
+// Zero-amount multi-group refunds follow the same P0 rule: admission/S19
+// succeeds but no physical release is requested.
+func TestMultiGroupZeroRefundDoesNotWriteRelease(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 0}
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(payments, &fakeFulfillmentPort{status: "CANCELLED"})
+	ctx := context.Background()
+	seedZeroRefundOrder(t, db, "ORD-ZMULTI")
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no,line_no,sku_id,name,quantity,warehouse_id,fulfillment_group_no,line_paid_cent,unit_paid_cent)
+		VALUES ('ORD-ZMULTI',2,2,'x',1,2,'G2',0,0)`); err != nil {
+		t.Fatal(err)
+	}
+	seedReleaseGroup(t, db, "ORD-ZMULTI", "G1", 1, "ALLOCATED", refundStateNone)
+	seedReleaseGroup(t, db, "ORD-ZMULTI", "G2", 2, "ALLOCATED", refundStateNone)
+	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "AS-ZMULTI", OrderNo: "ORD-ZMULTI", GroupNo: "G1", AmountCent: 0, Source: refundSourceSystemZero,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply.GetState() != refundApplicationDone || reply.GetResult() != refundResultPre {
+		t.Fatalf("zero multi admission=%s/%s, want DONE/PRE", reply.GetState(), reply.GetResult())
+	}
+	if got := len(loadRefundReleaseEvents(t, db, "ORD-ZMULTI")); got != 0 {
+		t.Fatalf("multi-group zero refund wrote %d release event(s)", got)
+	}
+	if payments.getCalls != 0 || payments.listCalls != 0 {
+		t.Fatalf("zero refund consulted Payment (get=%d list=%d)", payments.getCalls, payments.listCalls)
 	}
 }

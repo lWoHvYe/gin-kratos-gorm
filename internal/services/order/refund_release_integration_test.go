@@ -263,6 +263,9 @@ func TestAdmitRefundSingleGroupEmitsImmediately(t *testing.T) {
 	if len(releases) != 1 {
 		t.Fatalf("release events=%d, want 1", len(releases))
 	}
+	if releases[0].GroupCount != 1 {
+		t.Fatalf("group_count=%d, want 1", releases[0].GroupCount)
+	}
 	if len(releases[0].Items) != 2 ||
 		releases[0].Items[0] != (events.RefundReleaseItem{SkuID: 1, Quantity: 1, WarehouseID: 1}) ||
 		releases[0].Items[1] != (events.RefundReleaseItem{SkuID: 2, Quantity: 2, WarehouseID: 3}) {
@@ -353,6 +356,7 @@ func TestAdmitRefundSystemZeroWritesOrderLevelRelease(t *testing.T) {
 		t.Fatalf("release events=%d, want 1", len(releases))
 	}
 	if releases[0].ReleaseScope != events.RefundReleaseScopeOrderReservationFull ||
+		releases[0].GroupCount != 1 ||
 		releases[0].Source != events.RefundReleaseSourceSystemZero {
 		t.Fatalf("zero release = %+v", releases[0])
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -60,12 +61,27 @@ func handleRefundRelease(ctx context.Context, svc refundReleaseExecutor, data []
 	if err := json.Unmarshal(data, &event); err != nil {
 		return consumer.Permanent(err)
 	}
-	if len(event.CoveredGroupNos) > 1 {
-		// P0 only emits single-group releases. A multi-group event is a contract
-		// violation from a stale/foreign producer; releasing would touch stock
-		// that must stay reserved for P1/manual handling.
+	// group_count is the safety fact for a full-reservation release. P0 only
+	// supports single-group orders; missing/0/!=1 is a contract error and must
+	// never release stock.
+	if event.GroupCount != 1 {
 		return consumer.Permanent(fmt.Errorf(
-			"refund release %s: multi-group event is not supported (group_count>1)", event.ReleaseID))
+			"refund release %s: group_count must be 1, got %d", event.ReleaseID, event.GroupCount))
+	}
+	if len(event.CoveredGroupNos) > 0 {
+		// covered_group_nos is audit-only, but when present it must describe
+		// exactly this one group; a stale/foreign producer listing another group
+		// is a contract violation.
+		if len(event.CoveredGroupNos) != 1 {
+			return consumer.Permanent(fmt.Errorf(
+				"refund release %s: covered_group_nos must contain exactly the single group",
+				event.ReleaseID))
+		}
+		if strings.TrimSpace(event.CoveredGroupNos[0]) != strings.TrimSpace(event.GroupNo) {
+			return consumer.Permanent(fmt.Errorf(
+				"refund release %s: covered_group_nos %v does not match group_no %q",
+				event.ReleaseID, event.CoveredGroupNos, event.GroupNo))
+		}
 	}
 	for _, item := range event.Items {
 		status, quantity, err := svc.refundReleaseReservation(ctx, event.OrderNo, item.SkuID, item.WarehouseID)

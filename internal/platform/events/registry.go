@@ -226,6 +226,9 @@ func validateRefundRelease(sample any) error {
 	if ev.ReleaseScope != RefundReleaseScopeOrderReservationFull {
 		return fmt.Errorf("release_scope must be %q, got %q", RefundReleaseScopeOrderReservationFull, ev.ReleaseScope)
 	}
+	if ev.GroupCount <= 0 {
+		return fmt.Errorf("group_count must be positive, got %d", ev.GroupCount)
+	}
 	refundID := strings.TrimSpace(ev.RefundID)
 	if refundID == "" {
 		return fmt.Errorf("refund_id is required")
@@ -249,6 +252,14 @@ func validateRefundRelease(sample any) error {
 			return fmt.Errorf("covered_group_nos[%d] duplicates %q", i, groupNo)
 		}
 		covered[groupNo] = struct{}{}
+	}
+	if len(covered) > 0 {
+		if len(covered) != int(ev.GroupCount) {
+			return fmt.Errorf("covered_group_nos length %d must equal group_count %d", len(covered), ev.GroupCount)
+		}
+		if _, ok := covered[strings.TrimSpace(ev.GroupNo)]; !ok {
+			return fmt.Errorf("covered_group_nos must contain group_no %q", ev.GroupNo)
+		}
 	}
 	wantReason, ok := refundReleaseReasons[ev.Source]
 	if !ok {
@@ -300,7 +311,7 @@ var schemas = map[string]schema{
 	"inventory.compensation_requested": {inventoryEvent{}, []string{"order_no", "items"}},
 	"inventory.confirm_requested":      {inventoryEvent{}, []string{"order_no", "items"}},
 	"inventory.refund_release_requested": {RefundReleaseRequested{}, []string{
-		"schema_version", "release_scope", "release_id", "refund_id", "order_no", "group_no",
+		"schema_version", "release_scope", "group_count", "release_id", "refund_id", "order_no", "group_no",
 		"source", "reason", "items", "requested_at",
 	}},
 	"inventory.reserved":              {inventoryEvent{}, []string{"reservation_no", "order_no", "sku_id", "warehouse_id", "quantity", "status"}},

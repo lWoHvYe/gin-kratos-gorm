@@ -194,6 +194,7 @@ func (s *Service) appendRefundReleaseTx(ctx context.Context, tx *sql.Tx, refundI
 	payload := events.RefundReleaseRequested{
 		SchemaVersion: 1,
 		ReleaseScope:  events.RefundReleaseScopeOrderReservationFull,
+		GroupCount:    releaseGroupCountSingle,
 		ReleaseID:     events.RefundReleaseID(refundID),
 		RefundID:      refundID,
 		OrderNo:       orderNo,

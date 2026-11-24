@@ -59,6 +59,7 @@ func releasePayload(t *testing.T, orderNo, releaseID, refundID string, items ...
 	raw, err := json.Marshal(events.RefundReleaseRequested{
 		SchemaVersion: 1,
 		ReleaseScope:  events.RefundReleaseScopeOrderReservationFull,
+		GroupCount:    1,
 		ReleaseID:     releaseID,
 		RefundID:      refundID,
 		OrderNo:       orderNo,
@@ -207,27 +208,62 @@ func TestRefundReleaseHandlerRejectsUnknownReservationStatus(t *testing.T) {
 	}
 }
 
-// A stale/foreign producer could send a multi-group release. P0 only supports
-// single-group releases, so the consumer must fail closed instead of touching
-// stock that belongs to other groups.
-func TestRefundReleaseHandlerRejectsMultiGroupEvent(t *testing.T) {
+// The consumer must fail closed when group_count is missing/0/!=1 or when the
+// optional audit list names a different group. Malformed events never reach the
+// executor.
+func TestRefundReleaseHandlerRejectsInvalidGroupCount(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"missing group_count", func(p map[string]any) { delete(p, "group_count") }},
+		{"zero group_count", func(p map[string]any) { p["group_count"] = 0 }},
+		{"multi group_count", func(p map[string]any) { p["group_count"] = 2 }},
+		{"covered other group", func(p map[string]any) { p["covered_group_nos"] = []any{"G1"} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeRefundRelease()
+			fake.statuses[[2]int64{1, 1}] = statusHeld
+			var payload map[string]any
+			if err := json.Unmarshal(releasePayload(t, "ORD-REL", "rr:R-1", "R-1",
+				events.RefundReleaseItem{SkuID: 1, Quantity: 1, WarehouseID: 1}), &payload); err != nil {
+				t.Fatal(err)
+			}
+			tc.mutate(payload)
+			raw, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := handleRefundRelease(context.Background(), fake, raw); err == nil {
+				t.Fatalf("%s was accepted", tc.name)
+			}
+			if len(fake.releaseCalls) != 0 || len(fake.cancelCalls) != 0 {
+				t.Fatalf("%s reached the executor", tc.name)
+			}
+		})
+	}
+}
+
+func TestRefundReleaseHandlerAcceptsSingleGroupCoveredAudit(t *testing.T) {
 	fake := newFakeRefundRelease()
 	fake.statuses[[2]int64{1, 1}] = statusHeld
-	raw := releasePayload(t, "ORD-MULTI", "rr:R-MULTI", "R-MULTI",
+	raw := releasePayload(t, "ORD-REL", "rr:R-1", "R-1",
 		events.RefundReleaseItem{SkuID: 1, Quantity: 1, WarehouseID: 1})
-	var ev events.RefundReleaseRequested
-	if err := json.Unmarshal(raw, &ev); err != nil {
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
 		t.Fatal(err)
 	}
-	ev.CoveredGroupNos = []string{"G1", "G2"}
-	raw, err := json.Marshal(ev)
+	payload["covered_group_nos"] = []any{"G2"}
+	// releasePayload uses GroupNo G2 in the unit helper.
+	raw, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := handleRefundRelease(context.Background(), fake, raw); err == nil {
-		t.Fatal("multi-group release event was accepted")
+	if err := handleRefundRelease(context.Background(), fake, raw); err != nil {
+		t.Fatalf("single-group covered audit rejected: %v", err)
 	}
-	if len(fake.releaseCalls) != 0 || len(fake.cancelCalls) != 0 {
-		t.Fatal("multi-group event reached the executor")
+	if len(fake.releaseCalls) != 1 {
+		t.Fatalf("release calls=%d, want 1", len(fake.releaseCalls))
 	}
 }

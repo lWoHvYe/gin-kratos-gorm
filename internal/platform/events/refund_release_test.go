@@ -9,6 +9,7 @@ func refundReleasePayload() map[string]any {
 	return map[string]any{
 		"schema_version": 1,
 		"release_scope":  RefundReleaseScopeOrderReservationFull,
+		"group_count":    1,
 		"release_id":     "rr:AS-1",
 		"refund_id":      "AS-1",
 		"order_no":       "ORD-1",
@@ -58,6 +59,10 @@ func TestRefundReleaseContractRejectsIncompleteOrIncoherentEvents(t *testing.T) 
 		{"missing refund_id", func(p map[string]any) { delete(p, "refund_id") }},
 		{"schema_version 2", func(p map[string]any) { p["schema_version"] = 2 }},
 		{"missing release_scope", func(p map[string]any) { delete(p, "release_scope") }},
+		{"missing group_count", func(p map[string]any) { delete(p, "group_count") }},
+		{"zero group_count", func(p map[string]any) { p["group_count"] = 0 }},
+		{"covered other group", func(p map[string]any) { p["covered_group_nos"] = []any{"G2"} }},
+		{"covered length mismatch", func(p map[string]any) { p["covered_group_nos"] = []any{"G1", "G2"} }},
 		{"wrong release_scope", func(p map[string]any) { p["release_scope"] = "group_reservation" }},
 		{"empty covered group", func(p map[string]any) { p["covered_group_nos"] = []any{"G1", ""} }},
 		{"duplicate covered group", func(p map[string]any) { p["covered_group_nos"] = []any{"G1", "G1"} }},
@@ -107,5 +112,13 @@ func TestRefundReleaseSourceReasonPairs(t *testing.T) {
 func TestRefundReleaseIDIsDeterministic(t *testing.T) {
 	if got := RefundReleaseID("tcc:PAY-1:G2"); got != "rr:tcc:PAY-1:G2" {
 		t.Fatalf("RefundReleaseID = %q", got)
+	}
+}
+
+func TestRefundReleaseCoveredGroupAuditIsValidForSingleGroup(t *testing.T) {
+	payload := refundReleasePayload()
+	payload["covered_group_nos"] = []any{"G1"}
+	if err := ValidateJSON(RefundReleaseEventType, marshalPayload(t, payload)); err != nil {
+		t.Fatalf("single-group covered audit rejected: %v", err)
 	}
 }

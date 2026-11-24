@@ -79,9 +79,12 @@ type RefundReleaseItem struct {
 type RefundReleaseRequested struct {
 	SchemaVersion int32  `json:"schema_version"`
 	ReleaseScope  string `json:"release_scope"`
-	ReleaseID     string `json:"release_id"`
-	RefundID      string `json:"refund_id"`
-	OrderNo       string `json:"order_no"`
+	// GroupCount is the mandatory safety fact for full-reservation release.
+	// P0 producers write 1; Inventory refuses anything else.
+	GroupCount int32  `json:"group_count"`
+	ReleaseID  string `json:"release_id"`
+	RefundID   string `json:"refund_id"`
+	OrderNo    string `json:"order_no"`
 	// GroupNo is the triggering group and is audit-only. It does not identify
 	// the Inventory reservation (the full order reservation does).
 	GroupNo string `json:"group_no"`

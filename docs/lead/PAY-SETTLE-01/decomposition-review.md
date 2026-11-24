@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT — 待人类确认后生效** |
+| Status | **APPROVED (simplified) — 2026-11-25；在当前分支继续** |
 | 触发 | T1.4 越改越多；Reviewer B1 `[ARCHITECTURAL_FLAW]`（group 数量 vs order reservation） |
 | 决策 | 人类接受方案 A：先重拆分，不再在 T1.4b2 上叠补丁 |
 | 范围 | P0-A/P0-B + T1–T5 的重新分解；不写代码 |
@@ -59,15 +59,15 @@
 
 | WP | 内容 | Owner | 契约/迁移 | 依赖 | 退出标准 |
 |---|---|---|---|---|---|
-| **WP-I1 Group Reservation Identity** | `stock_reservations/stock_ledger.fulfillment_group_no`、唯一键、Order Reserve/Confirm/Cancel 按组、历史拆组/`LEGACY_SHARED` | Inventory + Order | C-04 group 字段；C-05 inventory 迁移 | 无（可与 R1 并行，Order 文件需切分） | Inventory/Order Reviewer PASS；不接 refund release |
-| **WP-I2 Refund Release (INV-44)** | Order release outbox、Inventory consumer、group release、PRE-only、幂等/DLQ | Order + Inventory | release event accepted；无新迁移 | I1 + R2 | Reviewer PASS |
+| **WP-I1 Order-level Deferred Release** | **不做 group reservation**；Order 判断共享 reservation 的其他活动组，只有最后活动组才发整笔 release；单组立即 | Order + Inventory | 无新迁移；release event 增 `release_scope=order_reservation_full` | 无 | Order/Inventory Reviewer PASS |
+| **WP-I2 Refund Release (INV-44)** | Order outbox、Inventory consumer；按 `order_reservation_full` 整笔释放；PRE-only；幂等/DLQ | Order + Inventory | release event accepted；无新迁移 | I1 + R2 | Reviewer PASS |
 | **WP-I3 Restock/Return** | 退货回库、restock 授权/执行 | AfterSales + Inventory | 现有 restock | I1 | Reviewer PASS；可与 I2 并行 |
 
 ### P0/P1 历史与兼容
 
 | WP | 内容 | Owner | 依赖 | 退出标准 |
 |---|---|---|---|---|
-| **WP-B1 Historical Release Backfill** | 扫描上线前 PRE admission/S19 无 release，补发/漂移扫描 | Order Dev | I2 | Reviewer PASS + runbook |
+| **WP-B1 Historical Release Backfill** | **DEFERRED**：当前 flags false、未上线、生产无 PRE/S19 数据；不做 drift worker；如 dev/UAT 有数据只做一次性清理 | Order Dev | I2 | 人类书面确认“无生产数据”即可关闭 |
 | **WP-B2 Historical PAID Resolution** | `settlement_payment_no` 空、`ListOrderIntents`、人工队列、回填 | Order + Payment | R1 | Reviewer PASS |
 | **WP-E1 `refund_requested` observe-only** | 消费者停止直接 Refund，Amendment 先行 | Payment Dev | R2 | Reviewer PASS |
 | **WP-E2 PENDING/CANCELLED+captured** | CAS→CANCELLED + 支付级 cancel 退款，Amendment 先行 | Order + Payment | R1/R2/E1 | Reviewer PASS |
@@ -103,19 +103,11 @@ V1 after P0
 
 ## 6. 分支与集成分支策略
 
-当前 `wip/pay-settle-01-phase1` 是混合 WIP，**冻结为快照**：
+人类决定 **2026-11-25：不新拆分支，当前 `wip/pay-settle-01-phase1` 继续**。以下原分支方案作废：
 
-- Tag：`wip/ps-integration-2026-11-25`（当前 HEAD）。
-- 新分支从快照/对应 WP 提交切出：
-  - `wip/ps-r1-payment`
-  - `wip/ps-r2-order-ledger`
-  - `wip/ps-r3-zero`
-  - `wip/ps-i1-group-reservation`
-  - `wip/ps-i2-release`
-  - `wip/ps-b2-history`
-- WP 分支只收本 WP 的 Reviewer PASS；集成分支只 merge PASS 的 WP。
-- `main` 只在 **P0 收尾 + 人类 merge approve** 后合入。
-- 提交带 `work_package: WP-xx` trailer；`change_id` 仍是 `PAY-SETTLE-01`。
+- 当前分支继续；每个 WP 用 `work_package: WP-xx` trailer 与独立 commit 范围隔离。
+- Stop-the-line 仍按 WP：Reviewer FAIL 后该 WP 冻结，不得在同一 WP 继续叠代码。
+- 不新开分支；`main` 只在 **P0 收尾 + 人类 merge approve** 后合入。
 
 ## 7. 当前 WIP 处置
 
@@ -157,3 +149,11 @@ V1 after P0
 4. WP-R1/R2/R3 各自独立 Reviewer；不再混在 T1.4b2 上。
 5. I1/I2 完成后再做 B1；B2/E3/E4 可并行。
 6. P0 全部 PASS 后，人类决定 merge。
+
+## 11. 2026-11-25 简化裁决（Human）
+
+- **不做 group-scoped reservation**，不改 Inventory schema。
+- 多组订单部分组退款：库存延迟到**最后一个共享该 reservation 的活动组结束**才整笔释放；单组立即释放。
+- **不做 B1 历史 PRE/S19 回填**：flags false、未上线、生产无此类数据；dev/UAT 如有数据只做一次性清理。
+- **不新拆分支**：当前 `wip/pay-settle-01-phase1` 继续；用 `work_package` 隔离 commit。
+- 保留 RefundBatch、reconcile worker、零元 task；不追求“每组立即释放库存”的完美语义。

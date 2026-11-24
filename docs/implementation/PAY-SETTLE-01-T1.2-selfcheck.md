@@ -7,7 +7,7 @@
 | Plan | `docs/lead/PAY-SETTLE-01/t1.2-r-plan.md`（Director approved 2026-11-24） |
 | Review input | `docs/collab/qc-reports/REV-PAY-SETTLE-01-T1.2.md`（B1/B2/M1/M2/m1/m2/m6） |
 | Base | `4e5d07f`（T1.2b WIP，Reviewer FAIL 范围终点） |
-| Code head（本清单绑定的实现 HEAD） | `e7e29e5`（`wip(order): T1.2-R lifecycle gate, legacy composition and no-active refusals`） |
+| Code head（本清单绑定的实现 HEAD） | **`72b984b`**（T1.2-R2，`wip(order): T1.2-R2 legacy G1 shipped, mixed composition and no-active preflight`）；T1.2-R 为 `e7e29e5` |
 | Docs head | 包含本文件的 WIP commit（`e7e29e5` 之后仅 docs） |
 | Scope | T1.2/T1.2b/T1.3 的 B1/M1/M2/m1 修复；**不含** T1.4/T1.5/T1.6/T1.7/T2/T3/T5 |
 | Status | **WIP**；不批准、不宣称实现 PASS/Release PASS，不标 AC-VERIFIED |
@@ -126,3 +126,30 @@
 - 本文件不批准任何实现，不宣称 PASS，不把 AC-REF 写成 AC-VERIFIED；`ac-coverage.tsv` 的 AC-51/AC-65 仍按 Reviewer 台账处理。
 - 测试日志在代码 HEAD `e7e29e5` 的树上执行；本文件随后仅新增 docs，不改 `internal/`。
 - 冻结状态与重审由 Reviewer/人类按 `t1.2-r-plan.md` 执行。
+
+---
+
+## 6. T1.2-R2（Review G1 / g1 / g2 / g3）
+
+| 项 | 值 |
+|---|---|
+| Code head | **`72b984b`**（T1.2-R 代码 head `e7e29e5`） |
+| Tests | `go test ./internal/services/order -run 'TestTcc\|TestOrderTestSchema' -v` → **52 PASS / 0 FAIL**（51.078s）；完整 order 包 **ok 69.878s**；`-race TestTcc` **ok 51.648s**；并发/混合/manual 复跑 `-count=2` **ok 12.791s** |
+| Logs | `/tmp/t12r2-logs/{build-vet,order-full,tcc-verbose,tcc-pass-list,tcc-race,tcc-race-repeat}.log` |
+
+### 6.1 修改点
+
+- **G1**（`tcc_precheck.go`/`tcc_settlement.go`）：无履约组历史单合成 G1 时用 `legacyG1GroupStatus(orders.status)` 推导 `GroupStatus`（`SHIPPED→SHIPPED`、`COMPLETED→RECEIVED`、`PAID/ALLOCATED→ALLOCATED`、`PENDING_PAYMENT→PENDING`）；`ListShipments` 无 facts 时，synthetic G1 的 SHIPPED/RECEIVED 直接 POST，其余无法解释的组状态（含 `""`）fail-closed，不再默认“未离仓”。测试 `TestTccCancelLegacyG1ShippedUsesOrderStatus`（SHIPPED/COMPLETED 子用例）断言 app=POST、**无 G1 permit 行**、无 admission/commitment/commitment line；`TestTccCancelUnknownGroupStatusNoFactsFailsClosed` 断言零写入。
+- **g1**（`tcc_settlement.go`）：`tccGroupComposition` 新增 `KnownGoods/KnownFreight`，行合计校验改为“所有 known=1 行必须等于 known=1 头”，不再因同组存在 known=0 而跳过。混合组 `TestTccCancelMixedCompositionValidatesKnownLines`：known=1 行缺失/错 → fail-closed 且原承诺/permit 不变；补齐行 → 整组成功，新 TCC commitment 仍 `known=0` 无行、cap=9700（非任一旧 commitment amount）。
+- **g2**（`tcc.go`）：`Σ == remaining == 0` 在 `TccCancelMarkPaid` 中、`ListShipments` 之前返回幂等成功（Payment 快照 + Σ 已先执行）。`TestTccCancelNoActiveReturnsBeforeFulfillment`：Fulfillment 超时 + 全退单 → 成功且 `ListShipments` 调用 0 次、Payment 快照已调用、无 batch/订单写；Σ 不等 + Fulfillment 超时 → 仍写 1 条 `PRECHECK_FAILED` 审计且不查 Fulfillment。
+- **g3**（`tcc.go`）：`TccQueryMarkPaid` 对 `ALLOCATED/SHIPPED/COMPLETED` 返回 `Prepared=true`，与 `TccCancelMarkPaid` 的 B1 gate 一致；`CANCELLED/CLOSED` 仍 false。测试 `TestTccQueryMarkPaidMatchesLifecycleGate`。
+
+### 6.2 副作用 / 残余
+
+- `REFUNDING` 续跑仍会先读 `ListShipments`（续跑需要 shipment facts 才能补组），g2 的“先返回”仅覆盖无活动组的新补偿入口；已存在的 batch 续跑仍需 Fulfillment 可用，符合“resume 需要事实”的边界。
+- synthetic G1 状态仅用于“是否已离仓”判定；permit/commitment 的初始化/撤销仍按 POST/PRE 分支执行，生命周期字段不被改写。
+- 其余残余风险同 §4（T1.4 worker、m4/m5/m3），T1.2-R2 未扩大范围。
+
+### 6.3 声明（R2）
+
+- 本文件不批准 T1.2-R2，不宣称 PASS/Release PASS，不标 AC-VERIFIED；Reviewer 按 `t1.2-r-plan.md` R-7 以 `72b984b` 复审。

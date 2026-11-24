@@ -99,13 +99,21 @@ printf '\n| 1.1 | valid |\n' >> "$d/docs/specs/0001-demo.md"
 rm -f "$d/docs/specs/0001-demo.md.bak" "$d/docs/specs/README.md.bak"
 printf '\n// AC-02 note\n' >> "$d/internal/demo_test.go"
 git -C "$d" add -A
-git -C "$d" commit -qm 'valid bump' --trailer 'Role: Product Owner, Developer'
+git -C "$d" commit -qm 'valid bump' --trailer 'Role: Product Owner, Developer' \
+  --trailer 'change_id: GATES-TEST-01' --trailer 'Actor: dev' --trailer 'Reviewed-by: reviewer'
 if ! out="$("$gates" --mode=strict --repo="$d" 2>&1)"; then
   echo "A4 FAIL: valid commit rejected" >&2
   echo "$out" >&2
   exit 1
 fi
 echo "PASS A4 valid commit"
+pass=$((pass + 1))
+
+# P0a T-A1/T-A2: governance evidence model + head-bound G-3 reads (AC-99/71/72/102).
+if ! python3 "$root/scripts/test_collab_gates_p0a.py"; then
+  echo "P0a FAIL: governance/head-bound fixtures" >&2
+  exit 1
+fi
 pass=$((pass + 1))
 
 # A5: strict runtime < 5s.
@@ -121,4 +129,4 @@ else
   exit 1
 fi
 
-echo "gates-test: A1-A5 PASS (${pass} assertions)"
+echo "gates-test: A1-A5 + P0a PASS (${pass} assertions)"

@@ -104,3 +104,10 @@ Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `
 - [ ] R2-3 no-event fault-injection test: batch DONE + order FULL/PARTIAL without payment.refunded.
 - [ ] R2-4 canonical selfcheck bound to new HEAD; Plan approval rows.
 - [ ] R2-5 Reviewer re-review.
+
+## Human decisions 2026-11-25
+
+- T1.4b2 C-04 release event：不需单独人类批准，按 Amendment 流程。
+- T1.5/T1.6：若触及 `order.refund_requested` 消费者/支付级退款，先出 Amendment。
+- P0 收尾后 merge：必须人类批准。
+- 临时豁免：PAY-SETTLE-01 WIP 期间 ADR/SPEC Amendment 不需单独人类 Approve；QC/Architect 仍需；merge/Release/AC-VERIFIED 不豁免。

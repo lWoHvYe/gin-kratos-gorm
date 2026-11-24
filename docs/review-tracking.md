@@ -87,6 +87,19 @@ re-review and human merge decision are still required.
   canonical self-check, Reviewer re-review, then human merge decision.
 - Zero after-sale amendment remains approved; T1.2 code is not approved.
 
+### 2026-11-25 human decisions: WIP continuation and amendment waiver
+
+- T1.4b1-R2: if Reviewer PASS, continue on the WIP branch; do not merge main.
+- T1.4b2 C-04 release event: no separate human approval required.
+- T1.5/T1.6: if they touch the `order.refund_requested` consumer or
+  payment-level refund semantics, issue an Amendment first.
+- Merge after P0 closure still requires explicit human approval.
+- **Temporary waiver (scoped)**: during the PAY-SETTLE-01 WIP, ADR/SPEC
+  Amendments do not require separate human approval. QC/Architect review still
+  applies; merge, Release PASS, and AC-VERIFIED are NOT waived. Scope ends at
+  P0 closure/merge decision (or 2026-12-31, whichever is earlier). Recorded per
+  constitution Article Governance 6.
+
 ## 2026-11-24 human decisions: constitution v1.2.0
 
 - Director approved constitution v1.2.0 and set the hierarchy:
@@ -172,6 +185,14 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   P0a/P0b bootstrap exception: GV-S20 `mode=bootstrap`, approver=Director,
   expiry=2026-12-31, scope=AC-106/AC-112. NOT-RUN never counts as PASS; the
   exception does not authorize Release or AC-VERIFIED and ends when P0b lands G-4.
+- **2026-11-25 CI NOT-RUN policy**: Director decided the CI gate job **accepts
+  executor exit 4 (NOT-RUN)** as a successful job while recording
+  `RELEASE_ELIGIBLE=false`, uploading the gate artifacts and annotating the run;
+  **Release/tag workflows still require exit 0**, and `--mode=warn` /
+  `continue-on-error` remain forbidden in CI. Rationale: main must stay green
+  while governance ACs are verified incrementally, without treating NOT-RUN as
+  PASS. Requires ADR-0008 **Amendment 1** + QC + Director approval before T-B7
+  wiring; until then P0b is not committed.
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

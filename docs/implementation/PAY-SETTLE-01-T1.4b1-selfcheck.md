@@ -1,18 +1,18 @@
-# PAY-SETTLE-01 T1.4b1 Developer 自检清单
+# PAY-SETTLE-01 T1.4b1-R2 Developer 自检清单
 
 | 项 | 值 |
 |---|---|
 | change_id | `PAY-SETTLE-01` |
-| Role / Actor | Developer / `dev-phase1d` |
-| Plan | `docs/lead/PAY-SETTLE-01/plan.md` + `tasks.md`（Plan approved 2026-11-24） |
-| 契约输入 | SPEC-0002 **v1.9**（approved 2026-11-24）；ADR-0007 Amd1（accepted）+ 零元 Addendum（accepted）+ T1.2 Rulings Addendum（accepted）+ **T1.4a Rulings Addendum（accepted）** R-B；C-04 既有 `Refund`/`GetRefundByKey` proto；C-05 `order/0017`–`0021` |
-| Base | `dff267d`（T1.4a Addendum approval；`wip/pay-settle-01-phase1`） |
-| Code head（本清单绑定） | **本 WIP 提交**（`wip(order): T1.4b1 tcc group refunds + payment.refunded convergence`；Base=`dff267d`） |
-| Scope | **仅 T1.4b1**：TCC 逐组 `Payment.Refund` + `payment.refunded` 收敛（commitment `SETTLED`、application `DONE`、batch `DONE`） |
-| 不做 | INV-44 release/回库（**T1.4b2**）；零元/Aftersales 持久 refund task（T1.4b2/T3）；`order.refund_requested` 消费者（T1.5）；`PENDING_PAYMENT+已捕获`（T1.6）；T1.7/T5 全矩阵；T2/T3/T4 |
+| Role / Actor | Developer / `dev-phase1f` |
+| Plan | `docs/lead/PAY-SETTLE-01/t1.4b1-r-plan.md`；**Plan 审批状态由 Lead 维护，本文不写、不代批** |
+| 契约输入 | SPEC-0002 **v1.9**（approved 2026-11-24）；ADR-0007 Amd1（accepted）；C-04 RefundBatch（accepted 2026-11-24）；T1.4b1-R Plan |
+| Base | `ba8a822`（T1.4b1-R Order 预检 + RefundBatch 接线 WIP） |
+| Code head（本清单绑定） | **`6ac218e`**（`wip(order): T1.4b1-R2 durable TCC reconcile and order projection`） |
+| Scope | **仅 T1.4b1-R2**：持久 `RunTccReconcileWorker`、`GetRefundByKey` 惰性收敛、order 金额投影；不新增契约/迁移 |
+| 不做 | T1.4b2/INV-44 release/回库；零元/Aftersales 持久 task；T1.5；T1.6；T1.7/T5 全矩阵；不改 Spec/ADR/proto/migrations |
 | Status | **WIP**；不批准、不宣称实现 PASS / Release PASS，不标 AC-VERIFIED |
 
-> 本文件是 Developer 的 canonical 自检交付物。只记录本次实现事实、证据与残余风险，不替代 Reviewer 裁决。
+> 本文只记录 Developer 的实现事实、测试证据和残余风险，不替代 Reviewer 裁决。Plan 审批状态不在本文职责内。
 
 ---
 
@@ -20,30 +20,34 @@
 
 ### 1.1 并发冲突 / 网络超时 / 部分成功时会发生什么？处理了吗？
 
-- **准入未完成绝不打款**：`payTccBatch` 只接受 batch `ADMITTED`/`PAYING`；`FROZEN`/`ADMITTING` 返回可重试 `UNAVAILABLE`。`TccCancelMarkPaid` 先 `admitTccBatch` 后 `payTccBatch`，准入任一失败即返回错误、**零退款调用**（`TestTccPaymentIsBlockedUntilEveryGroupIsAdmitted`、`TestTccPaymentRefusesNonAdmittedBatch`）。
-- **整组预检后才进入 PAYING**：`planTccPayments` 在第一次退款前校验每个组（`PROCESSING` + `PRE/POST`、`refund_id=tcc:<pay>:<group>`、金额>0、commitment 属于该组且 `RESERVED` 且金额等于组 CapCent）。任一组不满足 → 整批 fail-closed、零退款、batch 保持 `ADMITTED`（`TestTccPaymentRequiresReservedCommitment`）。
-- **并发**：batch 状态用 CAS（`ADMITTED→PAYING`、`PAYING→DONE`、`PAYING→MANUAL_HOLD`）；8 并发 TCC 重试仍只有 1 batch/2 application/2 commitment，batch `PAYING`，退款按 `refund_id` 幂等重放（`TestTccAdmissionConcurrentIsIdempotent`，`-race`）。
-- **网络超时/部分成功**：`Payment.Refund` 失败按下游语义分类——瞬时失败保持 `PAYING`、记录 application `attempts/last_error`、返回可重试 `UNAVAILABLE`，重试复用同一 `refund_id`（`TestTccPaymentRetryReusesRefundIDAfterTransientFailure`）；判定性拒绝（金额超过剩余 captured、intent 不可退）→ 停止后续组、`PAYING→MANUAL_HOLD`、返回 `FAILED_PRECONDITION`，自动重试不再推进（`TestTccPaymentRejectionParksBatchForManualHandling`）。**部分组已成功时不会回滚已成功退款**（ADR §4.1.3(4)）；重试只补未完成组，Payment 以 `refund_id` 保证不重复退款。
-- **崩溃窗口（Refund 已受理、`payment.refunded` 未消费）**：Order 侧 commitment 仍 `RESERVED` 而 Payment `refunded` 已增加。`ADMITTED/PAYING` 的重跑不再用准入期 Σ 等式（会让重试误报 mismatch），改由 Payment 的剩余 captured 校验兜底；重试幂等重放 `refund_id`（`TestTccPaymentRetryToleratesUnprojectedRefund`）。
-- **重复/乱序事件**：`payment.refunded` 先收敛账本再投影金额；累计金额已覆盖（重复/乱序）仍会 `SETTLED`+`DONE`，重复投递不改版本、不再发投影事件（`TestPaymentRefundedOutOfOrderStillSettlesLedger`、`TestPaymentRefundedSettlesCommitmentApplicationAndBatch` 的 replay 段）。
-- **未知/非生效 refund_id**：非生效捕获直接忽略（不进入订单 captured/refunded、不碰 commitment）；未知 `refund_id` 不猜测组，只投影订单金额并 `Warn` 告警（`TestPaymentRefundedUnknownRefundIDProjectsOrderOnly`、`TestPaymentRefundedIgnoresNonEffectiveCapture`）。
-- **人工态**：`MANUAL_HOLD/FAILED_PERMANENT` 的 batch 不被自动准入/打款推进（`tccBatchManualError`）；commitment `RELEASED`（T3 将来）不会被 `payment.refunded` 覆盖。
+- **Payment 事实已提交、事件丢失**：`RunTccReconcileWorker` 扫描 `ADMITTED/PAYING` 的 active TCC batch，对每个 application 调 `Payment.GetRefundByKey`；`SUCCEEDED/REFUNDED` 时在同一 order-locked 事务内完成：
+  - commitment `RESERVED -> SETTLED`（CAS；**唯一金额触发**）；
+  - application `PENDING/PROCESSING -> DONE`；
+  - 全部 application `DONE` 后 batch `DONE`（`ADMITTED` 先经 `PAYING`）；
+  - `orders.refunded_cent/refund_status/refund_state` 单调投影。
+  没有 Payment 事实（NotFound/PENDING/PROCESSING/FAILED）时保持原状，不猜测、不打款（`TestTccReconcileWorkerLeavesOutstandingWithoutFact`）。
+- **事件 + worker 双写**：两者都锁同一 order 行；投影值取 `max(current, SUM(SETTLED commitments))`，**不是增量**，因此 event 的累计 `OrderRefundedCent` 与 worker 的单组结算不会双计。commitment CAS 成功才视为本次结算的金额触发；CAS 失败（event/另一副本已结算）只补 application DONE，不再加金额（`TestTccReconcileWorkerDoesNotDoubleCountWithEvent`）。
+- **并发 worker/多副本**：所有写都在 order 行锁内，commitment 是 CAS，application/batch 是幂等更新；重复扫描/并发扫描不会重复投影。8 并发 worker 断言 `refunded_cent=10000`（不是 20000/80000），且 DONE 后再跑 bump 0 次 order version（`TestTccReconcileWorkerConcurrentIsIdempotent`，`-race`）。
+- **部分成功**：有事实的组结算并投影；没有事实的组不动，batch 保持 `PAYING`、order 保持 `REFUNDING`；只有全部组 DONE 且无其它未完成 TCC batch 才 `PARTIAL/FULL`（`TestTccReconcileWorkerKeepsRefundingForPartialBatch`）。已结算的组不会因重扫回滚。
+- **GetRefundByKey 抖动**：worker 只记录并跳过该 application（不 park batch、不写账本）；下一轮重试。pay-path 预检仍按 T1.4b1-R 的瞬时/确定性错误语义处理。
+- **状态竞争**：worker 不覆盖 `MANUAL_HOLD/FAILED_PERMANENT`；`applyTccReconcileTx` 只接受 `ADMITTED/PAYING/DONE`，`convergeTccBatchTx` 不会把未完成 application 的 batch 置 DONE。
+- **order 金额投影**：active TCC batch（状态不是 `DONE/PRECHECK_FAILED`，含 `MANUAL_HOLD/FAILED_PERMANENT`）存在时固定 `refund_state=REFUNDING`；全部完成后按 `refunded_cent vs paid_cent` 派生 `PARTIAL/FULL`，`refund_status` 同步为 `PARTIALLY_REFUNDED/REFUNDED`；已 `FULL` 不回退。
+- **pay-path lazy reconcile**：`payTccBatch` 的 `GetRefundByKey` 成功分支复用同一 `settleTccRefundFactTx/convergeTccBatchTx/projectTccReconcileOrderTx`，所以即便 worker 尚未 tick，预检已能收敛 ledger + order 金额；不会出现 batch DONE 而 order 金额永远停在旧值。
 
 ### 1.2 是否把状态揉进一个字段 / 加 if-else 绕过架构？
 
-- 未新增状态字段、未新增 proto/迁移：batch 使用 ADR §6.1 既有 `ADMITTING/ADMITTED/PAYING/DONE/MANUAL_HOLD`（**PAID 语义由契约终态 `DONE` 承担**，DB CHECK 不允许新增 `PAID`）；application 使用既有 `PENDING/PROCESSING/DONE`；commitment 使用既有 `RESERVED/SETTLED`。
-- 未新增第二套退款裁决：TCC 打款只消费 T1.4a 已持久化的 `order_refund_admissions` 结果与 commitment，不再调用 `AdmitRefund`、不改 permit。
-- 未把 `ADMITTED` 当已退款：`ADMITTED` 只是“可进入打款”的门；只有 `Payment.Refund` 受理 + `payment.refunded` 才把 commitment 置 `SETTLED`、application `DONE`、batch `DONE`。
-- 唯一“金额状态回退”保护是订单级 `refund_state`：当存在 active TCC batch（`FROZEN/ADMITTING/ADMITTED/PAYING`）时，部分退款投影保持 `REFUNDING` 而不是 `PARTIAL`；否则 T1.2/T1.3 的 resume 会以“batch 存在但订单不是 REFUNDING”拒绝剩余组（见 §2.3）。
+- 未新增状态字段、未新增 proto/迁移、未改 Spec/ADR：沿用 batch `ADMITTED/PAYING/DONE`、application `PENDING/PROCESSING/DONE`、commitment `RESERVED/SETTLED`。
+- 未新增第二套退款裁决：worker 只读 Payment 事实，不调用 `RefundBatch`/`Refund`、不改 permit、不调 Inventory。
+- 金额投影没有新增“已投影”标记：以 commitment `RESERVED->SETTLED` 的 CAS 作为唯一金额触发；投影用 settled 总和的下界取 `max`，避免双计而不需要迁移。
+- 唯一新增的本地策略是 worker 扫描周期与每批 100 条上限；不影响契约状态机。
 
 ### 1.3 向现实做了哪些妥协（重大妥协高亮）
 
-1. **【重大】“不得部分打款”的边界**：准入门槛是严格全有或全无（任一未准入 → 零退款）。进入 `PAYING` 后，下游逐组 RPC 无法原子化；某组瞬时失败时，已受理的组保持已退、失败组保留 `RESERVED`，batch 保持 `PAYING` 等重试。**不会把部分成功报告为完成**，且 `refund_id` 幂等保证重试不重退。这是 ADR §4.1.3(4) 的实现口径。
-2. **【重大】PAYING 阶段不再重跑准入期 Σ 等式**：`ADMITTED/PAYING` 的 resume 用本地账本重算组视图但不校验 `Σ == remaining` 与冻结快照（准入前已验证）；剩余额度由 Payment 的每次 `Refund` 权威校验，判定性拒绝 → `MANUAL_HOLD`。否则“Refund 已成功、事件未投影”的正常窗口会让重试误报 Σ mismatch 并被审计成 PRECHECK_FAILED（T1.2 strict 校验仍用于 `FROZEN/ADMITTING`）。
-3. **T1.2 resume Σ 的排除口径收紧**：`tcc:<pay>:` 前缀只排除本批 **RESERVED** commitment；本批 **SETTLED** commitment 计入已占用（钱已退，remaining 已扣减）。否则部分退款成功后 resume 永远 Σ 不足。
-4. **`payment.refunded` 保留 REFUNDING**：见 §1.2；这是跨任务交互的最小修复，避免 T1.2/T1.3 resume 被投影中态破坏（`TestPaymentRefundedKeepsRefundingWhileTccBatchPays`）。
-5. **零元/Aftersales/INV-44 未做**：按人类裁决拆到 T1.4b2/T3；本任务不写持久 release 请求、不建 AfterSales refund task、不调用 Inventory。
-6. **无 lazy reconciliation API 调用**：未接 `GetRefundByKey`（C-04 已有），重试依赖 Payment 幂等 + 事件消费；日终/惰性对账仍属 ADR §4.7 的其余 owner（见 §5）。
+1. **【重大】Payment.GetRefundByKey 仍无服务端实现**：proto/generated client 存在（`api/proto/mall/v1/mall.proto:782`、`api/gen/mall/v1/mall_grpc.pb.go:4078`），但 `internal/services/payment` 仍嵌入 `UnimplementedPaymentServiceServer` 且无 `GetRefundByKey` 方法。真实部署下 worker/preflight 会收到 gRPC `Unimplemented`：worker 每轮告警、不收敛；pay-path 预检会 fail-closed。**本 WIP 的 worker 只能用 fake Payment 验证，端到端被该缺口阻塞**（见 §5-1）。
+2. **order 金额投影下界是 SETTLED commitments 之和**：TCC 组退款都有 commitment，因此 TCC 场景可完整投影；没有 commitment 的支付级/历史退款仍只依赖 `payment.refunded`（其 `OrderRefundedCent` 是累计值）。本任务不改变支付级退款的事实所有权。
+3. **worker 是安全网，不是实时路径**：默认 1 分钟、每批最多 100 条；order 金额在 worker tick、pay-path resume 或事件到达前可能短暂滞后。未实现 metrics/告警/手动触发，只写结构化日志。
+4. **无 `payment.refunded` 时订单 lifecycle 不变**：worker 只写 `refund_state/refund_status/refunded_cent`，不改 `orders.status`，也不发 `order.refund_requested`。
+5. **`MANUAL_HOLD/FAILED_PERMANENT` 被 worker 排除在自动推进之外**，且投影查询把它们视为“未完成”，因此 order 保持 `REFUNDING` 等待人工；本任务不提供恢复命令。
 
 ---
 
@@ -53,84 +57,63 @@
 
 | 文件 | 修改 |
 |---|---|
-| `internal/services/order/ports.go` | `paymentPort` 增加 `Refund`（既有 proto `RefundRequest`；`idempotency_key` 承载 `refund_id`）。 |
-| `internal/services/order/tcc_payment.go`（新增） | T1.4b1 打款阶段：`ADMITTED→PAYING`；整组 `planTccPayments` 预检（PROCESSING+PRE/POST、`refund_id=tcc:<pay>:<group>`、`RESERVED` commitment 且金额=CapCent）；逐组 `Payment.Refund`；瞬时失败保持 PAYING/可重试，判定性拒绝 `MANUAL_HOLD`；`PAYING→DONE` 收敛；`activeTccBatchExists` 供投影使用。 |
-| `internal/services/order/tcc.go` | `TccCancelMarkPaid` 在 `admitTccBatch` 成功后调用 `payTccBatch`；失败返回可重试/人工错误，不报成功。 |
-| `internal/services/order/tcc_admission.go` | `PAYING` 纳入 repair 分支（只补未准入组，DONE/PROCESSING 跳过）；`markTccBatchAdmitted` 接受并发 worker 已推进到 `ADMITTED/PAYING/DONE`；PAYING 下不回退 `ADMITTED`。 |
-| `internal/services/order/tcc_settlement.go` | 新增 `resumeTccRecheckTx`：`FROZEN/ADMITTING` 保留 strict Σ/快照等式；`ADMITTED/PAYING` 只重算并补缺行，额度由 Payment 权威校验；commitment 组成只排除本批 `RESERVED`（`SETTLED` 计入）。 |
-| `internal/services/order/tcc_precheck.go` | `loadGroupCommittedCentFiltered` 仅排除本批 `RESERVED`；文档更新（`SETTLED` 必须计入 remaining 等式）。 |
-| `internal/services/order/refund_consumer.go` | `payment.refunded`：先收敛账本（commitment `RESERVED→SETTLED`、application `PENDING/PROCESSING→DONE`、全部 DONE 后 batch `PAYING→DONE`），再单调投影订单 `refunded_cent/refund_status/refund_state`；未知 refund_id 告警不猜测；非生效忽略；重复/乱序幂等；active TCC batch 时保持 `REFUNDING`；不改 `orders.status`。 |
-| `internal/services/order/{refund_admission,tcc_compensation,tcc_admission}_integration_test.go` | fake/counting/gated Payment 补 `Refund`；既有“成功后 batch=ADMITTED”断言更新为 `PAYING`（T1.4b1 后真实端到端状态）；T1.2 snapshot 变化用例改为 `FROZEN`（strict 门禁仍覆盖准入前）。 |
-| `internal/services/order/tcc_payment_integration_test.go`（新增） | 7 个真实 MySQL 用例（见 §3.1）。 |
-| `internal/services/order/refund_consumer_integration_test.go`（新增） | 5 个真实 MySQL 用例（见 §3.1）。 |
+| `internal/services/order/ports.go`（`ba8a822`） | `paymentPort` 增 `GetRefundByKey`、`RefundBatch`；TCC 支付只走原子批。 |
+| `internal/services/order/tcc_payment.go`（`ba8a822` + `6ac218e`） | `payTccBatch` 预检 `B/done/inFlight/outstanding/R`、单次 `RefundBatch`、错误映射；`reconcileTccRefundFact` 改为复用 R2 的 settle/converge/project helper，pay-path 也投影 order 金额。 |
+| `internal/services/order/tcc_reconcile.go`（新增，`6ac218e`） | `RunTccReconcileWorker` + `runTccReconcileOnce`：扫描 `ADMITTED/PAYING` TCC batch，读 `GetRefundByKey`，在 order 行锁内 CAS commitment/app/batch，并投影 `orders.refunded_cent/refund_status/refund_state`；`max(current, SUM(SETTLED))` 防双计；active batch 保持 `REFUNDING`。 |
+| `cmd/order/main.go`（`6ac218e`） | 注册 `order.RunTccReconcileWorker(..., cfg.TccReconcileInterval)`。 |
+| `internal/platform/config/config.go`（`6ac218e`） | 新增 `TccReconcileInterval`，默认 1m；`TCC_RECONCILE_INTERVAL` 必须是正 duration，否则启动报错。 |
+| `internal/platform/config/config_test.go`（`6ac218e`） | 覆盖 interval 解析/非法值。 |
+| `internal/services/order/tcc_reconcile_integration_test.go`（新增） | 5 个真实 MySQL worker 用例：事件丢失收敛+投影、部分批次保持 REFUNDING、无事实无写入、8 并发幂等、event+worker 不双计。 |
+| `internal/services/order/tcc_payment_integration_test.go`（`6ac218e`） | pay-path lazy reconcile 增加 order 金额/状态断言。 |
+| `internal/services/order/tcc_compensation_integration_test.go`（`6ac218e`） | ALLOCATED resume 在全部 Payment 事实已存在时期望 `ALLOCATED/FULL`（lifecycle 不变）。 |
 
 ### 2.2 [架构侵入性]
 
-- 新增 1 个 payment 阶段与 1 个消费收敛段；无“默认放行”分支：所有未知/不满足前置条件的组合都返回错误或保持可重试状态。
-- 状态所有权不变：Order 仍唯一写 `refund_batches/refund_applications/order_refund_commitments`；Payment 仍是退款事实 owner；Order 只按事件投影。
-- 未改订单 lifecycle（`orders.status`）；未发 `order.refund_requested`；未改 proto/迁移；未新增跨服务调用（只用既有 `Payment.Refund`）。
-- 对 T1.2/T1.3 的既有 strict Σ 语义只在“已准入/已开始打款”的 batch 上放行，准入前行为不变。
+- 新增 1 个后台 worker 和 1 组共享 settle/project helper；没有“默认放行”分支：未知/不匹配的 commitment、application、fact 都跳过并告警，不写金额。
+- 状态所有权不变：Order 仍唯一写 `refund_batches/refund_applications/order_refund_commitments/orders`；Payment 仍是退款事实 owner；worker 只读 Payment。
+- 未改订单 lifecycle、未新增跨服务写、未改 proto/迁移、未碰 Inventory。
+- order 金额投影新增一个写入者（worker/pay-path），但通过 order 行锁 + commitment CAS + `max` 下界与 event 消费保持同一事实口径；event 的累计投影行为未改。
 
 ### 2.3 [副作用评估]
 
-- **`ADMITTED` 不再是 `TccCancelMarkPaid` 成功后的终态**：成功路径结束于 `PAYING`（退款已受理、事件待消费）或 `DONE`（事件已消费）。T1.4a 测试已按此更新；`ADMITTED` 仅表示“已准入、未打款”。
-- **部分退款投影期间订单 `refund_state` 保持 `REFUNDING`**：`refunded_cent/refund_status` 仍按金额单调投影；全部组 `DONE` 后才变 `FULL`。非 TCC 退款（无 active batch）仍得到 `PARTIAL`，AC-25 既有测试不变。
-- **T1.2 的 “snapshot 变化阻止 resume” 覆盖范围收窄到 `FROZEN/ADMITTING`**；`ADMITTED/PAYING` 的等价保护移到 Payment 调用（拒绝 → `MANUAL_HOLD`）。
-- **`MANUAL_HOLD` 新入口**：退款被 Payment 判定性拒绝时 batch 进入人工态，自动重试不再推进；需要人工核对/修数（本任务不提供恢复命令）。
-- **`refund_applications.attempts/last_error` 会被打款失败更新**（不含 version），供运维观察。
-- **测试库**：`orderTestDB` 仍执行真实 `0017/0018/0021`；新表/约束无变化。
+- `ADMITTED` batch 在 worker 看到 Payment 事实后会先转 `PAYING`，全部组 DONE 后 `DONE`；`ADMITTED` 不再是“有事实但未推进”的悬挂态。
+- order `refund_state` 在 active batch 期间保持 `REFUNDING`（包括 `MANUAL_HOLD`）；全部完成才 `PARTIAL/FULL`。已 `FULL` 不回退。
+- 新增 `order.refund_projected` outbox 事件（worker/pay-path 投影时）与 `order_status_logs(operator='tcc-reconcile')`；重复投影不重复写（金额/状态/状态机均未变化时直接返回）。
+- `TCC_RECONCILE_INTERVAL` 非法值导致 `config.Load` 失败（fail-closed）；默认 1m。
+- 每轮扫描最多 100 个 active batch；大量积压时下一轮继续，未做分页游标。
 
 ---
 
-## 3. 测试证据（真实 MySQL；绑定本 WIP 提交，Base=`dff267d`）
+## 3. 测试证据（真实 MySQL；绑定 `6ac218e`，Base=`ba8a822`）
 
-环境：`go1.27.1 darwin/amd64`；MySQL `mysql-unicorn`（`127.0.0.1:3306`，`26.10.0`）；`TEST_MYSQL_DSN` 由 `scripts/test-dsn.sh` 按包派生；`GOCACHE=/tmp/dsh-go-cache`。
+环境：`go1.27.1 darwin/amd64`；MySQL `mysql-unicorn`（`127.0.0.1:3306`，`26.10.0`）；`TEST_MYSQL_DSN=root:root@tcp(127.0.0.1:3306)/mall_integration_test?parseTime=true`；`GOCACHE=<workspace>/.gocache`（默认缓存被环境 sandbox 拒绝，非仓库变更）。
 
 | 命令 | 结果 |
 |---|---|
 | `go build ./...` | `BUILD_OK` |
-| `go vet ./internal/services/order` | `VET_OK` |
-| `TEST_MYSQL_DSN=<order> go test ./internal/services/order -count=1` | `ok ... 61.086s` |
-| `TEST_MYSQL_DSN=<order> go test -race ./internal/services/order -run 'TestTccPayment|TestPaymentRefunded|TestTccAdmission|TestTccCancel|TestAdmitRefund' -count=1` | `ok ... 59.075s` |
+| `go test ./internal/platform/config -count=1` | `ok ... 0.112s` |
+| `go test ./internal/services/order -count=1` | `ok ... 121.828s` |
+| `go test -race -p 1 ./internal/services/order -run 'TestTcc' -count=1` | `ok ... 90.874s` |
 | `gofmt -l <changed files>` | 空（`internal/services/order/service.go` 的既有漂移未触碰） |
 
-### 3.1 新增/受影响测试（逐条 PASS）
-
-T1.4b1 打款（`tcc_payment_integration_test.go`）：
+### 3.1 新增 worker 用例（不投递 `payment.refunded`）
 
 ```text
---- PASS: TestTccPaymentPaysEveryAdmittedGroupOnce (0.93s)
---- PASS: TestTccPaymentIsBlockedUntilEveryGroupIsAdmitted (0.93s)
---- PASS: TestTccPaymentRetryReusesRefundIDAfterTransientFailure (0.87s)
---- PASS: TestTccPaymentRejectionParksBatchForManualHandling (1.15s)
---- PASS: TestTccPaymentRequiresReservedCommitment (0.75s)
---- PASS: TestTccPaymentRefusesNonAdmittedBatch (0.89s)
---- PASS: TestTccPaymentRetryToleratesUnprojectedRefund (1.05s)
+--- PASS: TestTccReconcileWorkerSettlesLostEventsAndProjectsOrder (1.28s)
+--- PASS: TestTccReconcileWorkerKeepsRefundingForPartialBatch (1.46s)
+--- PASS: TestTccReconcileWorkerLeavesOutstandingWithoutFact (1.32s)
+--- PASS: TestTccReconcileWorkerConcurrentIsIdempotent (1.67s)
+--- PASS: TestTccReconcileWorkerDoesNotDoubleCountWithEvent (1.22s)
+ok  gin-kratos-gorm/internal/services/order  7.054s
 ```
 
-`payment.refunded` 收敛（`refund_consumer_integration_test.go`）：
+### 3.2 既有 T1.4b1-R 用例（回归）
+
+`TestTccRefundBatch*` 14 个顶层用例 + external 1000/6000/4000 子用例全部 PASS（见 §3.3 命令输出），包括：原子单批、BATCH_UNAVAILABLE 重试、MANUAL_HOLD、同 batch 不同 items、in-flight、GetRefundByKey 超时、外部退款零 Payment、部分/全量 lazy reconcile。pay-path lazy reconcile 现在同时断言 `orders.refunded_cent/refund_status/refund_state`。
 
 ```text
---- PASS: TestPaymentRefundedSettlesCommitmentApplicationAndBatch (0.76s)
---- PASS: TestPaymentRefundedOutOfOrderStillSettlesLedger (0.74s)
---- PASS: TestPaymentRefundedIgnoresNonEffectiveCapture (0.74s)
---- PASS: TestPaymentRefundedUnknownRefundIDProjectsOrderOnly (0.87s)
---- PASS: TestPaymentRefundedKeepsRefundingWhileTccBatchPays (0.84s)
-```
-
-既有受影响用例（T1.4a/T1.3/T1.2 端到端状态）：
-
-```text
---- PASS: TestTccAdmissionNonePermitResolvesPre
---- PASS: TestTccAdmissionConsumedCreatedCancelIfCreatedPre
---- PASS: TestTccAdmissionConsumedShippedPost
---- PASS: TestTccAdmissionCancelIfCreatedFailureKeepsPendingRemote
---- PASS: TestTccAdmissionConcurrentIsIdempotent
---- PASS: TestTccAdmissionLegacyG1ShippedPost
---- PASS: TestTccCancelResumeFillsMissingApplicationsAndPermits
---- PASS: TestTccCancelRefundingOrderWithoutBatchCreatesBatch
---- PASS: TestTccCancelResumeBlocksWhenPaymentSnapshotChanges
---- PASS: TestTccCancelRefundingAllocatedOrderResumesByRefundState
+ok  gin-kratos-gorm/internal/services/order  121.828s   # full order package
+ok  gin-kratos-gorm/internal/services/order  90.874s    # -race TestTcc
 ```
 
 ---
@@ -139,42 +122,39 @@ T1.4b1 打款（`tcc_payment_integration_test.go`）：
 
 ### 4.1 【测试范围】
 
-- 全部准入后逐组打款：`refund_id=tcc:<pay>:<group>`、金额=组 CapCent、`non_effective_capture=false`；batch `ADMITTED→PAYING`；commitment 保持 `RESERVED`、application 保持 `PROCESSING` 直到事件。
-- 部分准入失败：零退款、batch `ADMITTING`；重试补齐后打款。
-- 重复打款幂等：同一 `refund_id` 重复调用、无重复账本行。
-- 瞬时失败保持 `PAYING` 可重试；判定性拒绝 `MANUAL_HOLD` 且自动重试不推进。
-- 非 `ADMITTED`（`FROZEN`）拒绝打款；缺 `RESERVED` commitment 整批 fail-closed。
-- `payment.refunded`：commitment `SETTLED` + application `DONE` + 全组 DONE 后 batch `DONE`；重复/乱序幂等；非生效忽略；未知 `refund_id` 只投影订单金额并告警；部分投影保持 `REFUNDING`；lifecycle 不变。
-- 真实 MySQL（C-05 真实迁移）+ `-race`（TCC 准入/取消/打款/消费定向集）。
+- 不投递 `payment.refunded`，仅运行 worker：batch DONE、commitment SETTLED、application DONE、order `refunded_cent/refund_status/refund_state` 正确。
+- 部分组有事实/部分无事实：有事实的组结算并投影，batch 保持 PAYING、order 保持 REFUNDING；后续事实到齐后 FULL。
+- 无 Payment 事实（NotFound/PENDING）：零写入、零投影。
+- 重复/并发 worker：金额不双计、DONE 后不再 bump version。
+- 事件 + worker：event 先投影累计值，worker 只补剩余 commitment，最终 10000 而非 16000；迟到 event 幂等。
+- pay-path lazy reconcile 与 worker 共用投影：batch DONE 时 order 金额同步，不留“batch DONE、order 旧值”。
+- 真实 MySQL（真实 order 迁移 0017/0018/0021）+ `-race`。
 
-### 4.2 【未覆盖范围】（显式不在 T1.4b1）
+### 4.2 【未覆盖范围】
 
-1. **INV-44 持久 release 请求 / Inventory 释放/回库**（R-A）→ **T1.4b2/T3.3/T3.5**。
-2. **AfterSales 零元持久 refund task / 终态投影**（R-C 前置）→ **T1.4b2**。
-3. `order.refund_requested` 消费者改为观察/告警 → **T1.5**。
-4. `PENDING_PAYMENT+已捕获` 的 CAS→CANCELLED + 支付级取消退款 → **T1.6**。
-5. `GetRefundByKey` 惰性对账、日终 worker、`AdmitRefund` 事务外退款事实查询 → ADR §4.7 其余部分（**T5.3** / 后续任务；见 §5-2）。
-6. T1.7/T5 全矩阵（Σ 不等全量、Ship 竞态全矩阵、故障注入、真实迁移全量、回填、AC 证据矩阵）→ **T1.7/T5**。
-7. 运维恢复命令（`MANUAL_HOLD` 的自助恢复/重放工具）与 metrics：本任务只有 `s.log` 日志。
-8. `composition_known=0` 的行级退款、责任运费/168h、`order.settled` shadow、依赖 fail-fast → T3/T4。
-9. 生产 MySQL 版本与生产集群验证：本任务只在 compose MySQL `26.10.0` 验证（release 门禁负责）。
+1. **真实 Payment 进程**：`GetRefundByKey`/`RefundBatch` 仍由 fake 模拟；Payment 真实服务端 `GetRefundByKey` 实现不在本任务（见 §5-1）。
+2. **worker 运维面**：无 metrics、无手动触发、无死信/积压分页游标；只有日志。
+3. **多副本真实集群**：只在单进程内 8 并发 goroutine + 行锁/CAS 验证；未做多 Pod 网络分区/时钟实验。
+4. **支付级/无 commitment 退款**：worker 的金额下界只来自 SETTLED commitments；这类退款仍只由 `payment.refunded` 投影（事实所有权不变）。
+5. **INV-44 release/回库、零元/Aftersales、T1.5/T1.6、T1.7/T5 全矩阵**：按人类裁决不在本任务。
+6. **`MANUAL_HOLD` 恢复命令**、跨日对账报表、生产 MySQL/集群验证：不在本任务。
 
 ---
 
 ## 5. 契约缺口 / 需裁决事项（不自行扩展）
 
-1. **INV-44 释放/回库仍未接线**（T1.4b2）：本任务只打款，不写 `release` 请求、不调 Inventory；`order.refund_admitted` 事件字段（`group_no/warehouse_id/items`）扩展仍是 C-04 缺口，需 T1.4b2 落实。
-2. **`GetRefundByKey` 惰性对账未接线**（ADR §4.7/A-07）：本任务的重试依赖 Payment `refund_id` 幂等 + 事件消费；若 `payment.refunded` 丢失（超出 outbox 假设），commitment 会停留 `RESERVED`、batch 停留 `PAYING`，需要日终 worker 或人工修复。归属待 Lead/Architect 明确（T5.3 或 T1.4b2）。
-3. **PAYING 阶段的 Σ/快照复核口径**：本实现不逐笔预读 `Payment.GetIntent`，而把“remaining captured 已变化”的裁决交给 `Payment.Refund` 的权威校验（判定性拒绝 → `MANUAL_HOLD`）。这与 ADR §4.1.3(5) 的目标一致，但字面“每次打款前重新读取 Payment 权威”未逐字实现；若 Reviewer 要求逐字实现，需要显式定义“已 Refund 未投影”状态下的等式（建议随 `GetRefundByKey` 一并裁决）。
-4. **PRE 组的缺失 commitment 无法自愈**：准入阶段（T1.4a）才写 PRE 组 commitment；若数据被破坏删除，`payTccBatch` 会整批 fail-closed（零退款、batch 保持 `ADMITTED`），但现有 `AdmitRefund` 幂等路径不会重建它，需要人工修数。该边界是 fail-closed，不是自动放行。
-5. **`refund_applications` 的 `PROCESSING` 语义**：本任务沿用“已准入、待/正在打款”，未新增 `PAYING` 值（避免与 batch 状态重复表达）；`payment.refunded` 到达前无法从 application 区分“已受理退款”和“未受理”，对账需结合 commitment（`RESERVED`）与 Payment。若 T5 对账需要更强可观测性，需契约增量。
-6. **batch `PAID`**：按 ADR §6.1 契约终态使用 `DONE`，未新增 `PAID`（DB CHECK 只允许既有 9 值）。
-7. **`make fmt-check` 基线失败**：`internal/services/order/service.go` 在 base 即未 gofmt（非本任务修改）；本任务所有改动文件 `gofmt -l` 为空。
+1. **【阻塞】Payment.GetRefundByKey 无服务端实现**：proto/generated client 已 accepted，`internal/services/payment/service.go` 仍嵌入 `UnimplementedPaymentServiceServer`，无 `func (s *Service) GetRefundByKey`。真实部署下 worker 只能告警、pay-path 预检 fail-closed；**T1.4b1-R2 的 worker 端到端不可用，直到 Payment 实现该只读 RPC**。建议 Payment owner 按 C-04 实现 `(payment_no, refund_id)` 查询/NotFound，不改 proto。
+2. **Payment.RefundBatch 仍是 WIP `fc295e5`**：C-04 accepted ≠ 实现 PASS；Order 测试使用 fake Payment 模拟行锁/原子/幂等语义。真实组合验证需 Payment 实现 + `0012_refund_batch.sql`。
+3. **order 金额投影下界**：`max(current, SUM(SETTLED commitments))` 不覆盖无 commitment 的支付级退款；若事件永久丢失，这类金额仍会滞后。是否需要 Payment 级累计读（`ListOrderIntents`/`GetIntent`）作为第二下界，需 Architect 裁决。
+4. **worker 周期/超时**：`TCC_RECONCILE_INTERVAL` 默认 1m 是本任务本地运维值；C-04 未定义。in-flight 30m 阈值仍沿用 `ba8a822` 的本地策略。
+5. **`MANUAL_HOLD/FAILED_PERMANENT` 的投影**：worker 不推进这些 batch；投影查询把它们视为未完成以保持 `REFUNDING`。若业务希望人工态也允许金额投影到 `PARTIAL/FULL`，需状态机裁决。
+6. **outbox 事件 payload**：worker 的 `order.refund_projected` 用 `batch.CapturedSnapshotCent` 作为 `captured_cent`；多 payment intent 订单是否应改用订单级 captured 汇总，需事件契约 owner 确认。
+7. **`make fmt-check` 基线失败**：`internal/services/order/service.go` 在 base 即未 gofmt（非本任务修改）；本任务改动文件 `gofmt -l` 为空。
 
 ---
 
 ## 6. 结论
 
-- 本次交付 **仅 T1.4b1**：TCC 逐组 `Payment.Refund`（`tcc:<pay>:<group>`、组 CapCent、全部准入后才打款、幂等/可重试/人工态）+ `payment.refunded` 收敛（commitment `SETTLED`、application `DONE`、batch `DONE`）。
-- 未做 INV-44 release/回库、零元售后持久 task、T1.5/T1.6/T1.7；未改 order lifecycle、未发 `order.refund_requested`、未新增 proto/迁移。
-- **Status: WIP**；不批准、不宣称实现 PASS / Release PASS，不标 AC-VERIFIED；交由 Reviewer 按精确 base/head 复核。
+- 本提交完成 **T1.4b1-R2**：持久 TCC reconcile worker + `GetRefundByKey` 惰性收敛 + order 金额/状态投影；不依赖 `payment.refunded`，event+worker 不双计，并发/重复幂等。
+- 未改 Spec/ADR/proto/migrations；未做 T1.4b2/INV-44/零元/T1.5/T1.6；未调 Inventory。
+- **Status: WIP**；不批准、不宣称实现 PASS / Release PASS，不标 AC-VERIFIED。真实端到端被 Payment.GetRefundByKey 服务端缺口阻塞。

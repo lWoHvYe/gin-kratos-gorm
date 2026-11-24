@@ -17,9 +17,9 @@
 | 项 | 值 |
 |---|---|
 | Spec | SPEC-0001 **v1.2 approved** |
-| ADR | ADR-0005 **v1.2**（§18 Amendment 1 / §19.2 T-001 closed）；ADR-0006 gates accepted |
+| ADR | ADR-0005 **v1.2**（§18 Amendment 1 / §19.2 T-001 closed）；ADR-0006 retired 2026-11-25 |
 | 实施线程 | `docs/collab/architect-developer/threads/T-001.md` **OPEN**，由 Architect 复核后关闭 |
-| 实施提交 | `0c1bd16`（B-01/B-05/SPEC v1.2）、`655ccc7`（gates 自测标签）、`e81de00`（T-001 进展回写） |
+| 实施提交 | `0c1bd16`（B-01/B-05/SPEC v1.2）、`655ccc7`（历史 gate 自测标签）、`e81de00`（T-001 进展回写） |
 | 偏差登记 | `docs/implementation/adr-0005-deviation-register.md` |
 | 生产开关 | quantity split / carrier registry / auto confirm / shortage / freight responsibility 默认 false |
 
@@ -31,7 +31,7 @@
 - B-04：授权号 + `VerifyRestockAuthorization` + Inventory fail-closed。
 - B-05：缺货 4h/48h 字段、`shortage.resolved` 必填 payload、AfterSales 系统退款单 + durable refund task + Order 退款投影。
 - SPEC v1.2：组号按 `warehouse_id` 升序、运费券只减订单级、60s 申诉宽限、15 天已确认争议不回滚、`AUTO_T7` 文案、新单禁止直接改额。
-- ADR-0006：`make gates/gates-strict/gates-test`、AC baseline/coverage、CI job；A1…A5 自测通过。
+- ADR-0006：**已 retired（2026-11-25）**；`make gates*`/CI job 已删除；AC baseline/coverage 保留为人工台账。
 
 ## 4. 当前残余（有 owner + expiry）
 
@@ -60,7 +60,7 @@
 
 - 单服务：`feat|fix|test(order|pricing|inventory|fulfillment|aftersales|payment|gateway|admin|catalog|cart|identity|seckill|ai)`
 - 契约：`feat(contracts)`；迁移：`feat(migrations)`
-- 闸门：`ci(gates)`；工具：`chore(tooling)`
+- 闸门：无（协作门禁已退役）；工具：`chore(tooling)`
 - 记忆：`docs(developer)`；偏差登记：`docs(impl)`
 
 单服务与契约同改时拆两笔，不混提。
@@ -74,8 +74,7 @@ export GOMODCACHE=$PWD/.tmp/modcache GOPATH=$PWD/.tmp/gopath
 export GOSUMDB=off GOFLAGS=-mod=readonly GOPROXY=off
 
 make verify
-make gates-strict
-make gates-test
+# 协作闸门已退役（2026-11-25）：不再运行 make gates*
 make contract-check
 TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/mall_order_test?parseTime=true&loc=UTC' \
   go test ./internal/services/order -count=1
@@ -86,5 +85,5 @@ TEST_MYSQL_DSN='root:root@tcp(127.0.0.1:3306)/mall_order_test?parseTime=true&loc
 1. 读 `AGENTS.md`、`docs/collab/CONVENTIONS.md`、Spec 当前版本、ADR-0005/0006、本文件。
 2. 看 `docs/collab/architect-developer/threads.md` 与 T-001；有 OPEN 先处理。
 3. `git status` 确认是否有其他 Agent 的在途改动；**不覆盖/不回滚**，只提交自己的路径。
-4. 先跑 `make gates-strict` 与相关测试，再决定改什么。
+4. 先跑 `make test` / `make verify`（不含 gates），再决定改什么。
 5. 需要改 Spec/ADR 时开线程，不直接编辑。

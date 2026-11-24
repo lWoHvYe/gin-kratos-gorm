@@ -114,6 +114,7 @@
 3. **组合与发布证据**：跨服务变更必须包含受影响基线的非回归证据。实现测试绿色不等于 Release PASS；发布结论必须绑定精确 base/head。阻断项、延期处置及所要求的环境验证。
 4. **防御声明**：必须附带 `【测试范围】` 与 `【未覆盖范围】`，帮助人类挡住审查者的过度发散。
 5. **AC 证据矩阵**：受影响 AC 必须映射到 `docs/collab/ac-coverage.tsv` 的 `test_type`、`evidence_path`、`status`；AC-REF 不等于 AC-VERIFIED。
+6. **协作闸门已退役（2026-11-25）**：`make gates*`、`scripts/collab_gates.py` 与 CI `collab-gates` job 均已删除；G-1…G-4 只是人工检查清单，不得要求运行已删命令，也不得以“已通过机器门禁”作为交付证据。
 
 ---
 

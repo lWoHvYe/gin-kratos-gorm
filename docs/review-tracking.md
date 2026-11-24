@@ -266,6 +266,9 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   v1.2.1 门禁退役；v1.2.3 历史记录与人工清单口径）；5 份角色 prompt 增加分级口径并新增
   `prompt/Lead.md`；协作闸门脚本/CI 已删除。所有 Lead/subagent 必须重新读取 AGENTS、
   宪法、CONVENTIONS 与自身 prompt，不得依赖旧摘要。
+- **2026-11-25 delta audit (AGENTS 角色矩阵 + §2.8)**: §1.0 Lead 限定 L2 Plan 并提议 Tier；
+  §1.4/§1.5 补 L1 口径与全级别 Tier 确认；新增分级角色动作总括；§2.8 治理变更最小化与撤回。
+  **收益**：角色动作与分级对齐、防止再次无界扩张；**停止条件**：本轮为最后编辑，不再新增治理机制。
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

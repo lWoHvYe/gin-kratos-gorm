@@ -26,6 +26,16 @@ WP-I2 release, WP-I3 restock, WP-B1/B2 backfill, WP-E1..E4 compatibility,
 WP-V1 evidence. Each WP owns one invariant, one branch, one scoped Reviewer.
 T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
 
+### 2026-11-25 T1.4b2-R FAIL — deferred release still too complex
+
+- B1: TCC groups stay REFUNDING; no TCC REFUNDED projection, so multi-group
+  last-active never emits. B2: scan has no watermark/cursor; starves and would
+  backfill production. B3: shared POST/unknown group has no durable manual
+  marker; unknown group can fail-open release.
+- Old group/reservation B1 and system_shortage B2 are closed.
+- T1.4b2 frozen. Proposed simplification: P0 releases only single-group orders;
+  multi-group physical release deferred to P1/manual. Awaiting human decision.
+
 ### 2026-11-25 T1.4b2 FAIL — group/reservation identity
 
 - B1 [ARCHITECTURAL_FLAW]: release event carries group quantity, but Inventory

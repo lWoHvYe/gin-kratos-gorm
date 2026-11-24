@@ -239,19 +239,26 @@ func (s *Service) refundCancelledWithSnapshot(ctx context.Context, record *order
 			"reason", "PAYMENT_CANCEL_NO_CAPTURE")
 		return nil
 	}
+	// Inventory is a required dependency for the direct compensation path: a
+	// nil client is a configuration error, not "nothing to do". Fail closed
+	// before writing a payment command (T1.6-R B3).
+	if s.inventory == nil {
+		return apperr.Unavailable("inventory client is required for cancelled-after-confirm compensation", nil)
+	}
 	items, err := loadOrderItems(ctx, s.db, record.OrderNo)
 	if err != nil {
 		return apperr.Internal("load items for cancelled-after-confirm restock", err)
 	}
-	if s.inventory != nil {
-		if _, err := s.inventory.TccCancelConfirm(ctx, &pb.TccPaymentRequest{
-			OrderNo: record.OrderNo, Items: items,
-		}); err != nil {
-			// The order remains cancelled and the payment must still be
-			// refunded. Persist a durable Inventory retry and alert; do not
-			// silently swallow the compensation failure.
-			s.log.Error("restock cancelled-after-confirm order", "order_no", record.OrderNo, "error", err)
-			s.queueInventoryCompensation(ctx, record.OrderNo, items)
+	if _, err := s.inventory.TccCancelConfirm(ctx, &pb.TccPaymentRequest{
+		OrderNo: record.OrderNo, Items: items,
+	}); err != nil {
+		// The order remains cancelled and the payment must still be refunded.
+		// The Inventory retry must be durable; if it cannot be persisted, the
+		// whole compensation is a real error and no payment command is written.
+		s.log.Error("restock cancelled-after-confirm order", "order_no", record.OrderNo, "error", err)
+		if qerr := s.queueInventoryCompensation(ctx, record.OrderNo, items); qerr != nil {
+			return apperr.Internal("restock cancelled-after-confirm order and persist its compensation",
+				errors.Join(err, qerr))
 		}
 	}
 	if err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {

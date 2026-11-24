@@ -113,7 +113,10 @@ func t16AssertNoGroupLedger(t *testing.T, db *sql.DB, orderNo string) {
 func TestT1_6PendingCapturedCASWins(t *testing.T) {
 	db := orderTestDB(t)
 	payments := &fakePaymentPort{captured: 10000}
-	svc := tccTestService(t, db, payments)
+	inventory := &t16InventoryPort{db: db}
+	svc := New(db, nil, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(payments, &fakeFulfillmentPort{status: "CANCELLED"})
+	svc.inventory = inventory
 	ctx := context.Background()
 	const orderNo = "ORD-T16-PENDING-WIN"
 	seedTccPendingOrder(t, db, orderNo, 10000, 0, 0)
@@ -326,10 +329,14 @@ func TestT1_6PendingCapturedAlreadyRefundedWritesNoCommand(t *testing.T) {
 func TestT1_6CancelledCapturedWritesCommand(t *testing.T) {
 	db := orderTestDB(t)
 	payments := &fakePaymentPort{captured: 1000}
-	svc := tccTestService(t, db, payments)
+	inventory := &t16InventoryPort{db: db}
+	svc := New(db, nil, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(payments, &fakeFulfillmentPort{status: "CANCELLED"})
+	svc.inventory = inventory
 	ctx := context.Background()
 	const orderNo = "ORD-T16-CANCELLED"
 	seedTccOrder(t, db, orderNo, 1000, 1000, 0, 0, "PAY-T16-CAN")
+	seedTccLine(t, db, orderNo, 1, "G1", 1000)
 	setTccOrderStatus(t, db, orderNo, statusCancelled)
 
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
@@ -352,8 +359,32 @@ func TestT1_6CancelledCapturedWritesCommand(t *testing.T) {
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = ?`, orderNo); got != 0 {
 		t.Fatalf("cancelled repair wrote group batches: %d", got)
 	}
+	if inventory.cancelConfirmCalls != 1 {
+		t.Fatalf("cancelled repair TccCancelConfirm calls = %d, want 1", inventory.cancelConfirmCalls)
+	}
 	if len(payments.refundCalls) != 0 {
 		t.Fatalf("Order called Payment.Refund directly: %d", len(payments.refundCalls))
+	}
+}
+
+// B3: a nil Inventory client is a configuration error for the direct
+// cancel-after-confirm compensation; it must not silently write a command.
+func TestT1_6CancelledCapturedRequiresInventory(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 1000}
+	svc := tccTestService(t, db, payments)
+	ctx := context.Background()
+	const orderNo = "ORD-T16-CANCELLED-NO-INV"
+	seedTccOrder(t, db, orderNo, 1000, 1000, 0, 0, "PAY-T16-CAN-NO-INV")
+	setTccOrderStatus(t, db, orderNo, statusCancelled)
+
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: orderNo, PaymentNo: "PAY-T16-CAN-NO-INV", PaidCent: 1000,
+	}); err == nil {
+		t.Fatal("nil inventory client was accepted for cancel-after-confirm compensation")
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = ? AND event_type = 'order.refund_requested'`, orderNo); got != 0 {
+		t.Fatalf("nil inventory wrote a payment command: %d", got)
 	}
 }
 
@@ -458,7 +489,10 @@ func TestT1_6RefundCancelledAfterConfirmWithoutCaptureWritesNothing(t *testing.T
 func TestT1_6ConcurrentPendingCapturedCancelSingleWinner(t *testing.T) {
 	db := orderTestDB(t)
 	payments := &countingPaymentPort{captured: 10000}
-	svc := tccTestService(t, db, payments)
+	inventory := &t16InventoryPort{db: db}
+	svc := New(db, nil, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(payments, &fakeFulfillmentPort{status: "CANCELLED"})
+	svc.inventory = inventory
 	ctx := context.Background()
 	const orderNo = "ORD-T16-PENDING-RACE"
 	seedTccPendingOrder(t, db, orderNo, 10000, 0, 0)
@@ -506,4 +540,208 @@ func TestT1_6ConcurrentPendingCapturedCancelSingleWinner(t *testing.T) {
 		}
 	}
 	t16AssertNoGroupLedger(t, db, orderNo)
+}
+
+// B2 + B1: PENDING_PAYMENT must read the authoritative Payment snapshot even
+// when req.paid_cent=0, and the order.cancelled payload must carry the line's
+// warehouse_id (W2) so Inventory cannot compensate W1 by default.
+func TestT1_6PendingCapturedPaidCentZeroUsesAuthorityAndWarehouse(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	svc := tccTestService(t, db, payments)
+	ctx := context.Background()
+	const orderNo = "ORD-T16-PAIDZERO-W2"
+	seedTccPendingOrder(t, db, orderNo, 10000, 0, 0)
+	seedTccGroup(t, db, orderNo, "G1", 1, 0)
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no,line_no,sku_id,name,quantity,warehouse_id,fulfillment_group_no,line_paid_cent,unit_paid_cent)
+		VALUES (?, 1, 1, 'x', 1, 2, 'G1', 10000, 10000)`, orderNo); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: orderNo, PaymentNo: "PAY-T16-PAIDZERO", PaidCent: 0,
+	}); err != nil {
+		t.Fatalf("paid_cent=0 with authoritative capture: %v", err)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM orders WHERE order_no = ?`, orderNo).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusCancelled {
+		t.Fatalf("status = %s, want CANCELLED", status)
+	}
+	commands := t16OutboxPayloads(t, db, orderNo, "order.refund_requested")
+	if len(commands) != 1 {
+		t.Fatalf("payment commands = %d, want 1", len(commands))
+	}
+	if commands[0]["amount_cent"] != float64(10000) || commands[0]["refund_id"] != "pay:PAY-T16-PAIDZERO:cancel" {
+		t.Fatalf("command = %+v", commands[0])
+	}
+	cancelled := t16OutboxPayloads(t, db, orderNo, "order.cancelled")
+	if len(cancelled) != 1 {
+		t.Fatalf("order.cancelled = %d, want 1", len(cancelled))
+	}
+	items, _ := cancelled[0]["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("order.cancelled items = %+v", cancelled[0]["items"])
+	}
+	item, _ := items[0].(map[string]any)
+	if item["warehouse_id"] != float64(2) {
+		t.Fatalf("order.cancelled item warehouse_id = %v, want 2", item["warehouse_id"])
+	}
+	if payments.getCalls == 0 {
+		t.Fatal("PENDING cancel did not read the authoritative Payment snapshot")
+	}
+}
+
+// B1/B3: the durable Inventory compensation payload must carry warehouse_id and
+// must return append failures to the caller instead of only logging them.
+func TestT1_6QueueInventoryCompensationCarriesWarehouseAndReturnsError(t *testing.T) {
+	db := orderTestDB(t)
+	svc := New(db, nil, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), nil, nil, nil, nil)
+	ctx := context.Background()
+	const orderNo = "ORD-T16-COMP-QUEUE"
+
+	if err := svc.queueInventoryCompensation(ctx, orderNo, []*pb.OrderItem{
+		{SkuId: 1, WarehouseId: 2, Quantity: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	events := t16OutboxPayloads(t, db, orderNo, "inventory.compensation_requested")
+	if len(events) != 1 {
+		t.Fatalf("compensation events = %d, want 1", len(events))
+	}
+	items, _ := events[0]["items"].([]any)
+	item, _ := items[0].(map[string]any)
+	if item["warehouse_id"] != float64(2) {
+		t.Fatalf("compensation item warehouse_id = %v, want 2", item["warehouse_id"])
+	}
+
+	if err := svc.queueInventoryCompensation(ctx, "ORD-T16-COMP-MISSING", []*pb.OrderItem{
+		{SkuId: 1, Quantity: 1},
+	}); err == nil {
+		t.Fatal("compensation without warehouse_id was accepted")
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = 'ORD-T16-COMP-MISSING'`); got != 0 {
+		t.Fatalf("missing-warehouse compensation wrote outbox rows: %d", got)
+	}
+
+	_, _ = db.Exec(`DROP TRIGGER IF EXISTS t16_fail_compensation`)
+	if _, err := db.Exec(`CREATE TRIGGER t16_fail_compensation BEFORE INSERT ON outbox_events
+		FOR EACH ROW
+		BEGIN
+			IF NEW.event_type = 'inventory.compensation_requested' THEN
+				SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected compensation outbox failure';
+			END IF;
+		END`); err != nil {
+		t.Fatalf("create compensation failure trigger: %v", err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec(`DROP TRIGGER IF EXISTS t16_fail_compensation`) })
+	if err := svc.queueInventoryCompensation(ctx, orderNo, []*pb.OrderItem{
+		{SkuId: 1, WarehouseId: 2, Quantity: 1},
+	}); err == nil {
+		t.Fatal("compensation outbox failure was not returned")
+	}
+}
+
+// Ruling 3: an Inventory direct-compensation failure is persisted, but the
+// payment command is still written so captured money is not blocked by stock.
+func TestT1_6CancelAfterConfirmInventoryFailureStillRefunds(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 1000}
+	inventory := &t16InventoryPort{db: db, cancelConfirmErr: apperr.Unavailable("inventory down", nil)}
+	svc := New(db, nil, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(payments, &fakeFulfillmentPort{status: "CANCELLED"})
+	svc.inventory = inventory
+	ctx := context.Background()
+	const orderNo = "ORD-T16-AFC-INVFAIL"
+	seedTccOrder(t, db, orderNo, 1000, 1000, 0, 0, "PAY-T16-AFC-INVFAIL")
+	seedTccLine(t, db, orderNo, 1, "G1", 1000)
+	setTccOrderStatus(t, db, orderNo, statusCancelled)
+	record, err := findOrder(ctx, db, orderNo)
+	if err != nil || record == nil {
+		t.Fatalf("reload cancelled order: %v", err)
+	}
+
+	if err := svc.refundCancelledAfterConfirm(ctx, record, "PAY-T16-AFC-INVFAIL"); err != nil {
+		t.Fatal(err)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = ? AND event_type = 'inventory.compensation_requested'`, orderNo); got != 1 {
+		t.Fatalf("durable inventory compensation = %d, want 1", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = ? AND event_type = 'order.refund_requested'`, orderNo); got != 1 {
+		t.Fatalf("payment command = %d, want 1", got)
+	}
+}
+
+// B3: if the durable Inventory compensation cannot be persisted, the direct
+// compensation is a real error and no payment command may be written.
+func TestT1_6CancelAfterConfirmCompensationAppendFailureBlocksRefund(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 1000}
+	inventory := &t16InventoryPort{db: db, cancelConfirmErr: apperr.Unavailable("inventory down", nil)}
+	svc := New(db, nil, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(payments, &fakeFulfillmentPort{status: "CANCELLED"})
+	svc.inventory = inventory
+	ctx := context.Background()
+	const orderNo = "ORD-T16-AFC-COMPFAIL"
+	seedTccOrder(t, db, orderNo, 1000, 1000, 0, 0, "PAY-T16-AFC-COMPFAIL")
+	seedTccLine(t, db, orderNo, 1, "G1", 1000)
+	setTccOrderStatus(t, db, orderNo, statusCancelled)
+	record, err := findOrder(ctx, db, orderNo)
+	if err != nil || record == nil {
+		t.Fatalf("reload cancelled order: %v", err)
+	}
+
+	_, _ = db.Exec(`DROP TRIGGER IF EXISTS t16_fail_compensation`)
+	if _, err := db.Exec(`CREATE TRIGGER t16_fail_compensation BEFORE INSERT ON outbox_events
+		FOR EACH ROW
+		BEGIN
+			IF NEW.event_type = 'inventory.compensation_requested' THEN
+				SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'injected compensation outbox failure';
+			END IF;
+		END`); err != nil {
+		t.Fatalf("create compensation failure trigger: %v", err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec(`DROP TRIGGER IF EXISTS t16_fail_compensation`) })
+
+	if err := svc.refundCancelledAfterConfirm(ctx, record, "PAY-T16-AFC-COMPFAIL"); err == nil {
+		t.Fatal("unpersisted inventory compensation did not fail the refund path")
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = ? AND event_type = 'order.refund_requested'`, orderNo); got != 0 {
+		t.Fatalf("unpersisted compensation still wrote a payment command: %d", got)
+	}
+}
+
+// B2/裁决 5: an unavailable Payment authority must fail closed before any
+// order/cancel/refund write, even when req.paid_cent=0.
+func TestT1_6PendingCapturedPaymentUnavailableFailsClosed(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{getErr: apperr.Unavailable("payment intent timeout", nil)}
+	svc := tccTestService(t, db, payments)
+	ctx := context.Background()
+	const orderNo = "ORD-T16-PENDING-UNAVAILABLE"
+	seedTccPendingOrder(t, db, orderNo, 10000, 0, 0)
+	seedTccGroup(t, db, orderNo, "G1", 1, 0)
+	seedTccLine(t, db, orderNo, 1, "G1", 10000)
+	version := tccVersion(t, db, orderNo)
+
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: orderNo, PaymentNo: "PAY-T16-UNAVAILABLE", PaidCent: 0,
+	}); err == nil {
+		t.Fatal("unavailable Payment authority was accepted")
+	}
+	var status string
+	var versionAfter int64
+	if err := db.QueryRow(`SELECT status, version FROM orders WHERE order_no = ?`, orderNo).
+		Scan(&status, &versionAfter); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusPendingPayment || versionAfter != version {
+		t.Fatalf("Payment-unavailable cancel mutated order: %s/version %d", status, versionAfter)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = ?`, orderNo); got != 0 {
+		t.Fatalf("Payment-unavailable cancel wrote outbox events: %d", got)
+	}
 }

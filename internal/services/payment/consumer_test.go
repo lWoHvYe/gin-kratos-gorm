@@ -17,8 +17,11 @@ import (
 // the Payment idempotency key, and never refunds group/TCC events.
 
 type fakeRefundCommand struct {
-	calls []*pb.RefundRequest
-	err   error
+	calls    []*pb.RefundRequest
+	err      error
+	intent   *pb.Intent
+	getErr   error
+	getCalls int
 }
 
 func (f *fakeRefundCommand) Refund(_ context.Context, in *pb.RefundRequest) (*pb.Empty, error) {
@@ -27,6 +30,20 @@ func (f *fakeRefundCommand) Refund(_ context.Context, in *pb.RefundRequest) (*pb
 		return nil, f.err
 	}
 	return &pb.Empty{}, nil
+}
+
+func (f *fakeRefundCommand) GetIntent(_ context.Context, in *pb.GetIntentRequest) (*pb.Intent, error) {
+	f.getCalls++
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	if f.intent == nil {
+		return nil, apperr.NotFound("payment intent not found")
+	}
+	return &pb.Intent{
+		PaymentNo: in.GetPaymentNo(), AmountCent: f.intent.GetAmountCent(),
+		CapturedCent: f.intent.GetCapturedCent(), RefundedCent: f.intent.GetRefundedCent(),
+	}, nil
 }
 
 func t16Event(t *testing.T, event orderRefundRequested) []byte {
@@ -72,7 +89,7 @@ func TestHandleOrderRefundRequestedExecutesPaymentCancelCommand(t *testing.T) {
 }
 
 func TestHandleOrderRefundRequestedLegacyCancelAfterConfirm(t *testing.T) {
-	fake := &fakeRefundCommand{}
+	fake := &fakeRefundCommand{intent: &pb.Intent{CapturedCent: 500, AmountCent: 500, RefundedCent: 0}}
 	event := orderRefundRequested{
 		OrderNo: "ORD-T16-LEGACY", PaymentNo: "PAY-T16-LEGACY", PaidCent: 500,
 		Reason: "order cancelled after inventory confirm", Status: "CANCELLED",
@@ -87,7 +104,72 @@ func TestHandleOrderRefundRequestedLegacyCancelAfterConfirm(t *testing.T) {
 		t.Fatalf("legacy idempotency_key = %q, want the deterministic cancel identity", got)
 	}
 	if got := fake.calls[0].GetAmountCent(); got != 500 {
-		t.Fatalf("legacy amount = %d, want paid_cent 500", got)
+		t.Fatalf("legacy amount = %d, want authoritative net 500", got)
+	}
+	if fake.getCalls != 1 {
+		t.Fatalf("legacy GetIntent calls = %d, want 1", fake.getCalls)
+	}
+}
+
+func TestHandleOrderRefundRequestedLegacyUsesNetNotPaidCent(t *testing.T) {
+	// paid_cent is the full capture; 200 was already refunded. The command must
+	// refund the remaining 300, not the full 500.
+	fake := &fakeRefundCommand{intent: &pb.Intent{CapturedCent: 500, AmountCent: 500, RefundedCent: 200}}
+	event := orderRefundRequested{
+		OrderNo: "ORD-T16-LEGACY-NET", PaymentNo: "PAY-T16-LEGACY-NET", PaidCent: 500,
+		Reason: "order cancelled after inventory confirm", Status: "CANCELLED",
+	}
+	if err := handleOrderRefundRequested(context.Background(), fake, t16Logger(), t16Event(t, event)); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 1 {
+		t.Fatalf("legacy net Refund calls = %d, want 1", len(fake.calls))
+	}
+	if got := fake.calls[0].GetAmountCent(); got != 300 {
+		t.Fatalf("legacy amount = %d, want captured-refunded net 300", got)
+	}
+}
+
+func TestHandleOrderRefundRequestedLegacyAlreadyRefundedAcks(t *testing.T) {
+	fake := &fakeRefundCommand{intent: &pb.Intent{CapturedCent: 500, AmountCent: 500, RefundedCent: 500}}
+	event := orderRefundRequested{
+		OrderNo: "ORD-T16-LEGACY-FULL", PaymentNo: "PAY-T16-LEGACY-FULL", PaidCent: 500,
+		Reason: "order cancelled after inventory confirm", Status: "CANCELLED",
+	}
+	if err := handleOrderRefundRequested(context.Background(), fake, t16Logger(), t16Event(t, event)); err != nil {
+		t.Fatalf("already-refunded legacy command must be acked: %v", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("already-refunded legacy called Refund %d times", len(fake.calls))
+	}
+}
+
+func TestHandleOrderRefundRequestedLegacyNetUnavailableRetries(t *testing.T) {
+	fake := &fakeRefundCommand{getErr: apperr.Unavailable("payment intent timeout", nil)}
+	event := orderRefundRequested{
+		OrderNo: "ORD-T16-LEGACY-RETRY", PaymentNo: "PAY-T16-LEGACY-RETRY", PaidCent: 500,
+		Reason: "order cancelled after inventory confirm", Status: "CANCELLED",
+	}
+	err := handleOrderRefundRequested(context.Background(), fake, t16Logger(), t16Event(t, event))
+	if err == nil || !apperr.IsCode(err, apperr.CodeUnavailable) {
+		t.Fatalf("legacy net unavailable = %v, want UNAVAILABLE retry", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("legacy net unavailable called Refund %d times", len(fake.calls))
+	}
+}
+
+func TestHandleOrderRefundRequestedLegacyNetNotFoundDoesNotFallbackPaidCent(t *testing.T) {
+	fake := &fakeRefundCommand{getErr: apperr.NotFound("payment intent not found")}
+	event := orderRefundRequested{
+		OrderNo: "ORD-T16-LEGACY-MISS", PaymentNo: "PAY-T16-LEGACY-MISS", PaidCent: 500,
+		Reason: "order cancelled after inventory confirm", Status: "CANCELLED",
+	}
+	if err := handleOrderRefundRequested(context.Background(), fake, t16Logger(), t16Event(t, event)); err != nil {
+		t.Fatalf("unresolvable legacy net must be observed, not retried: %v", err)
+	}
+	if len(fake.calls) != 0 {
+		t.Fatalf("unresolvable legacy net fell back to paid_cent: %d Refund calls", len(fake.calls))
 	}
 }
 

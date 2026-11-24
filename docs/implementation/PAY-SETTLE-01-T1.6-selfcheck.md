@@ -9,7 +9,7 @@
 | Design / QC | `docs/adr/0007-amd1-addendum-t16-payment-cancel.md` **accepted r1.0（2026-11-25）**，§4.2 五裁决；QC-28 READY |
 | Spec-Ref | SPEC-0002 **v1.9** AC-46/AC-65/AC-67/AC-68、INV-44/INV-46；ADR Amd1 §4.8 |
 | Base | `5093a1d`（T1.6 WIP 首个实现提交 `e9643ff` 的父提交；本清单随 metric/selfcheck WIP 提交） |
-| Code head（本清单绑定） | **本 WIP 提交**（`git log -1` 即该提交，包含本文件） |
+| Code head（本清单绑定） | **本 T1.6-R WIP 提交**（`git log -1` 即该提交，包含本文件） |
 | allowed_paths | `internal/services/order/**`、`internal/services/payment/**`、`internal/services/inventory/**`、`internal/platform/events/**`、`internal/platform/metrics/**`、对应 `_test.go`、`docs/implementation/PAY-SETTLE-01-T1.6-selfcheck.md` |
 | baseline_impact | `order.refund_requested` 消费者、`refundCancelledAfterConfirm`、`TccCancelMarkPaid` 的 PENDING+captured 分支、Payment.Refund 幂等；INV-44/INV-46；非回归：order/payment/inventory/events 全包测试。无 proto、无 migrations、无新 cancel 表 |
 | Scope | T1.6 payment-level cancel；`pay:<payment_no>:cancel` 命令、PENDING/CANCELLED+captured、consumer command-only、C-04 可选字段、CAS 丢失 metric |
@@ -17,6 +17,8 @@
 | Status | **WIP**；不批准、不声称实现 PASS / Release PASS、不标 AC-VERIFIED |
 
 > 本文件是 Developer 的 canonical 自检交付物，只记录本次实现事实、证据与残余风险，不替代 Reviewer 裁决。
+>
+> **T1.6-R（Reviewer FAIL B1/B2/B3）修复见 §8；§8 对 §1–§7 中相应旧描述构成覆盖/补充。**
 
 ---
 
@@ -171,3 +173,59 @@
 - **Base**：`5093a1d`；**Code head**：本 WIP 提交（`git log -1`）。
 - **Tier**：L2；commit trailer 包含 `change_id`/`Role`/`Actor`/`Status`/`Tier`；无 `Reviewed-by`。
 - **不批准**：本清单不构成实现 PASS、Reviewer PASS、Release PASS 或 AC-VERIFIED；不批准合入。
+
+---
+
+## 8. T1.6-R（Reviewer FAIL B1/B2/B3）修复
+
+Reviewer：[REV-PAY-SETTLE-01-T1.6.md](docs/collab/qc-reports/REV-PAY-SETTLE-01-T1.6.md)；本 WIP 只改代码/测试，不改 Spec/ADR/proto/migrations，Tier L2。
+
+### 8.1 B1 — `warehouse_id` 必带，禁止 W1 回退
+
+| 点 | 实现 | 测试 |
+|---|---|---|
+| Order event items | `orderItemsPayload` 从 `order_items.warehouse_id` 输出 `warehouse_id`（`internal/services/order/service.go:1299-1315`） | `TestOrderItemsPayload`；`TestT1_6PendingCapturedPaidCentZeroUsesAuthorityAndWarehouse`（W2 payload） |
+| Inventory compensation producer | `queueInventoryCompensation` 校验每个 item `warehouse_id>0`，缺失返回 `INVENTORY_COMPENSATION_NO_WAREHOUSE`，payload 必带（`service.go:748-777`） | `TestT1_6QueueInventoryCompensationCarriesWarehouseAndReturnsError` |
+| `order.cancelled` consumer | 解析 `warehouse_id` 并传入 `pb.OrderItem.WarehouseId`；缺失 `Permanent`，不回退 W1（`internal/services/inventory/consumer.go:16-63`） | `TestOrderCancelledCompensatesHeldAndConfirmed`（W1/W2 × HELD/CONFIRMED）；`TestOrderCancelledMissingWarehouseFailsClosed` |
+| `inventory.compensation_requested` consumer | 同规则（`compensation_consumer.go:18-66`） | `TestCompensationConsumerUsesWarehouse`；`TestCompensationConsumerMissingWarehouseFailsClosed` |
+
+> 旧的无 `warehouse_id` 的 `order.cancelled`/compensation 消息现在 DLQ，不再按 W1 猜测；这是 B1 要求的 fail-closed 行为。
+
+### 8.2 B2 — PENDING 无条件读 Payment 权威快照
+
+- `TccCancelMarkPaid` 在 `from==PENDING_PAYMENT` 时**不再以 `paid_cent` 作为进入条件**（`internal/services/order/tcc.go:207-247`）：
+  - 唯一例外：`payment_no` 为空、`pay_cent=0` 且无 settlement payment 的零元单，按 AC-67 本地取消（不触 Payment）。
+  - 其余 PENDING 一律 `readTccPaymentSnapshot`；captured>0 → CAS→CANCELLED + `pay:<payment_no>:cancel`；captured=0 → 本地取消；Payment 不可用 → fail-closed。
+- 测试：`TestT1_6PendingCapturedPaidCentZeroUsesAuthorityAndWarehouse`（`PaidCent=0` + captured=10000 → CANCELLED + 命令）；`TestT1_6PendingCapturedPaymentUnavailableFailsClosed`；`TestTccCancelPendingWithoutCaptureStillCancelsLocally`（captured=0 → 本地取消、无命令、Payment 读一次）。
+
+### 8.3 B3 — 补偿持久化失败不可静默；legacy 金额取净额
+
+- `queueInventoryCompensation` 返回 `error`（`service.go:748-777`），append 失败/缺 warehouse 均不再只 log。
+- `refundCancelledWithSnapshot`：`inventory==nil` → `UNAVAILABLE` 且不写命令（`payment_cancel.go:240-249`）；`TccCancelConfirm` 失败 → `queueInventoryCompensation`，若补偿也无法持久化则返回错误、不写命令（`:250-263`）；补偿持久化成功则仍写退款命令（§4.2 裁决 3）。
+- `MarkPaid` 部分确认补偿的 queue 失败也返回 INTERNAL（`service.go:645-654`）。
+- Payment consumer legacy（`amount_cent` 缺失且 `paid_cent>0`）通过 `GetIntent` 取 `captured-refunded` 净额（`consumer.go:96-131`、`:212-230`）；净额 0 → `ALREADY_REFUNDED` observe/ack；net 不可用 → 瞬时 `PAYMENT_CANCEL_NET_UNAVAILABLE` 重试、确定性不可用 → observe/ack；**不再用 `paid_cent` 兜底**。
+- 测试：`TestT1_6CancelAfterConfirmInventoryFailureStillRefunds`（补偿持久化成功 + 退款命令）；`TestT1_6CancelAfterConfirmCompensationAppendFailureBlocksRefund`（补偿失败 → 无命令）；`TestT1_6CancelledCapturedRequiresInventory`（nil inventory → 无命令）；`TestHandleOrderRefundRequestedLegacyUsesNetNotPaidCent`（500 captured − 200 refunded → 退 300）；`...LegacyAlreadyRefundedAcks`；`...LegacyNetUnavailableRetries`；`...LegacyNetNotFoundDoesNotFallbackPaidCent`。
+
+### 8.4 T1.6-R 测试证据（真实 MySQL，绑定本 WIP 提交）
+
+环境：`go1.27.1 darwin/amd64`；MySQL `mysql-unicorn`；`GOCACHE=/tmp/dsh-go-cache`。
+
+| 命令 | 结果 |
+|---|---|
+| `gofmt -l cmd internal` | 空 |
+| `go build ./...` | OK |
+| `TEST_MYSQL_DSN=<order> go test ./internal/services/order -count=1` | `ok 121.349s` |
+| `TEST_MYSQL_DSN=<payment> go test ./internal/services/payment -count=1` | `ok 4.329s` |
+| `TEST_MYSQL_DSN=<inventory> go test ./internal/services/inventory -count=1` | `ok 12.037s` |
+| `go test -race -p 1 ./internal/services/order -run 'TestT1_6|TestTccCancel' -count=1` | `ok 41.718s` |
+| `go test -race -p 1 ./internal/services/inventory -run 'TestOrderCancelled|TestCompensation' -count=1` | `ok 3.378s` |
+| `go test -race -p 1 ./internal/services/payment -count=1` | `ok 5.554s` |
+
+### 8.5 T1.6-R 未覆盖 / 残余
+
+1. `order.cancelled`/compensation 旧消息（无 `warehouse_id`）会被 DLQ；上线前需确认无旧 producer 积压，或由运维重放带 warehouse 的新事件。
+2. NATS broker 端到端（T5.2/T5.3）仍未跑。
+3. `payment_cancel_cas_lost_total` 仍无 counter 值单测（为避免新增 `client_model`/`testutil` 直接依赖）。
+4. legacy net 解析依赖 Payment `GetIntent`（本地 DB）；只覆盖 `order.refund_requested` 的旧 cancel-after-confirm，不扩展到组级事件。
+5. 未改组级 batch/RefundBatch/scan；未改 C-04 可选字段语义。
+6. 无 AC-VERIFIED、无 Release PASS、不批准。

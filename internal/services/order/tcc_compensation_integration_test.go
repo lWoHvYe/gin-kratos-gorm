@@ -1144,8 +1144,9 @@ func seedTccPendingOrder(t *testing.T, db *sql.DB, orderNo string, payCent, paid
 	}
 }
 
-// Regression: the genuinely uncaptured PENDING branch still cancels locally
-// (AC-65 no-captured branch) and never creates a refund batch.
+// Regression (T1.6-R B2): PENDING_PAYMENT always reads the authoritative
+// Payment snapshot, even when req.paid_cent=0. captured=0 stays a local cancel
+// and never creates a refund batch or payment command.
 func TestTccCancelPendingWithoutCaptureStillCancelsLocally(t *testing.T) {
 	db := orderTestDB(t)
 	payments := &fakePaymentPort{}
@@ -1172,8 +1173,11 @@ func TestTccCancelPendingWithoutCaptureStillCancelsLocally(t *testing.T) {
 	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = 'ORD-TCC-PENDING-ZERO' AND event_type = 'order.cancelled'`); got != 1 {
 		t.Fatalf("order.cancelled events = %d, want 1", got)
 	}
-	if payments.getCalls != 0 {
-		t.Fatalf("local cancel called Payment %d times", payments.getCalls)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = 'ORD-TCC-PENDING-ZERO' AND event_type = 'order.refund_requested'`); got != 0 {
+		t.Fatalf("no-capture PENDING cancel wrote payment commands: %d", got)
+	}
+	if payments.getCalls != 1 {
+		t.Fatalf("PENDING cancel must read the authoritative Payment snapshot once, got %d calls", payments.getCalls)
 	}
 }
 

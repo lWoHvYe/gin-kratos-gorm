@@ -646,7 +646,10 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 					OrderNo: orderNo, Items: attempted,
 				}); cerr != nil {
 					s.log.Error("compensate partially confirmed inventory", "order_no", orderNo, "error", cerr)
-					s.queueInventoryCompensation(ctx, orderNo, attempted)
+					if qerr := s.queueInventoryCompensation(ctx, orderNo, attempted); qerr != nil {
+						return nil, apperr.Internal("confirm inventory before payment and persist its compensation",
+							errors.Join(err, cerr, qerr))
+					}
 				}
 				return nil, apperr.Unavailable("confirm inventory before payment: "+err.Error(), err)
 			}
@@ -739,10 +742,26 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	return s.replyFor(ctx, s.db, updated)
 }
 
-func (s *Service) queueInventoryCompensation(ctx context.Context, orderNo string, items []*pb.OrderItem) {
+// queueInventoryCompensation persists a durable Inventory retry. The caller
+// must treat a returned error as a real failure: compensating stock must never
+// be dropped just because the outbox append failed (T1.6-R B3).
+func (s *Service) queueInventoryCompensation(ctx context.Context, orderNo string, items []*pb.OrderItem) error {
+	if orderNo == "" || len(items) == 0 {
+		return apperr.Invalid("inventory compensation requires order_no and items")
+	}
 	payload := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		payload = append(payload, map[string]any{"sku_id": item.GetSkuId(), "quantity": item.GetQuantity()})
+		if item.GetWarehouseId() <= 0 {
+			return apperr.Failed("inventory compensation item is missing warehouse_id").
+				WithDetails(map[string]any{
+					"order_no": orderNo, "sku_id": item.GetSkuId(),
+					"reason": "INVENTORY_COMPENSATION_NO_WAREHOUSE",
+				})
+		}
+		payload = append(payload, map[string]any{
+			"sku_id": item.GetSkuId(), "warehouse_id": item.GetWarehouseId(),
+			"quantity": item.GetQuantity(),
+		})
 	}
 	if err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
 		return outbox.Append(ctx, tx, outbox.Event{
@@ -751,8 +770,9 @@ func (s *Service) queueInventoryCompensation(ctx context.Context, orderNo string
 			Payload: map[string]any{"order_no": orderNo, "items": payload, "created_at": time.Now().Unix()},
 		})
 	}); err != nil {
-		s.log.Error("queue inventory compensation", "order_no", orderNo, "error", err)
+		return apperr.Internal("queue inventory compensation", err)
 	}
+	return nil
 }
 
 // queueInventoryConfirm emits a durable retry when an already-paid order still
@@ -1279,13 +1299,20 @@ func branchError(action string, err error) error {
 func orderItemsPayload(items []*pb.OrderItem) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		out = append(out, map[string]any{
+		payload := map[string]any{
 			"sku_id":        item.GetSkuId(),
 			"name":          item.GetName(),
 			"price_cent":    item.GetPriceCent(),
 			"quantity":      item.GetQuantity(),
 			"discount_cent": item.GetDiscountCent(),
-		})
+		}
+		// INV-44/AC-46: Inventory must locate the exact reservation. Never emit
+		// an implicit W1 item; an absent warehouse makes the consumer fail
+		// closed instead of compensating the wrong warehouse.
+		if item.GetWarehouseId() > 0 {
+			payload["warehouse_id"] = item.GetWarehouseId()
+		}
+		out = append(out, payload)
 	}
 	return out
 }

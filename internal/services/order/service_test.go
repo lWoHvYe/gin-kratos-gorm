@@ -290,13 +290,16 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestOrderItemsPayload(t *testing.T) {
-	items := []*pb.OrderItem{{SkuId: 1, Name: "x", PriceCent: 100, Quantity: 2, DiscountCent: 10}}
+	items := []*pb.OrderItem{{SkuId: 1, WarehouseId: 2, Name: "x", PriceCent: 100, Quantity: 2, DiscountCent: 10}}
 	payload := orderItemsPayload(items)
 	if len(payload) != 1 {
 		t.Fatalf("payload length = %d, want 1", len(payload))
 	}
 	if payload[0]["sku_id"] != int64(1) || payload[0]["quantity"] != int32(2) {
 		t.Fatalf("unexpected payload: %+v", payload[0])
+	}
+	if payload[0]["warehouse_id"] != int64(2) {
+		t.Fatalf("payload must carry order_items.warehouse_id, got %+v", payload[0])
 	}
 }
 

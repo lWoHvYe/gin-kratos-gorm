@@ -42,6 +42,9 @@ const (
 // database while still using the real Service in production.
 type refundCommandExecutor interface {
 	Refund(ctx context.Context, in *pb.RefundRequest) (*pb.Empty, error)
+	// GetIntent resolves the authoritative captured/refunded net for legacy
+	// cancel-after-confirm events that did not carry amount_cent.
+	GetIntent(ctx context.Context, in *pb.GetIntentRequest) (*pb.Intent, error)
 }
 
 // RunRefundConsumer executes payment-level cancel commands written by Order.
@@ -92,9 +95,39 @@ func handleOrderRefundRequested(ctx context.Context, svc refundCommandExecutor, 
 	}
 
 	amount := event.AmountCent
-	if amount <= 0 {
-		// Legacy cancel-after-confirm events only carried paid_cent.
-		amount = event.PaidCent
+	if amount <= 0 && event.PaidCent > 0 {
+		// Legacy cancel-after-confirm events carried paid_cent (the full
+		// captured amount) but no net. Never refund paid_cent: after a partial
+		// refund it exceeds the remaining cap and the remaining net would be
+		// lost. Resolve captured-refunded from Payment authority instead.
+		net, err := paymentCancelNetCent(ctx, svc, event.PaymentNo)
+		if err != nil {
+			code := apperr.From(err).Code
+			if isRetryableRefundError(code) {
+				metrics.PaymentRefundEvents.WithLabelValues("retry").Inc()
+				logger.Warn("cannot resolve legacy payment-level cancel net; will retry",
+					"order_no", event.OrderNo, "payment_no", event.PaymentNo,
+					"refund_id", refundID, "error", err,
+					"reason", "PAYMENT_CANCEL_NET_UNAVAILABLE")
+				return err
+			}
+			// Unknown/not-refundable payment: observe and ack instead of
+			// guessing an amount from the order event.
+			metrics.PaymentRefundEvents.WithLabelValues("rejected").Inc()
+			logger.Error("cannot resolve legacy payment-level cancel net; no refund executed",
+				"order_no", event.OrderNo, "payment_no", event.PaymentNo,
+				"refund_id", refundID, "error", err,
+				"reason", "PAYMENT_CANCEL_NET_UNAVAILABLE")
+			return nil
+		}
+		if net <= 0 {
+			metrics.PaymentRefundEvents.WithLabelValues("rejected").Inc()
+			logger.Warn("legacy payment-level cancel has no remaining net; no refund executed",
+				"order_no", event.OrderNo, "payment_no", event.PaymentNo,
+				"refund_id", refundID, "reason", "ALREADY_REFUNDED")
+			return nil
+		}
+		amount = net
 	}
 	if amount <= 0 {
 		// No captured money: the producer should not have written a command.
@@ -174,6 +207,30 @@ func isLegacyCancelAfterConfirm(reason string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(reason))
 	return strings.Contains(normalized, "cancelled after inventory confirm") ||
 		strings.Contains(normalized, "canceled after inventory confirm")
+}
+
+// paymentCancelNetCent resolves the authoritative remaining refundable amount:
+// captured (falling back to amount for legacy rows) minus refunded.
+func paymentCancelNetCent(ctx context.Context, svc refundCommandExecutor, paymentNo string) (int64, error) {
+	intent, err := svc.GetIntent(ctx, &pb.GetIntentRequest{PaymentNo: paymentNo})
+	if err != nil {
+		return 0, err
+	}
+	if intent == nil {
+		return 0, apperr.NotFound("payment intent not found")
+	}
+	captured := intent.GetCapturedCent()
+	if captured <= 0 {
+		captured = intent.GetAmountCent()
+	}
+	refunded := intent.GetRefundedCent()
+	if refunded < 0 || captured < 0 || refunded > captured {
+		return 0, apperr.Failed("payment captured/refunded facts are inconsistent").
+			WithDetails(map[string]any{
+				"payment_no": paymentNo, "captured_cent": captured, "refunded_cent": refunded,
+			})
+	}
+	return captured - refunded, nil
 }
 
 func isRetryableRefundError(code apperr.Code) bool {

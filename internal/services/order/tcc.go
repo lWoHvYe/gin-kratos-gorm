@@ -199,11 +199,18 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 		paid = record.PaidCent
 	}
 	from := record.Status
-	// T1.6: a captured PENDING_PAYMENT order is cancelled at the AC-46 order
-	// CAS decision point instead of running the group refund ledger. The TCC
-	// request's paid_cent only selects the captured branch; the refund amount
-	// always comes from the authoritative Payment snapshot, never from it.
-	if from == statusPendingPayment && paid > 0 {
+	// T1.6: a PENDING_PAYMENT cancel always consults the authoritative Payment
+	// snapshot, regardless of req.paid_cent/order.paid_cent. Captured > 0 must
+	// CAS->CANCELLED + write the payment-level command; captured == 0 is the
+	// AC-46/AC-67 local cancel. A request-paid hint must never decide whether
+	// captured money is refunded.
+	if from == statusPendingPayment {
+		// A genuine zero-amount order with no payment identity never touches
+		// Payment (AC-67). Every other PENDING cancel must read the authority.
+		if strings.TrimSpace(paymentNo) == "" && record.PayCent == 0 &&
+			strings.TrimSpace(record.SettlementPaymentNo) == "" {
+			return s.cancelPendingAfterTCC(ctx, record, paymentNo)
+		}
 		snapshot, err := s.readTccPaymentSnapshot(ctx, record, paymentNo)
 		if err != nil {
 			// Fail closed: no Payment fact means no safe cancel-refund. Do not
@@ -211,8 +218,10 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 			return nil, err
 		}
 		if snapshot.CapturedCent <= 0 {
-			s.log.Warn("TCC cancel request reported captured money but Payment has none; cancelling locally",
-				"order_no", orderNo, "payment_no", paymentNo, "requested_paid_cent", paid)
+			if paid > 0 {
+				s.log.Warn("TCC cancel request reported paid_cent without an authoritative capture; cancelling locally",
+					"order_no", orderNo, "payment_no", paymentNo, "requested_paid_cent", paid)
+			}
 			return s.cancelPendingAfterTCC(ctx, record, paymentNo)
 		}
 		continuePaid, err := s.cancelPendingCapturedAfterTCC(ctx, record, snapshot, paymentNo)

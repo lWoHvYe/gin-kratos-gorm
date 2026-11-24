@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 
@@ -116,11 +117,22 @@ func TestRefundReleaseSourceMapping(t *testing.T) {
 		{"system_shortage", events.RefundReleaseSourceSystemShortage, events.RefundReleaseReasonShortageRefund},
 		{"aftersale", events.RefundReleaseSourceAfterSale, events.RefundReleaseReasonAfterSaleRefund},
 		{"", events.RefundReleaseSourceAfterSale, events.RefundReleaseReasonAfterSaleRefund},
+		{"  ", events.RefundReleaseSourceAfterSale, events.RefundReleaseReasonAfterSaleRefund},
 	}
 	for _, tc := range cases {
-		source, reason := refundReleaseSource(tc.in)
+		source, reason, err := refundReleaseSource(tc.in)
+		if err != nil {
+			t.Fatalf("source %q rejected: %v", tc.in, err)
+		}
 		if source != tc.source || reason != tc.reason {
 			t.Fatalf("source %q -> %s/%s, want %s/%s", tc.in, source, reason, tc.source, tc.reason)
+		}
+	}
+	for _, raw := range []string{"payment", "legacy_expired", "unknown", "system"} {
+		if _, _, err := refundReleaseSource(raw); err == nil {
+			t.Fatalf("unsupported source %q was accepted", raw)
+		} else if !strings.Contains(err.Error(), "REFUND_RELEASE_SOURCE_UNSUPPORTED") {
+			t.Fatalf("source %q error = %v, want REFUND_RELEASE_SOURCE_UNSUPPORTED", raw, err)
 		}
 	}
 }
@@ -396,5 +408,118 @@ func TestAdmitRefundMissingWarehouseRejectsRelease(t *testing.T) {
 	}
 	if got := len(loadRefundReleaseEvents(t, db, "ORD-NOWH")); got != 0 {
 		t.Fatalf("release events=%d, want 0", got)
+	}
+}
+
+// Architect ruling (2026-11-25): only tcc|system_zero|system_shortage|aftersale
+// (and empty as aftersale) are releasable sources. Any other explicit value must
+// reject the admission with REFUND_RELEASE_SOURCE_UNSUPPORTED and write zero
+// rows; it must never be relabelled as aftersale.
+func TestAdmitRefundUnsupportedReleaseSourceRejects(t *testing.T) {
+	db := orderTestDB(t)
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(&fakePaymentPort{captured: 10000}, &fakeFulfillmentPort{status: "CANCELLED"})
+	ctx := context.Background()
+	seedReleaseOrder(t, db, "ORD-SRC", 10000, 10000, "PAY-1", []releaseTestItem{
+		{lineNo: 1, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 10000, groupNo: "G1"},
+	}, "")
+	for _, source := range []string{"payment", "legacy_expired", "unknown", "system"} {
+		refundID := "R-SRC-" + source
+		_, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+			RefundId: refundID, OrderNo: "ORD-SRC", GroupNo: "G1", AmountCent: 10000, Source: source,
+		})
+		if err == nil {
+			t.Fatalf("source %q was accepted", source)
+		}
+		if !strings.Contains(err.Error(), "REFUND_RELEASE_SOURCE_UNSUPPORTED") {
+			t.Fatalf("source %q error = %v, want REFUND_RELEASE_SOURCE_UNSUPPORTED", source, err)
+		}
+		var admissions, commitments int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM order_refund_admissions WHERE refund_id=?`, refundID).Scan(&admissions); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.QueryRow(`SELECT COUNT(*) FROM order_refund_commitments WHERE refund_id=?`, refundID).Scan(&commitments); err != nil {
+			t.Fatal(err)
+		}
+		if admissions != 0 || commitments != 0 || refundAdmittedCount(t, db, "ORD-SRC") != 0 {
+			t.Fatalf("source %q leaked admission=%d commitment=%d", source, admissions, commitments)
+		}
+		if got := len(loadRefundReleaseEvents(t, db, "ORD-SRC")); got != 0 {
+			t.Fatalf("source %q wrote %d release event(s)", source, got)
+		}
+		var permits int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM order_shipping_permits WHERE order_no='ORD-SRC'`).Scan(&permits); err != nil {
+			t.Fatal(err)
+		}
+		if permits != 0 {
+			t.Fatalf("source %q leaked %d permit row(s)", source, permits)
+		}
+	}
+}
+
+// Empty source stays backward compatible as an ordinary after-sale refund.
+func TestAdmitRefundEmptySourceDefaultsToAfterSale(t *testing.T) {
+	db := orderTestDB(t)
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(&fakePaymentPort{captured: 10000}, &fakeFulfillmentPort{status: "CANCELLED"})
+	ctx := context.Background()
+	seedReleaseOrder(t, db, "ORD-EMPTY-SRC", 10000, 10000, "PAY-1", []releaseTestItem{
+		{lineNo: 1, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 10000, groupNo: "G1"},
+	}, "")
+	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "R-EMPTY-SRC", OrderNo: "ORD-EMPTY-SRC", GroupNo: "G1", AmountCent: 10000, Source: "",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply.GetResult() != refundResultPre {
+		t.Fatalf("result=%q, want PRE", reply.GetResult())
+	}
+	releases := loadRefundReleaseEvents(t, db, "ORD-EMPTY-SRC")
+	if len(releases) != 1 {
+		t.Fatalf("release events=%d, want 1", len(releases))
+	}
+	if releases[0].Source != events.RefundReleaseSourceAfterSale || releases[0].Reason != events.RefundReleaseReasonAfterSaleRefund {
+		t.Fatalf("empty source mapped to %s/%s", releases[0].Source, releases[0].Reason)
+	}
+	if releases[0].ReleaseID != "rr:R-EMPTY-SRC" {
+		t.Fatalf("release_id=%q", releases[0].ReleaseID)
+	}
+}
+
+// An unshipped group with no frozen order lines cannot produce a release event;
+// admission must fail closed with zero writes instead of writing an empty event.
+func TestAdmitRefundNoOrderItemsFailsClosed(t *testing.T) {
+	db := orderTestDB(t)
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+	svc.EnableSettlementClients(&fakePaymentPort{captured: 10000}, &fakeFulfillmentPort{status: "CANCELLED"})
+	ctx := context.Background()
+	seedReleaseOrder(t, db, "ORD-NOITEM", 10000, 10000, "PAY-1", nil, "")
+	if _, err := db.Exec(`INSERT INTO order_fulfillment_groups
+		(group_no,order_no,seq,warehouse_id,status,reservation_state,freight_cent,freight_share_cent,version,created_at,updated_at)
+		VALUES ('G1','ORD-NOITEM',1,1,'ALLOCATED','HELD',500,500,1,NOW(3),NOW(3))`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "R-NOITEM", OrderNo: "ORD-NOITEM", GroupNo: "G1", AmountCent: 500, Source: "aftersale",
+	})
+	if err == nil {
+		t.Fatal("admission without order items succeeded")
+	}
+	if !strings.Contains(err.Error(), "no order items to release") {
+		t.Fatalf("error = %v, want the no-items fail-closed cause", err)
+	}
+	var admissions, permits int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM order_refund_admissions WHERE refund_id='R-NOITEM'`).Scan(&admissions); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM order_shipping_permits WHERE order_no='ORD-NOITEM'`).Scan(&permits); err != nil {
+		t.Fatal(err)
+	}
+	if admissions != 0 || permits != 0 || refundAdmittedCount(t, db, "ORD-NOITEM") != 0 {
+		t.Fatalf("no-items admission leaked admissions=%d permits=%d", admissions, permits)
+	}
+	if got := len(loadRefundReleaseEvents(t, db, "ORD-NOITEM")); got != 0 {
+		t.Fatalf("no-items admission wrote %d release event(s)", got)
 	}
 }

@@ -197,6 +197,14 @@ var refundReleaseReasons = map[string]string{
 	RefundReleaseSourceAfterSale:      RefundReleaseReasonAfterSaleRefund,
 }
 
+// RefundReleaseReasonForSource returns the canonical reason for a T1.4b2
+// release source. Producers use it so the source/reason pair cannot drift from
+// the registry contract; ok=false means the source is unsupported.
+func RefundReleaseReasonForSource(source string) (reason string, ok bool) {
+	reason, ok = refundReleaseReasons[source]
+	return reason, ok
+}
+
 // validators holds the per-event contract checks that the sample unmarshal
 // cannot express.
 var validators = map[string]validateSample{

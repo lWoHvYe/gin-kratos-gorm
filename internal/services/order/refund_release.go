@@ -23,20 +23,28 @@ import (
 // existing AfterSales restock flow, not this event.
 
 // refundReleaseSource maps the AdmitRefund request source onto the closed
-// event enum. AdmitRefund historically does not require `source`; a caller that
-// does not identify a TCC/zero/shortage refund is an ordinary after-sale
-// refund, which is the only remaining source in the event contract.
-func refundReleaseSource(source string) (string, string) {
-	switch strings.TrimSpace(source) {
-	case events.RefundReleaseSourceTCC:
-		return events.RefundReleaseSourceTCC, events.RefundReleaseReasonTCCCompensation
-	case events.RefundReleaseSourceSystemZero:
-		return events.RefundReleaseSourceSystemZero, events.RefundReleaseReasonZeroAfterSale
-	case events.RefundReleaseSourceSystemShortage:
-		return events.RefundReleaseSourceSystemShortage, events.RefundReleaseReasonShortageRefund
-	default:
-		return events.RefundReleaseSourceAfterSale, events.RefundReleaseReasonAfterSaleRefund
+// event enum. T1.4b2 accepts exactly tcc|system_zero|system_shortage|aftersale;
+// an empty source remains compatible as an ordinary after-sale refund, but any
+// other explicit value (payment, legacy_expired, unknown) is rejected with
+// REFUND_RELEASE_SOURCE_UNSUPPORTED so the admission rolls back with zero
+// writes instead of mislabelling the release.
+func refundReleaseSource(raw string) (string, string, error) {
+	source := strings.TrimSpace(raw)
+	if source == "" {
+		source = events.RefundReleaseSourceAfterSale
 	}
+	reason, ok := events.RefundReleaseReasonForSource(source)
+	if !ok {
+		return "", "", apperr.Invalid("REFUND_RELEASE_SOURCE_UNSUPPORTED: source %q is not supported by the INV-44 release", source).
+			WithDetails(map[string]any{
+				"source": source,
+				"supported_sources": []string{
+					events.RefundReleaseSourceTCC, events.RefundReleaseSourceSystemZero,
+					events.RefundReleaseSourceSystemShortage, events.RefundReleaseSourceAfterSale,
+				},
+			})
+	}
+	return source, reason, nil
 }
 
 // loadRefundReleaseItems reads the group composition from the frozen order
@@ -93,11 +101,14 @@ func loadRefundReleaseItems(ctx context.Context, q querier, orderNo, groupNo str
 // appendRefundReleaseTx appends the durable INV-44 release request. The caller
 // owns the admission transaction, so any error here rolls the admission back.
 func appendRefundReleaseTx(ctx context.Context, tx *sql.Tx, refundID, orderNo, groupNo, source string) error {
+	releaseSource, reason, err := refundReleaseSource(source)
+	if err != nil {
+		return err
+	}
 	items, err := loadRefundReleaseItems(ctx, tx, orderNo, groupNo)
 	if err != nil {
 		return err
 	}
-	releaseSource, reason := refundReleaseSource(source)
 	payload := events.RefundReleaseRequested{
 		SchemaVersion: 1,
 		ReleaseID:     events.RefundReleaseID(refundID),

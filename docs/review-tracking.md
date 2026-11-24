@@ -17,6 +17,13 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-24 C-04 RefundBatch accepted
+
+Director accepted the C-04 `RefundBatch` contract (expected_total/new-only
+remaining, first-reply idempotency, batch ledger schema, error mapping). Payment
+WIP `fc295e5` remains unapproved; Order preflight and Reviewer are next. No
+merge/AC-VERIFIED.
+
 ### 2026-11-24 T1.4b1-R scope approved
 
 Director approved the atomic `Payment.RefundBatch` + T1.4b1-R scope. Contract

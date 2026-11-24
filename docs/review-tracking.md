@@ -17,6 +17,15 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-24 T1.2-R Reviewer PASS (scoped)
+
+- Scope `a3f080f..e7e29e5`; PASS for T1.2-R B1/B2/M1/M2/m1. Not merge/Release.
+- G1 remains MAJOR: legacy orders with no fulfillment group and status
+  SHIPPED/COMPLETED can be misclassified as not shipped when ListShipments has
+  no facts; fix before T1.4. g1 mixed composition/g2 no-active dependency are
+  minor follow-ups.
+- T1.2 is still WIP; T1.4/T1.6/T1.7/T5 not done.
+
 ### 2026-11-24 T1.2-R approved
 
 Director approved the T1.2-R remediation plan (B1/B2/M1/M2/m1); implementation

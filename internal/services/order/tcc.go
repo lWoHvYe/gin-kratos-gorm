@@ -199,30 +199,65 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 		paid = record.PaidCent
 	}
 	from := record.Status
-	switch from {
-	case statusCancelled:
-		// T1.6 owns CANCELLED + captured (payment-level cancel refund). Until
-		// it lands this must not look like a completed compensation.
+	// T1.6: a captured PENDING_PAYMENT order is cancelled at the AC-46 order
+	// CAS decision point instead of running the group refund ledger. The TCC
+	// request's paid_cent only selects the captured branch; the refund amount
+	// always comes from the authoritative Payment snapshot, never from it.
+	if from == statusPendingPayment && paid > 0 {
+		snapshot, err := s.readTccPaymentSnapshot(ctx, record, paymentNo)
+		if err != nil {
+			// Fail closed: no Payment fact means no safe cancel-refund. Do not
+			// create group state, do not guess captured and do not call Payment.
+			return nil, err
+		}
+		if snapshot.CapturedCent <= 0 {
+			s.log.Warn("TCC cancel request reported captured money but Payment has none; cancelling locally",
+				"order_no", orderNo, "payment_no", paymentNo, "requested_paid_cent", paid)
+			return s.cancelPendingAfterTCC(ctx, record, paymentNo)
+		}
+		continuePaid, err := s.cancelPendingCapturedAfterTCC(ctx, record, snapshot, paymentNo)
+		if err != nil {
+			return nil, err
+		}
+		if !continuePaid {
+			return &pb.Empty{}, nil
+		}
+		latest, err := findOrder(ctx, s.db, orderNo)
+		if err != nil {
+			return nil, apperr.Internal("reload order after lost pending cancel CAS", err)
+		}
+		if latest == nil {
+			return nil, apperr.NotFound("order not found")
+		}
+		// CANCEL_CAS_LOST: payment confirmation won. From here the ordinary
+		// PAID group fan-out owns the refund and no payment-level command is
+		// written. Use the authoritative captured amount.
+		record = latest
+		paid = snapshot.CapturedCent
+		from = latest.Status
+	}
+	// CANCELLED + captured covers a concurrent/user cancel: restock any
+	// confirmed reservation and persist the payment-level command idempotently.
+	if from == statusCancelled {
 		if paid > 0 {
-			return nil, tccCancelledCapturedError(orderNo, paymentNo, paid)
+			if err := s.refundCancelledAfterConfirm(ctx, record, paymentNo); err != nil {
+				return nil, err
+			}
 		}
 		return &pb.Empty{}, nil
-	case statusPendingPayment, statusPaid, statusAllocated, statusShipped, statusCompleted:
+	}
+	switch from {
+	case statusPaid, statusAllocated, statusShipped, statusCompleted:
 		// Every lifecycle state that can hold a captured payment must be
 		// compensable; T1.2-R B1 removed the old silent success for
 		// ALLOCATED/SHIPPED/COMPLETED.
+	case statusPendingPayment:
+		// Only an unpaid PENDING_PAYMENT order reaches this point; the
+		// captured branch was cancelled above (T1.6).
 	default:
 		// Unknown/terminal lifecycle states fail closed instead of pretending
 		// the compensation completed (B1: no silent return).
 		return nil, tccUnsupportedStatusError(orderNo, paymentNo, from)
-	}
-	// Addendum 2 R-3: PENDING_PAYMENT with captured money belongs to T1.6
-	// (CAS->CANCELLED + payment-level cancel refund). Until it lands this
-	// guard must write nothing and must not call Payment. The request's
-	// paid_cent is the TCC compensation's captured amount, so no extra
-	// Payment round-trip is needed to identify the branch.
-	if from == statusPendingPayment && paid > 0 {
-		return nil, tccPendingCapturedError(orderNo, paymentNo, paid)
 	}
 	if paid > record.PaidCent {
 		return nil, apperr.Invalid("paid_cent exceeds captured amount")
@@ -409,9 +444,8 @@ const (
 
 // tccCancelDecision maps (status, captured amount) to the compensation path.
 // A PENDING order with no capture must be cancelled, not parked in REFUNDING.
-// The PENDING_PAYMENT + captured case never reaches this mapping from
-// TccCancelMarkPaid: Addendum 2 R-3 guards it until T1.6 implements the
-// CAS->CANCELLED + payment-level cancel-refund branch.
+// A captured PENDING_PAYMENT order never reaches this mapping: T1.6 cancels it
+// through the order CAS + payment-level command before the group ledger starts.
 func tccCancelDecision(status string, paid int64) tccCancelAction {
 	switch status {
 	case statusPendingPayment:

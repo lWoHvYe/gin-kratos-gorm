@@ -86,26 +86,27 @@ func tccPermitAfterSaleNo(paymentNo string) string {
 	return truncate("tcc:"+paymentNo, 64)
 }
 
-// tccErrPendingCaptured is the identifiable error returned while the
-// PENDING_PAYMENT+captured compensation branch belongs to T1.6
-// (ADR-0007 Amd1 §4.8; Addendum 2 R-3). This guard writes nothing.
-const tccErrPendingCaptured = "TCC_PENDING_CAPTURED_NOT_IMPLEMENTED"
+// tccErrPendingCaptured is the defense-in-depth rejection for a captured
+// PENDING_PAYMENT order that somehow reached the group refund path. T1.6
+// handles that state at the TccCancelMarkPaid entry (CAS->CANCELLED + payment
+// command), so this path must never create a batch/permit/application.
+const tccErrPendingCaptured = "TCC_PENDING_CAPTURED_GROUP_PATH"
 
 func tccPendingCapturedError(orderNo, paymentNo string, paidCent int64) error {
-	return apperr.Failed("TCC compensation for a captured PENDING_PAYMENT order belongs to T1.6").
+	return apperr.Failed("captured PENDING_PAYMENT order reached the group refund path; it must be cancelled at the TCC cancel entry").
 		WithDetails(map[string]any{
 			"tcc_error": tccErrPendingCaptured,
 			"order_no":  orderNo, "payment_no": paymentNo, "paid_cent": paidCent,
 		})
 }
 
-// tccErrCancelledCaptured is the identifiable error for a CANCELLED order that
-// still holds captured money. T1.6 owns the payment-level cancel refund; a
-// T1.2 compensation must not report success without refunding (Plan T1.2-R B1).
-const tccErrCancelledCaptured = "TCC_CANCELLED_CAPTURED_NOT_IMPLEMENTED"
+// tccErrCancelledCaptured is the defense-in-depth rejection for a captured
+// CANCELLED order that reached the group refund path. T1.6 owns that branch:
+// it restocks the reservation and writes the payment-level cancel command.
+const tccErrCancelledCaptured = "TCC_CANCELLED_CAPTURED_GROUP_PATH"
 
 func tccCancelledCapturedError(orderNo, paymentNo string, paidCent int64) error {
-	return apperr.Failed("TCC compensation for a captured CANCELLED order belongs to T1.6").
+	return apperr.Failed("captured CANCELLED order reached the group refund path; the payment-level cancel owns it").
 		WithDetails(map[string]any{
 			"tcc_error": tccErrCancelledCaptured,
 			"order_no":  orderNo, "payment_no": paymentNo, "paid_cent": paidCent,
@@ -287,16 +288,17 @@ func (s *Service) freezeTccCompensationTx(ctx context.Context, tx *sql.Tx, order
 	case statusPaid, statusAllocated, statusShipped, statusCompleted:
 		// Captured money is still refundable after the lifecycle advanced.
 	case statusCancelled:
-		// T1.6 owns CANCELLED + captured; a captured CANCELLED order must not
-		// be reported as a completed compensation (Plan T1.2-R B1).
+		// T1.6 handles CANCELLED + captured before this ledger starts. If it
+		// is reached here anyway, fail closed instead of reporting a completed
+		// compensation (defense in depth, Plan T1.2-R B1).
 		if snapshot.CapturedCent > 0 {
 			return tccCancelledCapturedError(locked.OrderNo, snapshot.PaymentNo, snapshot.CapturedCent)
 		}
 		return nil
 	case statusPendingPayment:
-		// Addendum 2 R-3: PENDING_PAYMENT with captured money is T1.6's
-		// CAS->CANCELLED + payment-level cancel-refund branch. Until it lands
-		// this guard must not write PAID/REFUNDING/batch/permit/application.
+		// T1.6 cancels a captured PENDING_PAYMENT order at the entry (CAS +
+		// payment command). This ledger must never write PAID/REFUNDING/batch/
+		// permit/application for that state (defense in depth, Addendum 2 R-3).
 		if snapshot.CapturedCent > 0 {
 			return tccPendingCapturedError(locked.OrderNo, snapshot.PaymentNo, snapshot.CapturedCent)
 		}
@@ -341,8 +343,9 @@ func (s *Service) createTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 	}
 	if rechecked.NoCaptured {
 		// AC-65: no captured money is a cancel/zero-converge branch, never a
-		// per-group refund. T1.6 owns that branch; until it lands this path is
-		// fail-closed instead of silently skipping the Compensation.
+		// per-group refund. The T1.6 entry cancels that state before this
+		// ledger; reaching it here is fail-closed instead of silently
+		// skipping the compensation.
 		return apperr.Failed("TCC compensation has no captured amount").
 			WithDetails(map[string]any{
 				"order_no": locked.OrderNo, "payment_no": snapshot.PaymentNo,
@@ -504,11 +507,10 @@ func (s *Service) recordTccPrecheckFailure(ctx context.Context, orderNo string, 
 	return apperr.Internal("record tcc precheck failure audit batch: attempt sequence contention", nil)
 }
 
-// markOrderRefundingTx is the refund-state CAS of ADR §4.1.2 step 3. The
-// PENDING_PAYMENT+captured branch is guarded before this function (Addendum 2
-// R-3): T1.6 owns its CAS->CANCELLED + payment-level cancel-refund semantics.
-// An already REFUNDING order is left untouched so a resume never rewrites
-// lifecycle history.
+// markOrderRefundingTx is the refund-state CAS of ADR §4.1.2 step 3. A captured
+// PENDING_PAYMENT order is cancelled by T1.6 before this function; reaching it
+// here is a fail-closed invariant violation. An already REFUNDING order is left
+// untouched so a resume never rewrites lifecycle history.
 func markOrderRefundingTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, paymentNo string, paid int64) error {
 	if locked.RefundState == refundStateRefunding {
 		return nil

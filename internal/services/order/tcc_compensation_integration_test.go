@@ -1144,52 +1144,6 @@ func seedTccPendingOrder(t *testing.T, db *sql.DB, orderNo string, payCent, paid
 	}
 }
 
-// Addendum 2 R-3: PENDING_PAYMENT + captured money belongs to T1.6. Until it
-// lands the compensation must fail closed with an identifiable error, write
-// nothing and not even call Payment.
-func TestTccCancelPendingCapturedGuardWritesNothing(t *testing.T) {
-	db := orderTestDB(t)
-	payments := &fakePaymentPort{captured: 10000}
-	svc := tccTestService(t, db, payments)
-	ctx := context.Background()
-	seedTccPendingOrder(t, db, "ORD-TCC-PENDING-CAP", 10000, 0, 0)
-	seedTccGroup(t, db, "ORD-TCC-PENDING-CAP", "G1", 1, 0)
-	seedTccLine(t, db, "ORD-TCC-PENDING-CAP", 1, "G1", 10000)
-	version := tccVersion(t, db, "ORD-TCC-PENDING-CAP")
-
-	_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-		OrderNo: "ORD-TCC-PENDING-CAP", PaymentNo: "PAY-PENDING-CAP", PaidCent: 10000,
-	})
-	if err == nil {
-		t.Fatal("captured PENDING_PAYMENT compensation was accepted")
-	}
-	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
-		t.Fatalf("error code=%v, want FAILED_PRECONDITION: %v", apperr.From(err).Code, err)
-	}
-	if got := apperr.From(err).Details["tcc_error"]; got != tccErrPendingCaptured {
-		t.Fatalf("tcc_error detail = %v, want %s", got, tccErrPendingCaptured)
-	}
-	if payments.getCalls != 0 {
-		t.Fatalf("PENDING guard called Payment %d times", payments.getCalls)
-	}
-	assertNoTccStateWrites(t, db, "ORD-TCC-PENDING-CAP", version)
-	for _, query := range []string{
-		`SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-PENDING-CAP'`,
-		`SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-PENDING-CAP'`,
-	} {
-		if got := countRows(t, db, query); got != 0 {
-			t.Fatalf("PENDING guard wrote rows (%s -> %d)", query, got)
-		}
-	}
-	var status string
-	if err := db.QueryRow(`SELECT status FROM orders WHERE order_no = 'ORD-TCC-PENDING-CAP'`).Scan(&status); err != nil {
-		t.Fatal(err)
-	}
-	if status != statusPendingPayment {
-		t.Fatalf("PENDING guard changed status to %s", status)
-	}
-}
-
 // Regression: the genuinely uncaptured PENDING branch still cancels locally
 // (AC-65 no-captured branch) and never creates a refund batch.
 func TestTccCancelPendingWithoutCaptureStillCancelsLocally(t *testing.T) {
@@ -1492,49 +1446,6 @@ func TestTccCancelCompletedLifecycle(t *testing.T) {
 	}
 	if status != statusCompleted || result != refundResultPost {
 		t.Fatalf("completed lifecycle = %s/%s, want COMPLETED/POST", status, result)
-	}
-}
-
-// Plan T1.2-R R-1: CANCELLED + captured must not be reported as a completed
-// compensation before T1.6; zero writes.
-func TestTccCancelCancelledCapturedFailsClosed(t *testing.T) {
-	db := orderTestDB(t)
-	payments := &fakePaymentPort{captured: 1000}
-	svc := tccTestService(t, db, payments)
-	ctx := context.Background()
-	seedTccOrder(t, db, "ORD-TCC-CAN", 1000, 1000, 0, 0, "PAY-CAN")
-	seedTccGroup(t, db, "ORD-TCC-CAN", "G1", 1, 0)
-	seedTccLine(t, db, "ORD-TCC-CAN", 1, "G1", 1000)
-	setTccOrderStatus(t, db, "ORD-TCC-CAN", statusCancelled)
-	version := tccVersion(t, db, "ORD-TCC-CAN")
-
-	_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-		OrderNo: "ORD-TCC-CAN", PaymentNo: "PAY-CAN", PaidCent: 1000,
-	})
-	if err == nil || !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
-		t.Fatalf("cancelled captured = %v, want FAILED_PRECONDITION", err)
-	}
-	if got := apperr.From(err).Details["tcc_error"]; got != tccErrCancelledCaptured {
-		t.Fatalf("tcc_error = %v, want %s", got, tccErrCancelledCaptured)
-	}
-	var status, refundState string
-	var versionAfter int64
-	if err := db.QueryRow(`SELECT status, refund_state, version FROM orders WHERE order_no = 'ORD-TCC-CAN'`).
-		Scan(&status, &refundState, &versionAfter); err != nil {
-		t.Fatal(err)
-	}
-	if status != statusCancelled || refundState != refundStateNone || versionAfter != version {
-		t.Fatalf("order mutated: %s/%s/version %d", status, refundState, versionAfter)
-	}
-	for _, query := range []string{
-		`SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-CAN'`,
-		`SELECT COUNT(*) FROM refund_applications WHERE order_no = 'ORD-TCC-CAN'`,
-		`SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-CAN'`,
-		`SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = 'ORD-TCC-CAN'`,
-	} {
-		if got := countRows(t, db, query); got != 0 {
-			t.Fatalf("CANCELLED+captured wrote rows (%s -> %d)", query, got)
-		}
 	}
 }
 

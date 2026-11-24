@@ -32,6 +32,9 @@ type fakePaymentPort struct {
 	// succeed. refundCalls records every request so duplicates are visible.
 	refundErrs  []error
 	refundCalls []*pb.RefundRequest
+	// beforeGet runs before GetIntent returns; T1.6 tests use it to land a
+	// concurrent payment confirmation between the snapshot and the order CAS.
+	beforeGet func()
 
 	// T1.4b1-R Payment facts. refundFacts is keyed by refund_id and is what
 	// GetRefundByKey reads (absent => NotFound). RefundBatch mirrors C-04's
@@ -50,6 +53,9 @@ type fakePaymentPort struct {
 
 func (f *fakePaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, ...grpc.CallOption) (*pb.Intent, error) {
 	f.getCalls++
+	if f.beforeGet != nil {
+		f.beforeGet()
+	}
 	if f.getErr != nil {
 		return nil, f.getErr
 	}

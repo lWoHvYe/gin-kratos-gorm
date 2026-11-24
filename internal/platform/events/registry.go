@@ -20,33 +20,40 @@ type OrderItem struct {
 }
 
 type orderEvent struct {
-	OrderNo        string      `json:"order_no"`
-	UserID         int64       `json:"user_id"`
-	QuoteID        string      `json:"quote_id,omitempty"`
-	PayCent        int64       `json:"pay_cent,omitempty"`
-	PaidCent       int64       `json:"paid_cent,omitempty"`
-	PaymentNo      string      `json:"payment_no,omitempty"`
-	Status         string      `json:"status,omitempty"`
-	Reason         string      `json:"reason,omitempty"`
-	Operator       string      `json:"operator,omitempty"`
-	ExpireAt       int64       `json:"expire_at,omitempty"`
-	PaidAt         int64       `json:"paid_at,omitempty"`
-	Cancelled      int64       `json:"cancelled_at,omitempty"`
-	Created        int64       `json:"created_at,omitempty"`
-	Items          []OrderItem `json:"items,omitempty"`
-	ChangedAt      int64       `json:"changed_at,omitempty"`
-	GroupNo        string      `json:"group_no,omitempty"`
-	AllocationHash string      `json:"allocation_hash,omitempty"`
-	PackageCount   int32       `json:"package_count,omitempty"`
-	WarehouseCount int32       `json:"warehouse_count,omitempty"`
-	FrozenAt       int64       `json:"frozen_at,omitempty"`
-	Resolution     string      `json:"resolution,omitempty"`
-	ChooseDeadline int64       `json:"choose_deadline_unix,omitempty"`
-	ReasonCode     string      `json:"reason_code,omitempty"`
-	DetectedAt     int64       `json:"detected_at_unix,omitempty"`
-	NotifyDeadline int64       `json:"notify_deadline_unix,omitempty"`
-	NotifiedAt     int64       `json:"notified_at_unix,omitempty"`
-	ResolvedAt     int64       `json:"resolved_at,omitempty"`
+	OrderNo   string `json:"order_no"`
+	UserID    int64  `json:"user_id"`
+	QuoteID   string `json:"quote_id,omitempty"`
+	PayCent   int64  `json:"pay_cent,omitempty"`
+	PaidCent  int64  `json:"paid_cent,omitempty"`
+	PaymentNo string `json:"payment_no,omitempty"`
+	// RefundID/Source/NonEffectiveCapture/AmountCent are the optional T1.6
+	// payment-level cancel command fields on order.refund_requested. They stay
+	// omitempty so legacy events/producers keep validating unchanged.
+	RefundID            string      `json:"refund_id,omitempty"`
+	Source              string      `json:"source,omitempty"`
+	NonEffectiveCapture bool        `json:"non_effective_capture,omitempty"`
+	AmountCent          int64       `json:"amount_cent,omitempty"`
+	Status              string      `json:"status,omitempty"`
+	Reason              string      `json:"reason,omitempty"`
+	Operator            string      `json:"operator,omitempty"`
+	ExpireAt            int64       `json:"expire_at,omitempty"`
+	PaidAt              int64       `json:"paid_at,omitempty"`
+	Cancelled           int64       `json:"cancelled_at,omitempty"`
+	Created             int64       `json:"created_at,omitempty"`
+	Items               []OrderItem `json:"items,omitempty"`
+	ChangedAt           int64       `json:"changed_at,omitempty"`
+	GroupNo             string      `json:"group_no,omitempty"`
+	AllocationHash      string      `json:"allocation_hash,omitempty"`
+	PackageCount        int32       `json:"package_count,omitempty"`
+	WarehouseCount      int32       `json:"warehouse_count,omitempty"`
+	FrozenAt            int64       `json:"frozen_at,omitempty"`
+	Resolution          string      `json:"resolution,omitempty"`
+	ChooseDeadline      int64       `json:"choose_deadline_unix,omitempty"`
+	ReasonCode          string      `json:"reason_code,omitempty"`
+	DetectedAt          int64       `json:"detected_at_unix,omitempty"`
+	NotifyDeadline      int64       `json:"notify_deadline_unix,omitempty"`
+	NotifiedAt          int64       `json:"notified_at_unix,omitempty"`
+	ResolvedAt          int64       `json:"resolved_at,omitempty"`
 }
 
 type inventoryItem struct {

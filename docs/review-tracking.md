@@ -226,6 +226,13 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   未实现的草案（`docs/adr/0008-governance-cost-reduction-amd1.md`），不作为契约执行。
   运行时门禁保持 G-1/G-2/G-3 + 人类 Release：治理 AC 的 `NOT-RUN` 仅提示、不阻断
   提交；Release 仍由人类放行。不新增 CI workflow，不改 `go.yml`。
+- **2026-11-25 gate retirement (Director)**: 门禁工具**整体退役**，不再保留任何脚本/CI
+  强制。已删除 `scripts/collab_gates.py`、`scripts/check-collab-gates.sh`、
+  `scripts/test-collab-gates.sh`、`scripts/test_collab_gates_p0a.py`；`Makefile` 移除
+  `gates`/`gates-strict`/`gates-test` 且 `verify` 不再依赖 `gates`；`.github/workflows/go.yml`
+  移除 `collab-gates` job（`verify` 保留）。G-1…G-4 降级为 `CONVENTIONS §7` 的人工检查清单；
+  `ADR-0006` 标记 retired，`ADR-0008`/Amendment 1 标记 withdrawn。GOV-COST-01 正式撤回，
+  不再推进 P0a 之后的任何实现。测试/构建/迁移/proto 门禁不变；Release 仍由人类放行。
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

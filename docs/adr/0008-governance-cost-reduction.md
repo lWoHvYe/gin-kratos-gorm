@@ -4,7 +4,7 @@
 |---|---|
 | ADR ID | 0008（`docs/adr/0008-governance-cost-reduction.md`） |
 | Revision | **Rev 1.1（approved，2026-11-24）**：按 QC-05（`docs/collab/qc-reports/ADR-0008-QC-01.md`，BLOCKED 4 BLOCKER / 8 MAJOR / 8 MINOR）整改 Q-01…Q-20，并绑定**已批准的 SPEC-0003 v1.4**（2026-11-24，sha1 `58679f03…`）；逐项映射与关闭状态见 **§21**。Rev 1.1 经 **QC-02 复审 READY（0 BLOCKER / 0 MAJOR / 7 MINOR；Q-01…Q-20 = 20/20 CLOSED）**，7 项 MINOR（N-1…N-7 = M-1…M-7）作为**编辑性澄清**并入后，由 **Director 于 2026-11-24 批准**（`Status: approved`，批准记录见 **§22**）。Rev 1.0 = QC-05 被审稿（967 行，sha1 `0c67a163…`，HEAD `dff267d`） |
-| Status | **approved**（Director 于 2026-11-24 批准 ADR-0008 Rev 1.1；QC-02 READY 0 BLOCKER / 0 MAJOR / 7 MINOR，7 项 MINOR 全部作为编辑性澄清并入，见 §22）。批准只授权按 §18.1 的 R0…R6 顺序实现，**不**产生实现通过、不产生 AC-VERIFIED、不改变任何现行门禁、不构成 Release PASS |
+| Status | **withdrawn（2026-11-25）**（原 **approved**：Director 于 2026-11-24 批准 Rev 1.1；随协作闸门工具链整体退役而撤回，见下方 Withdrawal 注记） |
 | Date | 2026-11-24 |
 | Owner | System Architect（设计 owner） |
 | Integration owner | System Architect（治理/工具链落点集成）；**Independent Verifier = Director 本人或其每次运行前书面指定者**（GV-S21 `designated_by`/`independence_evidence`，§6.10；已由 `docs/review-tracking.md` 的 “2026-11-24 human decisions: GOV-COST-01 bootstrap, IV and commit timing” 裁决）；release owner 为 Director 或其书面指定者（GV-S22） |
@@ -24,6 +24,8 @@
 > 5. 与 v1.3 的差异仅限 bootstrap 证据口径、§6/§12 交叉引用与行号校正（v1.4 §13 自述）；其余 AC/INV 文本不变，故本 ADR 的非 bootstrap 设计不受影响。
 >
 > **版本格式现状**：G-2 当前只解析两段式版本（`scripts/collab_gates.py:38` 的 `VERSION_RE` 与索引版本正则 `:196`），补丁级版本会被判 `G-2 FAIL ... missing YAML version`（`:212-214`）。v1.4 为两段式，不阻塞本 ADR；P0b 把解析扩为 `MAJOR.MINOR[.PATCH]`，并**新增同版本内容摘要比较**（§6.11 G-2，Q-07），以免“版本号不变、内容已变”被机器放行。
+
+> **Withdrawal（2026-11-25）**：Director 决定**整体退役协作闸门工具链**，本 ADR 随 `Status: withdrawn` 撤回。P0a 已落地的执行器代码及配套 wrapper/自测（`scripts/collab_gates.py`、`scripts/check-collab-gates.sh`、`scripts/test-collab-gates.sh`）、Makefile `gates*` 目标与 CI `collab-gates` job 已随闸门一并删除；P0b 及之后（G-4、`--release`、`scope`、GV-S18/GV-S20/GV-S21 载体、`collab-gates.yml`）**从未实现**。本 ADR 与 SPEC-0003 仅保留为**设计历史**，不是现行契约：其 AC-69…AC-112 / INV-51…INV-81、载体 schema、`MANAGED` 扩展与实现清单均不再有执行者或验收义务；人工审查与常规 test/build 门禁不受影响。
 
 ---
 

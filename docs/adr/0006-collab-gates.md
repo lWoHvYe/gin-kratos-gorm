@@ -1,10 +1,22 @@
 # ADR 0006: 协作闸门可执行化（G-1 所有权 / G-2 版本 / G-3 AC↔测试）
 
-- Status: **accepted**（Architect 方案；Developer 实现，Reviewer 跑 A1…A5）
+- Status: **superseded / retired（2026-11-25）**（原 accepted：Architect 方案；Developer 实现，Reviewer 跑 A1…A5。Agent 工具链已整体删除，见下方 Retirement）
 - Date: 2026-11-22
 - Revision: **1.1 / Amendment 1**（2026-11-23；T-003 闸门有效性补强）
 - Thread: [T-002](../collab/po-architect/threads/T-002.md)；Amendment: [T-003](../collab/po-architect/threads/T-003.md)
 - Related: [`docs/collab/CONVENTIONS.md`](../collab/CONVENTIONS.md) §3/§4/§6、[ADR 0004](0004-p3-0-contract-and-production-scope.md)
+
+## Retirement（2026-11-25）
+
+Director 于 2026-11-25 决定**整体退役协作闸门工具链**（非仅 P0a）。此后本 ADR 的机器化设计（含 Amendment 1）**只作设计历史**，不再是执行契约。
+
+- **工具已移除**：`scripts/collab_gates.py`、`scripts/check-collab-gates.sh`、`scripts/test-collab-gates.sh`（由 Lead 删除）。
+- **`make verify` 不再运行 `gates`**；Makefile 已无 `gates` / `gates-strict` / `gates-test` 目标。
+- **CI 已无 `collab-gates` job**。
+- **G-1…G-4 仅作为人工检查清单**保留在 `docs/collab/CONVENTIONS.md` §7（§7.1 边界表）；**无替代工具**，不新增门禁，不恢复脚本/CI/Makefile 集成。
+- 人工审查与常规 test/build 门禁不变。
+
+以下原文（Context / Decision / 实现清单 / Reviewer 验收 / Consequences / Amendment 1）保留为历史。
 
 ## Context
 

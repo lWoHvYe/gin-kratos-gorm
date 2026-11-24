@@ -3,7 +3,7 @@
 | 项 | 值 |
 |---|---|
 | change_id | `GOV-COST-01` |
-| Status | **FROZEN at P0a — Director 2026-11-25**（门禁大幅放宽，不继续复杂化）。P0a DONE（`0d57398`/`3cac054`，gates 绿）；**P0b/P1/P2 全部 DEFERRED**；未提交的 P0b/CI 改动已回退；Amendment 1 不执行 |
+| Status | **WITHDRAWN — Director 2026-11-25**（门禁工具整体退役；GOV-COST-01 撤回，P0a 代码随工具删除；ADR-0008/Amendment 1 withdrawn） |
 | Drafted | 2026-11-24 |
 | Plan owner | Lead |
 | Integration owner | System Architect（治理/工具链落点）|

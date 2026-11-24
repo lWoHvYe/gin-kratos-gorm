@@ -174,9 +174,13 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 ---
 
-## 7. 机器门禁：只保留少量客观检查
+## 7. 门禁（已退役 2026-11-25，仅保留人工检查清单）
 
-### 7.1 门禁边界
+> **Retired 2026-11-25**：协作闸门工具链已整体退役，由 Lead 删除 `scripts/collab_gates.py`、`scripts/check-collab-gates.sh`、`scripts/test-collab-gates.sh`、Makefile `gates`/`gates-strict`/`gates-test` 目标与 CI `collab-gates` job；`make verify` 不再运行 `gates`，**没有替代工具**，也不恢复脚本/CI/Makefile 集成。§7 以下内容只作**人工检查清单与判断原则**：不得再指示任何 agent 运行已删除的命令，也不得把某次提交描述为“已通过 G-1…G-4 机器门禁”。人工审查与常规 test/build 门禁不变。
+
+### 7.1 门禁边界（人工审查清单）
+
+下表是 **Reviewer 人工核对清单**（G-1…G-4 退役后仅存的形态），“机器”列只记录历史上的机器检查范围，不代表现在有可执行检查：
 
 | 阀门            | 机器适合检查                                    | 机器不能证明                             |
 | --------------- | ----------------------------------------------- | ---------------------------------------- |
@@ -185,29 +189,15 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 | G-3 AC-REF      | AC 编号、测试引用、延期字段                     | 测试已执行、未 SKIP、断言充分            |
 | G-4 到期        | owner/expiry/status、到期和续期记录             | 延期是否合理、残余风险是否可接受         |
 
-默认不继续增加 G-5、G-6。新增门禁前必须回答：是否客观、是否低误判、是否有明确 owner、误伤成本是否低于收益。
+默认不继续增加 G-5、G-6。新增检查前必须回答：是否客观、是否低误判、是否有明确 owner、误伤成本是否低于收益。
 
 **不交给机器强制判断**：架构优劣、断言深度、业务折中、commit scope 词表、每个 AC 的测试环境数量，以及是否允许发布。
 
-### 7.2 当前执行器能力
+### 7.2 执行器能力（历史记录，retired 2026-11-25）
 
-当前 Makefile 提供的统一入口只有：
+原 `scripts/collab_gates.py`、`scripts/check-collab-gates.sh`、`scripts/test-collab-gates.sh` 及 `make gates` / `make gates-strict` / `make gates-test` 随整体退役删除，`make verify` 已不含 `gates`，CI 已无 `collab-gates` job。以下限制清单仅为历史记录，**不再要求任何人运行或修复**：只实现 G-1/G-2/G-3 而无 G-4/`--release`；输出 `AC coverage` 而非 `AC-REF`；默认范围 `HEAD^..HEAD`；G-1 的 Role 并集只能提示；Makefile 未透传 `RANGE/RELEASE`、CI 未覆盖全部 docs/prompt 变化。
 
-```bash
-make gates
-make gates-strict
-make gates-test
-```
-
-当前 `scripts/collab_gates.py` 仍有以下限制：
-
-- 只实现 G-1/G-2/G-3，尚未实现 G-4 和 `--release`。
-- 仍输出 `AC coverage`，目标措辞 `AC-REF` 尚未落地。
-- 默认范围为 `HEAD^..HEAD`，不能覆盖整个 PR 或 release range。
-- G-1 将 range 内 Role 做并集，结果只能作为提示，不能单独作为发布所有权证明。
-- Makefile 尚未透传 `RANGE/RELEASE`，CI 也未覆盖全部 docs/prompt 变化。
-
-因此，**文档中的目标规则不得被描述成已经通过的机器能力**，但在可接受范围内。
+退役后仍成立的只有 §7 的口径要求：**文档中的目标规则不得被描述成已经通过的机器能力**。
 
 ---
 

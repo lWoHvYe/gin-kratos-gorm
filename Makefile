@@ -27,7 +27,7 @@ K8S_INFRA_HA_VALUES := $(K8S_DIR)/charts/infra/values-ha.yaml
 .DEFAULT_GOAL := help
 
 .PHONY: help build test fmt fmt-check vet run-infra run-observability \
-	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract alerts-check contract-check e2e-phase15 e2e-warehouse-split create-split-fixture check-split-concurrency fault-split-uat rehearse-c-migration test-migrate-runner concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo ai-eval clean gates gates-strict gates-test \
+	run-gateway run-admin run-service run-all db-reset dtm-smoke dtm-contract alerts-check contract-check e2e-phase15 e2e-warehouse-split create-split-fixture check-split-concurrency fault-split-uat rehearse-c-migration test-migrate-runner concurrency-phase15 test-race test-integration chaos verify wire proto arch migrations-check seed-demo ai-eval clean \
 	k8s-images k8s-import k8s-render k8s-lint k8s-render-ha k8s-lint-ha k8s-ha-verify k8s-deploy mesh-smoke \
 	frontend-install frontend-build frontend-test frontend-images seckill-s1 seckill-s2 seckill-s3 seckill-integration status
 
@@ -156,17 +156,9 @@ proto:
 		--go-grpc_out=api/gen --go-grpc_opt=paths=source_relative \
 		api/proto/mall/v1/mall.proto
 
-verify: fmt-check vet test test-race build arch dtm-contract migrations-check proto-guard gates
+verify: fmt-check vet test test-race build arch dtm-contract migrations-check proto-guard
 	@echo "verify: OK"
 
-gates:
-	./scripts/check-collab-gates.sh --mode=warn
-
-gates-strict:
-	./scripts/check-collab-gates.sh --mode=strict
-
-gates-test:
-	./scripts/test-collab-gates.sh
 
 dtm-smoke:
 	./scripts/dtm-smoke.sh

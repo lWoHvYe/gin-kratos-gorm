@@ -17,6 +17,12 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-24 T1.2-R2 PASS (scoped)
+
+- G1/g1/g2/g3 closed; Reviewer PASS for `e7e29e5..72b984b`.
+- T1.2 scoped close; still WIP, no merge, no T1.4 yet.
+- No AC-VERIFIED; AC-51/AC-65 remain DEFERRED.
+
 ### 2026-11-24 T1.2-R Reviewer PASS (scoped)
 
 - Scope `a3f080f..e7e29e5`; PASS for T1.2-R B1/B2/M1/M2/m1. Not merge/Release.
@@ -78,6 +84,30 @@ re-review and human merge decision are still required.
   These are business decisions only; SPEC-0002 v1.8, SPEC-0001 v1.4 and
   ADR-0007 Amendment 1 were approved on 2026-11-24 (see the next section).
   D-27..D-29 are closed by ADR-0007 Amendment 1.
+
+## 2026-11-24 human decisions: governance cost reduction (D-CR-1…D-CR-5)
+
+- Director approved **all recommendations** D-CR-1…D-CR-5 from
+  `docs/cost-reduction-proposal.md` on 2026-11-24 (session directive to Lead:
+  "已经批准了 D-CR-1 至 D-CR-5 的所有建议"). Recorded here by Lead; the approval
+  is the Director's, not the Lead's, and this entry is the canonical approval
+  evidence referenced by SPEC-0003.
+  - D-CR-1: adopt the three-tier change classification L0/L1/L2 with the proposal
+    §3 objective criteria; criteria changes require human-approved Spec versions.
+  - D-CR-2: L1 stage approval delegated to **QC + Reviewer joint sign-off**
+    (conservative option; not Reviewer-only).
+  - D-CR-3: approve QC delta review for small versions, keeping the two mandatory
+    full-QC nodes (major version bump, before Release gate).
+  - D-CR-4: mis-tiering = stop-the-line + redo at L2 + Reviewer ledger record.
+  - D-CR-5: CI gate-triggering paths must include `docs/**`, `prompt/**`,
+    `.specify/**`.
+- Scope: governance/process only; no business AC/INV change; no waiver of EARS,
+  fail-closed, stop-the-line, or red lines R-1…R-6.
+- Open: D-CR-6 (root `AGENTS.md` / full managed-path CI coverage) and D-CR-7
+  (QC scope inside L1 joint sign-off) remain undecided.
+- Tracking: SPEC-0003 (`docs/specs/0003-platform-governance-cost-reduction.md`)
+  draft; QC-01 returned BLOCKED (0 BLOCKER / 10 MAJOR / 11 MINOR) and the spec is
+  in revision. Not a Spec approval; SPEC-0003 `approved_by` stays null.
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

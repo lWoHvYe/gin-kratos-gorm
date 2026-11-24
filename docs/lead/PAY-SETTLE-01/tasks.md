@@ -18,12 +18,12 @@ Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `
 - [ ] **T1.0** P-03 回归：Order 侧 `SettleZero`/`AdmitRefund` 已测；**AC-40 零元售后端到端 BLOCKED**（见 Phase 1a checkpoint）
 - [x] **T1.1** Σ 预检 helper + 测试（未接线 `TccCancelMarkPaid`；T1.2 接线）
 - [ ] **T1.2** Tx1：REFUNDING + batch；`NONE→REVOKED`，`CONSUMED` 只写 PENDING_REMOTE + commitment（不得写 REVOKED）
-- [ ] **T1.3** 持久 batch/task；`REFUNDING` 不早退；崩溃重跑只补未完成组
+- [x] **T1.3** 持久 batch/task；`REFUNDING` 不早退；崩溃重跑只补未完成组
 - [ ] **T1.4** 逐组 `AdmitRefund`；全部成功后才打款；已发货组 POST
 - [ ] **T1.5** `order.refund_requested` 消费者改为观察/告警；不直接 Refund
 - [ ] **T1.6** `PENDING_PAYMENT+已捕获` 分支按 C-03 裁决（CAS→CANCELLED 或 PAID+写生效支付）
 - [ ] **T1.7** 测试：Σ 不等、REFUNDING vs Ship 竞态、崩溃续跑、部分失败、无组 G1、已发货组
-- [ ] **T1.2b** 按 Architect Addendum R-1/R-2/R-3 修复：
+- [x] **T1.2b** 按 Architect Addendum R-1/R-2/R-3 修复：
   - R-1：Σ 不等写 `refund_batches(state=PRECHECK_FAILED)` 审计，其他零写入；调整“零行”测试。
   - R-2：Tx1 外读 `ListShipments`，`exception_state != 'NONE' && shipped_at_unix>0` 判已离仓；不可用/不明确 fail-closed；T1.4 `CancelIfCreated` 返回 `ALREADY_SHIPPED`。
   - R-3：`PENDING_PAYMENT && captured>0` 在 T1.2b 只加 fail-closed guard，不建 batch；CAS→CANCELLED 归 T1.6。

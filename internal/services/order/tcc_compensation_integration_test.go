@@ -22,10 +22,11 @@ import (
 // countingPaymentPort is the concurrency-safe Payment stand-in for the race
 // test; fakePaymentPort's counters are not safe for parallel use.
 type countingPaymentPort struct {
-	mu       sync.Mutex
-	captured int64
-	refunded int64
-	getCalls int
+	mu          sync.Mutex
+	captured    int64
+	refunded    int64
+	getCalls    int
+	refundCalls int
 }
 
 func (f *countingPaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, ...grpc.CallOption) (*pb.Intent, error) {
@@ -37,6 +38,15 @@ func (f *countingPaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, .
 
 func (f *countingPaymentPort) ListOrderIntents(context.Context, *pb.ListOrderIntentsRequest, ...grpc.CallOption) (*pb.IntentList, error) {
 	return &pb.IntentList{}, nil
+}
+
+// Refund is counted under the same mutex because T1.4b1's payment phase runs
+// concurrently with the admission phase in the race test.
+func (f *countingPaymentPort) Refund(context.Context, *pb.RefundRequest, ...grpc.CallOption) (*pb.Empty, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.refundCalls++
+	return &pb.Empty{}, nil
 }
 
 func (f *countingPaymentPort) setRefunded(cent int64) {
@@ -272,10 +282,10 @@ func TestTccCancelPrecheckFailureAuditDoesNotBlockNextAttempt(t *testing.T) {
 	}
 	var admittedID string
 	var admittedSeq int
-	// T1.4a: a successful Tx1 is followed by the per-group admission, so the
-	// batch is ADMITTED when the compensation call returns.
+	// T1.4a admission + T1.4b1 payment: the batch is PAYING when the
+	// compensation call returns (refunds accepted, payment events pending).
 	if err := db.QueryRow(`SELECT batch_id, attempt_seq FROM refund_batches
-		WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchAdmitted).Scan(&admittedID, &admittedSeq); err != nil {
+		WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchPaying).Scan(&admittedID, &admittedSeq); err != nil {
 		t.Fatal(err)
 	}
 	if admittedID != "tcc:PAY-AUDIT:3" || admittedSeq != 3 {
@@ -293,8 +303,8 @@ func TestTccCancelPrecheckFailureAuditDoesNotBlockNextAttempt(t *testing.T) {
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT'`); got != 3 {
 		t.Fatalf("batches after resume = %d, want 3 (2 audit + 1 admitted)", got)
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchAdmitted); got != 1 {
-		t.Fatalf("admitted batches = %d, want 1", got)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchPaying); got != 1 {
+		t.Fatalf("paying batches = %d, want 1", got)
 	}
 }
 
@@ -702,8 +712,8 @@ func TestTccCancelRefundingOrderWithoutBatchCreatesBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	batch := loadTccBatchRow(t, db, "ORD-TCC-ORPHAN", "PAY-ORPHAN")
-	if batch.State != refundBatchAdmitted {
-		t.Fatalf("batch state = %s, want ADMITTED after the T1.4a admission", batch.State)
+	if batch.State != refundBatchPaying {
+		t.Fatalf("batch state = %s, want PAYING after admission + T1.4b1 payment", batch.State)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications WHERE batch_id = ?`, batch.BatchID); got != 1 {
 		t.Fatalf("applications = %d, want 1", got)
@@ -723,14 +733,15 @@ func TestTccCancelResumeBlocksWhenPaymentSnapshotChanges(t *testing.T) {
 	seedTccOrder(t, db, "ORD-TCC-CHANGED", 10000, 10000, 0, 0, "PAY-CHANGED")
 	seedTccGroup(t, db, "ORD-TCC-CHANGED", "G1", 1, 0)
 	seedTccLine(t, db, "ORD-TCC-CHANGED", 1, "G1", 10000)
-	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-		OrderNo: "ORD-TCC-CHANGED", PaymentNo: "PAY-CHANGED", PaidCent: 10000,
-	}); err != nil {
+	// Freeze Tx1 only (FROZEN batch): the strict Σ/snapshot resume gate applies
+	// before admission. Once a batch is ADMITTED/PAYING the Payment authority
+	// gates the remaining amounts instead (T1.4b1, ADR §4.1.3(5)).
+	if err := runTccTx1(t, ctx, svc, db, "ORD-TCC-CHANGED", "PAY-CHANGED", 10000); err != nil {
 		t.Fatal(err)
 	}
 	batchBefore := loadTccBatchRow(t, db, "ORD-TCC-CHANGED", "PAY-CHANGED")
-	// T1.4a already persisted the admission/commitment of the first freeze; the
-	// failed resume must not add a second set.
+	// The failed resume must not add a second application/admission/commitment
+	// set to the frozen Tx1 ledger.
 	commitmentsBefore := countRows(t, db, `SELECT COUNT(*) FROM order_refund_commitments WHERE order_no = 'ORD-TCC-CHANGED'`)
 	admissionsBefore := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-TCC-CHANGED'`)
 	payments.setRefunded(100)
@@ -937,6 +948,10 @@ func (f *gatedPaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, ...g
 
 func (f *gatedPaymentPort) ListOrderIntents(context.Context, *pb.ListOrderIntentsRequest, ...grpc.CallOption) (*pb.IntentList, error) {
 	return &pb.IntentList{}, nil
+}
+
+func (f *gatedPaymentPort) Refund(context.Context, *pb.RefundRequest, ...grpc.CallOption) (*pb.Empty, error) {
+	return &pb.Empty{}, nil
 }
 
 // T1.3 concurrency: a caller whose Σ precheck raced a winning TCC freeze must

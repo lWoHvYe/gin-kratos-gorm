@@ -27,6 +27,11 @@ type paymentPort interface {
 	// amount?" without a payment_no, which is required for the AC-40 zero-order
 	// narrowing before a zero settlement.
 	ListOrderIntents(ctx context.Context, in *pb.ListOrderIntentsRequest, opts ...grpc.CallOption) (*pb.IntentList, error)
+	// Refund executes one captured-payment refund (T1.4b). The request's
+	// idempotency_key is the caller's refund_id (`tcc:<payment_no>:<group_no>`
+	// for a TCC group), which Payment stores verbatim and repeats as
+	// payment.refunded.refund_id, so a retried group can never refund twice.
+	Refund(ctx context.Context, in *pb.RefundRequest, opts ...grpc.CallOption) (*pb.Empty, error)
 }
 
 type fulfillmentPort interface {

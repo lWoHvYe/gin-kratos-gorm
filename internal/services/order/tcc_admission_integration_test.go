@@ -13,9 +13,13 @@ import (
 // T1.4a evidence (SPEC-0002 v1.9 AC-51/AC-65, ADR-0007 Amendment 1 §4.1.2
 // steps 4-5). Every test runs against real MySQL with the real C-05 migrations
 // because the guarantees are transactional (batch CAS, application CAS, one
-// admission per refund_id) and because the phase must never call Payment: the
-// paymentPort interface has no Refund method, so "no money moved" is also a
-// compile-time property.
+// admission per refund_id).
+//
+// Since T1.4b1 the same TccCancelMarkPaid call continues into the payment
+// phase, so a successful path ends with the batch PAYING and one idempotent
+// Payment.Refund per admitted group (see tcc_payment_integration_test.go for
+// the payment-specific evidence). Admission-only failures still make zero
+// payment calls.
 
 func loadTccApplication(t *testing.T, ctx context.Context, db *sql.DB, refundID string) (state, result string, amount, goods, freight int64) {
 	t.Helper()
@@ -45,8 +49,8 @@ func TestTccAdmissionNonePermitResolvesPre(t *testing.T) {
 		t.Fatal(err)
 	}
 	batch := loadTccBatchRow(t, db, "ORD-ADM-PRE", "PAY-ADM-PRE")
-	if batch.State != refundBatchAdmitted {
-		t.Fatalf("batch state = %s, want ADMITTED", batch.State)
+	if batch.State != refundBatchPaying {
+		t.Fatalf("batch state = %s, want PAYING after T1.4b1 payment was accepted", batch.State)
 	}
 	for _, want := range []struct {
 		group   string
@@ -181,8 +185,8 @@ func TestTccAdmissionConsumedCreatedCancelIfCreatedPre(t *testing.T) {
 		t.Fatalf("commitments = %d, want 1", got)
 	}
 	batch := loadTccBatchRow(t, db, "ORD-ADM-CC", "PAY-ADM-CC")
-	if batch.State != refundBatchAdmitted {
-		t.Fatalf("batch state = %s, want ADMITTED", batch.State)
+	if batch.State != refundBatchPaying {
+		t.Fatalf("batch state = %s, want PAYING after T1.4b1 payment was accepted", batch.State)
 	}
 	// A repeat never calls CancelIfCreated again and never duplicates rows.
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
@@ -349,8 +353,8 @@ func TestTccAdmissionCancelIfCreatedFailureKeepsPendingRemote(t *testing.T) {
 		t.Fatalf("after retry application = %s/%s, want PROCESSING/PRE", state, result)
 	}
 	batch = loadTccBatchRow(t, db, "ORD-ADM-RETRY", "PAY-ADM-RETRY")
-	if batch.State != refundBatchAdmitted {
-		t.Fatalf("after retry batch = %s, want ADMITTED", batch.State)
+	if batch.State != refundBatchPaying {
+		t.Fatalf("after retry batch = %s, want PAYING after T1.4b1 payment was accepted", batch.State)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE refund_id = ?`, refundID); got != 1 {
 		t.Fatalf("retry duplicated the admission: %d", got)
@@ -394,8 +398,8 @@ func TestTccAdmissionConcurrentIsIdempotent(t *testing.T) {
 		t.Fatalf("batches = %d, want 1", got)
 	}
 	batch := loadTccBatchRow(t, db, "ORD-ADM-RACE", "PAY-ADM-RACE")
-	if batch.State != refundBatchAdmitted {
-		t.Fatalf("batch state = %s, want ADMITTED", batch.State)
+	if batch.State != refundBatchPaying {
+		t.Fatalf("batch state = %s, want PAYING after T1.4b1 payment was accepted", batch.State)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications
 		WHERE batch_id = ? AND state = ?`, batch.BatchID, refundApplicationProcessing); got != 2 {

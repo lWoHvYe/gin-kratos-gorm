@@ -28,7 +28,10 @@ import (
 // The batch is moved FROZEN -> ADMITTING before the loop and ADMITTING ->
 // ADMITTED only when every active group is admitted. A failure leaves the
 // application and the batch resumable (PENDING_REMOTE stays PENDING_REMOTE);
-// a rerun fills only the unfinished groups.
+// a rerun fills only the unfinished groups. A PAYING batch (T1.4b already
+// started paying) is also repaired here: DONE/PROCESSING applications are
+// skipped, so re-admission can never re-pay a group. The batch is not moved
+// back to ADMITTED in that case.
 
 // tccApplicationRef is one active group application of a frozen batch.
 type tccApplicationRef struct {
@@ -71,11 +74,13 @@ func (s *Service) admitTccBatch(ctx context.Context, orderNo, paymentNo string) 
 			return err
 		}
 		batch.State = refundBatchAdmitting
-	case refundBatchAdmitting, refundBatchAdmitted:
+	case refundBatchAdmitting, refundBatchAdmitted, refundBatchPaying:
 		// Resume/self-heal: fill only the groups that are not admitted yet.
-	case refundBatchPaying, refundBatchDone, refundBatchFailedPre:
-		// PAYING/DONE are T1.4b states; a PRECHECK_FAILED row has no
-		// applications and is audit-only (ADR §6.1).
+		// PAYING is a repair path only (a crash left an application PENDING);
+		// DONE/PROCESSING groups are skipped and never paid here.
+	case refundBatchDone, refundBatchFailedPre:
+		// DONE is complete; a PRECHECK_FAILED row has no applications and is
+		// audit-only (ADR §6.1).
 		return nil
 	case refundBatchManualHold, refundBatchFailedPermanent:
 		// Human-owned states are never pushed by an automatic retry.
@@ -108,6 +113,10 @@ func (s *Service) admitTccBatch(ctx context.Context, orderNo, paymentNo string) 
 				"order_no": batch.OrderNo, "payment_no": batch.PaymentNo,
 				"batch_id": batch.BatchID, "failed_groups": failures,
 			})
+	}
+	if batch.State == refundBatchPaying {
+		// Repair of an in-flight payment batch: never move it back to ADMITTED.
+		return nil
 	}
 	return s.markTccBatchAdmitted(ctx, batch.BatchID)
 }
@@ -445,7 +454,9 @@ func (s *Service) markTccBatchAdmitted(ctx context.Context, batchID string) erro
 			return apperr.Internal("reload tcc refund batch after admission", err)
 		}
 		switch state {
-		case refundBatchAdmitted:
+		case refundBatchAdmitted, refundBatchPaying, refundBatchDone:
+			// A concurrent worker already completed admission and may have
+			// started/finished the T1.4b1 payment phase; admission is complete.
 			return nil
 		case refundBatchAdmitting:
 			continue

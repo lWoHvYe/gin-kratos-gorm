@@ -159,10 +159,12 @@ func computeTccPrecheck(ctx context.Context, q querier, record *orderRecord, sna
 
 // computeTccPrecheckExcluding is computeTccPrecheck with a refund_id prefix to
 // ignore when summing existing commitments. Resume (T1.3) re-runs the Σ
-// equation for a batch that already reserved its groups: those commitments are
-// the amount being compensated, so counting them again would always show a
-// shortfall. The prefix is `tcc:<payment_no>:`, i.e. this compensation's own
-// group refund identities; it never excludes another flow's commitments.
+// equation for a batch that already reserved its groups: those RESERVED
+// commitments are the amount being compensated, so counting them again would
+// always show a shortfall. The prefix is `tcc:<payment_no>:`, i.e. this
+// compensation's own group refund identities; it never excludes another flow's
+// commitments. Own SETTLED commitments stay counted (T1.4b1): the money is
+// already refunded and the remaining captured amount is net of it.
 func computeTccPrecheckExcluding(ctx context.Context, q querier, record *orderRecord, snapshot *tccPaymentSnapshot, excludeRefundPrefix string) (*tccPrecheck, error) {
 	if record == nil || snapshot == nil {
 		return nil, apperr.Internal("TCC precheck requires an order and a payment snapshot", nil)
@@ -458,13 +460,17 @@ func loadGroupCommittedCent(ctx context.Context, q querier, orderNo string) (map
 }
 
 // loadGroupCommittedCentFiltered sums RESERVED/SETTLED commitment headers.
-// excludeRefundPrefix (optional) ignores this compensation's own refund_ids so
-// a resume recheck sees the quota it is about to refund (T1.3).
+// excludeRefundPrefix (optional) ignores this compensation's own *RESERVED*
+// refund_ids so a resume recheck sees the quota it is about to refund (T1.3).
+// Own SETTLED commitments are NOT ignored: their money has already been
+// refunded, so the remaining captured amount is already net of them (T1.4b1
+// partial-payment resume). Ignoring them would make the equation look short by
+// exactly the already-refunded groups and block a legitimate retry.
 func loadGroupCommittedCentFiltered(ctx context.Context, q querier, orderNo, excludeRefundPrefix string) (map[string]int64, error) {
-	query := `SELECT group_no, refund_id, COALESCE(SUM(amount_cent),0)
+	query := `SELECT group_no, refund_id, state, COALESCE(SUM(amount_cent),0)
 		FROM order_refund_commitments
 		WHERE order_no = ? AND state IN ('RESERVED','SETTLED')
-		GROUP BY group_no, refund_id`
+		GROUP BY group_no, refund_id, state`
 	rows, err := q.QueryContext(ctx, query, orderNo)
 	if err != nil {
 		return nil, err
@@ -472,12 +478,13 @@ func loadGroupCommittedCentFiltered(ctx context.Context, q querier, orderNo, exc
 	defer rows.Close()
 	out := make(map[string]int64, 2)
 	for rows.Next() {
-		var groupNo, refundID string
+		var groupNo, refundID, state string
 		var amount int64
-		if err := rows.Scan(&groupNo, &refundID, &amount); err != nil {
+		if err := rows.Scan(&groupNo, &refundID, &state, &amount); err != nil {
 			return nil, err
 		}
-		if excludeRefundPrefix != "" && strings.HasPrefix(strings.TrimSpace(refundID), excludeRefundPrefix) {
+		if excludeRefundPrefix != "" && state == commitmentReserved &&
+			strings.HasPrefix(strings.TrimSpace(refundID), excludeRefundPrefix) {
 			continue
 		}
 		out[strings.TrimSpace(groupNo)] += amount

@@ -360,9 +360,11 @@ func (s *Service) createTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 }
 
 // resumeTccCompensationTx is Tx1 for a rerun: the batch already froze the
-// compensation, so only missing groups are filled. The Σ recheck ignores this
-// compensation's own commitments (they are the quota being resumed) and must
-// still match the batch snapshot; otherwise it stops before writing anything.
+// compensation, so only missing groups are filled. Before admission the Σ
+// recheck ignores this compensation's own RESERVED commitments (they are the
+// quota being resumed) and must still match the batch snapshot; after admission
+// (ADMITTED/PAYING) the payment authority gates the remaining amounts instead
+// (see resumeTccRecheckTx).
 func (s *Service) resumeTccCompensationTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, snapshot *tccPaymentSnapshot, shipments *tccShipmentFacts, batch *tccRefundBatch) error {
 	if locked.RefundState != refundStateRefunding {
 		// A batch only exists after Tx1 wrote REFUNDING in the same
@@ -373,20 +375,59 @@ func (s *Service) resumeTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 				"refund_state": locked.RefundState, "batch_state": batch.State,
 			})
 	}
-	rechecked, err := s.recheckTccSumTxExcluding(ctx, tx, locked.OrderNo, snapshot, tccCommitmentPrefix(snapshot.PaymentNo))
+	rechecked, err := s.resumeTccRecheckTx(ctx, tx, locked, snapshot, batch)
+	if err != nil {
+		return err
+	}
+	if rechecked.SumGroupCapCent == 0 && rechecked.RemainingCapturedCent == 0 && rechecked.ActiveGroupCount == 0 {
+		// M2: an existing ledger that is now fully refunded/zero-cap has
+		// nothing to fill; idempotent success without an empty batch write.
+		return nil
+	}
+	return s.writeTccBatchGroupsTx(ctx, tx, batch, snapshot, shipments, rechecked.Groups, tccCommitmentPrefix(snapshot.PaymentNo))
+}
+
+// resumeTccRecheckTx re-derives the Σ view used to fill missing resume rows.
+//
+// FROZEN/ADMITTING batches still gate on the strict Σ equality and the frozen
+// snapshot (nothing has been paid yet). An ADMITTED/PAYING batch is already past
+// admission: its group amounts are frozen and Payment is executing them. There
+// the strict equality would fail spuriously as soon as Payment has refunded a
+// group but payment.refunded has not been projected yet, and it would also fail
+// permanently for groups whose commitment already SETTLED. ADR §4.1.3(5) makes
+// the Payment authority per-call cap check the gate for this phase: a definitive
+// rejection parks the batch in MANUAL_HOLD (tcc_payment.go), so a changed
+// snapshot can never silently over-refund.
+func (s *Service) resumeTccRecheckTx(ctx context.Context, tx *sql.Tx, locked *orderRecord, snapshot *tccPaymentSnapshot, batch *tccRefundBatch) (*tccPrecheck, error) {
+	excludePrefix := tccCommitmentPrefix(snapshot.PaymentNo)
+	if batch.State == refundBatchAdmitted || batch.State == refundBatchPaying {
+		rechecked, err := computeTccPrecheckExcluding(ctx, tx, locked, snapshot, excludePrefix)
+		if err != nil {
+			return nil, err
+		}
+		if rechecked.SumGroupCapCent == 0 && rechecked.ActiveGroupCount == 0 && rechecked.RemainingCapturedCent > 0 {
+			return nil, apperr.Failed("tcc refund has no active group but captured money remains; manual reconciliation required").
+				WithDetails(map[string]any{
+					"order_no": locked.OrderNo, "batch_id": batch.BatchID,
+					"remaining_captured_cent": rechecked.RemainingCapturedCent,
+				})
+		}
+		return rechecked, nil
+	}
+	rechecked, err := s.recheckTccSumTxExcluding(ctx, tx, locked.OrderNo, snapshot, excludePrefix)
 	if err != nil {
 		if rechecked != nil {
 			// Plan T1.2-R R-4 (m1): a resume Σ failure is audited exactly like
 			// a fresh precheck failure; the transaction rolls back first.
-			return &tccSumMismatch{result: rechecked, err: err}
+			return nil, &tccSumMismatch{result: rechecked, err: err}
 		}
-		return err
+		return nil, err
 	}
 	if rechecked.SumGroupCapCent != batch.SumGroupCapCent || rechecked.RemainingCapturedCent != batch.RemainingCapturedCent {
 		// AC-65: the authoritative captured/refunded facts changed since the
 		// batch froze. Do not extend it by guessing; record the audit batch
 		// (R-4) and stop for manual review (T1.4 owns MANUAL_HOLD).
-		return &tccSumMismatch{result: rechecked, err: apperr.Failed("TCC compensation snapshot changed since the batch was frozen").
+		return nil, &tccSumMismatch{result: rechecked, err: apperr.Failed("TCC compensation snapshot changed since the batch was frozen").
 			WithDetails(map[string]any{
 				"order_no": locked.OrderNo, "batch_id": batch.BatchID, "payment_no": snapshot.PaymentNo,
 				"batch_sum_group_cap_cent":      batch.SumGroupCapCent,
@@ -397,12 +438,7 @@ func (s *Service) resumeTccCompensationTx(ctx context.Context, tx *sql.Tx, locke
 				"recomputed_refunded_captured":  rechecked.RefundedCent,
 			})}
 	}
-	if rechecked.SumGroupCapCent == 0 && rechecked.RemainingCapturedCent == 0 && rechecked.ActiveGroupCount == 0 {
-		// M2: an existing ledger that is now fully refunded/zero-cap has
-		// nothing to fill; idempotent success without an empty batch write.
-		return nil
-	}
-	return s.writeTccBatchGroupsTx(ctx, tx, batch, snapshot, shipments, rechecked.Groups, tccCommitmentPrefix(snapshot.PaymentNo))
+	return rechecked, nil
 }
 
 // resumeTccCancelledOrder converges a concurrent TCC cancel: if another caller
@@ -1037,23 +1073,28 @@ type tccGroupComposition struct {
 // attribution. A composition_known=0 row is not an error: it marks the group as
 // whole-group-only and its stored goods/freight are not used as attribution
 // (Plan T1.2-R M1, ADR §4.3).
+//
+// excludeRefundPrefix (resume) ignores only this compensation's own RESERVED
+// commitments: they are the quota being resumed. Own SETTLED commitments stay
+// in the composition because that quota was already refunded (T1.4b1).
 func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRefundPrefix string) (map[string]*tccGroupComposition, error) {
 	out := make(map[string]*tccGroupComposition, 2)
-	rows, err := q.QueryContext(ctx, `SELECT group_no, refund_id, amount_cent, goods_cent, freight_cent, composition_known
+	rows, err := q.QueryContext(ctx, `SELECT group_no, refund_id, state, amount_cent, goods_cent, freight_cent, composition_known
 		FROM order_refund_commitments WHERE order_no = ? AND state IN (?, ?)`,
 		orderNo, commitmentReserved, commitmentSettled)
 	if err != nil {
 		return nil, apperr.Internal("load refund commitment composition", err)
 	}
 	for rows.Next() {
-		var groupNo, refundID string
+		var groupNo, refundID, state string
 		var amount, goods, freight int64
 		var compositionKnown int
-		if err := rows.Scan(&groupNo, &refundID, &amount, &goods, &freight, &compositionKnown); err != nil {
+		if err := rows.Scan(&groupNo, &refundID, &state, &amount, &goods, &freight, &compositionKnown); err != nil {
 			_ = rows.Close()
 			return nil, apperr.Internal("scan refund commitment composition", err)
 		}
-		if excludeRefundPrefix != "" && strings.HasPrefix(strings.TrimSpace(refundID), excludeRefundPrefix) {
+		if excludeRefundPrefix != "" && state == commitmentReserved &&
+			strings.HasPrefix(strings.TrimSpace(refundID), excludeRefundPrefix) {
 			continue
 		}
 		groupNo = strings.TrimSpace(groupNo)
@@ -1098,24 +1139,25 @@ func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRef
 	lineQuantity := map[lineKey]int64{}
 	// Only composition_known=1 commitments have line attribution; unknown
 	// whole-group commitments are deliberately excluded from line math.
-	lineRows, err := q.QueryContext(ctx, `SELECT c.group_no, c.refund_id, l.line_no,
+	lineRows, err := q.QueryContext(ctx, `SELECT c.group_no, c.refund_id, c.state, l.line_no,
 		COALESCE(SUM(l.goods_cent),0), COALESCE(SUM(l.freight_cent),0), COALESCE(SUM(l.quantity),0)
 		FROM order_refund_commitment_lines l
 		JOIN order_refund_commitments c ON c.refund_id = l.refund_id
 		WHERE c.order_no = ? AND c.state IN (?, ?) AND c.composition_known = 1
-		GROUP BY c.group_no, c.refund_id, l.line_no`, orderNo, commitmentReserved, commitmentSettled)
+		GROUP BY c.group_no, c.refund_id, c.state, l.line_no`, orderNo, commitmentReserved, commitmentSettled)
 	if err != nil {
 		return nil, apperr.Internal("load refund commitment lines", err)
 	}
 	for lineRows.Next() {
-		var groupNo, refundID string
+		var groupNo, refundID, state string
 		var lineNo int
 		var goods, freight, quantity int64
-		if err := lineRows.Scan(&groupNo, &refundID, &lineNo, &goods, &freight, &quantity); err != nil {
+		if err := lineRows.Scan(&groupNo, &refundID, &state, &lineNo, &goods, &freight, &quantity); err != nil {
 			_ = lineRows.Close()
 			return nil, apperr.Internal("scan refund commitment lines", err)
 		}
-		if excludeRefundPrefix != "" && strings.HasPrefix(strings.TrimSpace(refundID), excludeRefundPrefix) {
+		if excludeRefundPrefix != "" && state == commitmentReserved &&
+			strings.HasPrefix(strings.TrimSpace(refundID), excludeRefundPrefix) {
 			continue
 		}
 		groupNo = strings.TrimSpace(groupNo)

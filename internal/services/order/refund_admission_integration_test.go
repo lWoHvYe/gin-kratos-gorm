@@ -17,7 +17,8 @@ import (
 )
 
 // fakePaymentPort is the order package's narrow Payment stand-in. It records
-// calls so tests can prove a path never consulted Payment.
+// calls so tests can prove a path never consulted Payment, and since T1.4b1 it
+// also records Refund calls (payment evidence).
 type fakePaymentPort struct {
 	captured, refunded int64
 	intents            []*pb.Intent
@@ -25,6 +26,10 @@ type fakePaymentPort struct {
 	listErr            error
 	getCalls           int
 	listCalls          int
+	// refundErrs fails the matching Refund call (by call index); nil entries
+	// succeed. refundCalls records every request so duplicates are visible.
+	refundErrs  []error
+	refundCalls []*pb.RefundRequest
 }
 
 func (f *fakePaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, ...grpc.CallOption) (*pb.Intent, error) {
@@ -41,6 +46,15 @@ func (f *fakePaymentPort) ListOrderIntents(context.Context, *pb.ListOrderIntents
 		return nil, f.listErr
 	}
 	return &pb.IntentList{Intents: f.intents}, nil
+}
+
+func (f *fakePaymentPort) Refund(_ context.Context, in *pb.RefundRequest, _ ...grpc.CallOption) (*pb.Empty, error) {
+	index := len(f.refundCalls)
+	f.refundCalls = append(f.refundCalls, in)
+	if index < len(f.refundErrs) && f.refundErrs[index] != nil {
+		return nil, f.refundErrs[index]
+	}
+	return &pb.Empty{}, nil
 }
 
 type fakeFulfillmentPort struct {

@@ -2,13 +2,14 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT — 未批准；T1.6 不进入实现** |
-| Approved | — |
-| Revision | **0.1-draft（r1）** |
+| Status | **accepted**（2026-11-25 用户接受 Amendment 不需单独 Approve；QC-28 READY） |
+| Approved | **2026-11-25** |
+| Revision | **1.0**（T1.6 payment-level cancel；原 r1 定稿） |
 | Tier | **L2**（跨服务/支付级退款/事件/库存补偿） |
 | change_id | `PAY-SETTLE-01` |
 | Base | ADR-0007 Amd1 + T1.2/T1.4a Rulings Addenda（accepted）+ 零元 Addendum（accepted）+ C-04 RefundBatch（accepted） |
 | Spec-Ref | **SPEC-0002 v1.9** AC-46/AC-65/AC-67/AC-68、INV-44/INV-46；ADR Amd1 §4.8 |
+| QC | **QC-28 READY**；本 accepted 不替代 Reviewer 实现复审 |
 | allowed_paths | `internal/services/order/`、`internal/services/payment/`、`internal/services/inventory/`、`internal/platform/events/`、对应 `_test.go` |
 | baseline_impact | `order.refund_requested` 消费者、`refundCancelledAfterConfirm`、`TccCancelMarkPaid` 的 PENDING+captured 分支；不改变 C-04 RefundBatch |
 | Scope | T1.6 payment-level cancel；不写代码/迁移/测试 |
@@ -18,12 +19,12 @@
 ## 1. 结论摘要
 
 1. **PENDING_PAYMENT+captured**：在 TCC 补偿入口先 CAS `PENDING_PAYMENT→CANCELLED`；成功则在**同一事务**写 `order.cancelled` + 支付级取消命令；**不创建组级 application/batch、不进入 AdmitRefund/组扇出、不改 permit**。CAS 失败（已 PAID）→ 进入 §4.1 组扇出。
-2. 支付级命令身份：`refund_id=pay:<payment_no>:cancel`；`source=payment`；`non_effective_capture=true`；`amount=captured/paid`；Payment 执行 `Refund`（幂等键同上），**不使用 RefundBatch**（单笔支付级，无组 Σ）。
+2. 支付级命令身份：`refund_id=pay:<payment_no>:cancel`；`source=payment`；`non_effective_capture=true`；`amount=captured-refunded` **净额**（剩余可退；0 不写命令）；Payment 执行 `Refund`（幂等键同上），**不使用 RefundBatch**（单笔支付级，无组 Σ）。
 3. `refundCancelledAfterConfirm` 不再仅写日志：必须写持久 payment-level command（outbox 事务）；失败返回错误/重试，不允许静默丢命令。
 4. 保留 `order.refund_requested` 作为**当前命令载体**：T1.5 后 TCC 不再发；T1.6 consumer 只把 `pay:<payment_no>:cancel`/legacy cancel-after-confirm 当命令执行；其余 observe-only。最终 observe-only/移除由 Director release 记录另定。
 5. `order.cancelled` 负责 Inventory 补偿；CONFIRMED 预留走 `TccCancelConfirm` 回库，HELD 走 `Release`；Order 不直接改库存。
 6. 无 captured/零元：不写 payment command；按 AC-46 本地取消/零元路径；No Payment 不进入本分支。
-7. **不可交实现**：本 Addendum DRAFT；先 QC/人类批准 + C-04 event 字段 + T1.6-R 任务与测试。
+7. **本 Addendum accepted（2026-11-25）**；T1.6 WIP 可交 Reviewer，但不等于实现 PASS；C-04 event 字段与 T1.6-R 仍须完成。
 
 ---
 
@@ -38,7 +39,7 @@
   2. 成功 → append `order.cancelled`（库存/优惠补偿，现有协议）；
   3. 同一 tx append payment cancel command（outbox，`refund_id=pay:<payment_no>:cancel`）；
   4. commit；**不写** `refund_batches`/`refund_applications`/`order_refund_admissions`/commitment，不改 permit。
-- CAS 0 行/状态已 PAID → rollback；返回 `CANCEL_CAS_LOST`，进入 §4.1 组扇出；不得再发 payment-level cancel。
+- CAS 0 行/状态已 PAID → rollback；记录稳定 reason `CANCEL_CAS_LOST` 并进入 §4.1 组扇出；**不返回业务错误**，不得再发 payment-level cancel。
 - outbox append 失败 → 整个 tx rollback；CAS 不落；重试。
 - 事务内禁止远程调用；Inventory 由 `order.cancelled` consumer 异步补偿。
 
@@ -71,7 +72,7 @@
   "refund_id": "pay:<payment_no>:cancel",
   "source": "payment",
   "non_effective_capture": true,
-  "amount_cent": 1234,
+  "amount_cent": 1234,             // captured - refunded 净额
   "paid_cent": 1234,
   "reason": "order cancelled after inventory confirm | pending captured cancel",
   "status": "CANCELLED"
@@ -79,7 +80,7 @@
 ```
 
 - `refund_id` 是**支付级幂等键**；Payment `Refund` 传入 `IdempotencyKey=refund_id`、`NonEffectiveCapture=true`。
-- `amount_cent` = 权威 captured/paid；不得用 order pay_cent 猜测。
+- `amount_cent` = 权威 `captured - refunded` 净额；0 不写命令；不得用 order pay_cent 猜测。
 - 命令由 Order 在 outbox 事务写；Payment consumer durable/重试；重复事件 Payment.Refund 幂等。
 - **不使用 `RefundBatch`**：本命令是单笔支付级退款，无组 items/Σ；RefundBatch 仅 TCC 组级。
 
@@ -140,6 +141,19 @@
 | C-05 | **无迁移**；不新增 payment cancel 表；outbox 事务持久化，Payment 幂等。 |
 | 目标 | SPEC-0002 v1.9 AC-46/AC-65/AC-67/AC-68、INV-44/INV-46；ADR Amd1 §4.8。 |
 
+## 4.2 T1.6 实现契约基线（accepted）
+
+| # | 裁决 | 契约 |
+|---|---|---|
+| **1** | `CANCEL_CAS_LOST` 不返回业务错误，继续组扇出 | **接受**。CAS 失败是正常竞态：返回 `true` 继续 §4.1 组扇出；不写 payment-level command；稳定 reason `CANCEL_CAS_LOST` + log + metric `payment_cancel_cas_lost_total`（WIP 无 metric 的，Reviewer 前补）。 |
+| **2** | amount 用 `captured-refunded` 净额 | **接受**。ADR 的 “captured/paid” 解释为权威 captured 快照上的**剩余可退**；`paymentCancelAmount = captured - refunded`，净额 0 不写命令；不得退超过 Payment cap。 |
+| **3** | Inventory `TccCancelConfirm` 失败仍写退款命令 | **接受**。Payment 退款不被回库失败阻塞；Inventory 补偿必须持久化（`queueInventoryCompensation`/等价）并告警；命令写入失败则回滚并返回错误，不得静默。 |
+| **4** | 错误码仅 reason/log/metric，不扩 apperr/proto（WIP） | **WIP 接受**。异步命令不新增 proto/domain code；必须使用稳定 `details.reason`（如 `PAYMENT_CANCEL_NO_CAPTURE/REFUND_RETRY/NOT_REFUNDABLE`）+ log + metric；Reviewer 不得接受裸字符串无观测。 |
+| **5** | `refundCancelledAfterConfirm` Payment 不可用 fail-closed | **接受**。Payment 权威快照不可用时不猜 amount、不写命令；返回 `UNAVAILABLE`/告警，由 caller/重试恢复；不得用订单金额降级。 |
+
+- 上述 5 条构成 T1.6 实现契约基线；T1.6 WIP 可交 Reviewer，但通过前不得视为实现 PASS。
+- 不扩 apperr/proto；不新增 Payment cancel 表；C-05 无迁移。
+
 ## 5. T1.6-R 任务
 
 | ID | 任务 | Owner | 验收 |
@@ -176,6 +190,13 @@
 
 ## 7. 状态与实现门禁
 
-- **Status: DRAFT**；T1.6 **不可交实现**；先 QC/人类批准 + C-04 event 字段 + T1.6-R。
-- 本 Addendum 不修改 C-04 RefundBatch；C-04 release event 不影响本分支。
+- **Status: accepted**（2026-11-25）；T1.6 WIP 交 Reviewer；通过前不构成实现 PASS。
+- 本 Addendum 不修改 C-04 RefundBatch；C-04 release event 不影响本分支；C-05 无迁移。
 - 不写代码/迁移/测试；Tier L2；AC 证据由 Reviewer/T5 绑定。
+
+## 8. 变更记录
+
+| Revision | 日期 | 变更 | 影响 |
+|---|---|---|---|
+| 0.1-draft（r1） | 2026-11-25 | 初始 T1.6 payment-level cancel 设计 | DRAFT |
+| **1.0（accepted）** | 2026-11-25 | 用户接受 Amendment 不需单独 Approve；Status accepted、Approved 2026-11-25、Revision 1.0；裁决 5 个 WIP 契约点；`amount=captured-refunded` 净额 | T1.6 WIP 交 Reviewer；不构成实现 PASS |

@@ -262,8 +262,8 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   （宪法 Governance 4：merge 是人类检查点，Lead/subagent 不得代行）；L2 不减免任何批准点。
   判据变更须人类批准；误判即 stop-the-line、按 L2 重做并记录在此。
 - **2026-11-25 delta audit (Governance 5)**: 治理基线变更——AGENTS.md §2.7 与
-  CONVENTIONS.md §2.3 新增 L0/L1/L2 分级；宪法 **v1.2.2**（Workflow 1 L0/L1 路由、
-  Governance 4 适用时检查点；v1.2.1 门禁退役）；5 份角色 prompt 增加分级口径并新增
+  CONVENTIONS.md §2.3 新增 L0/L1/L2 分级；宪法 **v1.2.3**（v1.2.2 Workflow 1 L0/L1 路由、Governance 4 适用时检查点；
+  v1.2.1 门禁退役；v1.2.3 历史记录与人工清单口径）；5 份角色 prompt 增加分级口径并新增
   `prompt/Lead.md`；协作闸门脚本/CI 已删除。所有 Lead/subagent 必须重新读取 AGENTS、
   宪法、CONVENTIONS 与自身 prompt，不得依赖旧摘要。
 

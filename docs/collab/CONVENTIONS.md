@@ -82,7 +82,7 @@ MEMORY 不复制当前线程状态、PASS、commit、expiry 或发布状态；�
 | 级别 | 适用范围 | 流程 |
 | --- | --- | --- |
 | **L0** | 仅非规范性文本（文档/注释/格式）；不改变行为、契约、状态、权限或生成物语义 | 无 Spec/ADR/QC/Plan；运行相关测试；**人类合入** |
-| **L1** | 行为变更且仅限单一服务：精确一个 `internal/services/<service>/` + `cmd/<service>/`，且不命中任一 L2 触发条 | 引用既有 Spec 条款（`Spec-Ref`）+ 测试日志 + Reviewer PASS；更新受影响的既有 AC 行；无新 Spec/ADR/QC/Plan、无分级台账；**人类合入** |
+| **L1** | 行为变更且仅限单一服务：精确一个 `internal/services/<service>/` + `cmd/<service>/`，且不命中任一 L2 触发条 | 引用既有 Spec 条款（`Spec-Ref`）+ 测试日志 + Reviewer PASS；更新受影响的既有 AC 行（台账由 Reviewer 更新）；无新 Spec/ADR/QC/Plan、无分级台账；**人类合入** |
 | **L2** | 命中任一 L2 触发条的变更 | 沿用既有完整阶梯，不减免任何既有批准点 |
 
 **L1 审批 = Reviewer PASS + 人类合入**，取代已撤回的 GOV-COST-01 D-CR-2（QC+Reviewer 联签，从未实施）；见 `docs/review-tracking.md` 2026-11-25 tiering decision。
@@ -111,6 +111,7 @@ Developer 开始实现前，必须能确定：
 
 ```text
 change_id
+Tier / Tier-Rationale（L0/L1 按 §2.3；L1 另需 Spec-Ref）
 base
 spec_version / adr_revision
 integration_owner
@@ -120,6 +121,8 @@ allowed_paths
 ```
 
 Reviewer 开始审查前再记录精确 `head`。审查期间 HEAD 变化，必须重新确认差异和受影响验证。
+
+L0/L1 的 `Tier`/`Tier-Rationale`/`Spec-Ref` 按 §2.3 记录；L2 另需 `spec_version`/`adr_revision`。
 
 `baseline_impact` 只能写：
 
@@ -149,7 +152,7 @@ Reviewer 开始审查前再记录精确 `head`。审查期间 HEAD 变化，必�
 Developer⇄Reviewer 的审查线程还必须包含：
 
 ```text
-change_id / base / head
+change_id / Tier / base / head
 spec_version / adr_revision
 integration_owner
 review_scope
@@ -171,7 +174,7 @@ Actor / Reviewed-by
 | -------------------------- | --------------------------------------------- | ---------------------------- |
 | `thread_status=CLOSED`     | 沟通闭环                                      | 实现正确或发布通过           |
 | `review_verdict=PASS/FAIL` | 对指定 base/head、review_scope 的实现审查结论 | Spec 全量验收或 Release PASS |
-| `merge_status=ALLOWED`     | 允许合入当前变更                              | 业务 AC 全部完成             |
+| `merge_status=ALLOWED`     | 人类批准合入当前变更（分级不改变人类合入）    | 业务 AC 全部完成             |
 | `release_status=PASS`      | 精确 HEAD 满足发布证据要求                    | 后续提交自动继承通过         |
 
 - Reviewer 输出 PASS 时必须写明审查类型和范围；存在未处置的阻断 AC，不得写 Spec 全量验收 PASS。
@@ -208,16 +211,16 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 ### 7.1 门禁边界（人工审查清单）
 
-下表是 **Reviewer 人工核对清单**（G-1…G-4 退役后仅存的形态），“机器”列只记录历史上的机器检查范围，不代表现在有可执行检查：
+下表是 **Reviewer 人工核对清单**（G-1…G-4 退役后仅存的形态），“原机器检查范围”列只记录历史，不代表现在有可执行检查：
 
-| 阀门            | 机器适合检查                                    | 机器不能证明                             |
+| 阀门            | 人工核对要点（原机器检查范围）                  | 不能证明                                 |
 | --------------- | ----------------------------------------------- | ---------------------------------------- |
 | G-1 所有权/范围 | 受管路径、Role/Exception 是否存在、线程是否存在、HEAD 的 `change_id`/`Actor`/`Reviewed-by` 是否存在且 `Actor != Reviewed-by` | 跨提交 Role 并集能证明实际作者；架构合理 |
 | G-2 契约版本    | Spec version、索引、变更记录                    | 业务规则正确                             |
 | G-3 AC-REF      | AC 编号、测试引用、延期字段                     | 测试已执行、未 SKIP、断言充分            |
 | G-4 到期        | owner/expiry/status、到期和续期记录             | 延期是否合理、残余风险是否可接受         |
 
-默认不继续增加 G-5、G-6。新增检查前必须回答：是否客观、是否低误判、是否有明确 owner、误伤成本是否低于收益。
+不再新增 G 系列检查；G-1…G-4 仅作人工清单，无脚本实现。新增检查前必须回答：是否客观、是否低误判、是否有明确 owner、误伤成本是否低于收益。
 
 **不交给机器强制判断**：架构优劣、断言深度、业务折中、commit scope 词表、每个 AC 的测试环境数量，以及是否允许发布。
 
@@ -231,7 +234,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 ## 8. Commit 与交付
 
-- 推荐使用 Conventional Commit 和必要 trailer；受管交付 MUST 包含 `change_id`、`Actor`、`Reviewed-by`、`Role`（人工复核用；协作闸门已退役），服务/模块 scope 保持简单。
+- 推荐使用 Conventional Commit 和必要 trailer；受管交付 MUST 包含 `change_id`、`Actor`、`Reviewed-by`、`Tier`、`Role`（人工复核用；协作闸门已退役），服务/模块 scope 保持简单。
 - 不维护庞大的强制 scope 词表，不为满足形式机械拆分提交。
 - Spec/ADR 的业务或设计变更必须独立评审批；不要把未批准契约与实现混在一起。
 - 已批准契约的实现允许一个原子行为提交包含 proto、生成物、服务代码、迁移和对应测试。
@@ -245,7 +248,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 | 角色             | 开场必读                                 | 必须交付                                | 绝对不做                       |
 | ---------------- | ---------------------------------------- | --------------------------------------- | ------------------------------ |
 | Product Owner    | AGENTS、本文件、角色 prompt、相关线程    | 升级 Spec、EARS AC、State Ownership     | 写代码/ADR、在聊天里定规则     |
-| Quality Checker  | AGENTS、本文件、待审 Spec 或 ADR         | QC-Report：遗漏、矛盾、异常分支         | 代写契约、写业务代码           |
+| Quality Checker  | AGENTS、本文件、待审 Spec/ADR/Plan       | QC-Report：遗漏、矛盾、异常分支；L2 Plan 测试矩阵 | 代写契约、写业务代码 |
 | System Architect | AGENTS、本文件、已批准 Spec、QC 报告     | ADR/Amendment、状态机、恢复协议         | 写业务代码、擅自改 Spec        |
 | Developer        | AGENTS、本文件、Spec+ADR、变更输入包     | 代码、测试日志、偏差与影响声明          | 私自发明规则、用 TODO 掩盖冲突 |
 | Reviewer         | AGENTS、本文件、精确 base/head、Spec+ADR | 有范围的 verdict、AC/基线证据、延期台账 | 用 AC-REF 代替验收、直接改代码 |
@@ -265,7 +268,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 - QC 未审就批准 Spec/ADR，或人类批准后被静默改契约。
 - 在聊天/线程里定业务规则，不回写 Spec/ADR。
-- 用历史线程 PASS、默认 HEAD^..HEAD 或 AC 引用数作为 Release PASS。
+- 用历史线程 PASS、AC 引用数或未绑定精确 base/head 的结论作为 Release PASS。
 - 删除/重编号 AC、删唯一测试、删 deferred 行、批量续期或修改阀门使其恒真。
 - 让不同 Agent 在移动 HEAD 上各读各的“当前版本”。
 - 用分布式锁、额外状态字段或场景专用 `if` 回避状态所有权和协议设计。

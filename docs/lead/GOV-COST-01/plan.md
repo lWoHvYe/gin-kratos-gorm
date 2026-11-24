@@ -3,7 +3,7 @@
 | 项 | 值 |
 |---|---|
 | change_id | `GOV-COST-01` |
-| Status | **APPROVED — Director 2026-11-24**（Plan 批准；P0a/P0b bootstrap 授权见 §2.1） |
+| Status | **APPROVED — Director 2026-11-24**；**P0a DONE**（commit `0d57398`，gates-strict exit 0，44 条治理 AC NOT-RUN）。P0b/P1/P2 待执行 |
 | Drafted | 2026-11-24 |
 | Plan owner | Lead |
 | Integration owner | System Architect（治理/工具链落点）|

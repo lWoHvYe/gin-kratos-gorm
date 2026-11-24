@@ -15,11 +15,11 @@
 
 | ID | 任务 | Owner | AC | 依赖 | 状态 | 证据 |
 |---|---|---|---|---|---|---|
-| T-A1 | G-3 读取 `test_type/evidence_path/status`；治理 AC 需 VERIFIED+签名+摘要，否则 `GOV_AC_EVIDENCE_MISSING` | Developer | AC-99 | Plan 批准 | TODO | `scripts/collab_gates.py` 单测 |
-| T-A2 | G-3 head 绑定（`git show`/`git ls-tree`），禁用工作区/未跟踪引用；`--range` 透传 | Developer | AC-71/72/102 | T-A1 | TODO | 单测 + 复现命令 |
-| T-A3 | `BASE` 投影运行：干净 worktree + `--range=<BASE^>..<BASE>` + scoped AC-01…68 + `g4_status=NOT-RUN(...)`；IV 记录 GV-S21 | Developer + IV | AC-106/112/107 | T-A2 | TODO | GV-S21 + 输出 |
-| T-A4 | 台账播种：baseline 到 AC-112；tsv 为 AC-69…112 建 `PENDING`（非 DEFERRED） | Reviewer | AC-95/99 | T-A1 | TODO | 台账 diff + G-3 运行 |
-| T-A5 | 原子提交（spec + G-3 + 台账 + 测试 + 证据）带 trailer | Lead + Developer | AC-95/103 | T-A1…T-A4 | TODO | commit + gates |
+| T-A1 | G-3 读取 `test_type/evidence_path/status`；治理 AC 需 VERIFIED+签名+摘要，否则 `GOV_AC_EVIDENCE_MISSING` | Developer | AC-99 | Plan 批准 | DONE | `scripts/collab_gates.py` 单测（0d57398） |
+| T-A2 | G-3 head 绑定（`git show`/`git ls-tree`），禁用工作区/未跟踪引用；`--range` 透传 | Developer | AC-71/72/102 | T-A1 | DONE | 单测 + 复现命令（0d57398） |
+| T-A3 | `BASE` 投影运行：干净 worktree + `--range=<BASE^>..<BASE>` + scoped AC-01…68 + `g4_status=NOT-RUN(...)`；IV 记录 GV-S21 | Developer + IV | AC-106/112/107 | T-A2 | DONE | `evidence/bootstrap/T-A3-base.md`（0d57398） |
+| T-A4 | 台账播种：baseline 到 AC-112；tsv 为 AC-69…112 建 `PENDING`（非 DEFERRED） | Reviewer | AC-95/99 | T-A1 | DONE | 台账 diff（0d57398） |
+| T-A5 | 原子提交（spec + G-3 + 台账 + 测试 + 证据）带 trailer | Lead + Developer | AC-95/103 | T-A1…T-A4 | DONE | commit `0d57398` + `make gates-strict` exit 0 |
 
 **P0a 前置**：bootstrap 人类批准行（GV-S20 `mode=bootstrap`，approver/date/expiry/scope）先于首个 P0a 提交；`BASE` 树不含 AC-69…112；`BASE^..BASE` 有 trailer；IV 已指定。
 

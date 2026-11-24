@@ -12,7 +12,7 @@
 | base | 98d4c41 |
 | head | 98d4c41 |
 | baseline_result | PASS — `python3 scripts/collab_gates.py --mode=strict --range=98d4c41^..98d4c41` → exit 0 |
-| post_change_result | pending P0a commit |
+| post_change_result | PASS — after P0a commit `0d57398`: `make gates-strict` exit 0, `SUMMARY G-1=0 G-2=0 G-3=0`; 44 governance ACs `NOT-RUN (status=PENDING)` as designed; AC coverage 43/112; no FAIL |
 | baseline_digest | sha1:34762ad2a213f2060542b47e275497e8e80e8e3c (captured stdout+stderr) |
 | base_tree_digest | 804902cceb908ddc8577173f5b4077c0e8961506 |
 | ac_scope_evaluated | AC-01…AC-68 |
@@ -52,4 +52,12 @@ G-3 WARN AC-63 deferred until 2026-12-31 (37d)
 G-3 WARN AC-64 deferred until 2026-12-31 (37d)
 G-3 WARN AC-66 deferred until 2026-12-31 (37d)
 SUMMARY G-1=0 G-2=0 G-3=0 mode=strict exit=0
+```
+
+## Post-change run (after P0a commit `0d57398`)
+
+```text
+SUMMARY G-1=0 G-2=0 G-3=0 mode=strict exit=0
+G-3 NOT-RUN AC-69…AC-112 (44) GOV_AC_EVIDENCE_MISSING (status=PENDING)
+AC coverage: 43/112
 ```

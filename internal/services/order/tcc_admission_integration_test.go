@@ -132,9 +132,12 @@ func TestTccAdmissionNonePermitResolvesPre(t *testing.T) {
 			t.Fatalf("repeat changed rows (%s -> %d, want %d)", query, got, want)
 		}
 	}
+	// T1.4b1-R: the repeat sees both successful Payment refunds (the fake does
+	// not run the event consumer) and lazily reconciles the ledger, so the
+	// applications are DONE instead of staying PROCESSING forever.
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications
-		WHERE order_no = 'ORD-ADM-PRE' AND state = ?`, refundApplicationProcessing); got != 2 {
-		t.Fatalf("applications after repeat = %d, want 2 PROCESSING", got)
+		WHERE order_no = 'ORD-ADM-PRE' AND state = ?`, refundApplicationDone); got != 2 {
+		t.Fatalf("applications after repeat = %d, want 2 DONE after lazy reconcile", got)
 	}
 }
 
@@ -398,12 +401,21 @@ func TestTccAdmissionConcurrentIsIdempotent(t *testing.T) {
 		t.Fatalf("batches = %d, want 1", got)
 	}
 	batch := loadTccBatchRow(t, db, "ORD-ADM-RACE", "PAY-ADM-RACE")
-	if batch.State != refundBatchPaying {
-		t.Fatalf("batch state = %s, want PAYING after T1.4b1 payment was accepted", batch.State)
+	if batch.State != refundBatchPaying && batch.State != refundBatchDone {
+		t.Fatalf("batch state = %s, want PAYING or DONE after T1.4b1 payment", batch.State)
+	}
+	// A final pass deterministically converges the fake's successful Payment
+	// facts (no event consumer runs in this test) and closes the batch.
+	if err := svc.payTccBatch(ctx, "ORD-ADM-RACE", "PAY-ADM-RACE"); err != nil {
+		t.Fatalf("converge after concurrent admission: %v", err)
+	}
+	batch = loadTccBatchRow(t, db, "ORD-ADM-RACE", "PAY-ADM-RACE")
+	if batch.State != refundBatchDone {
+		t.Fatalf("batch state after convergence = %s, want DONE", batch.State)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications
-		WHERE batch_id = ? AND state = ?`, batch.BatchID, refundApplicationProcessing); got != 2 {
-		t.Fatalf("admitted applications = %d, want 2", got)
+		WHERE batch_id = ? AND state = ?`, batch.BatchID, refundApplicationDone); got != 2 {
+		t.Fatalf("admitted applications = %d, want 2 DONE", got)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-ADM-RACE'`); got != 2 {
 		t.Fatalf("admissions = %d, want 2", got)

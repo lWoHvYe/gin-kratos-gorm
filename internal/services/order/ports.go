@@ -27,10 +27,20 @@ type paymentPort interface {
 	// amount?" without a payment_no, which is required for the AC-40 zero-order
 	// narrowing before a zero settlement.
 	ListOrderIntents(ctx context.Context, in *pb.ListOrderIntentsRequest, opts ...grpc.CallOption) (*pb.IntentList, error)
-	// Refund executes one captured-payment refund (T1.4b). The request's
-	// idempotency_key is the caller's refund_id (`tcc:<payment_no>:<group_no>`
-	// for a TCC group), which Payment stores verbatim and repeats as
-	// payment.refunded.refund_id, so a retried group can never refund twice.
+	// GetRefundByKey reads the Payment-owned refund fact by
+	// (payment_no, refund_id). The T1.4b1-R preflight uses it to attribute what
+	// is already refunded/in-flight before any new money moves; a NotFound means
+	// "no refund with this key" (outstanding), not a transport failure.
+	GetRefundByKey(ctx context.Context, in *pb.GetRefundByKeyRequest, opts ...grpc.CallOption) (*pb.Refund, error)
+	// RefundBatch atomically refunds every outstanding group of a TCC batch
+	// (C-04). Payment commits all refund rows/events in one transaction and
+	// replays the persisted reply for the same (payment_no, batch_id); Order
+	// never falls back to Refund per group.
+	RefundBatch(ctx context.Context, in *pb.RefundBatchRequest, opts ...grpc.CallOption) (*pb.RefundBatchReply, error)
+	// Refund executes one captured-payment refund for non-TCC flows (for
+	// example an after-sales refund admitted by C-04). The TCC group payment
+	// phase must use RefundBatch only: per-group Refund cannot close the
+	// external-refund race (C-04 §2.3).
 	Refund(ctx context.Context, in *pb.RefundRequest, opts ...grpc.CallOption) (*pb.Empty, error)
 }
 

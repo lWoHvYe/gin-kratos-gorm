@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
@@ -30,6 +32,20 @@ type fakePaymentPort struct {
 	// succeed. refundCalls records every request so duplicates are visible.
 	refundErrs  []error
 	refundCalls []*pb.RefundRequest
+
+	// T1.4b1-R Payment facts. refundFacts is keyed by refund_id and is what
+	// GetRefundByKey reads (absent => NotFound). RefundBatch mirrors C-04's
+	// all-or-none contract and persists one reply per batch_id.
+	refundFacts    map[string]*pb.Refund
+	getRefundErr   error
+	getRefundErrs  map[string]error
+	getRefundCalls []string
+	batchErrs      []error
+	batchCalls     []*pb.RefundBatchRequest
+	batchReplies   map[string]*pb.RefundBatchReply
+	// beforeBatch runs inside RefundBatch after the call is recorded; tests use
+	// it to land an external refund in the preflight -> batch window.
+	beforeBatch func(*fakePaymentPort)
 }
 
 func (f *fakePaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, ...grpc.CallOption) (*pb.Intent, error) {
@@ -55,6 +71,143 @@ func (f *fakePaymentPort) Refund(_ context.Context, in *pb.RefundRequest, _ ...g
 		return nil, f.refundErrs[index]
 	}
 	return &pb.Empty{}, nil
+}
+
+// GetRefundByKey returns the fake's refund fact or Payment's NOT_FOUND answer.
+func (f *fakePaymentPort) GetRefundByKey(_ context.Context, in *pb.GetRefundByKeyRequest, _ ...grpc.CallOption) (*pb.Refund, error) {
+	refundID := in.GetRefundId()
+	f.getRefundCalls = append(f.getRefundCalls, refundID)
+	if f.getRefundErr != nil {
+		return nil, f.getRefundErr
+	}
+	if err := f.getRefundErrs[refundID]; err != nil {
+		return nil, err
+	}
+	if fact := f.refundFacts[refundID]; fact != nil {
+		return fact, nil
+	}
+	return nil, apperr.NotFound("refund not found")
+}
+
+// RefundBatch is the C-04 fake: one all-or-none transaction, batch replay from
+// the persisted reply, mixed existing/new items and the deterministic errors
+// Order must map to MANUAL_HOLD.
+func (f *fakePaymentPort) RefundBatch(_ context.Context, in *pb.RefundBatchRequest, _ ...grpc.CallOption) (*pb.RefundBatchReply, error) {
+	index := len(f.batchCalls)
+	f.batchCalls = append(f.batchCalls, in)
+	if f.beforeBatch != nil {
+		f.beforeBatch(f)
+	}
+	if index < len(f.batchErrs) && f.batchErrs[index] != nil {
+		return nil, f.batchErrs[index]
+	}
+	items := in.GetItems()
+	if len(items) == 0 {
+		return nil, fakeRefundBatchErr(apperr.CodeInvalidArgument, "INVALID_BATCH", "items must not be empty")
+	}
+	seen := make(map[string]struct{}, len(items))
+	var total int64
+	for _, item := range items {
+		if item.GetRefundId() == "" || item.GetAmountCent() <= 0 {
+			return nil, fakeRefundBatchErr(apperr.CodeInvalidArgument, "INVALID_BATCH", "invalid item")
+		}
+		if _, duplicate := seen[item.GetRefundId()]; duplicate {
+			return nil, fakeRefundBatchErr(apperr.CodeInvalidArgument, "INVALID_BATCH", "duplicate refund_id")
+		}
+		seen[item.GetRefundId()] = struct{}{}
+		total += item.GetAmountCent()
+	}
+	if total != in.GetExpectedTotalCent() {
+		return nil, fakeRefundBatchErr(apperr.CodeInvalidArgument, "BATCH_SUM_MISMATCH", "expected_total mismatch")
+	}
+	if prior := f.batchReplies[in.GetBatchId()]; prior != nil {
+		if err := sameFakeBatchItems(prior, items); err != nil {
+			return nil, fakeRefundBatchErr(apperr.CodeConflict, "IDEMPOTENCY_CONFLICT", err.Error())
+		}
+		return prior, nil
+	}
+	results := make([]*pb.RefundBatchItemResult, 0, len(items))
+	var existingSum, newSum int64
+	for _, item := range items {
+		if fact := f.refundFacts[item.GetRefundId()]; fact != nil {
+			if fact.GetAmountCent() != item.GetAmountCent() {
+				return nil, fakeRefundBatchErr(apperr.CodeConflict, "ITEM_CONFLICT", "refund amount differs")
+			}
+			if fact.GetStatus() != tccRefundStatusSucceeded && fact.GetStatus() != tccRefundStatusRefunded {
+				return nil, fakeRefundBatchErr(apperr.CodeFailedPrecondition, "BATCH_STATE_INVALID", "refund not adoptable")
+			}
+			existingSum += item.GetAmountCent()
+			results = append(results, &pb.RefundBatchItemResult{
+				RefundId: item.GetRefundId(), RefundNo: fact.GetRefundNo(),
+				Status: refundBatchStatusAlreadyRefunded, AmountCent: item.GetAmountCent(),
+			})
+			continue
+		}
+		newSum += item.GetAmountCent()
+	}
+	if newSum > f.captured-f.refunded {
+		return nil, fakeRefundBatchErr(apperr.CodeFailedPrecondition, "INSUFFICIENT_REMAINING", "insufficient captured remaining")
+	}
+	status := refundBatchStatusAlreadyRefunded
+	if newSum > 0 {
+		status = refundBatchStatusRefunded
+		f.refunded += newSum
+		for _, item := range items {
+			if f.refundFacts[item.GetRefundId()] != nil {
+				continue
+			}
+			fact := &pb.Refund{
+				RefundNo: fmt.Sprintf("RFD-%s", item.GetRefundId()), RefundId: item.GetRefundId(),
+				PaymentNo: in.GetPaymentNo(), AmountCent: item.GetAmountCent(),
+				Status: tccRefundStatusSucceeded, CreatedAtUnix: time.Now().Unix(),
+				Reason: in.GetReason(),
+			}
+			f.addRefundFact(fact)
+			results = append(results, &pb.RefundBatchItemResult{
+				RefundId: item.GetRefundId(), RefundNo: fact.GetRefundNo(),
+				Status: refundBatchStatusRefunded, AmountCent: item.GetAmountCent(),
+			})
+		}
+	}
+	if existingSum+newSum != total {
+		return nil, fakeRefundBatchErr(apperr.CodeFailedPrecondition, "BATCH_STATE_INVALID", "item sum diverges")
+	}
+	reply := &pb.RefundBatchReply{
+		BatchId: in.GetBatchId(), Status: status, RefundedCent: total, ItemResults: results,
+	}
+	if f.batchReplies == nil {
+		f.batchReplies = make(map[string]*pb.RefundBatchReply)
+	}
+	f.batchReplies[in.GetBatchId()] = reply
+	return reply, nil
+}
+
+func fakeRefundBatchErr(code apperr.Code, reason, msg string) error {
+	return apperr.New(code, reason+": "+msg).WithDetails(map[string]any{"reason": reason})
+}
+
+func sameFakeBatchItems(reply *pb.RefundBatchReply, items []*pb.RefundBatchItem) error {
+	if len(reply.GetItemResults()) != len(items) {
+		return errors.New("different item count")
+	}
+	byID := make(map[string]int64, len(reply.GetItemResults()))
+	for _, result := range reply.GetItemResults() {
+		byID[result.GetRefundId()] = result.GetAmountCent()
+	}
+	for _, item := range items {
+		amount, ok := byID[item.GetRefundId()]
+		if !ok || amount != item.GetAmountCent() {
+			return errors.New("different item set")
+		}
+	}
+	return nil
+}
+
+func (f *fakePaymentPort) addRefundFact(fact *pb.Refund) {
+	if f.refundFacts == nil {
+		f.refundFacts = make(map[string]*pb.Refund)
+	}
+	f.refundFacts[fact.GetRefundId()] = fact
 }
 
 type fakeFulfillmentPort struct {

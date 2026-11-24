@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
@@ -27,6 +28,7 @@ type countingPaymentPort struct {
 	refunded    int64
 	getCalls    int
 	refundCalls int
+	refundFacts map[string]*pb.Refund
 }
 
 func (f *countingPaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, ...grpc.CallOption) (*pb.Intent, error) {
@@ -47,6 +49,65 @@ func (f *countingPaymentPort) Refund(context.Context, *pb.RefundRequest, ...grpc
 	defer f.mu.Unlock()
 	f.refundCalls++
 	return &pb.Empty{}, nil
+}
+
+func (f *countingPaymentPort) GetRefundByKey(_ context.Context, in *pb.GetRefundByKeyRequest, _ ...grpc.CallOption) (*pb.Refund, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if fact := f.refundFacts[in.GetRefundId()]; fact != nil {
+		return fact, nil
+	}
+	return nil, apperr.NotFound("refund not found")
+}
+
+func (f *countingPaymentPort) RefundBatch(_ context.Context, in *pb.RefundBatchRequest, _ ...grpc.CallOption) (*pb.RefundBatchReply, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	results := make([]*pb.RefundBatchItemResult, 0, len(in.GetItems()))
+	var total, newSum int64
+	for _, item := range in.GetItems() {
+		total += item.GetAmountCent()
+		if fact := f.refundFacts[item.GetRefundId()]; fact != nil {
+			results = append(results, &pb.RefundBatchItemResult{
+				RefundId: item.GetRefundId(), RefundNo: fact.GetRefundNo(),
+				Status: refundBatchStatusAlreadyRefunded, AmountCent: item.GetAmountCent(),
+			})
+			continue
+		}
+		newSum += item.GetAmountCent()
+	}
+	if total != in.GetExpectedTotalCent() {
+		return nil, fakeRefundBatchErr(apperr.CodeInvalidArgument, "BATCH_SUM_MISMATCH", "expected_total mismatch")
+	}
+	if newSum > f.captured-f.refunded {
+		return nil, fakeRefundBatchErr(apperr.CodeFailedPrecondition, "INSUFFICIENT_REMAINING", "insufficient captured remaining")
+	}
+	status := refundBatchStatusAlreadyRefunded
+	if newSum > 0 {
+		status = refundBatchStatusRefunded
+		f.refunded += newSum
+		if f.refundFacts == nil {
+			f.refundFacts = make(map[string]*pb.Refund)
+		}
+		for _, item := range in.GetItems() {
+			if f.refundFacts[item.GetRefundId()] != nil {
+				continue
+			}
+			fact := &pb.Refund{
+				RefundNo: "RFD-" + item.GetRefundId(), RefundId: item.GetRefundId(),
+				PaymentNo: in.GetPaymentNo(), AmountCent: item.GetAmountCent(),
+				Status: tccRefundStatusSucceeded, CreatedAtUnix: time.Now().Unix(),
+			}
+			f.refundFacts[item.GetRefundId()] = fact
+			results = append(results, &pb.RefundBatchItemResult{
+				RefundId: item.GetRefundId(), RefundNo: fact.GetRefundNo(),
+				Status: refundBatchStatusRefunded, AmountCent: item.GetAmountCent(),
+			})
+		}
+	}
+	return &pb.RefundBatchReply{
+		BatchId: in.GetBatchId(), Status: status, RefundedCent: total, ItemResults: results,
+	}, nil
 }
 
 func (f *countingPaymentPort) setRefunded(cent int64) {
@@ -294,7 +355,9 @@ func TestTccCancelPrecheckFailureAuditDoesNotBlockNextAttempt(t *testing.T) {
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchFailedPre); got != 2 {
 		t.Fatalf("audit attempts after success = %d, want 2", got)
 	}
-	// A repeat on the admitted batch resumes it; no new batch/attempt.
+	// A repeat on the admitted batch resumes it; no new batch/attempt. The
+	// repeat also sees the fake's successful Payment refunds (no event consumer
+	// runs here) and lazily reconciles the ledger, so the batch converges DONE.
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
 		OrderNo: "ORD-TCC-AUDIT", PaymentNo: "PAY-AUDIT", PaidCent: 10000,
 	}); err != nil {
@@ -303,8 +366,8 @@ func TestTccCancelPrecheckFailureAuditDoesNotBlockNextAttempt(t *testing.T) {
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT'`); got != 3 {
 		t.Fatalf("batches after resume = %d, want 3 (2 audit + 1 admitted)", got)
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchPaying); got != 1 {
-		t.Fatalf("paying batches = %d, want 1", got)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchDone); got != 1 {
+		t.Fatalf("done batches = %d, want 1 after lazy reconcile", got)
 	}
 }
 
@@ -580,8 +643,11 @@ func TestTccCancelConcurrentAndRepeatedIsIdempotent(t *testing.T) {
 			WHERE refund_id = ?`, tccGroupRefundID("PAY-RACE", groupNo)).Scan(&appState, &appResult); err != nil {
 			t.Fatal(err)
 		}
-		if appState != refundApplicationProcessing || appResult != refundResultPre {
-			t.Fatalf("%s application = %s/%s, want PROCESSING/PRE", groupNo, appState, appResult)
+		// The repeat after the race lazily reconciles the fake's successful
+		// Payment facts: DONE is the expected converged state, and the resolved
+		// admission result is still PRE.
+		if appState != refundApplicationDone || appResult != refundResultPre {
+			t.Fatalf("%s application = %s/%s, want DONE/PRE", groupNo, appState, appResult)
 		}
 	}
 	if payments.getCalls < 1 {
@@ -927,11 +993,13 @@ func TestTccCancelKnownCompositionLineMismatchFailsClosed(t *testing.T) {
 // gatedPaymentPort blocks the first Payment read until released so a test can
 // deterministically interleave two TCC cancels.
 type gatedPaymentPort struct {
-	mu       sync.Mutex
-	calls    int
-	entered  chan struct{}
-	release  chan struct{}
-	captured int64
+	mu          sync.Mutex
+	calls       int
+	entered     chan struct{}
+	release     chan struct{}
+	captured    int64
+	refunded    int64
+	refundFacts map[string]*pb.Refund
 }
 
 func (f *gatedPaymentPort) GetIntent(context.Context, *pb.GetIntentRequest, ...grpc.CallOption) (*pb.Intent, error) {
@@ -952,6 +1020,65 @@ func (f *gatedPaymentPort) ListOrderIntents(context.Context, *pb.ListOrderIntent
 
 func (f *gatedPaymentPort) Refund(context.Context, *pb.RefundRequest, ...grpc.CallOption) (*pb.Empty, error) {
 	return &pb.Empty{}, nil
+}
+
+func (f *gatedPaymentPort) GetRefundByKey(_ context.Context, in *pb.GetRefundByKeyRequest, _ ...grpc.CallOption) (*pb.Refund, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if fact := f.refundFacts[in.GetRefundId()]; fact != nil {
+		return fact, nil
+	}
+	return nil, apperr.NotFound("refund not found")
+}
+
+func (f *gatedPaymentPort) RefundBatch(_ context.Context, in *pb.RefundBatchRequest, _ ...grpc.CallOption) (*pb.RefundBatchReply, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	results := make([]*pb.RefundBatchItemResult, 0, len(in.GetItems()))
+	var total, newSum int64
+	for _, item := range in.GetItems() {
+		total += item.GetAmountCent()
+		if fact := f.refundFacts[item.GetRefundId()]; fact != nil {
+			results = append(results, &pb.RefundBatchItemResult{
+				RefundId: item.GetRefundId(), RefundNo: fact.GetRefundNo(),
+				Status: refundBatchStatusAlreadyRefunded, AmountCent: item.GetAmountCent(),
+			})
+			continue
+		}
+		newSum += item.GetAmountCent()
+	}
+	if total != in.GetExpectedTotalCent() {
+		return nil, fakeRefundBatchErr(apperr.CodeInvalidArgument, "BATCH_SUM_MISMATCH", "expected_total mismatch")
+	}
+	if newSum > f.captured-f.refunded {
+		return nil, fakeRefundBatchErr(apperr.CodeFailedPrecondition, "INSUFFICIENT_REMAINING", "insufficient captured remaining")
+	}
+	status := refundBatchStatusAlreadyRefunded
+	if newSum > 0 {
+		status = refundBatchStatusRefunded
+		f.refunded += newSum
+		if f.refundFacts == nil {
+			f.refundFacts = make(map[string]*pb.Refund)
+		}
+		for _, item := range in.GetItems() {
+			if f.refundFacts[item.GetRefundId()] != nil {
+				continue
+			}
+			fact := &pb.Refund{
+				RefundNo: "RFD-" + item.GetRefundId(), RefundId: item.GetRefundId(),
+				PaymentNo: in.GetPaymentNo(), AmountCent: item.GetAmountCent(),
+				Status: tccRefundStatusSucceeded, CreatedAtUnix: time.Now().Unix(),
+			}
+			f.refundFacts[item.GetRefundId()] = fact
+			results = append(results, &pb.RefundBatchItemResult{
+				RefundId: item.GetRefundId(), RefundNo: fact.GetRefundNo(),
+				Status: refundBatchStatusRefunded, AmountCent: item.GetAmountCent(),
+			})
+		}
+	}
+	return &pb.RefundBatchReply{
+		BatchId: in.GetBatchId(), Status: status, RefundedCent: total, ItemResults: results,
+	}, nil
 }
 
 // T1.3 concurrency: a caller whose Σ precheck raced a winning TCC freeze must

@@ -473,6 +473,10 @@ func TestTccCancelKeepsLifecycleAndSetsRefundState(t *testing.T) {
 	if _, err := db.Exec(`UPDATE orders SET settlement_payment_no = 'PAY-2' WHERE order_no = 'ORD-TCC-PAID'`); err != nil {
 		t.Fatal(err)
 	}
+	// The fake intent is shared by both orders; PAY-2 is a different captured
+	// payment with its own refunded total, so reset the fake's projection.
+	payments := svc.payments.(*fakePaymentPort)
+	payments.refunded = 0
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
 		OrderNo: "ORD-TCC-PAID", PaymentNo: "PAY-2", PaidCent: 1000,
 	}); err != nil {

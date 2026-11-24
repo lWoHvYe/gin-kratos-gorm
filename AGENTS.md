@@ -75,6 +75,12 @@
 4. **验收语义**：AC 文本引用不等于 AC 已验收；线程 CLOSED、实现 PASS、代码合入与 Release PASS 不得混用。跨服务变更必须验证受影响的既有基线，不得只验证新增 AC。
 5. **Plan/Tasks 与 Stop-the-line**：P0/跨服务/资金/库存/权限/状态机变更必须先有 Plan/Tasks 与 AC 证据矩阵；Plan 未批准不得写业务代码。QC/Reviewer FAIL 后冻结 `change_id`，直到修复 Plan、契约裁决与重审完成。
 6. **Actor/change_id**：受管交付 MUST 使用 `change_id`、`Actor`、`Reviewed-by` trailer；同一 `change_id` 的 `Actor` 不得等于 `Reviewed-by`。
+7. **变更分级 (L0/L1/L2)**：判据与流程以 `docs/collab/CONVENTIONS.md` §2.3 为准；无法明确归入 L0/L1 的一律 L2，命中任一 L2 触发条即 L2。
+    * **L0**：仅非规范性文本（文档/注释/格式）；免 Spec/ADR/QC/Plan，跑相关测试；仍须**人类合入**。规范性 Spec/ADR 修改走修订流程（EARS + QC + 人类批准），不是 L0。
+    * **L1**：行为变更仅限单一服务（精确一个 `internal/services/<service>/` + `cmd/<service>/`），且不命中 L2 触发条（P0、跨服务含既有事件消费效应、资金、库存、权限含 gateway/BFF 鉴权、状态机拆分、契约/事件/迁移、`api/proto/**`、`migrations/**`、`internal/platform/**`、`frontend/**`、`deploy/**`、共享包）；引用既有 Spec 条款 + 测试日志 + Reviewer PASS，更新受影响既有 AC 行，无新 Spec/ADR/QC/Plan，**人类合入**。
+    * **L2**：命中上述任一触发条的变更；沿用既有完整阶梯，不减免任何批准点。
+    * **防作弊**：治理/工具链变更（本文件、`CONVENTIONS.md`、宪法、CI、`scripts/**`、spec/ADR 结构）恒为 L2；Lead 提议级别并引用命中判据，Reviewer 在 verdict 中确认，Developer 不得设定或更改级别；误判即 stop-the-line，冻结 `change_id` 并按 L2 重做、记入 `docs/review-tracking.md` 的 human decisions/frozen 条目；合入后发现误判 MUST 记录并回退或取得追溯 L2 批准；分级表仅人类批准可改，任何级别保留人类 Release，L2 保留全部既有批准点。
+    * **变更输入**：`change_id`、`Tier`、`Tier-Rationale`、`Spec-Ref`（须实际覆盖改动行为，否则 L2）、`allowed_paths`、base/head、`baseline_impact`/INV、测试证据、Reviewer verdict、人类合入批准人与日期；commit trailer 写 `Tier: L0|L1|L2`。
 
 ---
 

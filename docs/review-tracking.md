@@ -238,6 +238,15 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   AC-69…AC-112 从 `ac-baseline.txt`/`ac-coverage.tsv` 移除（台账回到 AC-01…68 / 36 行），
   `docs/specs/README.md` 的 SPEC-0003 索引行移除。仅保留本决策记录与
   `docs/cost-reduction-proposal.md` 作为历史；不再有任何门禁/脚本引用它们。
+- **2026-11-25 tiering decision (Director)**: 分级以人工约定写入 `AGENTS.md` §2.7 /
+  `CONVENTIONS.md` §2.3，无脚本、无 CI、无新状态字段。**L1 审批 = Reviewer PASS + 人类合入**，
+  取代已撤回 GOV-COST-01 的 D-CR-2（QC+Reviewer 联签，从未实施）；**L0 同样保留人类合入**
+  （宪法 Governance 4：merge 是人类检查点，Lead/subagent 不得代行）；L2 不减免任何批准点。
+  判据变更须人类批准；误判即 stop-the-line、按 L2 重做并记录在此。
+- **2026-11-25 delta audit (Governance 5)**: 治理基线变更——AGENTS.md §2.7 与
+  CONVENTIONS.md §2.3 新增 L0/L1/L2 分级；宪法 v1.2.1（门禁退役）；协作闸门脚本/CI
+  已删除。所有 Lead/subagent 必须重新读取 AGENTS、宪法、CONVENTIONS 与自身 prompt，
+  不得依赖旧摘要。
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

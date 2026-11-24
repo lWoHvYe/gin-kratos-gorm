@@ -73,6 +73,32 @@ MEMORY 不复制当前线程状态、PASS、commit、expiry 或发布状态；�
 - 每条结论按所有者分流：业务口径回 PO，设计回 Architect，实现回 Developer，验收语义回 Reviewer。
 - 分流前必须核对是否已被既有 Spec/ADR/INV 裁决；已裁决的只能按文档漂移处理。
 
+### 2.3 变更分级判定
+
+变更分 L0/L1/L2 三级，判据与流程如下；级别随变更记录，Reviewer 逐条核对判据与证据。
+
+| 级别 | 适用范围 | 流程 |
+| --- | --- | --- |
+| **L0** | 仅非规范性文本（文档/注释/格式）；不改变行为、契约、状态、权限或生成物语义 | 无 Spec/ADR/QC/Plan；运行相关测试；**人类合入** |
+| **L1** | 行为变更且仅限单一服务：精确一个 `internal/services/<service>/` + `cmd/<service>/`，且不命中任一 L2 触发条 | 引用既有 Spec 条款（`Spec-Ref`）+ 测试日志 + Reviewer PASS；更新受影响的既有 AC 行；无新 Spec/ADR/QC/Plan、无分级台账；**人类合入** |
+| **L2** | 命中任一 L2 触发条的变更 | 沿用既有完整阶梯，不减免任何既有批准点 |
+
+**L1 审批 = Reviewer PASS + 人类合入**，取代已撤回的 GOV-COST-01 D-CR-2（QC+Reviewer 联签，从未实施）；见 `docs/review-tracking.md` 2026-11-25 tiering decision。
+
+**L2 触发条（与宪法 Workflow 8 一致，任一命中即 L2）**：P0、跨服务（含既有事件的消费效应）、资金、库存、权限（任一类，含 gateway/BFF 鉴权）、状态机拆分，以及契约/事件/迁移变更；契约含既有 RPC/事件响应语义、错误码映射、事件 payload 语义与消费语义。L1 与任一触发条重叠即 L2：单服务 P0 修复、网关鉴权变更、既有事件消费行为变更均不得判 L1。`frontend/**`、`deploy/**`、共享包、`internal/platform/**` 恒为 L2。规范性 Spec/ADR 修改走修订流程（EARS + QC + 人类批准），不得判 L0。
+
+**判据与防作弊（不可协商）**
+
+1. **默认升级**：不能明确归入 L0/L1 的变更一律 L2；治理/工具链变更（`AGENTS.md`、本文件、宪法、CI、`scripts/**`、spec/ADR 结构）恒为 L2。
+2. **禁止自报**：Lead 提议级别并引用命中判据；Reviewer 在 verdict 中确认；Developer 不得设定或更改级别。
+3. **误判即 stop-the-line**：冻结该 `change_id`，按 L2 重做，并记入 `docs/review-tracking.md` 的 human decisions/frozen 条目；不得新开 `change_id` 或用 `hotfix:` 绕过；合入后发现误判 MUST 记录，并回退或取得追溯 L2 批准，不得默认保留。
+4. **判据即法**：只有经人类批准的 `AGENTS.md`/本文件变更可以修改分级表；Agent 不得改动判据以改判任何工作。
+5. **人类检查点保留**：任何级别均保留人类 Release；L0 与 L1 保留人类合入（宪法 Governance 4：merge 是人类检查点，Lead/subagent 不得代行）；L2 保留全部既有批准点。
+
+**变更输入**（随 commit/PR 记录，不新增文件格式）：`change_id`、`Tier`、`Tier-Rationale`、`Spec-Ref`（须实际覆盖改动行为，否则 L2）、`allowed_paths`、base/head、`baseline_impact`/INV、测试证据、Reviewer verdict、人类合入批准人与日期；commit trailer 写 `Tier: L0|L1|L2`。
+
+**范围守卫**：不恢复 `make gates`、不建立按级别的 AC 台账、不新增状态字段、不引入 QC delta 机制。L1 不写 EARS AC：其无新契约，证据即既有 Spec 条款 + 测试 + 受影响既有 AC 行的更新。
+
 ---
 
 ## 3. 变更输入包与 integration owner

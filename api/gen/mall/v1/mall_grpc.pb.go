@@ -4047,6 +4047,7 @@ const (
 	PaymentService_VerifyPayment_FullMethodName     = "/mall.v1.PaymentService/VerifyPayment"
 	PaymentService_ListRefunds_FullMethodName       = "/mall.v1.PaymentService/ListRefunds"
 	PaymentService_GetRefundByKey_FullMethodName    = "/mall.v1.PaymentService/GetRefundByKey"
+	PaymentService_RefundBatch_FullMethodName       = "/mall.v1.PaymentService/RefundBatch"
 )
 
 // PaymentServiceClient is the client API for PaymentService service.
@@ -4075,6 +4076,9 @@ type PaymentServiceClient interface {
 	// return type is package-qualified because the legacy Refund method name
 	// shadows the unqualified Refund message in protoc name resolution.
 	GetRefundByKey(ctx context.Context, in *GetRefundByKeyRequest, opts ...grpc.CallOption) (*Refund, error)
+	// RefundBatch is the atomic group-refund batch. Every item commits in the
+	// same transaction; a batch-level error writes no refund row and no event.
+	RefundBatch(ctx context.Context, in *RefundBatchRequest, opts ...grpc.CallOption) (*RefundBatchReply, error)
 }
 
 type paymentServiceClient struct {
@@ -4185,6 +4189,16 @@ func (c *paymentServiceClient) GetRefundByKey(ctx context.Context, in *GetRefund
 	return out, nil
 }
 
+func (c *paymentServiceClient) RefundBatch(ctx context.Context, in *RefundBatchRequest, opts ...grpc.CallOption) (*RefundBatchReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefundBatchReply)
+	err := c.cc.Invoke(ctx, PaymentService_RefundBatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentServiceServer is the server API for PaymentService service.
 // All implementations must embed UnimplementedPaymentServiceServer
 // for forward compatibility.
@@ -4211,6 +4225,9 @@ type PaymentServiceServer interface {
 	// return type is package-qualified because the legacy Refund method name
 	// shadows the unqualified Refund message in protoc name resolution.
 	GetRefundByKey(context.Context, *GetRefundByKeyRequest) (*Refund, error)
+	// RefundBatch is the atomic group-refund batch. Every item commits in the
+	// same transaction; a batch-level error writes no refund row and no event.
+	RefundBatch(context.Context, *RefundBatchRequest) (*RefundBatchReply, error)
 	mustEmbedUnimplementedPaymentServiceServer()
 }
 
@@ -4250,6 +4267,9 @@ func (UnimplementedPaymentServiceServer) ListRefunds(context.Context, *ListRefun
 }
 func (UnimplementedPaymentServiceServer) GetRefundByKey(context.Context, *GetRefundByKeyRequest) (*Refund, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRefundByKey not implemented")
+}
+func (UnimplementedPaymentServiceServer) RefundBatch(context.Context, *RefundBatchRequest) (*RefundBatchReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefundBatch not implemented")
 }
 func (UnimplementedPaymentServiceServer) mustEmbedUnimplementedPaymentServiceServer() {}
 func (UnimplementedPaymentServiceServer) testEmbeddedByValue()                        {}
@@ -4452,6 +4472,24 @@ func _PaymentService_GetRefundByKey_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentService_RefundBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefundBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).RefundBatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_RefundBatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).RefundBatch(ctx, req.(*RefundBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PaymentService_ServiceDesc is the grpc.ServiceDesc for PaymentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4498,6 +4536,10 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRefundByKey",
 			Handler:    _PaymentService_GetRefundByKey_Handler,
+		},
+		{
+			MethodName: "RefundBatch",
+			Handler:    _PaymentService_RefundBatch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

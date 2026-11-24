@@ -17,6 +17,12 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-24 T1.4a Addendum approved
+
+Director approved the T1.4a contract rulings Addendum (R-A INV-44 owner,
+R-B POST commitment timing, R-C zero cancel). T1.4a code `6be5c5a` remains
+WIP; T1.4b/T3 and Reviewer are still required. No AC-VERIFIED/merge.
+
 ### 2026-11-24 T1.2-R2 PASS (scoped)
 
 - G1/g1/g2/g3 closed; Reviewer PASS for `e7e29e5..72b984b`.

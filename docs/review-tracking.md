@@ -17,6 +17,13 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-25 T1.4b1-R2 PASS (scoped)
+
+- B2 persistent reconcile worker/order projection and B3 selfcheck closed;
+  Reviewer PASS for `198c623..6ac218e`.
+- Continue WIP; no merge. T1.4b2 next: INV-44 release/restock + zero
+  AfterSales task; C-04 release event no separate human approval.
+
 ### 2026-11-25 T1.4b1-R FAIL — B2/B3
 
 - B1 external refund/atomicity closed; B2 lazy reconcile is not persistent and

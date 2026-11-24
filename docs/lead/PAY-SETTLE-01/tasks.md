@@ -115,6 +115,6 @@ Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `
 ## T1.4 closure (2026-11-25)
 
 - [x] T1.4b2a P0-R2 Reviewer PASS (60130e1..1de09e3): single-group release only.
-- [ ] T1.5 `order.refund_requested` observe-only (Amendment first).
-- [ ] T1.6 PENDING/CANCELLED + captured (Amendment first).
+- [x] T1.5 TCC bypass removed; consumer retained only for cancelled-after-confirm; observe-only deferred to T1.6.
+- [ ] T1.6 payment-level cancel: `pay:<payment_no>:cancel`, PENDING/CANCELLED+captured, then consumer observe-only (Amendment first).
 - [ ] T1.7/T5 evidence.

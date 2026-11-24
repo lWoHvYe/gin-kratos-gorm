@@ -26,6 +26,17 @@ WP-I2 release, WP-I3 restock, WP-B1/B2 backfill, WP-E1..E4 compatibility,
 WP-V1 evidence. Each WP owns one invariant, one branch, one scoped Reviewer.
 T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
 
+### 2026-11-25 T1.5 re-scope: TCC no longer uses refund_requested
+
+- Verified `TccCancelMarkPaid` no longer emits `shop.order.refund_requested.v1`
+  (T1.4 admission/batch path uses `refund_applications` + `RefundBatch`).
+- The only remaining producer is `refundCancelledAfterConfirm` (payment-level
+  cancel after inventory confirm). Making the consumer observe-only now would
+  drop that refund. Therefore T1.5 is closed as "TCC bypass removed"; the
+  remaining consumer stays until T1.6 adds the durable payment-level cancel
+  path (`pay:<payment_no>:cancel`) and then becomes observe-only.
+- No code change in T1.5.
+
 ### 2026-11-25 T1.4b2a P0-R2 PASS (scoped)
 
 - Reviewer PASS for `60130e1..1de09e3`: group_count=1, single-group release,

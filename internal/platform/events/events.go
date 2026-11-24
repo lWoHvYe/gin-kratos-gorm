@@ -34,6 +34,55 @@ type AfterSaleCompleted struct {
 	Reason              string `json:"reason"`
 }
 
+// Event identity of the INV-44 release request produced by Order and executed
+// by Inventory (T1.4b2a). The subject is versioned because this is an additive
+// protocol: the legacy order-level inventory.compensation_requested keeps its
+// own semantics.
+const (
+	RefundReleaseTopic     = "shop.inventory.refund_release_requested.v1"
+	RefundReleaseEventType = "inventory.refund_release_requested"
+
+	RefundReleaseSourceTCC            = "tcc"
+	RefundReleaseSourceSystemZero     = "system_zero"
+	RefundReleaseSourceSystemShortage = "system_shortage"
+	RefundReleaseSourceAfterSale      = "aftersale"
+
+	RefundReleaseReasonTCCCompensation = "TCC_COMPENSATION"
+	RefundReleaseReasonZeroAfterSale   = "ZERO_AFTER_SALE"
+	RefundReleaseReasonShortageRefund  = "SHORTAGE_REFUND"
+	RefundReleaseReasonAfterSaleRefund = "AFTER_SALE_REFUND"
+)
+
+// RefundReleaseID is the deterministic idempotency key of one group release:
+// the group refund identity prefixed once. Replaying the same refund must
+// converge on the same release instead of creating a second one.
+func RefundReleaseID(refundID string) string { return "rr:" + refundID }
+
+// RefundReleaseItem is one (sku, warehouse) quantity released by Inventory.
+// WarehouseID is mandatory: multi-warehouse operations must never default to
+// W1 (AGENTS §4 / constitution Article III.3).
+type RefundReleaseItem struct {
+	SkuID       int64 `json:"sku_id"`
+	Quantity    int64 `json:"quantity"`
+	WarehouseID int64 `json:"warehouse_id"`
+}
+
+// RefundReleaseRequested is the durable INV-44 release intent. Order writes it
+// inside the refund admission transaction; Inventory consumes it and performs
+// Release (HELD) or TccCancelConfirm (CONFIRMED). It carries no money/permit
+// decision and must not be interpreted as an order status change.
+type RefundReleaseRequested struct {
+	SchemaVersion int32               `json:"schema_version"`
+	ReleaseID     string              `json:"release_id"`
+	RefundID      string              `json:"refund_id"`
+	OrderNo       string              `json:"order_no"`
+	GroupNo       string              `json:"group_no"`
+	Source        string              `json:"source"`
+	Reason        string              `json:"reason"`
+	Items         []RefundReleaseItem `json:"items"`
+	RequestedAt   string              `json:"requested_at"`
+}
+
 // PaymentRefunded is the canonical payment refund fact consumed by Order.
 type PaymentRefunded struct {
 	PaymentNo           string `json:"payment_no"`

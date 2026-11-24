@@ -179,7 +179,7 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	if existing, err := findRefundAdmission(ctx, s.db, refundID); err != nil {
 		return nil, apperr.Internal("load refund admission", err)
 	} else if existing != nil && existing.State == refundPending {
-		return s.finishRemoteAdmission(ctx, existing)
+		return s.finishRemoteAdmission(ctx, existing, req.GetSource())
 	} else if existing != nil {
 		return admissionReply(existing), nil
 	}
@@ -205,7 +205,7 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	} else if existing != nil {
 		_ = tx.Rollback()
 		if existing.State == refundPending {
-			return s.finishRemoteAdmission(ctx, existing)
+			return s.finishRemoteAdmission(ctx, existing, req.GetSource())
 		}
 		return admissionReply(existing), nil
 	}
@@ -281,6 +281,11 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	if err := appendRefundAdmitted(ctx, tx, refundID, orderNo, groupNo, result, req.GetAmountCent(), 1, state); err != nil {
 		return nil, err
 	}
+	if result == refundResultPre {
+		if err := appendRefundReleaseTx(ctx, tx, refundID, orderNo, groupNo, req.GetSource()); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, apperr.Internal("commit refund admission", err)
 	}
@@ -289,7 +294,7 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		State: state, AmountCent: req.GetAmountCent(), Version: 1,
 	}
 	if state == refundPending {
-		return s.finishRemoteAdmission(ctx, row)
+		return s.finishRemoteAdmission(ctx, row, req.GetSource())
 	}
 	return admissionReply(row), nil
 }
@@ -500,6 +505,13 @@ func (s *Service) writeZeroRefundTx(ctx context.Context, refundID, orderNo, grou
 	if err := appendRefundAdmitted(ctx, tx, refundID, orderNo, groupNo, admissionResult, 0, 1, refundApplicationDone); err != nil {
 		return nil, false, err
 	}
+	// Zero and positive amounts share the same INV-44 release path; zero only
+	// skips Payment. A POST result left the warehouse and must not release.
+	if admissionResult == refundResultPre {
+		if err := appendRefundReleaseTx(ctx, tx, refundID, orderNo, groupNo, refundSourceSystemZero); err != nil {
+			return nil, false, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, false, apperr.Internal("commit zero-amount refund admission", err)
 	}
@@ -551,7 +563,7 @@ func zeroRefundableStatus(status string) bool {
 	}
 }
 
-func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissionRow) (*pb.AdmitRefundReply, error) {
+func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissionRow, source string) (*pb.AdmitRefundReply, error) {
 	if s.fulfillment == nil {
 		return nil, apperr.Unavailable("fulfillment client is required for consumed permits", nil)
 	}
@@ -582,6 +594,11 @@ func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissio
 	}
 	if err := appendRefundAdmitted(ctx, tx, row.RefundID, row.OrderNo, row.GroupNo, result, row.AmountCent, row.Version+1, result); err != nil {
 		return nil, err
+	}
+	if result == refundResultPre {
+		if err := appendRefundReleaseTx(ctx, tx, row.RefundID, row.OrderNo, row.GroupNo, source); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, apperr.Internal("commit refund admission tx2", err)

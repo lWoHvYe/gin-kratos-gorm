@@ -37,6 +37,7 @@ func TestRegistryCoversKnownEventTypes(t *testing.T) {
 		"order.created", "order.cancelled", "order.paid", "order.settled", "order.refund_admitted", "order.allocated",
 		"order.shipped", "order.completed", "order.refund_requested", "order.refund_projected",
 		"inventory.compensation_requested", "inventory.confirm_requested",
+		"inventory.refund_release_requested",
 		"inventory.reserved", "inventory.confirmed", "inventory.released",
 		"inventory.stock_changed", "inventory.adjusted",
 		"inventory.operation_completed", "inventory.operation_failed", "inventory.operation_item_failed",

@@ -78,6 +78,23 @@ type refund struct {
 	Channel        string
 	IdempotencyKey string
 	BatchID        string
+	CreatedAt      time.Time
+}
+
+// toPB exposes a persisted refund fact. RefundID is the stored
+// idempotency_key: callers must key lazy reconciliation on refund_id, never on
+// refund_no (C-04 §1.2).
+func (r *refund) toPB() *pb.Refund {
+	return &pb.Refund{
+		RefundNo:      r.RefundNo,
+		PaymentNo:     r.PaymentNo,
+		OrderNo:       r.OrderNo,
+		AmountCent:    r.AmountCent,
+		Reason:        r.Reason,
+		Status:        r.Status,
+		CreatedAtUnix: r.CreatedAt.Unix(),
+		RefundId:      r.IdempotencyKey,
+	}
 }
 
 // refundBatchRecord is one payment_refund_batches row: the persistent
@@ -189,13 +206,13 @@ func (r *repo) callbackPaymentNo(ctx context.Context, q querier, channel, eventI
 	return paymentNo, err
 }
 
-const refundColumns = `refund_no, payment_no, order_no, amount_cent, reason, status, channel, COALESCE(idempotency_key, ''), COALESCE(batch_id, '')`
+const refundColumns = `refund_no, payment_no, order_no, amount_cent, reason, status, channel, COALESCE(idempotency_key, ''), COALESCE(batch_id, ''), created_at`
 
 func (r *repo) refundByKey(ctx context.Context, q querier, paymentNo, idempotencyKey string) (*refund, error) {
 	var ref refund
 	err := q.QueryRowContext(ctx, `SELECT `+refundColumns+` FROM refunds
 		WHERE payment_no = ? AND idempotency_key = ?`, paymentNo, idempotencyKey).
-		Scan(&ref.RefundNo, &ref.PaymentNo, &ref.OrderNo, &ref.AmountCent, &ref.Reason, &ref.Status, &ref.Channel, &ref.IdempotencyKey, &ref.BatchID)
+		Scan(&ref.RefundNo, &ref.PaymentNo, &ref.OrderNo, &ref.AmountCent, &ref.Reason, &ref.Status, &ref.Channel, &ref.IdempotencyKey, &ref.BatchID, &ref.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

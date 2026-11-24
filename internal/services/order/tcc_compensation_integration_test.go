@@ -1627,3 +1627,276 @@ func TestTccCancelFullRefundStateIsIdempotent(t *testing.T) {
 		t.Fatalf("FULL compensation wrote batches: %d", got)
 	}
 }
+
+// Review G1: a historical order with no fulfillment groups whose lifecycle is
+// already SHIPPED/COMPLETED must derive the synthetic G1 status from
+// orders.status. Without shipment facts it is POST, and the fallback must not
+// initialize/revoke a G1 permit or write a commitment.
+func TestTccCancelLegacyG1ShippedUsesOrderStatus(t *testing.T) {
+	for _, tc := range []struct {
+		orderStatus string
+	}{
+		{statusShipped},
+		{statusCompleted},
+	} {
+		t.Run(tc.orderStatus, func(t *testing.T) {
+			db := orderTestDB(t)
+			svc := tccTestService(t, db, &fakePaymentPort{captured: 10000})
+			ctx := context.Background()
+			orderNo := "ORD-TCC-LEGACY-" + tc.orderStatus
+			paymentNo := "PAY-LEGACY-" + tc.orderStatus
+			seedTccOrder(t, db, orderNo, 10000, 10000, 0, 0, paymentNo)
+			seedTccLine(t, db, orderNo, 1, "G1", 10000)
+			setTccOrderStatus(t, db, orderNo, tc.orderStatus)
+
+			if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+				OrderNo: orderNo, PaymentNo: paymentNo, PaidCent: 10000,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			var refundState, result string
+			if err := db.QueryRow(`SELECT refund_state FROM orders WHERE order_no = ?`, orderNo).Scan(&refundState); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.QueryRow(`SELECT admission_result FROM refund_applications
+				WHERE refund_id = ?`, tccGroupRefundID(paymentNo, "G1")).Scan(&result); err != nil {
+				t.Fatal(err)
+			}
+			if refundState != refundStateRefunding || result != refundResultPost {
+				t.Fatalf("%s = refund_state %s/app %s, want REFUNDING/POST", tc.orderStatus, refundState, result)
+			}
+			for _, query := range []string{
+				`SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = ?`,
+				`SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = ?`,
+				`SELECT COUNT(*) FROM order_refund_commitments WHERE order_no = ?`,
+				`SELECT COUNT(*) FROM order_refund_commitment_lines l
+					JOIN order_refund_commitments c ON c.refund_id = l.refund_id WHERE c.order_no = ?`,
+			} {
+				if got := countRows(t, db, query, orderNo); got != 0 {
+					t.Fatalf("%s wrote rows (%s -> %d)", tc.orderStatus, query, got)
+				}
+			}
+		})
+	}
+}
+
+// Review G1: an unknown group status with no shipment facts is ambiguous and
+// must fail closed, not silently take the PRE path.
+func TestTccCancelUnknownGroupStatusNoFactsFailsClosed(t *testing.T) {
+	db := orderTestDB(t)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 10000})
+	ctx := context.Background()
+	seedTccOrder(t, db, "ORD-TCC-UNKNOWN-GROUP", 10000, 10000, 0, 0, "PAY-UNKNOWN-GROUP")
+	seedTccGroup(t, db, "ORD-TCC-UNKNOWN-GROUP", "G1", 1, 0)
+	seedTccLine(t, db, "ORD-TCC-UNKNOWN-GROUP", 1, "G1", 10000)
+	if _, err := db.Exec(`UPDATE order_fulfillment_groups SET status = '' WHERE order_no = 'ORD-TCC-UNKNOWN-GROUP'`); err != nil {
+		t.Fatal(err)
+	}
+	version := tccVersion(t, db, "ORD-TCC-UNKNOWN-GROUP")
+
+	_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-UNKNOWN-GROUP", PaymentNo: "PAY-UNKNOWN-GROUP", PaidCent: 10000,
+	})
+	if err == nil || !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("unknown group status = %v, want FAILED_PRECONDITION", err)
+	}
+	assertNoTccStateWrites(t, db, "ORD-TCC-UNKNOWN-GROUP", version)
+	for _, query := range []string{
+		`SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-UNKNOWN-GROUP'`,
+		`SELECT COUNT(*) FROM order_shipping_permits WHERE order_no = 'ORD-TCC-UNKNOWN-GROUP'`,
+	} {
+		if got := countRows(t, db, query); got != 0 {
+			t.Fatalf("unknown group status wrote rows (%s -> %d)", query, got)
+		}
+	}
+}
+
+// Review g1: a mixed group (known=0 legacy + known=1) must still validate the
+// known=1 line sums. known=1 lines are not skipped just because the group also
+// carries unattributed legacy quota.
+func TestTccCancelMixedCompositionValidatesKnownLines(t *testing.T) {
+	seedMixed := func(t *testing.T) (*sql.DB, *Service) {
+		t.Helper()
+		db := orderTestDB(t)
+		svc := tccTestService(t, db, &fakePaymentPort{captured: 10000, refunded: 300})
+		ctx := context.Background()
+		seedTccOrder(t, db, "ORD-TCC-MIXED", 10000, 10000, 0, 300, "PAY-MIXED")
+		seedTccGroup(t, db, "ORD-TCC-MIXED", "G1", 1, 0)
+		seedTccLine(t, db, "ORD-TCC-MIXED", 1, "G1", 10000)
+		seedTccPermit(t, db, "ORD-TCC-MIXED", "G1", permitConsumed, "SHIP-MIXED")
+		seedMigratedTccCommitment(t, db, "ORD-TCC-MIXED", "G1", "R-LEGACY-MIXED", 100)
+		seedKnownTccCommitment(t, db, "ORD-TCC-MIXED", "G1", "R-KNOWN-MIXED", 200, 200, 0)
+		_ = ctx
+		return db, svc
+	}
+
+	t.Run("known lines mismatch fails closed", func(t *testing.T) {
+		db, svc := seedMixed(t)
+		version := tccVersion(t, db, "ORD-TCC-MIXED")
+		_, err := svc.TccCancelMarkPaid(context.Background(), &pb.TccPaymentRequest{
+			OrderNo: "ORD-TCC-MIXED", PaymentNo: "PAY-MIXED", PaidCent: 10000,
+		})
+		if err == nil || !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+			t.Fatalf("mixed known line mismatch = %v, want FAILED_PRECONDITION", err)
+		}
+		var refundState string
+		var versionAfter int64
+		if err := db.QueryRow(`SELECT refund_state, version FROM orders WHERE order_no = 'ORD-TCC-MIXED'`).
+			Scan(&refundState, &versionAfter); err != nil {
+			t.Fatal(err)
+		}
+		if refundState != refundStateNone || versionAfter != version {
+			t.Fatalf("mixed mismatch mutated order: refund_state=%s version=%d", refundState, versionAfter)
+		}
+		for _, query := range []string{
+			`SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-MIXED'`,
+			`SELECT COUNT(*) FROM refund_applications WHERE order_no = 'ORD-TCC-MIXED'`,
+			`SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-TCC-MIXED'`,
+		} {
+			if got := countRows(t, db, query); got != 0 {
+				t.Fatalf("mixed mismatch wrote rows (%s -> %d)", query, got)
+			}
+		}
+		var permitState string
+		if err := db.QueryRow(`SELECT state FROM order_shipping_permits
+			WHERE order_no = 'ORD-TCC-MIXED' AND fulfillment_group_no = 'G1'`).Scan(&permitState); err != nil {
+			t.Fatal(err)
+		}
+		if permitState != permitConsumed {
+			t.Fatalf("mixed mismatch changed permit to %s", permitState)
+		}
+		if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_commitments WHERE order_no = 'ORD-TCC-MIXED'`); got != 2 {
+			t.Fatalf("mixed mismatch changed existing commitments: %d", got)
+		}
+	})
+
+	t.Run("valid known lines allow whole group", func(t *testing.T) {
+		db, svc := seedMixed(t)
+		if _, err := db.Exec(`INSERT INTO order_refund_commitment_lines
+			(refund_id, line_no, quantity, goods_cent, freight_cent)
+			VALUES ('R-KNOWN-MIXED', 1, 1, 200, 0)`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.TccCancelMarkPaid(context.Background(), &pb.TccPaymentRequest{
+			OrderNo: "ORD-TCC-MIXED", PaymentNo: "PAY-MIXED", PaidCent: 10000,
+		}); err != nil {
+			t.Fatalf("valid mixed composition = %v", err)
+		}
+		// Cap: 10000 + 0 - (100 legacy + 200 known) = 9700; new TCC commitment
+		// stays known=0 without lines.
+		var amount int64
+		var known int
+		if err := db.QueryRow(`SELECT amount_cent, composition_known FROM order_refund_commitments
+			WHERE refund_id = 'tcc:PAY-MIXED:G1'`).Scan(&amount, &known); err != nil {
+			t.Fatal(err)
+		}
+		if amount != 9700 || known != 0 {
+			t.Fatalf("mixed TCC commitment = %d/known %d, want 9700/0", amount, known)
+		}
+		if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_commitment_lines
+			WHERE refund_id = 'tcc:PAY-MIXED:G1'`); got != 0 {
+			t.Fatalf("mixed TCC commitment wrote lines: %d", got)
+		}
+		// The known=1 row's line is untouched.
+		if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_commitment_lines
+			WHERE refund_id = 'R-KNOWN-MIXED'`); got != 1 {
+			t.Fatalf("known=1 line rows = %d, want 1", got)
+		}
+	})
+}
+
+// Review g2: Σ == remaining == 0 (already refunded) must return before the
+// Fulfillment ListShipments dependency, but only after the Payment snapshot and
+// Σ equation were validated.
+func TestTccCancelNoActiveReturnsBeforeFulfillment(t *testing.T) {
+	t.Run("fully refunded succeeds while Fulfillment is down", func(t *testing.T) {
+		db := orderTestDB(t)
+		payments := &countingPaymentPort{captured: 10000, refunded: 10000}
+		fulfillment := &fakeFulfillmentPort{status: "CANCELLED", listErr: errors.New("fulfillment timeout")}
+		svc := tccTestServiceWithFulfillment(t, db, payments, fulfillment)
+		ctx := context.Background()
+		seedTccOrder(t, db, "ORD-TCC-G2", 10000, 10000, 0, 10000, "PAY-G2")
+		seedTccGroup(t, db, "ORD-TCC-G2", "G1", 1, 0)
+		seedTccLine(t, db, "ORD-TCC-G2", 1, "G1", 10000)
+		if _, err := db.Exec(`INSERT INTO order_refund_commitments
+			(order_no, group_no, refund_id, amount_cent, goods_cent, freight_cent, composition_known, composition_source, state)
+			VALUES ('ORD-TCC-G2', 'G1', 'R-G2', 10000, 10000, 0, 1, 'aftersale', 'SETTLED')`); err != nil {
+			t.Fatal(err)
+		}
+		version := tccVersion(t, db, "ORD-TCC-G2")
+
+		if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+			OrderNo: "ORD-TCC-G2", PaymentNo: "PAY-G2", PaidCent: 10000,
+		}); err != nil {
+			t.Fatalf("no-active compensation failed on Fulfillment outage: %v", err)
+		}
+		if fulfillment.listCalls.Load() != 0 {
+			t.Fatalf("no-active compensation consulted ListShipments %d times", fulfillment.listCalls.Load())
+		}
+		if payments.getCalls < 1 {
+			t.Fatal("no-active compensation skipped the Payment snapshot")
+		}
+		if got := tccVersion(t, db, "ORD-TCC-G2"); got != version {
+			t.Fatalf("no-active compensation wrote order state")
+		}
+		if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-G2'`); got != 0 {
+			t.Fatalf("no-active compensation wrote batches: %d", got)
+		}
+	})
+
+	t.Run("Σ mismatch still audits before Fulfillment", func(t *testing.T) {
+		db := orderTestDB(t)
+		payments := &countingPaymentPort{captured: 10000}
+		fulfillment := &fakeFulfillmentPort{status: "CANCELLED", listErr: errors.New("fulfillment timeout")}
+		svc := tccTestServiceWithFulfillment(t, db, payments, fulfillment)
+		ctx := context.Background()
+		seedTccOrder(t, db, "ORD-TCC-G2BAD", 10000, 10000, 0, 0, "PAY-G2BAD")
+		seedTccGroup(t, db, "ORD-TCC-G2BAD", "G1", 1, 0)
+		seedTccLine(t, db, "ORD-TCC-G2BAD", 1, "G1", 9000)
+		version := tccVersion(t, db, "ORD-TCC-G2BAD")
+
+		_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+			OrderNo: "ORD-TCC-G2BAD", PaymentNo: "PAY-G2BAD", PaidCent: 10000,
+		})
+		if err == nil || !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+			t.Fatalf("Σ mismatch = %v, want FAILED_PRECONDITION", err)
+		}
+		if fulfillment.listCalls.Load() != 0 {
+			t.Fatalf("Σ mismatch consulted ListShipments %d times", fulfillment.listCalls.Load())
+		}
+		if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-G2BAD' AND state = ?`, refundBatchFailedPre); got != 1 {
+			t.Fatalf("Σ mismatch audit batches = %d, want 1", got)
+		}
+		assertNoTccStateWrites(t, db, "ORD-TCC-G2BAD", version)
+	})
+}
+
+// Review g3: the read-only TccQueryMarkPaid probe mirrors the B1 lifecycle gate.
+func TestTccQueryMarkPaidMatchesLifecycleGate(t *testing.T) {
+	db := orderTestDB(t)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 1000})
+	ctx := context.Background()
+	for _, tc := range []struct {
+		status string
+		want   bool
+	}{
+		{statusPendingPayment, true},
+		{statusPaid, true},
+		{statusAllocated, true},
+		{statusShipped, true},
+		{statusCompleted, true},
+		{statusCancelled, false},
+		{statusClosed, false},
+	} {
+		orderNo := "ORD-TCC-QUERY-" + tc.status
+		seedTccOrder(t, db, orderNo, 1000, 1000, 0, 0, "PAY-"+tc.status)
+		setTccOrderStatus(t, db, orderNo, tc.status)
+		reply, err := svc.TccQueryMarkPaid(ctx, &pb.TccPaymentRequest{OrderNo: orderNo, PaymentNo: "PAY-" + tc.status})
+		if err != nil {
+			t.Fatalf("%s query: %v", tc.status, err)
+		}
+		if reply.GetPrepared() != tc.want {
+			t.Fatalf("%s Prepared = %v, want %v", tc.status, reply.GetPrepared(), tc.want)
+		}
+	}
+}

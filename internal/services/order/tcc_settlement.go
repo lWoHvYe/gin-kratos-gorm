@@ -222,10 +222,14 @@ func (f *tccShipmentFacts) shipped(group tccGroupCap) (bool, error) {
 		}
 	}
 	switch group.GroupStatus {
-	case "", "PENDING", statusAllocated:
+	case "PENDING", statusAllocated:
 		return false, nil
 	default:
-		return false, apperr.Failed("order group has no shipment fact but its status is not PENDING/ALLOCATED; manual reconciliation required").
+		// No shipment facts and a status we cannot interpret as "not shipped":
+		// including "" (unknown projection) this is ambiguous, so fail closed
+		// instead of guessing (Review G1). A synthetic legacy G1 derives its
+		// status from orders.status, so SHIPPED/COMPLETED is handled above.
+		return false, apperr.Failed("order group has no shipment fact and its status is not PENDING/ALLOCATED; manual reconciliation required").
 			WithDetails(map[string]any{"group_no": group.GroupNo, "group_status": group.GroupStatus})
 	}
 }
@@ -1002,6 +1006,12 @@ type tccGroupComposition struct {
 	CommittedAmount  int64
 	CommittedGoods   int64
 	CommittedFreight int64
+	// KnownGoods/KnownFreight are the header sums of the composition_known=1
+	// commitments only. They are validated against their line rows even when
+	// the group also has a known=0 legacy commitment (Review g1: a mixed group
+	// must not skip the known=1 line check).
+	KnownGoods   int64
+	KnownFreight int64
 	// UnknownComposition is true when at least one RESERVED/SETTLED commitment
 	// of the group predates line composition (composition_known=0, e.g. the
 	// order/0018 migration backfill goods=amount/freight=0 with no lines). Such
@@ -1058,6 +1068,8 @@ func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRef
 		}
 		comp.CommittedGoods += goods
 		comp.CommittedFreight += freight
+		comp.KnownGoods += goods
+		comp.KnownFreight += freight
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
@@ -1113,10 +1125,6 @@ func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRef
 		return nil, apperr.Internal("close refund commitment lines", err)
 	}
 	for groupNo, comp := range out {
-		if comp.UnknownComposition {
-			// Whole-group only: no line verification, no attribution.
-			continue
-		}
 		var goods, freight int64
 		for key, value := range lineGoods {
 			if key.groupNo == groupNo {
@@ -1130,12 +1138,16 @@ func loadTccGroupComposition(ctx context.Context, q querier, orderNo, excludeRef
 			}
 		}
 		freight = lineFreight[groupNo]
-		if goods != comp.CommittedGoods || freight != comp.CommittedFreight {
+		// g1: validate the known=1 portion even for a mixed group that also has
+		// a known=0 legacy commitment. For a pure known=0 group both sums are 0
+		// and there are no known=1 line rows, so this is a no-op.
+		if goods != comp.KnownGoods || freight != comp.KnownFreight {
 			return nil, apperr.Failed("refund commitment lines do not match the commitment headers").
 				WithDetails(map[string]any{
 					"order_no": orderNo, "group_no": groupNo,
-					"header_goods_cent": comp.CommittedGoods, "line_goods_cent": goods,
-					"header_freight_cent": comp.CommittedFreight, "line_freight_cent": freight,
+					"known_composition": !comp.UnknownComposition,
+					"header_goods_cent": comp.KnownGoods, "line_goods_cent": goods,
+					"header_freight_cent": comp.KnownFreight, "line_freight_cent": freight,
 				})
 		}
 	}

@@ -271,6 +271,14 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 			}
 			return nil, err
 		}
+		// M2/g2: Σ == remaining == 0 means every group is already refunded.
+		// The Payment snapshot and the Σ equation have been validated above;
+		// there is nothing to fill, so return before the Fulfillment
+		// ListShipments dependency (a fully refunded compensation must not fail
+		// because Fulfillment is down).
+		if pre.SumGroupCapCent == 0 && pre.RemainingCapturedCent == 0 {
+			return &pb.Empty{}, nil
+		}
 		if pre.NoCaptured {
 			// AC-65: no captured money is a cancel/zero-converge branch, not a
 			// per-group refund. T1.6 owns that branch; until then fail closed
@@ -317,7 +325,10 @@ func (s *Service) TccQueryMarkPaid(ctx context.Context, req *pb.TccPaymentReques
 		return &pb.TccQueryReply{Prepared: true}, nil
 	}
 	switch record.Status {
-	case statusPendingPayment, statusPaid:
+	case statusPendingPayment, statusPaid, statusAllocated, statusShipped, statusCompleted:
+		// g3: mirror the TccCancelMarkPaid lifecycle gate (B1). A read-only
+		// verification probe must not report an ALLOCATED/SHIPPED/COMPLETED
+		// order as unprepared when its TCC compensation is accepted.
 		return &pb.TccQueryReply{Prepared: true}, nil
 	default:
 		return &pb.TccQueryReply{Prepared: false}, nil

@@ -240,7 +240,8 @@ func computeTccPrecheckExcluding(ctx context.Context, q querier, record *orderRe
 		}
 		result.LegacyG1 = true
 		result.Groups = []tccGroupCap{{
-			GroupNo: defaultGroupNo, PaidCent: paid, FreightCent: record.FreightCent,
+			GroupNo: defaultGroupNo, GroupStatus: legacyG1GroupStatus(record.Status),
+			PaidCent: paid, FreightCent: record.FreightCent,
 			CommittedCent: committed, CapCent: capCent, Active: capCent > 0,
 		}}
 	} else {
@@ -404,6 +405,27 @@ func (s *Service) recheckTccSumTxExcluding(ctx context.Context, tx *sql.Tx, orde
 		return result, err
 	}
 	return result, nil
+}
+
+// legacyG1GroupStatus derives the synthetic G1 group status for a historical
+// order that has no order_fulfillment_groups row. Without this the group would
+// look unshipped ("" status) and Tx1 would revoke the G1 permit / reserve a
+// commitment even though the whole order is SHIPPED/COMPLETED (Review G1).
+func legacyG1GroupStatus(orderStatus string) string {
+	switch orderStatus {
+	case statusShipped:
+		return "SHIPPED"
+	case statusCompleted:
+		return "RECEIVED"
+	case statusPaid, statusAllocated:
+		return statusAllocated
+	case statusPendingPayment:
+		return "PENDING"
+	default:
+		// Uncertain lifecycle: leave the status empty so shipped() fails closed
+		// instead of guessing "not shipped".
+		return ""
+	}
 }
 
 func loadGroupPaidCent(ctx context.Context, q querier, orderNo string) (map[string]int64, error) {

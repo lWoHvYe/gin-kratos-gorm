@@ -17,6 +17,12 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-24 T1.2-R approved
+
+Director approved the T1.2-R remediation plan (B1/B2/M1/M2/m1); implementation
+of R-1..R-5 is authorized on the WIP branch. T1.2 remains unmerged; Reviewer
+re-review and human merge decision are still required.
+
 ### 2026-11-24 T1.2/T1.2b Reviewer FAIL — stop-the-line
 
 - Review scope `998e896..4e5d07f`; verdict FAIL:

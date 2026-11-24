@@ -453,6 +453,11 @@ func TestTccRefundBatchLazyReconcileRepairsLostEvents(t *testing.T) {
 	if batch := loadTccBatchRow(t, db, "ORD-PAY-LOST", "PAY-PAY-LOST"); batch.State != refundBatchDone {
 		t.Fatalf("batch after reconcile = %s, want DONE", batch.State)
 	}
+	if refunded, refundStatus, refundState, _ := loadOrderRefundProjection(t, db, "ORD-PAY-LOST"); refunded != 10000 ||
+		refundStatus != statusRefunded || refundState != refundStateFull {
+		t.Fatalf("pay-path projection = %d/%s/%s, want 10000/REFUNDED/FULL",
+			refunded, refundStatus, refundState)
+	}
 	// A late/duplicate event replay stays idempotent.
 	event := paymentRefundedEvent{
 		PaymentNo: "PAY-PAY-LOST", OrderNo: "ORD-PAY-LOST",
@@ -503,6 +508,11 @@ func TestTccRefundBatchLazyReconcileKeepsPartialBatchPaying(t *testing.T) {
 	}
 	if appState, _, _, _, _ := loadTccApplication(t, ctx, db, g1); appState != refundApplicationDone {
 		t.Fatalf("G1 application = %s, want DONE", appState)
+	}
+	if refunded, refundStatus, refundState, _ := loadOrderRefundProjection(t, db, "ORD-PAY-MIX"); refunded != 6000 ||
+		refundStatus != statusPartiallyRefunded || refundState != refundStateRefunding {
+		t.Fatalf("partial pay-path projection = %d/%s/%s, want 6000/PARTIALLY_REFUNDED/REFUNDING",
+			refunded, refundStatus, refundState)
 	}
 
 	// A second pass sees G2's successful fact and closes the batch without a

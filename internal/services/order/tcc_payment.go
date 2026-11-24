@@ -620,9 +620,10 @@ func (s *Service) reconcileTccDoneApplications(ctx context.Context, batch *tccRe
 }
 
 // reconcileTccRefundFact applies one already-successful Payment refund fact to
-// the ledger: commitment RESERVED->SETTLED, application->DONE and (only when
-// every group is DONE) batch PAYING->DONE. It never touches the order amount
-// projection and never re-pays.
+// the ledger and the order amount projection in the same transaction:
+// commitment RESERVED->SETTLED (the sole amount trigger), application->DONE,
+// batch DONE when every group is DONE, and orders.refunded_cent/status/state
+// projected with max(current, SUM(SETTLED commitments)). It never re-pays.
 func (s *Service) reconcileTccRefundFact(ctx context.Context, batch *tccRefundBatch, application *tccApplicationRef, amountCent int64) error {
 	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
 		locked, err := findOrderForUpdate(ctx, tx, batch.OrderNo)
@@ -645,11 +646,7 @@ func (s *Service) reconcileTccRefundFact(ctx context.Context, batch *tccRefundBa
 				},
 			}
 		}
-		event := paymentRefundedEvent{
-			RefundID: application.RefundID, PaymentNo: batch.PaymentNo,
-			OrderNo: batch.OrderNo, AmountCent: amountCent,
-		}
-		if err := s.settlePaymentRefundLedgerTx(ctx, tx, event); err != nil {
+		if _, err := s.settleTccRefundFactTx(ctx, tx, batch.OrderNo, application.RefundID, amountCent); err != nil {
 			if apperr.IsCode(err, apperr.CodeFailedPrecondition) ||
 				apperr.IsCode(err, apperr.CodeConflict) ||
 				apperr.IsCode(err, apperr.CodeNotFound) {
@@ -663,7 +660,13 @@ func (s *Service) reconcileTccRefundFact(ctx context.Context, batch *tccRefundBa
 			}
 			return apperr.Internal("reconcile tcc refund ledger", err)
 		}
-		return nil
+		if _, err := s.markTccApplicationDoneTx(ctx, tx, application.RefundID); err != nil {
+			return err
+		}
+		if _, err := s.convergeTccBatchTx(ctx, tx, batch); err != nil {
+			return err
+		}
+		return s.projectTccReconcileOrderTx(ctx, tx, locked, batch)
 	})
 	return err
 }

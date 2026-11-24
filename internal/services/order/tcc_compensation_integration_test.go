@@ -1757,8 +1757,11 @@ func TestTccCancelRefundingAllocatedOrderResumesByRefundState(t *testing.T) {
 		Scan(&status, &refundState); err != nil {
 		t.Fatal(err)
 	}
-	if status != statusAllocated || refundState != refundStateRefunding {
-		t.Fatalf("resume changed lifecycle: %s/%s", status, refundState)
+	// T1.4b1-R2: the resume sees both successful Payment facts, reconciles the
+	// ledger and projects the order amount, so the fully refunded compensation
+	// ends FULL while the lifecycle status stays ALLOCATED.
+	if status != statusAllocated || refundState != refundStateFull {
+		t.Fatalf("resume changed lifecycle: %s/%s, want ALLOCATED/FULL", status, refundState)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-RESUME-ALLOC'`); got != 1 {
 		t.Fatalf("resume created a second batch: %d", got)

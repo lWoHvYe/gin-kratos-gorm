@@ -54,6 +54,9 @@ type Config struct {
 	// PricingConfirmationWorkerEnabled drives the durable coupon/promotion
 	// confirmation worker (ADR-0007). Default false.
 	PricingConfirmationWorkerEnabled bool
+	// TccReconcileInterval is the T1.4b1-R2 lazy TCC refund reconcile period.
+	// Default one minute; TCC_RECONCILE_INTERVAL overrides it.
+	TccReconcileInterval time.Duration
 	// FulfillmentSettleConsumerMode is the three-state settlement consumer
 	// switch: paid (legacy order.paid path, R1 default), shadow (dual-consume,
 	// record/compare only), settled (order.settled admits fulfillment).
@@ -192,6 +195,7 @@ func Load(service string) (*Config, error) {
 		// R1 settlement default is the legacy paid consumer; shadow/settled
 		// need an explicit env switch plus a valid approval row.
 		FulfillmentSettleConsumerMode: FulfillmentSettleConsumerPaid,
+		TccReconcileInterval:          time.Minute,
 	}
 	// Bootstrap endpoints are needed before the config center can be read.
 	if v := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS")); v != "" {
@@ -462,6 +466,13 @@ func applyEnv(c *Config) error {
 	}
 	if v := os.Getenv("PAYMENT_SECRET"); v != "" {
 		c.PaymentSecret = v
+	}
+	if v := strings.TrimSpace(os.Getenv("TCC_RECONCILE_INTERVAL")); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return fmt.Errorf("TCC_RECONCILE_INTERVAL must be a positive duration (got %q)", v)
+		}
+		c.TccReconcileInterval = d
 	}
 	if v, ok := os.LookupEnv("PRICING_CONFIRMATION_WORKER_ENABLED"); ok && strings.TrimSpace(v) != "" {
 		parsed, err := strconv.ParseBool(strings.TrimSpace(v))

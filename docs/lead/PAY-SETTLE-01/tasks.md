@@ -1,6 +1,6 @@
 # PAY-SETTLE-01 Remediation Tasks (Revision 1)
 
-Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未批准前不得写业务代码。
+Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `PAY-SETTLE-01`（原 id）。T1.2-R 批准前不得写受管代码。
 依赖：`plan.md`；每条任务必须有 Owner、依赖、验收与证据路径。
 
 ## Phase 0 — Contract（批准前不进入 Phase 1）
@@ -86,3 +86,13 @@ Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未
   - `after_sales.amount_state` has no `DONE(zero_amount)` value.
 - No code was invented. Needs PO/Architect amendment: define where `DONE(zero_amount)` lives (recommended: Order `refund_applications(source=system_zero, amount=0, DONE)` as execution ledger; AfterSales projects `REFUNDED` with zero amount).
 - T1.2 (batch/permit) paused until this gap is ruled, per Plan stop condition.
+
+## T1.2-R（Reviewer FAIL 后）
+
+- [ ] R-1 B1 真实 ALLOCATED/SHIPPED/COMPLETED（Developer）
+- [ ] R-2 M1 historical composition（Developer + Architect）
+- [ ] R-3 M2 no active groups（Developer）
+- [ ] R-4 m1 resume audit（Developer）
+- [ ] R-5 B2 self-check canonical（Developer）
+- [x] R-6 M3 Plan 状态（Lead）
+- [ ] R-7 Reviewer 复审（Reviewer）

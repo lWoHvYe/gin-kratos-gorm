@@ -71,7 +71,7 @@
 2. **返工与修改法则**：
     * Reviewer 提出 FAIL 时，Dev **绝不能**为了消除报错而打补丁。
     * 如果判定为“架构缺陷”，Dev 必须停止写代码，要求打回给 Architect 修改 ADR。
-3. **阶梯门禁**：Spec 与 ADR 均须经过 QC 和人类批准后才能进入下游；具体流程以 `docs/collab/CONVENTIONS.md` 为准。
+3. **阶梯门禁**：产生新 Spec/ADR 时（L2），Spec 与 ADR 均须经过 QC 和人类批准后才能进入下游；L0/L1 按 §2.7 减免，具体流程以 `docs/collab/CONVENTIONS.md` 为准。
 4. **验收语义**：AC 文本引用不等于 AC 已验收；线程 CLOSED、实现 PASS、代码合入与 Release PASS 不得混用。跨服务变更必须验证受影响的既有基线，不得只验证新增 AC。
 5. **Plan/Tasks 与 Stop-the-line**：P0/跨服务/资金/库存/权限/状态机变更必须先有 Plan/Tasks 与 AC 证据矩阵；Plan 未批准不得写业务代码。QC/Reviewer FAIL 后冻结 `change_id`，直到修复 Plan、契约裁决与重审完成。
 6. **Actor/change_id**：受管交付 MUST 使用 `change_id`、`Actor`、`Reviewed-by` trailer；同一 `change_id` 的 `Actor` 不得等于 `Reviewed-by`。

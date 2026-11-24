@@ -53,6 +53,8 @@ MEMORY 不复制当前线程状态、PASS、commit、expiry 或发布状态；�
  -> 发布门禁/人类决定 RELEASE_APPROVED
 ```
 
+> **路由**：L0/L1 按 §2.3 减免，不走下方完整阶梯；L2 走本流程。任何级别保留人类合入与 Release。
+
 - Spec 未批准，不得开始 ADR；ADR 未批准，不得开始实现。
 - QC 只报告遗漏、矛盾和异常分支，不代写 Spec/ADR。
 - PO 和 Architect 的批准是业务与架构批准，不等于代码验收。
@@ -229,7 +231,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 ## 8. Commit 与交付
 
-- 推荐使用 Conventional Commit 和必要 trailer；受管交付 MUST 包含 `change_id`、`Actor`、`Reviewed-by`、`Role`（`Role` 仍用于 G-1 所有者核对），服务/模块 scope 保持简单。
+- 推荐使用 Conventional Commit 和必要 trailer；受管交付 MUST 包含 `change_id`、`Actor`、`Reviewed-by`、`Role`（人工复核用；协作闸门已退役），服务/模块 scope 保持简单。
 - 不维护庞大的强制 scope 词表，不为满足形式机械拆分提交。
 - Spec/ADR 的业务或设计变更必须独立评审批；不要把未批准契约与实现混在一起。
 - 已批准契约的实现允许一个原子行为提交包含 proto、生成物、服务代码、迁移和对应测试。

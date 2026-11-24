@@ -83,7 +83,7 @@
     * **L2**：命中上述任一触发条的变更；沿用既有完整阶梯，不减免任何批准点。
     * **防作弊**：治理/工具链变更（本文件、`CONVENTIONS.md`、宪法、CI、`scripts/**`、spec/ADR 结构）恒为 L2；Lead 提议级别并引用命中判据，Reviewer 在 verdict 中确认，Developer 不得设定或更改级别；误判即 stop-the-line，冻结 `change_id` 并按 L2 重做、记入 `docs/review-tracking.md` 的 human decisions/frozen 条目；合入后发现误判 MUST 记录并回退或取得追溯 L2 批准；分级表仅人类批准可改，任何级别保留人类 Release，L2 保留全部既有批准点。
     * **变更输入**：`change_id`、`Tier`、`Tier-Rationale`、`Spec-Ref`（须实际覆盖改动行为，否则 L2）、`allowed_paths`、base/head、`baseline_impact`/INV、测试证据、Reviewer verdict、人类合入批准人与日期；commit trailer 写 `Tier: L0|L1|L2`。
-8. **治理变更最小化与撤回**：治理/工具链变更 MUST 从最小可行增量开始，写明停止条件与可验证的收益指标；MUST NOT 以“设计完整性”扩张为多文件/多阶段重构。若首增量未产生可测收益，MUST 撤回而非继续加层。撤回 MUST 删除其脚本、CI、入口与台账行，仅保留决策记录；MUST NOT 留下死契约、死命令或死台账。任何角色/分级变更 MUST 同步 `prompt/**` 并经 Reviewer 复核，不得只改 AGENTS 或 CONVENTIONS。
+8. **治理变更最小化与撤回**：治理/工具链变更 MUST 从最小可行增量开始，写明停止条件与可验证收益；安全/合规/数据完整性类变更 MAY 豁免“可测收益”，但 MUST 写明风险、范围与停止条件。MUST NOT 扩张超出首个可验证增量（同一增量内的多文件同步不受限）。若首增量未产生预期收益，MUST 撤回而非继续加层。撤回 MUST 由各产物 owner 执行清理：删除该变更新增的脚本/CI/入口/台账行；既有 AC、既有延期行、他人产物不得删除；仅保留决策记录，MUST NOT 留下死契约、死命令或死台账。收益与停止条件 MUST 记录在 `docs/review-tracking.md` 或变更输入。任何角色/分级变更 MUST 同步 `prompt/**` 并经 Reviewer 复核，不得只改 AGENTS 或 CONVENTIONS。
 
 ---
 

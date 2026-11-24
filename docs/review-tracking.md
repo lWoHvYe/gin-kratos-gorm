@@ -26,6 +26,14 @@ WP-I2 release, WP-I3 restock, WP-B1/B2 backfill, WP-E1..E4 compatibility,
 WP-V1 evidence. Each WP owns one invariant, one branch, one scoped Reviewer.
 T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
 
+### 2026-11-25 P0 simplification: single-group physical release only (Tier L2)
+
+Director accepted: for P0, only single-group orders emit an immediate full
+Inventory release. Multi-group orders complete refund admission but do not emit
+a physical release; stock stays reserved and is deferred to P1/manual. This
+removes the TCC group REFUNDED projection, deferred scan, watermark/cursor,
+manual queue and production backfill. No AC-VERIFIED/Release PASS; no merge.
+
 ### 2026-11-25 T1.4b2-R FAIL — deferred release still too complex
 
 - B1: TCC groups stay REFUNDING; no TCC REFUNDED projection, so multi-group

@@ -59,8 +59,8 @@
 
 | WP | 内容 | Owner | 契约/迁移 | 依赖 | 退出标准 |
 |---|---|---|---|---|---|
-| **WP-I1 Order-level Deferred Release** | **不做 group reservation**；Order 判断共享 reservation 的其他活动组，只有最后活动组才发整笔 release；单组立即 | Order + Inventory | 无新迁移；release event 增 `release_scope=order_reservation_full` | 无 | Order/Inventory Reviewer PASS |
-| **WP-I2 Refund Release (INV-44)** | Order outbox、Inventory consumer；按 `order_reservation_full` 整笔释放；PRE-only；幂等/DLQ | Order + Inventory | release event accepted；无新迁移 | I1 + R2 | Reviewer PASS |
+| **WP-I1 Single-group Release** | **P0 只对单组订单发整笔 release**；多组退款准入成功但不释放库存，保持 reserved，P1/人工；不做 scan/last-active | Order + Inventory | 无新迁移；`release_scope=order_reservation_full` | 无 | Order/Inventory Reviewer PASS |
+| **WP-I2 Refund Release (INV-44)** | 单组 Order outbox、Inventory consumer；整笔释放；PRE-only；幂等/DLQ；多组不写 | Order + Inventory | release event accepted；无新迁移 | I1 + R2 | Reviewer PASS |
 | **WP-I3 Restock/Return** | 退货回库、restock 授权/执行 | AfterSales + Inventory | 现有 restock | I1 | Reviewer PASS；可与 I2 并行 |
 
 ### P0/P1 历史与兼容
@@ -157,3 +157,9 @@ V1 after P0
 - **不做 B1 历史 PRE/S19 回填**：flags false、未上线、生产无此类数据；dev/UAT 如有数据只做一次性清理。
 - **不新拆分支**：当前 `wip/pay-settle-01-phase1` 继续；用 `work_package` 隔离 commit。
 - 保留 RefundBatch、reconcile worker、零元 task；不追求“每组立即释放库存”的完美语义。
+
+## 12. 2026-11-25 进一步简化（Human）
+
+- P0 **只对单组订单**发 physical release；多组订单退款准入成功但不释放库存，保持 reserved，P1/人工。
+- 移除 deferred scan、last-active、TCC group REFUNDED、watermark/cursor、manual queue、生产回填。
+- 单组立即 full release；多组记日志/告警，不写 outbox。

@@ -573,9 +573,12 @@ func (s *Service) groupForAfterSale(ctx context.Context, afterSaleNo string) (st
 	return groupNo, nil
 }
 
-// Refund first blocks new shipments in Order, then persists REFUNDING plus a
-// durable refund task. Payment is idempotent by after_sale_no; a failed inline
-// attempt is retried by the refund worker, never by a status scanner.
+// Refund persists REFUNDING plus a durable refund task, then runs the refund
+// worker inline. The task/lease is written before any remote Order admission
+// (R-C): a zero-amount after-sale can therefore retry CancelIfCreated after a
+// crash, and a failed admission never loses the intent. Payment is idempotent
+// by after_sale_no; a failed inline attempt is retried by the refund worker,
+// never by a status scanner.
 func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*pb.AfterSale, error) {
 	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
 	if afterSaleNo == "" {
@@ -594,22 +597,9 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*
 	if err := refundableStatus(pre); err != nil {
 		return nil, err
 	}
-	if s.orders == nil {
-		return nil, apperr.Unavailable("order client is not configured", nil)
-	}
 	groupNo, err := s.groupForAfterSale(ctx, afterSaleNo)
 	if err != nil {
 		return nil, err
-	}
-	refundAmount := pre.effectiveAmountCent
-	if refundAmount <= 0 {
-		refundAmount = pre.amountCent
-	}
-	if _, err := s.orders.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: afterSaleNo, OrderNo: pre.orderNo, GroupNo: groupNo,
-		AmountCent: refundAmount, Source: "aftersale",
-	}); err != nil {
-		return nil, apperr.Unavailable("refund admission", err)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)

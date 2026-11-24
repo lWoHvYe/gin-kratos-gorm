@@ -282,7 +282,7 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		return nil, err
 	}
 	if result == refundResultPre {
-		if err := appendRefundReleaseTx(ctx, tx, refundID, orderNo, groupNo, req.GetSource()); err != nil {
+		if err := s.appendRefundReleaseTx(ctx, tx, refundID, orderNo, groupNo, req.GetSource()); err != nil {
 			return nil, err
 		}
 	}
@@ -508,7 +508,7 @@ func (s *Service) writeZeroRefundTx(ctx context.Context, refundID, orderNo, grou
 	// Zero and positive amounts share the same INV-44 release path; zero only
 	// skips Payment. A POST result left the warehouse and must not release.
 	if admissionResult == refundResultPre {
-		if err := appendRefundReleaseTx(ctx, tx, refundID, orderNo, groupNo, refundSourceSystemZero); err != nil {
+		if err := s.appendRefundReleaseTx(ctx, tx, refundID, orderNo, groupNo, refundSourceSystemZero); err != nil {
 			return nil, false, err
 		}
 	}
@@ -596,7 +596,7 @@ func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissio
 		return nil, err
 	}
 	if result == refundResultPre {
-		if err := appendRefundReleaseTx(ctx, tx, row.RefundID, row.OrderNo, row.GroupNo, source); err != nil {
+		if err := s.appendRefundReleaseTx(ctx, tx, row.RefundID, row.OrderNo, row.GroupNo, source); err != nil {
 			return nil, err
 		}
 	}

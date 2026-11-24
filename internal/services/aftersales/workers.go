@@ -328,6 +328,16 @@ func runRefundBatch(ctx context.Context, database *sql.DB, svc *Service, logger 
 	}
 }
 
+// refundAdmissionSource maps the after-sale origin onto Order's closed refund
+// source. SYSTEM shortage refunds are `system_shortage` (T1.4b2 B2); ordinary
+// after-sales keep `aftersale`.
+func refundAdmissionSource(row *afterSaleRow) string {
+	if row.source == sourceSystem {
+		return "system_shortage"
+	}
+	return "aftersale"
+}
+
 func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) error {
 	owner, ok, err := s.claimRefundTask(ctx, afterSaleNo)
 	if err != nil || !ok {
@@ -388,7 +398,7 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		}
 		if _, err := s.orders.AdmitRefund(ctx, &pb.AdmitRefundRequest{
 			RefundId: afterSaleNo, OrderNo: row.orderNo, GroupNo: groupNo,
-			AmountCent: amount, Source: "aftersale",
+			AmountCent: amount, Source: refundAdmissionSource(row),
 		}); err != nil {
 			s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 			return apperr.Unavailable("refund admission", err)

@@ -42,6 +42,10 @@ const (
 	RefundReleaseTopic     = "shop.inventory.refund_release_requested.v1"
 	RefundReleaseEventType = "inventory.refund_release_requested"
 
+	// RefundReleaseScopeOrderReservationFull is the only T1.4b2 release
+	// scope: Inventory releases every reservation of the order, not one group.
+	RefundReleaseScopeOrderReservationFull = "order_reservation_full"
+
 	RefundReleaseSourceTCC            = "tcc"
 	RefundReleaseSourceSystemZero     = "system_zero"
 	RefundReleaseSourceSystemShortage = "system_shortage"
@@ -53,9 +57,10 @@ const (
 	RefundReleaseReasonAfterSaleRefund = "AFTER_SALE_REFUND"
 )
 
-// RefundReleaseID is the deterministic idempotency key of one group release:
-// the group refund identity prefixed once. Replaying the same refund must
-// converge on the same release instead of creating a second one.
+// RefundReleaseID is the deterministic idempotency key of one order-level full
+// release: the refund identity of the admission that triggered it, prefixed
+// once. Replaying the same refund must converge on the same release instead of
+// creating a second one.
 func RefundReleaseID(refundID string) string { return "rr:" + refundID }
 
 // RefundReleaseItem is one (sku, warehouse) quantity released by Inventory.
@@ -72,15 +77,20 @@ type RefundReleaseItem struct {
 // Release (HELD) or TccCancelConfirm (CONFIRMED). It carries no money/permit
 // decision and must not be interpreted as an order status change.
 type RefundReleaseRequested struct {
-	SchemaVersion int32               `json:"schema_version"`
-	ReleaseID     string              `json:"release_id"`
-	RefundID      string              `json:"refund_id"`
-	OrderNo       string              `json:"order_no"`
-	GroupNo       string              `json:"group_no"`
-	Source        string              `json:"source"`
-	Reason        string              `json:"reason"`
-	Items         []RefundReleaseItem `json:"items"`
-	RequestedAt   string              `json:"requested_at"`
+	SchemaVersion int32  `json:"schema_version"`
+	ReleaseScope  string `json:"release_scope"`
+	ReleaseID     string `json:"release_id"`
+	RefundID      string `json:"refund_id"`
+	OrderNo       string `json:"order_no"`
+	// GroupNo is the triggering group and is audit-only. It does not identify
+	// the Inventory reservation (the full order reservation does).
+	GroupNo string `json:"group_no"`
+	// CoveredGroupNos records the groups covered by the order-level release.
+	CoveredGroupNos []string            `json:"covered_group_nos,omitempty"`
+	Source          string              `json:"source"`
+	Reason          string              `json:"reason"`
+	Items           []RefundReleaseItem `json:"items"`
+	RequestedAt     string              `json:"requested_at"`
 }
 
 // PaymentRefunded is the canonical payment refund fact consumed by Order.

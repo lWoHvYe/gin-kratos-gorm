@@ -14,6 +14,7 @@ import (
 
 type fakeRefundRelease struct {
 	statuses     map[[2]int64]string
+	quantities   map[[2]int64]int64
 	releaseErr   map[int64]error
 	cancelErr    map[int64]error
 	releaseCalls []*pb.ReserveRequest
@@ -23,13 +24,15 @@ type fakeRefundRelease struct {
 func newFakeRefundRelease() *fakeRefundRelease {
 	return &fakeRefundRelease{
 		statuses:   make(map[[2]int64]string),
+		quantities: make(map[[2]int64]int64),
 		releaseErr: make(map[int64]error),
 		cancelErr:  make(map[int64]error),
 	}
 }
 
-func (f *fakeRefundRelease) refundReleaseReservationStatus(_ context.Context, _ string, skuID, warehouseID int64) (string, error) {
-	return f.statuses[[2]int64{skuID, warehouseID}], nil
+func (f *fakeRefundRelease) refundReleaseReservation(_ context.Context, _ string, skuID, warehouseID int64) (string, int64, error) {
+	key := [2]int64{skuID, warehouseID}
+	return f.statuses[key], f.quantities[key], nil
 }
 
 func (f *fakeRefundRelease) Release(_ context.Context, req *pb.ReserveRequest) (*pb.Empty, error) {
@@ -55,6 +58,7 @@ func releasePayload(t *testing.T, orderNo, releaseID, refundID string, items ...
 	t.Helper()
 	raw, err := json.Marshal(events.RefundReleaseRequested{
 		SchemaVersion: 1,
+		ReleaseScope:  events.RefundReleaseScopeOrderReservationFull,
 		ReleaseID:     releaseID,
 		RefundID:      refundID,
 		OrderNo:       orderNo,
@@ -74,6 +78,7 @@ func TestRefundReleaseHandlerDispatchesHeldAndConfirmed(t *testing.T) {
 	fake := newFakeRefundRelease()
 	fake.statuses[[2]int64{1, 1}] = statusHeld
 	fake.statuses[[2]int64{2, 3}] = statusConfirmed
+	fake.quantities[[2]int64{2, 3}] = 5
 	data := releasePayload(t, "ORD-REL", "rr:R-1", "R-1",
 		events.RefundReleaseItem{SkuID: 1, Quantity: 2, WarehouseID: 1},
 		events.RefundReleaseItem{SkuID: 2, Quantity: 1, WarehouseID: 3},
@@ -86,7 +91,7 @@ func TestRefundReleaseHandlerDispatchesHeldAndConfirmed(t *testing.T) {
 	}
 	release := fake.releaseCalls[0]
 	if release.GetOrderNo() != "ORD-REL" || release.GetSkuId() != 1 ||
-		release.GetWarehouseId() != 1 || release.GetQuantity() != 2 {
+		release.GetWarehouseId() != 1 || release.GetQuantity() != 0 {
 		t.Fatalf("release request = %+v", release)
 	}
 	if len(fake.cancelCalls) != 1 {
@@ -95,7 +100,7 @@ func TestRefundReleaseHandlerDispatchesHeldAndConfirmed(t *testing.T) {
 	cancel := fake.cancelCalls[0]
 	if cancel.GetOrderNo() != "ORD-REL" || len(cancel.GetItems()) != 1 ||
 		cancel.GetItems()[0].GetSkuId() != 2 || cancel.GetItems()[0].GetWarehouseId() != 3 ||
-		cancel.GetItems()[0].GetQuantity() != 1 {
+		cancel.GetItems()[0].GetQuantity() != 5 {
 		t.Fatalf("cancel request = %+v", cancel)
 	}
 }

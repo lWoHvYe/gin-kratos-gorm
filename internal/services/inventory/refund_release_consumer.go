@@ -22,7 +22,7 @@ import (
 // itself (HELD/RELEASED are no-ops when replayed), keyed by the event's
 // release_id at the protocol level. No release ledger table is added (C-05).
 type refundReleaseExecutor interface {
-	refundReleaseReservationStatus(ctx context.Context, orderNo string, skuID, warehouseID int64) (string, error)
+	refundReleaseReservation(ctx context.Context, orderNo string, skuID, warehouseID int64) (status string, quantity int64, err error)
 	Release(ctx context.Context, req *pb.ReserveRequest) (*pb.Empty, error)
 	TccCancelConfirm(ctx context.Context, req *pb.TccPaymentRequest) (*pb.Empty, error)
 }
@@ -61,7 +61,7 @@ func handleRefundRelease(ctx context.Context, svc refundReleaseExecutor, data []
 		return consumer.Permanent(err)
 	}
 	for _, item := range event.Items {
-		status, err := svc.refundReleaseReservationStatus(ctx, event.OrderNo, item.SkuID, item.WarehouseID)
+		status, quantity, err := svc.refundReleaseReservation(ctx, event.OrderNo, item.SkuID, item.WarehouseID)
 		if err != nil {
 			return err
 		}
@@ -74,15 +74,23 @@ func handleRefundRelease(ctx context.Context, svc refundReleaseExecutor, data []
 		case statusReleased:
 			continue
 		case statusHeld:
+			// Full-release semantics: the event quantity is audit input only
+			// and is deliberately not compared to the reservation quantity.
 			_, err = svc.Release(ctx, &pb.ReserveRequest{
-				OrderNo: event.OrderNo, SkuId: item.SkuID,
-				WarehouseId: item.WarehouseID, Quantity: int32(item.Quantity),
+				OrderNo: event.OrderNo, SkuId: item.SkuID, WarehouseId: item.WarehouseID,
 			})
 		case statusConfirmed:
+			// TccCancelConfirm requires a positive quantity, so use the
+			// authoritative reservation quantity, never the event quantity.
+			if quantity <= 0 {
+				return consumer.Permanent(fmt.Errorf(
+					"refund release %s: confirmed reservation %s sku %d warehouse %d has no quantity",
+					event.ReleaseID, event.OrderNo, item.SkuID, item.WarehouseID))
+			}
 			_, err = svc.TccCancelConfirm(ctx, &pb.TccPaymentRequest{
 				OrderNo: event.OrderNo,
 				Items: []*pb.OrderItem{{
-					SkuId: item.SkuID, Quantity: int32(item.Quantity), WarehouseId: item.WarehouseID,
+					SkuId: item.SkuID, Quantity: int32(quantity), WarehouseId: item.WarehouseID,
 				}},
 			})
 		default:
@@ -97,18 +105,18 @@ func handleRefundRelease(ctx context.Context, svc refundReleaseExecutor, data []
 	return nil
 }
 
-// refundReleaseReservationStatus returns "" when the reservation does not
-// exist. A missing reservation is handled as an idempotent success by the
-// caller; any other read error is retryable.
-func (s *Service) refundReleaseReservationStatus(ctx context.Context, orderNo string, skuID, warehouseID int64) (string, error) {
+// refundReleaseReservation returns "" when the reservation does not exist. A
+// missing reservation is handled as an idempotent success by the caller; any
+// other read error is retryable.
+func (s *Service) refundReleaseReservation(ctx context.Context, orderNo string, skuID, warehouseID int64) (string, int64, error) {
 	r, err := s.reservationByOrderSku(ctx, s.db, orderNo, skuID, warehouseID, false)
 	if apperr.IsCode(err, apperr.CodeNotFound) {
-		return "", nil
+		return "", 0, nil
 	}
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return r.status, nil
+	return r.status, r.quantity, nil
 }
 
 // classifyRefundReleaseError separates retryable races/timeouts from permanent

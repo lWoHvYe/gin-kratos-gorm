@@ -7,13 +7,15 @@ import (
 
 func refundReleasePayload() map[string]any {
 	return map[string]any{
-		"schema_version": 1,
-		"release_id":     "rr:AS-1",
-		"refund_id":      "AS-1",
-		"order_no":       "ORD-1",
-		"group_no":       "G2",
-		"source":         RefundReleaseSourceAfterSale,
-		"reason":         RefundReleaseReasonAfterSaleRefund,
+		"schema_version":    1,
+		"release_scope":     RefundReleaseScopeOrderReservationFull,
+		"release_id":        "rr:AS-1",
+		"refund_id":         "AS-1",
+		"order_no":          "ORD-1",
+		"group_no":          "G2",
+		"covered_group_nos": []any{"G1", "G2"},
+		"source":            RefundReleaseSourceAfterSale,
+		"reason":            RefundReleaseReasonAfterSaleRefund,
 		"items": []any{
 			map[string]any{"sku_id": 1, "quantity": 2, "warehouse_id": 1},
 			map[string]any{"sku_id": 2, "quantity": 1, "warehouse_id": 3},
@@ -56,6 +58,10 @@ func TestRefundReleaseContractRejectsIncompleteOrIncoherentEvents(t *testing.T) 
 		{"release_id mismatch", func(p map[string]any) { p["release_id"] = "rr:AS-2" }},
 		{"missing refund_id", func(p map[string]any) { delete(p, "refund_id") }},
 		{"schema_version 2", func(p map[string]any) { p["schema_version"] = 2 }},
+		{"missing release_scope", func(p map[string]any) { delete(p, "release_scope") }},
+		{"wrong release_scope", func(p map[string]any) { p["release_scope"] = "group_reservation" }},
+		{"empty covered group", func(p map[string]any) { p["covered_group_nos"] = []any{"G1", ""} }},
+		{"duplicate covered group", func(p map[string]any) { p["covered_group_nos"] = []any{"G1", "G1"} }},
 		{"unknown source", func(p map[string]any) { p["source"] = "payment" }},
 		{"reason does not match source", func(p map[string]any) {
 			p["source"] = RefundReleaseSourceTCC

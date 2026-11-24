@@ -64,8 +64,9 @@ func TestRefundReleaseConsumerReleasesHeldOnce(t *testing.T) {
 	seedReleaseStock(t, db, 1, 1, 10, 1)
 	seedReleaseReservation(t, db, "ORD-REL", 1, 1, 1, statusHeld)
 	svc := &Service{db: db}
+	// Event quantity is deliberately wrong: order_reservation_full ignores it.
 	data := releasePayload(t, "ORD-REL", "rr:R-REL", "R-REL",
-		events.RefundReleaseItem{SkuID: 1, Quantity: 1, WarehouseID: 1})
+		events.RefundReleaseItem{SkuID: 1, Quantity: 99, WarehouseID: 1})
 	for i := 0; i < 2; i++ {
 		if err := handleRefundRelease(context.Background(), svc, data); err != nil {
 			t.Fatalf("attempt %d: %v", i+1, err)
@@ -89,8 +90,10 @@ func TestRefundReleaseConsumerRestocksConfirmedOnce(t *testing.T) {
 	seedReleaseStock(t, db, 1, 1, 10, 0)
 	seedReleaseReservation(t, db, "ORD-CONF-REL", 1, 1, 1, statusConfirmed)
 	svc := &Service{db: db}
+	// Event quantity is deliberately wrong; TccCancelConfirm uses the
+	// authoritative reservation quantity.
 	data := releasePayload(t, "ORD-CONF-REL", "rr:R-CONF-REL", "R-CONF-REL",
-		events.RefundReleaseItem{SkuID: 1, Quantity: 1, WarehouseID: 1})
+		events.RefundReleaseItem{SkuID: 1, Quantity: 99, WarehouseID: 1})
 	for i := 0; i < 2; i++ {
 		if err := handleRefundRelease(context.Background(), svc, data); err != nil {
 			t.Fatalf("attempt %d: %v", i+1, err)

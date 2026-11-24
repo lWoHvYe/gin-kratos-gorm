@@ -118,3 +118,10 @@ Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `
 - [x] T1.5 TCC bypass removed; consumer retained only for cancelled-after-confirm; observe-only deferred to T1.6.
 - [ ] T1.6 payment-level cancel: `pay:<payment_no>:cancel`, PENDING/CANCELLED+captured, then consumer observe-only (Amendment first).
 - [ ] T1.7/T5 evidence.
+
+## T1.6-R (Reviewer FAIL)
+
+- [ ] B1: order.cancelled/compensation payload warehouse_id; Inventory multi-WH release/restock; W2 test.
+- [ ] B2: PENDING_PAYMENT always read Payment snapshot, independent of req.PaidCent.
+- [ ] B3: Inventory nil/queue failure returns error/persists; legacy net captured-refunded.
+- [ ] Reviewer re-review.

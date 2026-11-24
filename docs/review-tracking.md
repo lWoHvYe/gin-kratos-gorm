@@ -37,6 +37,16 @@ T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
   path (`pay:<payment_no>:cancel`) and then becomes observe-only.
 - No code change in T1.5.
 
+### 2026-11-25 T1.6 FAIL — warehouse/captured/compensation
+
+- B1: `order.cancelled`/compensation payload lacks `warehouse_id`; multi-warehouse
+  W2 reservation is not released/restocked.
+- B2: PENDING_PAYMENT with request PaidCent=0 does not read Payment snapshot;
+  captured funds can be cancelled without a payment cancel command.
+- B3: inventory nil/queue failure is silent; legacy cancel-after-confirm uses
+  PaidCent, not captured-refunded net.
+- T1.6 frozen; T1.6-R required; no merge.
+
 ### 2026-11-25 T1.4b2a P0-R2 PASS (scoped)
 
 - Reviewer PASS for `60130e1..1de09e3`: group_count=1, single-group release,

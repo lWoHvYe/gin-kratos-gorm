@@ -10,6 +10,7 @@ import (
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/db"
+	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/outbox"
 )
 
@@ -191,6 +192,7 @@ func (s *Service) cancelPendingCapturedAfterTCC(ctx context.Context, record *ord
 		s.log.Warn("TCC cancel CAS lost to payment confirmation; continuing group refund",
 			"order_no", record.OrderNo, "payment_no", paymentNo, "status", latest.Status,
 			"reason", tccErrCancelCASLost)
+		metrics.PaymentCancelCASLost.WithLabelValues(tccErrCancelCASLost, "group_fanout").Inc()
 		return true, nil
 	case statusCancelled:
 		// A concurrent cancel won. Repair the durable pieces idempotently:
@@ -201,8 +203,10 @@ func (s *Service) cancelPendingCapturedAfterTCC(ctx context.Context, record *ord
 		if err := s.refundCancelledWithSnapshot(ctx, latest, snapshot, paymentNo, paymentCancelReasonAfterConfirm); err != nil {
 			return false, err
 		}
+		metrics.PaymentCancelCASLost.WithLabelValues(tccErrCancelCASLost, "cancelled_converged").Inc()
 		return false, nil
 	default:
+		metrics.PaymentCancelCASLost.WithLabelValues(tccErrCancelCASLost, "cas_lost_unexpected").Inc()
 		return false, apperr.Conflict("TCC cancel lost the order CAS and the order is not cancellable").
 			WithDetails(map[string]any{
 				"order_no": record.OrderNo, "payment_no": paymentNo,

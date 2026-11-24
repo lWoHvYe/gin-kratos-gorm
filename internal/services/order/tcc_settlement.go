@@ -32,12 +32,20 @@ import (
 const (
 	refundBatchSourceTCC = "tcc"
 	refundBatchFrozen    = "FROZEN"
+	refundBatchAdmitting = "ADMITTING"
+	refundBatchAdmitted  = "ADMITTED"
+	refundBatchPaying    = "PAYING"
 	refundBatchDone      = "DONE"
 	refundBatchFailedPre = "PRECHECK_FAILED"
+	// Human-owned batch states: an automatic TCC retry never moves them
+	// (Plan T1.2-R R-1/m2, ADR §6.1/AC-62).
+	refundBatchManualHold      = "MANUAL_HOLD"
+	refundBatchFailedPermanent = "FAILED_PERMANENT"
 
-	refundApplicationSourceTCC = "tcc"
-	refundApplicationPending   = "PENDING"
-	refundApplicationDone      = "DONE"
+	refundApplicationSourceTCC  = "tcc"
+	refundApplicationPending    = "PENDING"
+	refundApplicationProcessing = "PROCESSING"
+	refundApplicationDone       = "DONE"
 
 	commitmentReserved = "RESERVED"
 	commitmentSettled  = "SETTLED"
@@ -509,9 +517,9 @@ func findTccBatchForResume(ctx context.Context, tx *sql.Tx, orderNo, paymentNo s
 			return nil, false, apperr.Internal("scan tcc refund batch", err)
 		}
 		switch batch.State {
-		case refundBatchFrozen, "ADMITTING", "ADMITTED", "PAYING":
+		case refundBatchFrozen, refundBatchAdmitting, refundBatchAdmitted, refundBatchPaying:
 			resumable = append(resumable, batch)
-		case "MANUAL_HOLD", "FAILED_PERMANENT":
+		case refundBatchManualHold, refundBatchFailedPermanent:
 			// Plan T1.2-R R-1/m2: human-owned states must not be resumed by an
 			// automatic TCC retry; T1.4 owns their state CAS.
 			_ = rows.Close()
@@ -773,7 +781,9 @@ func ensureTccApplicationTx(ctx context.Context, tx *sql.Tx, batch *tccRefundBat
 	switch existingState {
 	case refundApplicationDone:
 		return true, nil
-	case refundApplicationPending:
+	case refundApplicationPending, refundApplicationProcessing:
+		// PENDING is the Tx1 state; PROCESSING is the T1.4a admitted state that
+		// waits for the T1.4b payment. Both are idempotently resumable.
 	default:
 		return false, apperr.Failed("tcc refund application is not resumable in its current state").
 			WithDetails(map[string]any{

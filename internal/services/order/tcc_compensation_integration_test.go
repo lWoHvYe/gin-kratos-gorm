@@ -120,6 +120,29 @@ func loadTccBatchRow(t *testing.T, db *sql.DB, orderNo, paymentNo string) tccBat
 	return row
 }
 
+// runTccTx1 runs ONLY Tx1 of a TCC compensation (ADR §4.1.2 step 3). T1.4a
+// added the per-group admission phase after Tx1, so the Tx1-only tests call
+// this helper to keep asserting the frozen ledger before admission resolves it.
+func runTccTx1(t *testing.T, ctx context.Context, svc *Service, db *sql.DB, orderNo, paymentNo string, paid int64) error {
+	t.Helper()
+	record, err := findOrder(ctx, db, orderNo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record == nil {
+		t.Fatalf("order %s not found", orderNo)
+	}
+	snapshot, err := svc.readTccPaymentSnapshot(ctx, record, paymentNo)
+	if err != nil {
+		return err
+	}
+	shipments, err := svc.loadTccShipmentFacts(ctx, orderNo)
+	if err != nil {
+		return err
+	}
+	return svc.applyTccCompensation(ctx, orderNo, snapshot, shipments, paid)
+}
+
 // assertNoTccStateWrites proves a fail-closed path changed no refund state.
 // The refund_batches ledger is asserted separately because a Σ mismatch is
 // allowed (and required) to leave one PRECHECK_FAILED audit batch (R-1).
@@ -247,29 +270,31 @@ func TestTccCancelPrecheckFailureAuditDoesNotBlockNextAttempt(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	var frozenID string
-	var frozenSeq int
+	var admittedID string
+	var admittedSeq int
+	// T1.4a: a successful Tx1 is followed by the per-group admission, so the
+	// batch is ADMITTED when the compensation call returns.
 	if err := db.QueryRow(`SELECT batch_id, attempt_seq FROM refund_batches
-		WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchFrozen).Scan(&frozenID, &frozenSeq); err != nil {
+		WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchAdmitted).Scan(&admittedID, &admittedSeq); err != nil {
 		t.Fatal(err)
 	}
-	if frozenID != "tcc:PAY-AUDIT:3" || frozenSeq != 3 {
-		t.Fatalf("successful attempt = %s/seq %d, want tcc:PAY-AUDIT:3/3", frozenID, frozenSeq)
+	if admittedID != "tcc:PAY-AUDIT:3" || admittedSeq != 3 {
+		t.Fatalf("successful attempt = %s/seq %d, want tcc:PAY-AUDIT:3/3", admittedID, admittedSeq)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchFailedPre); got != 2 {
 		t.Fatalf("audit attempts after success = %d, want 2", got)
 	}
-	// A repeat on the frozen batch resumes it; no new batch/attempt.
+	// A repeat on the admitted batch resumes it; no new batch/attempt.
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
 		OrderNo: "ORD-TCC-AUDIT", PaymentNo: "PAY-AUDIT", PaidCent: 10000,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT'`); got != 3 {
-		t.Fatalf("batches after resume = %d, want 3 (2 audit + 1 frozen)", got)
+		t.Fatalf("batches after resume = %d, want 3 (2 audit + 1 admitted)", got)
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchFrozen); got != 1 {
-		t.Fatalf("frozen batches = %d, want 1", got)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_batches WHERE order_no = 'ORD-TCC-AUDIT' AND state = ?`, refundBatchAdmitted); got != 1 {
+		t.Fatalf("admitted batches = %d, want 1", got)
 	}
 }
 
@@ -286,9 +311,7 @@ func TestTccCancelCreatesBatchApplicationsAndRevokesPermits(t *testing.T) {
 	seedTccLine(t, db, "ORD-TCC-OK", 1, "G1", 5500)
 	seedTccLine(t, db, "ORD-TCC-OK", 2, "G2", 4000)
 
-	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-		OrderNo: "ORD-TCC-OK", PaymentNo: "PAY-OK", PaidCent: 10000,
-	}); err != nil {
+	if err := runTccTx1(t, ctx, svc, db, "ORD-TCC-OK", "PAY-OK", 10000); err != nil {
 		t.Fatal(err)
 	}
 
@@ -363,9 +386,7 @@ func TestTccCancelConsumedPermitWritesRemoteAdmissionWithoutRevoking(t *testing.
 	seedTccLine(t, db, "ORD-TCC-CONSUMED", 2, "G1", 4000)
 	seedTccPermit(t, db, "ORD-TCC-CONSUMED", "G1", permitConsumed, "SHIP-CONSUMED")
 
-	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-		OrderNo: "ORD-TCC-CONSUMED", PaymentNo: "PAY-CONSUMED", PaidCent: 10000,
-	}); err != nil {
+	if err := runTccTx1(t, ctx, svc, db, "ORD-TCC-CONSUMED", "PAY-CONSUMED", 10000); err != nil {
 		t.Fatal(err)
 	}
 	var state string
@@ -457,9 +478,7 @@ func TestTccCancelShippedGroupIsPostShipAllowed(t *testing.T) {
 	seedTccPermit(t, db, "ORD-TCC-SHIPPED", "G1", permitConsumed, "SHIP-SHIPPED")
 	setTccGroupStatus(t, db, "ORD-TCC-SHIPPED", "G1", "SHIPPED")
 
-	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-		OrderNo: "ORD-TCC-SHIPPED", PaymentNo: "PAY-SHIPPED", PaidCent: 10000,
-	}); err != nil {
+	if err := runTccTx1(t, ctx, svc, db, "ORD-TCC-SHIPPED", "PAY-SHIPPED", 10000); err != nil {
 		t.Fatal(err)
 	}
 	var state string
@@ -540,8 +559,20 @@ func TestTccCancelConcurrentAndRepeatedIsIdempotent(t *testing.T) {
 			t.Fatalf("%s permit = %s/version %d, want REVOKED/version 2", groupNo, state, version)
 		}
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-TCC-RACE'`); got != 0 {
-		t.Fatalf("NONE path wrote remote admissions: %d", got)
+	// T1.4a resolves every active group to PRE and persists one admission row
+	// per group; the permits stay REVOKED once.
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-TCC-RACE'`); got != 2 {
+		t.Fatalf("resolved admissions = %d, want 2", got)
+	}
+	for _, groupNo := range []string{"G1", "G2"} {
+		var appState, appResult string
+		if err := db.QueryRow(`SELECT state, admission_result FROM refund_applications
+			WHERE refund_id = ?`, tccGroupRefundID("PAY-RACE", groupNo)).Scan(&appState, &appResult); err != nil {
+			t.Fatal(err)
+		}
+		if appState != refundApplicationProcessing || appResult != refundResultPre {
+			t.Fatalf("%s application = %s/%s, want PROCESSING/PRE", groupNo, appState, appResult)
+		}
 	}
 	if payments.getCalls < 1 {
 		t.Fatalf("precheck never read Payment: calls=%d", payments.getCalls)
@@ -671,8 +702,8 @@ func TestTccCancelRefundingOrderWithoutBatchCreatesBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	batch := loadTccBatchRow(t, db, "ORD-TCC-ORPHAN", "PAY-ORPHAN")
-	if batch.State != refundBatchFrozen {
-		t.Fatalf("batch state = %s", batch.State)
+	if batch.State != refundBatchAdmitted {
+		t.Fatalf("batch state = %s, want ADMITTED after the T1.4a admission", batch.State)
 	}
 	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications WHERE batch_id = ?`, batch.BatchID); got != 1 {
 		t.Fatalf("applications = %d, want 1", got)
@@ -698,6 +729,10 @@ func TestTccCancelResumeBlocksWhenPaymentSnapshotChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	batchBefore := loadTccBatchRow(t, db, "ORD-TCC-CHANGED", "PAY-CHANGED")
+	// T1.4a already persisted the admission/commitment of the first freeze; the
+	// failed resume must not add a second set.
+	commitmentsBefore := countRows(t, db, `SELECT COUNT(*) FROM order_refund_commitments WHERE order_no = 'ORD-TCC-CHANGED'`)
+	admissionsBefore := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-TCC-CHANGED'`)
 	payments.setRefunded(100)
 
 	_, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
@@ -733,11 +768,11 @@ func TestTccCancelResumeBlocksWhenPaymentSnapshotChanges(t *testing.T) {
 	if auditAttempt != 2 || auditSum != 10000 || auditRemaining != 9900 {
 		t.Fatalf("resume audit = attempt %d sum %d remaining %d, want 2/10000/9900", auditAttempt, auditSum, auditRemaining)
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_commitments WHERE order_no = 'ORD-TCC-CHANGED'`); got != 0 {
-		t.Fatalf("failed resume wrote commitments: %d", got)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_commitments WHERE order_no = 'ORD-TCC-CHANGED'`); got != commitmentsBefore {
+		t.Fatalf("failed resume wrote commitments: %d -> %d", commitmentsBefore, got)
 	}
-	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-TCC-CHANGED'`); got != 0 {
-		t.Fatalf("failed resume wrote admissions: %d", got)
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-TCC-CHANGED'`); got != admissionsBefore {
+		t.Fatalf("failed resume wrote admissions: %d -> %d", admissionsBefore, got)
 	}
 }
 
@@ -1062,9 +1097,7 @@ func TestTccCancelExceptionShippedGroupIsPostShipAllowed(t *testing.T) {
 	seedTccGroup(t, db, "ORD-TCC-EX", "G1", 1, 0)
 	seedTccLine(t, db, "ORD-TCC-EX", 1, "G1", 10000)
 
-	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-		OrderNo: "ORD-TCC-EX", PaymentNo: "PAY-EX", PaidCent: 10000,
-	}); err != nil {
+	if err := runTccTx1(t, ctx, svc, db, "ORD-TCC-EX", "PAY-EX", 10000); err != nil {
 		t.Fatal(err)
 	}
 	if got := fulfillment.listCalls.Load(); got != 1 {
@@ -1649,9 +1682,7 @@ func TestTccCancelLegacyG1ShippedUsesOrderStatus(t *testing.T) {
 			seedTccLine(t, db, orderNo, 1, "G1", 10000)
 			setTccOrderStatus(t, db, orderNo, tc.orderStatus)
 
-			if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-				OrderNo: orderNo, PaymentNo: paymentNo, PaidCent: 10000,
-			}); err != nil {
+			if err := runTccTx1(t, ctx, svc, db, orderNo, paymentNo, 10000); err != nil {
 				t.Fatal(err)
 			}
 			var refundState, result string

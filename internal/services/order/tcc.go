@@ -306,6 +306,12 @@ func (s *Service) TccCancelMarkPaid(ctx context.Context, req *pb.TccPaymentReque
 	if err := s.applyTccCompensation(ctx, orderNo, snapshot, shipments, paid); err != nil {
 		return nil, err
 	}
+	// T1.4a: per-group admission of the frozen batch (no payment; T1.4b owns
+	// PAYING/DONE). A failure keeps the unfinished groups resumable and returns
+	// a retryable error so the compensation is not reported complete.
+	if err := s.admitTccBatch(ctx, orderNo, paymentNo); err != nil {
+		return nil, err
+	}
 	return &pb.Empty{}, nil
 }
 

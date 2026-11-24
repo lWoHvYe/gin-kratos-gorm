@@ -174,11 +174,12 @@ func orderTestDB(t *testing.T) *sql.DB {
 	}
 	// The refund batch/application/commitment-composition schema comes from the
 	// real C-05 migrations, not a hand-written projection (Plan T1.2-R R-2 /
-	// Review m6). This exercises the order/0017 and order/0018 DDL (CHECK
-	// constraints, columns, indexes) in every order integration test.
+	// Review m6). This exercises the order/0017, order/0018 and order/0021 DDL
+	// (CHECK constraints, columns, indexes) in every order integration test.
 	for _, migration := range []string{
 		"0017_refund_batch_ledger.sql",
 		"0018_refund_commitment_composition.sql",
+		"0021_zero_application_check.sql",
 	} {
 		applyOrderTestMigration(t, db, migration)
 	}

@@ -17,6 +17,19 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-24 T1.2/T1.2b Reviewer FAIL — stop-the-line
+
+- Review scope `998e896..4e5d07f`; verdict FAIL:
+  B1 real lifecycle states (ALLOCATED/SHIPPED/COMPLETED) are silently ignored
+  by TCC cancel (no batch/permit/refund); B2 missing canonical Developer
+  self-check/test-scope artifact; M1 historical commitment composition can
+  block whole TCC; M2 no-active-group case still creates FROZEN batch;
+  M3 Plan approval state stale.
+- `PAY-SETTLE-01` is frozen: no further managed code, no merge, no T1.4.
+- Required: T1.2 remediation plan, regression tests for real lifecycle states,
+  canonical self-check, Reviewer re-review, then human merge decision.
+- Zero after-sale amendment remains approved; T1.2 code is not approved.
+
 ## 2026-11-24 human decisions: constitution v1.2.0
 
 - Director approved constitution v1.2.0 and set the hierarchy:

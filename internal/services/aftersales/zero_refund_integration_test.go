@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/apperr"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -458,5 +459,307 @@ func assertNotRefunded(t *testing.T, db *sql.DB, afterSaleNo string) {
 	}
 	if status == statusRefunded {
 		t.Fatalf("after sale %s was marked REFUNDED", afterSaleNo)
+	}
+}
+
+// --- T1.4b2b2: zero after-sale creation / approval entry ---------------------
+
+func positiveTestOrder() *pb.Order {
+	return &pb.Order{
+		OrderNo: "ORD-POS", UserId: 1, Status: "PAID", PayCent: 1000, PaidCent: 1000,
+		SettlementPaymentNo: "PAY-POS", RefundState: "NONE",
+		Items: []*pb.OrderItem{{
+			LineNo: 1, SkuId: 1, Quantity: 1, WarehouseId: 1, GroupNo: "G1",
+			LinePaidCent: 1000, UnitPaidCent: 1000,
+		}},
+		FulfillmentGroups: []*pb.OrderFulfillmentGroup{{GroupNo: "G1", WarehouseId: 1, Status: "ALLOCATED"}},
+	}
+}
+
+// nonZeroIdentityOrder has pay_cent=0 but not the `zero:<order_no>` settlement
+// identity, so it is NOT a zero order; captured=0 must fail closed.
+func nonZeroIdentityOrder() *pb.Order {
+	order := zeroTestOrder()
+	order.OrderNo = "ORD-NONZERO"
+	order.SettlementPaymentNo = "PAY-OTHER"
+	return order
+}
+
+func newServiceForOrder(t *testing.T, db *sql.DB, orders pb.OrderServiceClient, payment *fakePaymentService) *Service {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return New(db, nil, payment, &fakeInventoryService{}, orders, logger)
+}
+
+// TestZeroAfterSaleEndToEndCreateApproveRefundWithoutPayment drives the public
+// entry points: CreateAfterSale -> Approve -> Refund/worker -> REFUNDED/0/
+// CONSUMED, with zero Payment lookups/refunds and no amount ledger.
+func TestZeroAfterSaleEndToEndCreateApproveRefundWithoutPayment(t *testing.T) {
+	db := afterSaleTestDB(t)
+	ctx := context.Background()
+	order := &fakeZeroOrderService{order: zeroTestOrder(), db: db, s19: map[string]*pb.AdmitRefundReply{}}
+	payment := &fakePaymentService{captured: 0}
+	svc := newServiceForOrder(t, db, order, payment)
+
+	created, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-ZERO", UserId: 1, Type: typeRefundOnly, AmountCent: 0, Reason: "zero after-sale",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1}},
+	})
+	if err != nil {
+		t.Fatalf("create zero after sale: %v", err)
+	}
+	if created.GetStatus() != statusRequested || created.GetEffectiveAmountCent() != 0 ||
+		created.GetAmountState() != amountActive {
+		t.Fatalf("created zero after sale = %+v", created)
+	}
+	var ledgers, tasks int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sale_amount_ledger WHERE order_no = 'ORD-ZERO'`).Scan(&ledgers); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sale_refund_tasks`).Scan(&tasks); err != nil {
+		t.Fatal(err)
+	}
+	if ledgers != 0 || tasks != 0 {
+		t.Fatalf("zero create wrote ledger/task: ledgers=%d tasks=%d", ledgers, tasks)
+	}
+
+	approved, err := svc.Approve(ctx, &pb.ApproveRequest{AfterSaleNo: created.GetAfterSaleNo(), Approved: true})
+	if err != nil {
+		t.Fatalf("approve zero after sale: %v", err)
+	}
+	if approved.GetStatus() != statusApproved || approved.GetEffectiveAmountCent() != 0 ||
+		approved.GetAmountState() != amountActive {
+		t.Fatalf("approved zero after sale = %+v", approved)
+	}
+	if payment.lookupCalls != 0 || payment.refundCalls != 0 {
+		t.Fatalf("zero create/approve called Payment: lookups=%d refunds=%d", payment.lookupCalls, payment.refundCalls)
+	}
+
+	refunded, err := svc.Refund(ctx, &pb.RefundAfterSaleRequest{AfterSaleNo: created.GetAfterSaleNo()})
+	if err != nil {
+		t.Fatalf("refund zero after sale: %v", err)
+	}
+	if refunded.GetStatus() != statusRefunded {
+		t.Fatalf("zero refund reply = %+v", refunded)
+	}
+	assertZeroRefunded(t, db, created.GetAfterSaleNo())
+	if len(order.calls) != 1 {
+		t.Fatalf("admission calls = %d", len(order.calls))
+	}
+	if call := order.calls[0]; call.Source != zeroAfterSaleSource || call.AmountCent != 0 || call.TaskStatus != taskProcessing {
+		t.Fatalf("zero admission = %+v", call)
+	}
+	if payment.lookupCalls != 0 || payment.refundCalls != 0 {
+		t.Fatalf("zero refund called Payment: lookups=%d refunds=%d", payment.lookupCalls, payment.refundCalls)
+	}
+	if got := countAfterSaleEvents(t, db, "aftersale.completed", created.GetAfterSaleNo()); got != 1 {
+		t.Fatalf("completed events = %d", got)
+	}
+}
+
+// TestZeroAfterSaleApprovalRejectsPositiveAmount covers AC-67: a zero order's
+// after-sale cannot be turned into a positive-amount refund.
+func TestZeroAfterSaleApprovalRejectsPositiveAmount(t *testing.T) {
+	db := afterSaleTestDB(t)
+	ctx := context.Background()
+	order := &fakeZeroOrderService{order: zeroTestOrder(), db: db, s19: map[string]*pb.AdmitRefundReply{}}
+	svc := newServiceForOrder(t, db, order, &fakePaymentService{captured: 0})
+	created, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-ZERO", UserId: 1, Type: typeRefundOnly, AmountCent: 0, Reason: "zero after-sale",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1}},
+	})
+	if err != nil {
+		t.Fatalf("create zero after sale: %v", err)
+	}
+	_, err = svc.Approve(ctx, &pb.ApproveRequest{
+		AfterSaleNo: created.GetAfterSaleNo(), Approved: true, AmountCent: 100, Reason: "adjust",
+	})
+	if !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("zero approval with positive amount = %v", err)
+	}
+	var status string
+	var effective int64
+	if err := db.QueryRow(`SELECT status, effective_amount_cent FROM after_sales WHERE after_sale_no = ?`,
+		created.GetAfterSaleNo()).Scan(&status, &effective); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusRequested || effective != 0 {
+		t.Fatalf("after rejected zero approval = %s/%d", status, effective)
+	}
+}
+
+// TestZeroSystemShortageRefundUsesZeroTask covers createSystemRefund on a
+// zero-settled order: it creates the system after-sale + durable task with
+// amount 0, never calls Payment, and the worker completes it via the zero path.
+func TestZeroSystemShortageRefundUsesZeroTask(t *testing.T) {
+	db := afterSaleTestDB(t)
+	ctx := context.Background()
+	order := &fakeZeroOrderService{order: zeroTestOrder(), db: db, s19: map[string]*pb.AdmitRefundReply{}}
+	payment := &fakePaymentService{captured: 0}
+	svc := newServiceForOrder(t, db, order, payment)
+	event := shortageResolvedEvent{
+		OrderNo: "ORD-ZERO", GroupNo: "G1", Status: shortageResolved, Resolution: "REFUND",
+		ReasonCode: "SHORTAGE_DEFAULT",
+		Items: []struct {
+			LineNo   int32 `json:"line_no"`
+			SkuID    int64 `json:"sku_id"`
+			Quantity int32 `json:"quantity"`
+		}{{LineNo: 1, SkuID: 1, Quantity: 1}},
+	}
+	if err := svc.createSystemRefund(ctx, event); err != nil {
+		t.Fatalf("zero system refund: %v", err)
+	}
+	if err := svc.createSystemRefund(ctx, event); err != nil {
+		t.Fatalf("idempotent zero system refund: %v", err)
+	}
+	var afterSaleNo, status, source string
+	var effective int64
+	if err := db.QueryRow(`SELECT after_sale_no, status, source, effective_amount_cent FROM after_sales
+		WHERE order_no = 'ORD-ZERO'`).Scan(&afterSaleNo, &status, &source, &effective); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusApproved || source != sourceSystem || effective != 0 {
+		t.Fatalf("zero system refund = %s/%s/%d", status, source, effective)
+	}
+	var afterSales, tasks, ledgers int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sales WHERE order_no = 'ORD-ZERO'`).Scan(&afterSales); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sale_refund_tasks`).Scan(&tasks); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sale_amount_ledger WHERE order_no = 'ORD-ZERO'`).Scan(&ledgers); err != nil {
+		t.Fatal(err)
+	}
+	if afterSales != 1 || tasks != 1 || ledgers != 0 {
+		t.Fatalf("zero system rows = after_sales %d tasks %d ledgers %d", afterSales, tasks, ledgers)
+	}
+	if payment.lookupCalls != 0 || payment.refundCalls != 0 {
+		t.Fatalf("zero system refund called Payment: lookups=%d refunds=%d", payment.lookupCalls, payment.refundCalls)
+	}
+	if err := svc.processRefundTask(ctx, afterSaleNo); err != nil {
+		t.Fatalf("zero system worker: %v", err)
+	}
+	assertZeroRefunded(t, db, afterSaleNo)
+	if payment.refundCalls != 0 {
+		t.Fatalf("payment calls = %d", payment.refundCalls)
+	}
+}
+
+// TestNonZeroOrderZeroAmountRequestIsNotZeroAfterSale proves a user-supplied 0
+// on a positive order still computes the line refund (positive path) and pays
+// through Payment; it never becomes a zero after-sale.
+func TestNonZeroOrderZeroAmountRequestIsNotZeroAfterSale(t *testing.T) {
+	db := afterSaleTestDB(t)
+	ctx := context.Background()
+	order := &fakeOrderService{order: positiveTestOrder(), db: db}
+	payment := &fakePaymentService{captured: 1000}
+	svc := newServiceForOrder(t, db, order, payment)
+
+	created, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-POS", UserId: 1, Type: typeRefundOnly, AmountCent: 0, Reason: "user typed zero",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1}},
+	})
+	if err != nil {
+		t.Fatalf("positive create: %v", err)
+	}
+	if created.GetEffectiveAmountCent() != 1000 || created.GetAmountState() != amountActive {
+		t.Fatalf("positive create with amount 0 = %+v", created)
+	}
+	if _, err := svc.Approve(ctx, &pb.ApproveRequest{AfterSaleNo: created.GetAfterSaleNo(), Approved: true}); err != nil {
+		t.Fatalf("positive approve: %v", err)
+	}
+	if _, err := svc.Refund(ctx, &pb.RefundAfterSaleRequest{AfterSaleNo: created.GetAfterSaleNo()}); err != nil {
+		t.Fatalf("positive refund: %v", err)
+	}
+	if payment.refundCalls != 1 || len(payment.refundAmount) != 1 || payment.refundAmount[0] != 1000 {
+		t.Fatalf("positive payment refunds = %d %v", payment.refundCalls, payment.refundAmount)
+	}
+	if len(order.blocked) != 1 || order.sourceAtAdmit != "aftersale" || order.amountAtAdmit != 1000 {
+		t.Fatalf("positive admission = %v src=%s amount=%d", order.blocked, order.sourceAtAdmit, order.amountAtAdmit)
+	}
+}
+
+// TestNonZeroOrderFreeLineZeroAmountFailsClosed: a user-supplied 0 for a
+// zero-priced line on a positive order is not a zero after-sale and must fail
+// closed instead of entering the zero path.
+func TestNonZeroOrderFreeLineZeroAmountFailsClosed(t *testing.T) {
+	db := afterSaleTestDB(t)
+	order := &fakeOrderService{order: positiveTestOrder()}
+	order.order.Items[0].LinePaidCent = 0
+	order.order.Items[0].UnitPaidCent = 0
+	svc := newServiceForOrder(t, db, order, &fakePaymentService{captured: 1000})
+	_, err := svc.CreateAfterSale(context.Background(), &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-POS", UserId: 1, Type: typeRefundOnly, AmountCent: 0, Reason: "free line",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1}},
+	})
+	if !apperr.IsCode(err, apperr.CodeInvalidArgument) {
+		t.Fatalf("positive free-line zero request = %v", err)
+	}
+	var afterSales int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sales`).Scan(&afterSales); err != nil {
+		t.Fatal(err)
+	}
+	if afterSales != 0 {
+		t.Fatalf("failed positive zero request created %d after-sales", afterSales)
+	}
+}
+
+// TestCapturedZeroNonZeroIdentityFailsClosed covers the boundary: pay_cent=0
+// without the `zero:<order_no>` identity is not a zero order, so create,
+// approve and the system shortage refund all fail closed with no rows/tasks.
+func TestCapturedZeroNonZeroIdentityFailsClosed(t *testing.T) {
+	db := afterSaleTestDB(t)
+	ctx := context.Background()
+	order := &fakeOrderService{order: nonZeroIdentityOrder(), db: db}
+	payment := &fakePaymentService{captured: 0}
+	svc := newServiceForOrder(t, db, order, payment)
+
+	if _, err := svc.CreateAfterSale(ctx, &pb.CreateAfterSaleRequest{
+		OrderNo: "ORD-NONZERO", UserId: 1, Type: typeRefundOnly, AmountCent: 0, Reason: "not zero",
+		Items: []*pb.AfterSaleItem{{SkuId: 1, Quantity: 1}},
+	}); !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("non-zero identity create = %v", err)
+	}
+	event := shortageResolvedEvent{
+		OrderNo: "ORD-NONZERO", GroupNo: "G1", Status: shortageResolved, Resolution: "REFUND",
+		ReasonCode: "SHORTAGE_DEFAULT",
+		Items: []struct {
+			LineNo   int32 `json:"line_no"`
+			SkuID    int64 `json:"sku_id"`
+			Quantity int32 `json:"quantity"`
+		}{{LineNo: 1, SkuID: 1, Quantity: 1}},
+	}
+	if err := svc.createSystemRefund(ctx, event); !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("non-zero identity system refund = %v", err)
+	}
+	var afterSales, tasks int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sales`).Scan(&afterSales); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM after_sale_refund_tasks`).Scan(&tasks); err != nil {
+		t.Fatal(err)
+	}
+	if afterSales != 0 || tasks != 0 {
+		t.Fatalf("fail-closed rows = after_sales %d tasks %d", afterSales, tasks)
+	}
+	if payment.refundCalls != 0 {
+		t.Fatalf("payment calls = %d", payment.refundCalls)
+	}
+
+	if _, err := db.Exec(`INSERT INTO after_sales (after_sale_no, order_no, user_id, ` + "`type`" + `, status,
+		amount_cent, effective_amount_cent, amount_state, restock_state, reason, source)
+		VALUES ('AS-NONZERO', 'ORD-NONZERO', 1, 'REFUND_ONLY', 'REQUESTED', 0, 0, 'ACTIVE', 'NONE', 'x', 'USER')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Approve(ctx, &pb.ApproveRequest{AfterSaleNo: "AS-NONZERO", Approved: true}); !apperr.IsCode(err, apperr.CodeFailedPrecondition) {
+		t.Fatalf("non-zero identity approve = %v", err)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM after_sales WHERE after_sale_no = 'AS-NONZERO'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusRequested {
+		t.Fatalf("fail-closed approve changed status to %s", status)
 	}
 }

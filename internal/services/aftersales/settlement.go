@@ -40,8 +40,16 @@ func (s *Service) loadOrder(ctx context.Context, orderNo string, userID int64) (
 }
 
 // capturedForOrder prefers Payment captured_cent. The order paid_cent snapshot
-// is only a legacy fallback when Payment has no settled intent.
+// is only a legacy fallback when Payment has no settled intent. A zero-settled
+// order (pay_cent=0 and the `zero:<order_no>` identity, SPEC-0002 v1.9 AC-67)
+// has no captured amount by definition: it returns 0 without calling Payment,
+// because a zero after-sale must never touch Payment. A pay_cent=0 order with a
+// different settlement identity is not a zero order; it falls through and fails
+// closed when no captured amount exists.
 func (s *Service) capturedForOrder(ctx context.Context, order *pb.Order) (int64, string, error) {
+	if isZeroSettlementOrder(order) {
+		return 0, zeroCaptureSource, nil
+	}
 	if s.payments != nil && order.GetOrderNo() != "" {
 		intent, err := s.payments.GetPaymentByOrder(ctx, &pb.GetPaymentByOrderRequest{OrderNo: order.GetOrderNo()})
 		if err == nil {

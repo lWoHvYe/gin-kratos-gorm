@@ -29,6 +29,10 @@ const (
 	zeroAfterSaleSource        = "system_zero"
 	zeroSettlementPaymentNoPre = "zero:"
 	zeroRefundApplicationDone  = "DONE"
+	// zeroCaptureSource is only an audit label for a zero-settled order; the
+	// zero path never writes the after_sale_amount_ledger or a refund
+	// commitment, so no amount is ever reserved.
+	zeroCaptureSource = "zero_settlement"
 )
 
 // isZeroSettlementOrder reports whether Order's authoritative facts describe a

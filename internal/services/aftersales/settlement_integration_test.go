@@ -224,9 +224,11 @@ type fakePaymentService struct {
 	refundErr    error
 	refundCalls  int
 	refundAmount []int64
+	lookupCalls  int
 }
 
 func (f *fakePaymentService) GetPaymentByOrder(context.Context, *pb.GetPaymentByOrderRequest, ...grpc.CallOption) (*pb.Intent, error) {
+	f.lookupCalls++
 	return &pb.Intent{PaymentNo: "PAY-1", CapturedCent: f.captured, Status: "SUCCEEDED"}, nil
 }
 

@@ -112,6 +112,10 @@ func (s *Service) createSystemRefund(ctx context.Context, event shortageResolved
 	if err != nil {
 		return err
 	}
+	// AC-67: a zero-settled order still gets the shortage refund record, but
+	// with amount 0 and no Payment/amount-ledger involvement. The existing
+	// refund task then runs the zero short-circuit.
+	zeroSettlement := isZeroSettlementOrder(order)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return apperr.Internal("begin system refund", err)
@@ -135,15 +139,22 @@ func (s *Service) createSystemRefund(ctx context.Context, event shortageResolved
 		return err
 	}
 	effective := goodsCent + freightCent
-	if effective <= 0 {
-		return nil
-	}
-	ledger, err := s.ensureAmountLedgerTx(ctx, tx, event.OrderNo, capturedCent, capturedSource)
-	if err != nil {
-		return err
-	}
-	if err := reserveAmountTx(ctx, tx, ledger, effective); err != nil {
-		return err
+	if zeroSettlement {
+		if effective != 0 {
+			return apperr.Failed("zero-amount system refund must have amount_cent 0 (REFUND_ADMISSION_CONFLICT)").
+				WithDetails(map[string]any{"order_no": event.OrderNo, "amount_cent": effective})
+		}
+	} else {
+		if effective <= 0 {
+			return nil
+		}
+		ledger, err := s.ensureAmountLedgerTx(ctx, tx, event.OrderNo, capturedCent, capturedSource)
+		if err != nil {
+			return err
+		}
+		if err := reserveAmountTx(ctx, tx, ledger, effective); err != nil {
+			return err
+		}
 	}
 	afterSaleNo := id.AfterSale()
 	reasonCode := strings.TrimSpace(event.ReasonCode)

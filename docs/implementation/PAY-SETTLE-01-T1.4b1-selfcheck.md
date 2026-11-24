@@ -7,7 +7,8 @@
 | Plan | `docs/lead/PAY-SETTLE-01/t1.4b1-r-plan.md`；**Plan 审批状态由 Lead 维护，本文不写、不代批** |
 | 契约输入 | SPEC-0002 **v1.9**（approved 2026-11-24）；ADR-0007 Amd1（accepted）；C-04 RefundBatch（accepted 2026-11-24）；T1.4b1-R Plan |
 | Base | `ba8a822`（T1.4b1-R Order 预检 + RefundBatch 接线 WIP） |
-| Code head（本清单绑定） | **`6ac218e`**（`wip(order): T1.4b1-R2 durable TCC reconcile and order projection`） |
+| Code head（本清单绑定） | **`6ac218e`**（`wip(order): T1.4b1-R2 durable TCC reconcile and order projection`）；Payment.GetRefundByKey 由 `198c623` 提供，已包含在该 code head 中 |
+| Selfcheck head | **本 WIP docs commit（HEAD；docs-only）** |
 | Scope | **仅 T1.4b1-R2**：持久 `RunTccReconcileWorker`、`GetRefundByKey` 惰性收敛、order 金额投影；不新增契约/迁移 |
 | 不做 | T1.4b2/INV-44 release/回库；零元/Aftersales 持久 task；T1.5；T1.6；T1.7/T5 全矩阵；不改 Spec/ADR/proto/migrations |
 | Status | **WIP**；不批准、不宣称实现 PASS / Release PASS，不标 AC-VERIFIED |
@@ -43,7 +44,7 @@
 
 ### 1.3 向现实做了哪些妥协（重大妥协高亮）
 
-1. **【重大】Payment.GetRefundByKey 仍无服务端实现**：proto/generated client 存在（`api/proto/mall/v1/mall.proto:782`、`api/gen/mall/v1/mall_grpc.pb.go:4078`），但 `internal/services/payment` 仍嵌入 `UnimplementedPaymentServiceServer` 且无 `GetRefundByKey` 方法。真实部署下 worker/preflight 会收到 gRPC `Unimplemented`：worker 每轮告警、不收敛；pay-path 预检会 fail-closed。**本 WIP 的 worker 只能用 fake Payment 验证，端到端被该缺口阻塞**（见 §5-1）。
+1. **【重大】真实 Order↔Payment 组合链路仍未验证**：`Payment.GetRefundByKey` 已由 `198c623` 实现（`internal/services/payment/refund_lookup.go:20`；缺失返回 `NOT_FOUND`、零写，code head `6ac218e` 已包含），不再是阻塞项；但 `Payment.RefundBatch` 仍是 WIP `fc295e5`，Order 测试仍用 fake Payment 模拟原子/幂等语义，尚未跑真实 Order↔Payment 组合链路（见 §5-2）。
 2. **order 金额投影下界是 SETTLED commitments 之和**：TCC 组退款都有 commitment，因此 TCC 场景可完整投影；没有 commitment 的支付级/历史退款仍只依赖 `payment.refunded`（其 `OrderRefundedCent` 是累计值）。本任务不改变支付级退款的事实所有权。
 3. **worker 是安全网，不是实时路径**：默认 1 分钟、每批最多 100 条；order 金额在 worker tick、pay-path resume 或事件到达前可能短暂滞后。未实现 metrics/告警/手动触发，只写结构化日志。
 4. **无 `payment.refunded` 时订单 lifecycle 不变**：worker 只写 `refund_state/refund_status/refunded_cent`，不改 `orders.status`，也不发 `order.refund_requested`。
@@ -132,7 +133,7 @@ ok  gin-kratos-gorm/internal/services/order  90.874s    # -race TestTcc
 
 ### 4.2 【未覆盖范围】
 
-1. **真实 Payment 进程**：`GetRefundByKey`/`RefundBatch` 仍由 fake 模拟；Payment 真实服务端 `GetRefundByKey` 实现不在本任务（见 §5-1）。
+1. **真实 Order↔Payment 组合链路**：`GetRefundByKey` 已有 Payment 服务端实现与测试（`198c623`），但 Order 侧 worker/preflight 测试仍用 fake Payment；`RefundBatch` 仍是 WIP，未做真实组合验证（见 §5-2）。
 2. **worker 运维面**：无 metrics、无手动触发、无死信/积压分页游标；只有日志。
 3. **多副本真实集群**：只在单进程内 8 并发 goroutine + 行锁/CAS 验证；未做多 Pod 网络分区/时钟实验。
 4. **支付级/无 commitment 退款**：worker 的金额下界只来自 SETTLED commitments；这类退款仍只由 `payment.refunded` 投影（事实所有权不变）。
@@ -143,8 +144,8 @@ ok  gin-kratos-gorm/internal/services/order  90.874s    # -race TestTcc
 
 ## 5. 契约缺口 / 需裁决事项（不自行扩展）
 
-1. **【阻塞】Payment.GetRefundByKey 无服务端实现**：proto/generated client 已 accepted，`internal/services/payment/service.go` 仍嵌入 `UnimplementedPaymentServiceServer`，无 `func (s *Service) GetRefundByKey`。真实部署下 worker 只能告警、pay-path 预检 fail-closed；**T1.4b1-R2 的 worker 端到端不可用，直到 Payment 实现该只读 RPC**。建议 Payment owner 按 C-04 实现 `(payment_no, refund_id)` 查询/NotFound，不改 proto。
-2. **Payment.RefundBatch 仍是 WIP `fc295e5`**：C-04 accepted ≠ 实现 PASS；Order 测试使用 fake Payment 模拟行锁/原子/幂等语义。真实组合验证需 Payment 实现 + `0012_refund_batch.sql`。
+1. **Payment.GetRefundByKey 已实现（`198c623`）**：`internal/services/payment/refund_lookup.go:20` 提供只读 `(payment_no, refund_id)` 查询，缺失 `NOT_FOUND`、零写；code head `6ac218e` 已包含该提交。该缺口不再成立，剩余组合验证见下一条。
+2. **Payment.RefundBatch 仍是 WIP `fc295e5`**：C-04 accepted ≠ 实现 PASS；Order 测试使用 fake Payment 模拟行锁/原子/幂等语义。**未做真实 Order↔Payment 组合链路**；真实组合验证需 RefundBatch 实现 + `0012_refund_batch.sql` + 真实 Payment 进程。
 3. **order 金额投影下界**：`max(current, SUM(SETTLED commitments))` 不覆盖无 commitment 的支付级退款；若事件永久丢失，这类金额仍会滞后。是否需要 Payment 级累计读（`ListOrderIntents`/`GetIntent`）作为第二下界，需 Architect 裁决。
 4. **worker 周期/超时**：`TCC_RECONCILE_INTERVAL` 默认 1m 是本任务本地运维值；C-04 未定义。in-flight 30m 阈值仍沿用 `ba8a822` 的本地策略。
 5. **`MANUAL_HOLD/FAILED_PERMANENT` 的投影**：worker 不推进这些 batch；投影查询把它们视为未完成以保持 `REFUNDING`。若业务希望人工态也允许金额投影到 `PARTIAL/FULL`，需状态机裁决。
@@ -157,4 +158,4 @@ ok  gin-kratos-gorm/internal/services/order  90.874s    # -race TestTcc
 
 - 本提交完成 **T1.4b1-R2**：持久 TCC reconcile worker + `GetRefundByKey` 惰性收敛 + order 金额/状态投影；不依赖 `payment.refunded`，event+worker 不双计，并发/重复幂等。
 - 未改 Spec/ADR/proto/migrations；未做 T1.4b2/INV-44/零元/T1.5/T1.6；未调 Inventory。
-- **Status: WIP**；不批准、不宣称实现 PASS / Release PASS，不标 AC-VERIFIED。真实端到端被 Payment.GetRefundByKey 服务端缺口阻塞。
+- **Status: WIP**；不批准、不宣称实现 PASS / Release PASS，不标 AC-VERIFIED。真实 Order↔Payment 组合链路仍未验证（Payment.RefundBatch WIP）。

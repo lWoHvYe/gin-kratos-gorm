@@ -17,6 +17,16 @@ the "any contract gap stops implementation" rule for this isolated gap. T1.0
 Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
 Architect amendment is approved. No AC-VERIFIED or Release PASS.
 
+### 2026-11-24 T1.4b1 Reviewer FAIL — stop-the-line
+
+- Scope `dff267d..1f4f2d1`; FAIL. B1: pre-payment does not re-read Payment
+  remaining vs batch outstanding, so an external partial refund can allow G1
+  payment then G2 rejection (partial payment). Must preflight all groups before
+  any Payment.Refund; distinguish own accepted refunds via GetRefundByKey from
+  external refunds; mismatch -> MANUAL_HOLD with zero payments.
+- T1.4b1 frozen; no merge; T1.4b2 not started.
+- Requires Architect/Plan ruling and Reviewer re-review.
+
 ### 2026-11-24 T1.4a Addendum approved
 
 Director approved the T1.4a contract rulings Addendum (R-A INV-44 owner,
@@ -92,7 +102,6 @@ re-review and human merge decision are still required.
   D-27..D-29 are closed by ADR-0007 Amendment 1.
 
 ## 2026-11-24 human decisions: governance cost reduction (D-CR-1…D-CR-5)
-
 - Director approved **all recommendations** D-CR-1…D-CR-5 from
   `docs/cost-reduction-proposal.md` on 2026-11-24 (session directive to Lead:
   "已经批准了 D-CR-1 至 D-CR-5 的所有建议"). Recorded here by Lead; the approval
@@ -114,6 +123,26 @@ re-review and human merge decision are still required.
 - Tracking: SPEC-0003 (`docs/specs/0003-platform-governance-cost-reduction.md`)
   draft; QC-01 returned BLOCKED (0 BLOCKER / 10 MAJOR / 11 MINOR) and the spec is
   in revision. Not a Spec approval; SPEC-0003 `approved_by` stays null.
+
+## 2026-11-24 human decisions: GOV-COST-01 bootstrap, IV and commit timing
+
+Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
+
+- **Bootstrap G-4 (QC-05 Q-02)**: choose **SPEC-0003 v1.4 amendment**. AC-106/112
+  bootstrap evidence = legacy **G-1…G-3 PASS** (scoped AC-01…68) plus an explicit
+  `G-4 NOT-RUN(not-implemented-at-BASE)` record that does **not** block P0a/P0b;
+  G-4 is implemented in P0b and required from then on. NOT-RUN never counts as PASS;
+  this is a bootstrap-only, time-boxed, human-approved evidence exception and does
+  not authorize Release. Spec v1.4 still needs QC and human approval.
+- **Independent Verifier (AC-107/GV-S21)**: held by the **Director**, or a
+  per-run **written designee** recorded in GV-S21 (`designated_by` +
+  `independence_evidence`); the designee must not author the change.
+- **Commit timing**: approved SPEC-0003 remains **untracked until P0a**. P0a lands
+  atomically: approved spec + G-3 governance-evidence extension + ledger/base
+  seeding. Until then the committed HEAD gate stays green; batch `DEFERRED`
+  registration remains forbidden (INV-69/AC-99).
+- ADR-0008 stays `proposed`; Architect revision is in progress and must bind to
+  SPEC-0003 v1.4 once approved.
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

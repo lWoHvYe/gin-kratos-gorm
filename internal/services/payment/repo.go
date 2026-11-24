@@ -64,7 +64,10 @@ type callback struct {
 	ProcessedAt time.Time
 }
 
-// refund is one refunds row.
+// refund is one refunds row. IdempotencyKey is the caller's refund_id
+// (C-04 §2.8): Payment never introduces a second refund identity column.
+// BatchID is the atomic RefundBatch that wrote the row, or "" for a legacy
+// single Refund.
 type refund struct {
 	RefundNo       string
 	PaymentNo      string
@@ -74,6 +77,22 @@ type refund struct {
 	Status         string
 	Channel        string
 	IdempotencyKey string
+	BatchID        string
+}
+
+// refundBatchRecord is one payment_refund_batches row: the persistent
+// idempotency ledger for RefundBatch. ItemResults is the JSON array of
+// refundBatchItemResult (refund_id/refund_no/status/amount_cent) returned to
+// the caller, so a replay returns the same reply.
+type refundBatchRecord struct {
+	PaymentNo        string
+	BatchID          string
+	ItemsFingerprint string
+	Status           string
+	RefundedCent     int64
+	Reason           string
+	ItemResults      []byte
+	CreatedAt        time.Time
 }
 
 type repo struct {
@@ -170,13 +189,13 @@ func (r *repo) callbackPaymentNo(ctx context.Context, q querier, channel, eventI
 	return paymentNo, err
 }
 
-const refundColumns = `refund_no, payment_no, order_no, amount_cent, reason, status, channel, COALESCE(idempotency_key, '')`
+const refundColumns = `refund_no, payment_no, order_no, amount_cent, reason, status, channel, COALESCE(idempotency_key, ''), COALESCE(batch_id, '')`
 
 func (r *repo) refundByKey(ctx context.Context, q querier, paymentNo, idempotencyKey string) (*refund, error) {
 	var ref refund
 	err := q.QueryRowContext(ctx, `SELECT `+refundColumns+` FROM refunds
 		WHERE payment_no = ? AND idempotency_key = ?`, paymentNo, idempotencyKey).
-		Scan(&ref.RefundNo, &ref.PaymentNo, &ref.OrderNo, &ref.AmountCent, &ref.Reason, &ref.Status, &ref.Channel, &ref.IdempotencyKey)
+		Scan(&ref.RefundNo, &ref.PaymentNo, &ref.OrderNo, &ref.AmountCent, &ref.Reason, &ref.Status, &ref.Channel, &ref.IdempotencyKey, &ref.BatchID)
 	if err != nil {
 		return nil, err
 	}
@@ -185,9 +204,39 @@ func (r *repo) refundByKey(ctx context.Context, q querier, paymentNo, idempotenc
 
 func (r *repo) insertRefund(ctx context.Context, q querier, ref *refund, now time.Time) error {
 	_, err := q.ExecContext(ctx, `INSERT INTO refunds
-		(refund_no, payment_no, order_no, amount_cent, reason, status, channel, idempotency_key, completed_at, version, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-		ref.RefundNo, ref.PaymentNo, ref.OrderNo, ref.AmountCent, ref.Reason, ref.Status, ref.Channel, ref.IdempotencyKey, now, now, now)
+		(refund_no, payment_no, order_no, amount_cent, reason, status, channel, idempotency_key, batch_id, completed_at, version, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+		ref.RefundNo, ref.PaymentNo, ref.OrderNo, ref.AmountCent, ref.Reason, ref.Status, ref.Channel, ref.IdempotencyKey, ref.BatchID, now, now, now)
+	return err
+}
+
+const refundBatchColumns = `payment_no, batch_id, items_fingerprint, status, refunded_cent, reason, item_results, created_at`
+
+// refundBatchByKey loads the persistent batch ledger row. When forUpdate is
+// set the row is locked; RefundBatch also locks the intent row first, so the
+// two locks always follow the same order.
+func (r *repo) refundBatchByKey(ctx context.Context, q querier, paymentNo, batchID string, forUpdate bool) (*refundBatchRecord, error) {
+	query := `SELECT ` + refundBatchColumns + ` FROM payment_refund_batches
+		WHERE payment_no = ? AND batch_id = ?`
+	if forUpdate {
+		query += ` FOR UPDATE`
+	}
+	var rec refundBatchRecord
+	err := q.QueryRowContext(ctx, query, paymentNo, batchID).
+		Scan(&rec.PaymentNo, &rec.BatchID, &rec.ItemsFingerprint, &rec.Status,
+			&rec.RefundedCent, &rec.Reason, &rec.ItemResults, &rec.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+func (r *repo) insertRefundBatch(ctx context.Context, q querier, rec *refundBatchRecord, now time.Time) error {
+	_, err := q.ExecContext(ctx, `INSERT INTO payment_refund_batches
+		(payment_no, batch_id, items_fingerprint, status, refunded_cent, reason, item_results, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		rec.PaymentNo, rec.BatchID, rec.ItemsFingerprint, rec.Status, rec.RefundedCent,
+		rec.Reason, string(rec.ItemResults), now, now)
 	return err
 }
 

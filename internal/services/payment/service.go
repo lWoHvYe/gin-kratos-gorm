@@ -378,10 +378,7 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 		if in.Status != statusSucceeded && in.Status != statusPartiallyRefunded {
 			return apperr.Failed(fmt.Sprintf("payment intent is %s; only captured payments can be refunded", in.Status))
 		}
-		captured := in.CapturedCent
-		if captured <= 0 {
-			captured = in.AmountCent
-		}
+		captured := capturedCent(in)
 		if in.RefundedCent+amount > captured {
 			return apperr.Invalid("refund amount %d exceeds remaining refundable amount %d", amount, captured-in.RefundedCent)
 		}
@@ -407,10 +404,7 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundRequest) (*pb.Empty,
 			return err
 		}
 		totalRefunded := in.RefundedCent + amount
-		nextStatus := statusPartiallyRefunded
-		if totalRefunded >= captured {
-			nextStatus = statusRefunded
-		}
+		nextStatus := refundedIntentStatus(totalRefunded, captured)
 		if err := r.updateIntentRefund(ctx, tx, in.PaymentNo, totalRefunded, nextStatus, now); err != nil {
 			return err
 		}
@@ -450,6 +444,26 @@ func truncateReason(reason string) string {
 		return reason
 	}
 	return string(r[:255])
+}
+
+// capturedCent is the authoritative captured amount of an intent. Legacy rows
+// written before partial refunds existed only carry amount_cent, so a zero
+// captured_cent means the full amount was captured.
+func capturedCent(in *intent) int64 {
+	if in.CapturedCent > 0 {
+		return in.CapturedCent
+	}
+	return in.AmountCent
+}
+
+// refundedIntentStatus is the aggregate intent status after totalRefunded has
+// been applied to a captured payment. It is shared by Refund and RefundBatch so
+// both paths classify full and partial refunds identically.
+func refundedIntentStatus(totalRefunded, captured int64) string {
+	if totalRefunded >= captured {
+		return statusRefunded
+	}
+	return statusPartiallyRefunded
 }
 
 func refundKey(paymentNo string, amount int64, reason, provided string) string {

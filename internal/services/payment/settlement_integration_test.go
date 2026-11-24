@@ -56,16 +56,37 @@ func paymentTestDB(t *testing.T) *sql.DB {
 	if _, err := db.Exec(`DROP TABLE IF EXISTS refunds`); err != nil {
 		t.Fatal(err)
 	}
+	// Mirrors migrations/payment/0012_refund_batch.sql (C-05): batch_id plus
+	// UNIQUE(payment_no, batch_id, refund_id), where refund_id is the existing
+	// idempotency_key. The legacy uk_refunds_idem(payment_no, amount_cent,
+	// reason) key is intentionally absent so two group refunds on one payment
+	// may share amount and reason.
 	if _, err := db.Exec(`CREATE TABLE refunds (
 		id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, refund_no VARCHAR(64) NOT NULL,
 		payment_no VARCHAR(64) NOT NULL, order_no VARCHAR(64) NOT NULL,
 		amount_cent BIGINT NOT NULL, reason VARCHAR(255) NOT NULL DEFAULT '',
 		status VARCHAR(32) NOT NULL DEFAULT 'REFUNDED', channel VARCHAR(32) NOT NULL DEFAULT '',
-		idempotency_key VARCHAR(128) NOT NULL DEFAULT '', completed_at DATETIME(3) NULL,
+		idempotency_key VARCHAR(128) NOT NULL DEFAULT '', batch_id VARCHAR(96) NOT NULL DEFAULT '',
+		completed_at DATETIME(3) NULL,
 		version BIGINT NOT NULL DEFAULT 1,
 		created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 		updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-		UNIQUE KEY uk_refunds_no (refund_no), UNIQUE KEY uk_refunds_key (payment_no, idempotency_key))`); err != nil {
+		UNIQUE KEY uk_refunds_no (refund_no),
+		UNIQUE KEY uk_refunds_idempotency (payment_no, idempotency_key),
+		UNIQUE KEY uk_refunds_batch_item (payment_no, batch_id, idempotency_key))`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DROP TABLE IF EXISTS payment_refund_batches`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE payment_refund_batches (
+		payment_no VARCHAR(64) NOT NULL, batch_id VARCHAR(96) NOT NULL,
+		items_fingerprint CHAR(64) NOT NULL, status VARCHAR(32) NOT NULL,
+		refunded_cent BIGINT NOT NULL, reason VARCHAR(255) NOT NULL DEFAULT '',
+		item_results JSON NOT NULL,
+		created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+		updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+		PRIMARY KEY (payment_no, batch_id))`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`DROP TABLE IF EXISTS outbox_events`); err != nil {

@@ -5,39 +5,39 @@ AC-29	Developer	2026-12-15	Playwright 订单详情组级物流断言未接入 CI
 AC-30	Developer	2026-12-15	C 端缺货二选一按钮/进度页面未接 BFF	developer-reviewer/T-001	deferred	-	DEFERRED
 AC-35	Developer	2026-12-15	同刻申诉与到期 job 的真实竞态 Playwright/并发用例未跑	developer-reviewer/T-001	deferred	-	DEFERRED
 AC-37	Developer	2026-12-15	AUTO_T7 页面文案未做浏览器断言	developer-reviewer/T-001	deferred	-	DEFERRED
-AC-39	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-39	Developer	2026-12-31	T5.3 fault injection: channel exception and amount != pay_cent refund (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-40	Developer	2026-12-31	WP-R3	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-41	Developer	2026-12-31	WP-R1	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-42	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-43	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-42	Developer	2026-12-31	T5.1 contract/handler: captured-unsettled shows processing, PAID != shippable (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-43	Developer	2026-12-31	T5.3 fault injection: crash-resume after capture; HELD/CONFIRMED converge on CANCELLED (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-44	Developer	2026-12-31	WP-R1	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-45	Developer	2026-12-31	WP-R1	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-46	Developer	2026-12-31	WP-E2	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-47	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-48	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-49	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-47	Developer	2026-12-31	T5.3 fault injection: inventory shortage/technical retry; shortage hands to AC-56 (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-48	Developer	2026-12-31	T5.2 -race: permit NONE/CONSUMED/REVOKED, line confirm, Ship reads state (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-49	Developer	2026-12-31	T5.1 contract/handler: four facts emitted separately (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-50	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-51	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-52	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-53	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-54	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-55	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-56	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-57	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-58	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-59	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-56	Developer	2026-12-31	T5.2/T5.3 -race+fault: 4h/48h, restock, concurrent CAS (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-57	Developer	2026-12-31	T5.5 baseline ADR-0005 receipt tests: cite/rerun then AC-REF (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-58	Developer	2026-12-31	T5.5 baseline ADR-0005 dispute tests: cite/rerun then AC-REF (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-59	Developer	2026-12-31	T5.3 fault injection: refund/receipt/stock-failure/shortage out-of-order rejection (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-60	Developer	2026-12-31	WP-B2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-61	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-62	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-62	Developer	2026-12-31	T3 dependency: P1-T3 commitment release; not Phase 0-R/T5 (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-63	Developer	2026-12-31	WP-B2	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-64	Developer	2026-12-31	orphan (no WP)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-64	Developer	2026-12-31	T3 dependency: P1-T3 line/freight ledger; not Phase 0-R/T5 (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-65	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-66	Developer	2026-12-31	WP-E4	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-67	Developer	2026-12-31	WP-R3	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-68	Developer	2026-12-31	WP-R3	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-14	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
-AC-21	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
-AC-25	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
-AC-27	Developer	2026-12-31	AC-27 projection test passes; EARS refund_state=REFUNDED and reservation/waybill branches not covered	developer-reviewer/T-003	unit	internal/services/order/warehouse_quote_test.go:123 TestAC27RevokedGroupIsClosedInProjection	AC-REF
-AC-31	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
-AC-32	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
+AC-14	Developer	2026-12-31	Real MySQL 8.4.13 at HEAD 9322e75: six 6.5.1 scenarios + cumulative cap PASS (34d0466 evidence; reviewer rerun)	developer-reviewer/T-003	MySQL	internal/services/aftersales/settlement_integration_test.go:875 TestAC14FreightRefundSixScenarios	AC-VERIFIED
+AC-21	Developer	2026-12-31	Real MySQL 8.4.13 at HEAD 9322e75 PASS: auto-confirm T7 covered; "at least one notice" clause not asserted	developer-reviewer/T-003	MySQL	internal/services/fulfillment/delivery_integration_test.go:397 TestAC21AutoConfirmT7	AC-REF
+AC-25	Developer	2026-12-31	Real MySQL 8.4.13 -race at HEAD 9322e75 PASS: partial/full refund keeps lifecycle; universal "any refund scenario" not exhaustive	developer-reviewer/T-003	MySQL+race	internal/services/order/settlement_integration_test.go:355 TestAC25RefundProjectionKeepsLifecycle	AC-REF
+AC-27	Developer	2026-12-31	SPEC v1.5 AC-27/27A: EARS-2/CANCELLED/7.5/post-ship asserted (fe1600b; rerun PASS at HEAD); AC-27A steps 5/6 (CONSUMED+PRE, PENDING_REMOTE) not covered and AC-50-FIX-01/AC-27-NOWB-01/AC-27-LIVE-01 open; not AC-VERIFIED	developer-reviewer/T-003	unit+MySQL	internal/services/order/warehouse_quote_test.go:125 TestAC27RevokedGroupIsClosedInProjection; ac27_projection_{integration,cancelled,negative}_test.go	AC-REF
+AC-31	Developer	2026-12-31	Real MySQL 8.4.13 at HEAD 9322e75 PASS: goods refund + freight hold; 168h bound and user-visible hold not asserted	developer-reviewer/T-003	MySQL	internal/services/aftersales/settlement_integration_test.go:1101 TestAC31FreightHoldTimeout	AC-REF
+AC-32	Developer	2026-12-31	Real MySQL 8.4.13 at HEAD 9322e75 PASS: timeout -> MERCHANT_WAREHOUSE freight refund; user-visible supplement not asserted	developer-reviewer/T-003	MySQL	internal/services/aftersales/settlement_integration_test.go:1102 TestAC32FreightHoldTimeoutDefaultsToMerchant	AC-REF

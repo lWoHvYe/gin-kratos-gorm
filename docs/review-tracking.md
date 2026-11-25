@@ -347,6 +347,14 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   pre-ship `REFUNDING` closure; R-5 is SPEC §7.5 drift for PO next version.
   Pending QC; no code until accepted.
 
+### 2026-11-26 human decision: PO SPEC-0001 v1.5 authorized
+
+- Director authorized PO to issue **SPEC-0001 v1.5** to resolve the AC-27
+  conflict with §6.6.1/AC-25 (persisted lifecycle vs read-model projection),
+  the §7.5:405/:409 drift, and the AC-50 `CONSUMED`+no-waybill deviation.
+- QC delta review is still required before implementation; no code until the
+  PO/QC/Architect path completes. No merge/Release/AC-VERIFIED implied.
+
 ### 2026-11-25 human decision: R0.4 shadow runtime
 
 - Director decision (scoped to R0.4): keep

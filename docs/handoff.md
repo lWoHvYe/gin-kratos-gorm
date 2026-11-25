@@ -4,6 +4,8 @@ Read this first in a new conversation. It records the current truth, the
 remaining work, and local environment pitfalls. Use `git log -1` for the exact
 HEAD; running status remains in `docs/review-tracking.md`.
 
+> **过时声明（2026-11-25）**：Snapshot 停在 2026-11-22 12:05，仅作历史背景；当前运行状态以 `docs/review-tracking.md` 为准，契约以 `docs/specs/` 与 `docs/adr/` 当前版本为准，PAY-SETTLE-01 分解以 `docs/lead/PAY-SETTLE-01/decomposition-review.md` 为准。
+
 ## Snapshot
 
 - Date: 2026-11-22 12:05 CST.

@@ -1,6 +1,6 @@
 # PAY-SETTLE-01 Remediation Tasks (Revision 1)
 
-Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `PAY-SETTLE-01`（原 id）。T1.2-R 批准前不得写受管代码。
+Status: **APPROVED Plan (2026-11-24)**。本文件是 **Plan 视图**，不拥有运行状态；当前进度/冻结/PASS 以 `docs/review-tracking.md` 为准。change_id: `PAY-SETTLE-01`（原 id）。
 依赖：`plan.md`；每条任务必须有 Owner、依赖、验收与证据路径。
 
 ## Phase 0 — Contract（批准前不进入 Phase 1）
@@ -89,21 +89,21 @@ Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `
 
 ## T1.2-R（Reviewer FAIL 后）
 
-- [ ] R-1 B1 真实 ALLOCATED/SHIPPED/COMPLETED（Developer）
-- [ ] R-2 M1 historical composition（Developer + Architect）
-- [ ] R-3 M2 no active groups（Developer）
-- [ ] R-4 m1 resume audit（Developer）
-- [ ] R-5 B2 self-check canonical（Developer）
+- [ ] R-1 B1 真实 ALLOCATED/SHIPPED/COMPLETED（Developer） [superseded -> review-tracking]
+- [ ] R-2 M1 historical composition（Developer + Architect） [superseded -> review-tracking]
+- [ ] R-3 M2 no active groups（Developer） [superseded -> review-tracking]
+- [ ] R-4 m1 resume audit（Developer） [superseded -> review-tracking]
+- [ ] R-5 B2 self-check canonical（Developer） [superseded -> review-tracking]
 - [x] R-6 M3 Plan 状态（Lead）
-- [ ] R-7 Reviewer 复审（Reviewer）
+- [ ] R-7 Reviewer 复审（Reviewer） [superseded -> review-tracking]
 
 ## T1.4b1-R2 (Reviewer B2/B3)
 
-- [ ] R2-1 persistent TCC reconcile worker: scan ADMITTED/PAYING batches, GetRefundByKey, update commitment/app/batch + order amount projection in one tx; no event required; config interval.
-- [ ] R2-2 order projection: refunded_cent/refund_status/refund_state monotonic; active batch REFUNDING; all done PARTIAL/FULL.
-- [ ] R2-3 no-event fault-injection test: batch DONE + order FULL/PARTIAL without payment.refunded.
-- [ ] R2-4 canonical selfcheck bound to new HEAD; Plan approval rows.
-- [ ] R2-5 Reviewer re-review.
+- [ ] R2-1 persistent TCC reconcile worker: scan ADMITTED/PAYING batches, GetRefundByKey, update commitment/app/batch + order amount projection in one tx; no event required; config interval. [superseded -> review-tracking]
+- [ ] R2-2 order projection: refunded_cent/refund_status/refund_state monotonic; active batch REFUNDING; all done PARTIAL/FULL. [superseded -> review-tracking]
+- [ ] R2-3 no-event fault-injection test: batch DONE + order FULL/PARTIAL without payment.refunded. [superseded -> review-tracking]
+- [ ] R2-4 canonical selfcheck bound to new HEAD; Plan approval rows. [superseded -> review-tracking]
+- [ ] R2-5 Reviewer re-review. [superseded -> review-tracking]
 
 ## Human decisions 2026-11-25
 

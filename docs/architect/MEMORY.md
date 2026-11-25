@@ -3,6 +3,7 @@
 > 所有者：System Architect。其他角色只读。
 > 用途：跨会话保留**设计结论的索引、未完成项、易漂移点**，避免重新翻 1000 行 ADR。
 > 规则：这里不放业务规则；业务结论以 `docs/specs/**` 为准，设计结论以 `docs/adr/**` 为准。本文件只是指针 + 状态。
+> 只收跨变更仍成立的稳定经验；运行状态见 `docs/review-tracking.md` / `ac-coverage.tsv`；协作闸门已于 2026-11-25 退役。
 
 ## 工作守则（每轮开场先做）
 
@@ -18,15 +19,13 @@
 |---|---|
 | Spec | SPEC-0001 **v1.2**（approved，`docs/specs/0001-fulfillment-quantity-split.md`） |
 | ADR | ADR-0005 **v1.2 / Amendment 2**（accepted，T-001 已回写） |
-| 流程 ADR | ADR-0006 **v1.1 / Amendment 1**（T-003：G-3 `AC-REF`、G-4 到期、`--range/--release`、能力边界；待 Developer 实现 + Reviewer A1…A5） |
-| 线程（PO↔Arch） | T-001 **CLOSED**；T-002 **CLOSED**（A1…A5 PASS）；T-003 **ANSWERED**（等 G-4 实现 + A1…A5） |
+| 线程（PO↔Arch） | T-001 **CLOSED**；T-002 **CLOSED**（A1…A5 PASS）；T-003 **CLOSED**（2026-11-25 随闸门退役关闭） |
 | 线程（Arch↔Dev） | T-001 **CLOSED**（实施交接）；T-002 **CLOSED**（scope 追认） |
 | Reviewer 门禁 | `docs/collab/developer-reviewer/T-001` **CLOSED / PASS**（`f162ecf`） |
 | 生产开关 | `QUANTITY_SPLIT_ENABLED` / `CARRIER_REGISTRY_ENABLED` / `DELIVERY_AUTO_CONFIRM_ENABLED` / `SHORTAGE_CASE_ENABLED` / `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false |
 
 ## 未完成项（不能判 done）
 
-- **T-003 / G-4**：`AC-REF` 措辞、`DEFERRED/OVERDUE`、G-4 到期闸门、`SCAN RANGE`/`--release`、CONVENTIONS §4.4 待 Developer 实现；Reviewer A1…A5 未跑。
 - **B-01/B-05**：Developer 已交付，Reviewer **PASS**（P0-1…P0-7 关闭）；发布门禁已过。
 - **残余**：B-06a（change_reason/return_carrier_code）、C-01…C-03 shim、D-01/D-02（缺货 BFF、日终对账/故障注入），owner+expiry 见偏差登记；**到期未清升级 BLOCKING**。
 - AC-22/28/29/30/35/37 的浏览器/SLA 深度缺口仍在 `ac-coverage.tsv`，`expiry=2026-12-15`；不得静默续期。
@@ -46,12 +45,6 @@
 9. **库存变化**：BFF 同响应返回完整 `next_preview`，不得只回 `retry_preview`（P-17）。
 10. **冻结**：支付确认事务内 `allocation_frozen_at`；冻结后行/组/仓只读（INV-22）。
 
-## 闸门（ADR-0006）
-
-- `make gates`（warn，并入 `verify`）/ `make gates-strict`（CI/合并）/ `make gates-test`（A1…A5 自测）。
-- 豁免只允许 `Role:`、`Exception: T-NNN`、`Non-normative: true`；不得删 AC/测试、改 baseline、堆豁免、改脚本恒真。
-- 覆盖台账 `docs/collab/ac-coverage.tsv` 由 Reviewer 维护；baseline `docs/collab/ac-baseline.txt` 只增不减。
-
 ## 协作通道
 
 - PO↔Arch：`docs/collab/po-architect/`
@@ -70,7 +63,6 @@
 ## 常用命令
 
 ```bash
-make gates-strict
 make verify
 make contract-check
 git log --grep 'Thread: T-00' --oneline

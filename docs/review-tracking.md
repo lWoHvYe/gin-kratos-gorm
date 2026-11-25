@@ -4,6 +4,8 @@ This is the canonical running status ledger. Update it every round with evidence
 and remaining gaps. `docs/handoff.md` is a session-boundary snapshot and is only
 refreshed when a new conversation is started.
 
+> **唯一运行状态台账（2026-11-25 人类批准）**：裁决、冻结、PASS/FAIL、治理决策以本文件为准；`tasks.md`、`plan.md`、`handoff.md`、协作线程均为视图，冲突时以本文件为准。
+
 Source: 2026-11-20 handoff plus follow-up implementation. `done` means the code
 and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
@@ -314,6 +316,17 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   §1.4/§1.5 补 L1 口径与全级别 Tier 确认；新增分级角色动作总括；§2.8 治理变更最小化与撤回。
   **收益**：角色动作与分级对齐、防止再次无界扩张；**停止条件**：本轮为最后编辑，不再新增治理机制。
 - **2026-11-25 §2.8 收口**: 撤回清理由各产物 owner 执行、仅删本次新增行；多文件同步限于首个可验证增量；安全/合规/数据完整性可豁免可测收益；收益与停止条件记录于 review-tracking 或变更输入。
+
+## 2026-11-25 legacy cleanup decisions (Batch A/B/C)
+
+- **D-LC-1**: approved Batch A (L0), including A-2a's sole-running-ledger declaration.
+- **D-LC-4**: C-1.1 — the six ACs expiring 2026-12-15 are decided by 2026-12-08.
+- **D-LC-2 / D-LC-3**: Batch B uses the **light governance path** (Architect ->
+  QC -> human -> Reviewer; no Spec/ADR/Plan); **ADR-0007 (7 addenda) merges to
+  Rev 2.0 in this batch**.
+- **D-LC-5**: Phase 0 sign-off gap — Lead verified that `review-tracking` records
+  the Phase 0 exit but no individual Developer/Reviewer sign-off; human decision
+  pending (do not back-fill signatures).
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

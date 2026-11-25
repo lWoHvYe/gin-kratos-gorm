@@ -39,7 +39,7 @@
 
 | AC | 必须覆盖的 EARS 分支（摘，canonical SPEC-0001 :571-579） | Test type | Evidence path | Test owner | Status |
 |---|---|---|---|---|---|
-| AC-27 | ①G2 已退款完成且 G1 正常发货→按 G1 的 S2 读模型投影推进（`shipment_status`），G2 不阻塞；②WHILE `refund_state=REFUNDED` 且 permit `REVOKED` 或运单 `CANCELLED`→持久化 `orders.status` 不被组退款写入，退款进度只写 `refund_state`；③预留已释放或运单已取消→§6.6/§6.6.1 判定合法；关闭谓词见 PO v1.5 **AC-27A**（`CANCELLED` → 未离仓 `REVOKED` → 真实 `CANCELLED` 收敛的 `PRE_SHIP_REVOKED`；`refund_state/reservation_state` 不参与） | unit + MySQL | `warehouse_quote_test.go:125`、`ac27_projection_integration_test.go`、`ac27_projection_cancelled_test.go`、`ac27_projection_negative_test.go`；AC-27A 谓词待实现/重跑 | Developer | AC-REF（SPEC v1.5 AC-27A 待 QC；AC-50 `CONSUMED+无运单` 映射偏差需修/延期，不得据此标 VERIFIED） |
+| AC-27 | ①G2 已退款完成且 G1 正常发货→按 G1 的 S2 读模型投影推进（`shipment_status`），G2 不阻塞；②WHILE `refund_state=REFUNDED` 且 permit `REVOKED` 或运单 `CANCELLED`→持久化 `orders.status` 不被组退款写入，退款进度只写 `refund_state`；③预留已释放或运单已取消→§6.6/§6.6.1 判定合法；关闭谓词见 PO v1.5 **AC-27A**（`CANCELLED` → 未离仓 `REVOKED` → 真实 `CANCELLED` 收敛的 `PRE_SHIP_REVOKED`；`refund_state/reservation_state` 不参与） | unit + MySQL | `warehouse_quote_test.go:125`、`ac27_projection_integration_test.go`、`ac27_projection_cancelled_test.go`、`ac27_projection_negative_test.go`；Reviewer `fd208b2` 在 HEAD `9322e75` 重跑 PASS | Developer | **AC-REF**（2026-11-26 Reviewer：EARS-2/CANCELLED/§7.5/post-ship 真实断言 PASS；**AC-27A 第 5/6 条未实现**；`AC-50-FIX-01`/`AC-27-NOWB-01`/`AC-27-LIVE-01` open，不标 VERIFIED） |
 
 ## 2. New semantics — SPEC-0002 v1.10 已分配 AC-62…68
 
@@ -61,7 +61,7 @@
 
 | INV | 必须覆盖的分支（摘） | Test type | Evidence path / planned task | Owner | Status |
 |---|---|---|---|---|---|
-| INV-44 | 组退款后的库存处置有主：未离仓组由 Inventory 释放预留（`HELD` 直接释放、`CONFIRMED` 走 `CancelConfirm`），已离仓不回滚、按 INV-03 回库；释放失败重试+告警；`release_id=rr:<refund_id>` 幂等；P0 只发单组释放，多组 P1/manual 显式缺口 | MySQL + fault | C-04 release event v1（Addendum r3 §1.2-§1.4）+ `internal/services/order/refund_release.go` + `internal/services/inventory/refund_release_consumer.go`；R0.4b/c、T5.3 | Developer | AC-REF（多组释放缺口 DEFERRED，2026-12-31） |
+| INV-44 | 组退款后的库存处置有主：未离仓组由 Inventory 释放预留（`HELD` 直接释放、`CONFIRMED` 走 `CancelConfirm`），已离仓不回滚、按 INV-03 回库；释放失败重试+告警；`release_id=rr:<refund_id>` 幂等；P0 只发单组释放，多组 P1/manual 显式缺口 | MySQL + fault | C-04 release event v1（Addendum r3 §1.2-§1.4）+ `internal/services/order/refund_release.go` + `internal/services/inventory/refund_release_consumer.go`；R0.4b/c、T5.3 | Developer | AC-REF（多组释放缺口 + **missing-reservation metric** 均 DEFERRED；owner Developer/ops，expiry 2026-12-31；Reviewer R0.4e F-2 指出 metric 缺口，已登记） |
 | INV-45 | 准入不可逆；承诺只可因①打款前 `REJECTED/CANCELLED` 或②`FAILED_PERMANENT`/人工放弃 + 人工授权而 `RESERVED→RELEASED`；只释放额度、不恢复 permit、不当作退款完成、只回同订单同组；禁止 worker/重试/脚本静默释放；`SETTLED`/`RELEASED`/金额不等拒绝 | MySQL + fault | `migrations/order/0018_refund_commitment_composition.sql`（表/约束）+ T3 release tests（planned） | Developer | DEFERRED（T3） |
 | INV-46 | `PAID` 且生效支付为空先解析；唯一候选 `SUCCEEDED`+`captured==pay_cent`；零元 `zero:<order_no>`；有捕获不得 zero；0/多候选队列 24h 离开 `OPEN/RESOLVING`（`COMPENSATING` 或终态）；有捕获无离仓→`COMPENSATING`（撤 permit/`CancelIfCreated`/INV-44 释放，Payment.Refund 最后）→`EXPIRED_REFUND`，有离仓→`EXPIRED_FINANCE`；补偿失败保持 `COMPENSATING`；不猜 payment_no、不无限期 OPEN | MySQL + backfill + fault | T2 `legacy_payment_resolution`/backfill（planned）；0022 `chk_lpr_expiry_24h` | Developer | DEFERRED（T2） |
 | INV-47 | 行级 ≤ 行剩余、合计 ≤ captured 剩余（INV-24 双层）；商品+可退运费；责任唯一（AfterSales/缺货/TCC），Order 只校验；`UNDETERMINED` 商品照退、运费挂起 ≤168h；后置补退同组；累计退运费 ≤ 该组实付 ≤ 用户实付 | MySQL + `-race` | T3 line/freight tests（planned） | Developer | DEFERRED（T3） |

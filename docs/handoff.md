@@ -11,49 +11,46 @@
 > Do not use this file as a Developer rule source. If a rule exists only here,
 > stop and ask the Lead to route it to its canonical owner.
 
-## Snapshot (2026-11-25)
+## Snapshot (2026-11-26)
 
-- **HEAD**: `90b502c` on `main`; worktree clean.
+- **HEAD**: `fd208b2` (Reviewer verdicts) on `main`; then Lead/ledger updates.
+  Worktree clean after the Lead checkpoint commit.
 - `main` contains the PAY-SETTLE-01 P0 WIP merge (`d7c2f30`).
   **Not P0 closure; not Release PASS.**
-- Canonical contracts: SPEC-0002 **v1.10**, ADR-0007 **Rev 2.3**.
+- Canonical contracts: SPEC-0002 **v1.10**, SPEC-0001 **v1.5**
+  (AC-27/AC-27A, approved 2026-11-26), ADR-0007 **Rev 2.3**,
+  R0.4 Addendum **ACCEPTED** (`c432ed6`).
 - Production split remains **off**; no Release approval.
-- P0 WIP state: T1.7 test-only PASS; R0.1/C-05 evidence PASS; R0.2 C-01…C-05
-  contract PASS after C-04 “release RPC” B1 was withdrawn (release is event).
-  **R0.3 FAIL**; **R0.4b/c WIP `90b502c`**; R0.5 not done.
 
-## Completed this session
+## State after this session
 
-- `docs/handoff.md` split: durable env/test rules moved to
-  `docs/development.md`; handoff is snapshot only. README and
-  `prompt/Developer.md` point to canonical; QC-34/Reviewer PASS.
-- T1.7 test-only evidence (`93380d5..2a05c1d`): Σ mismatch, REFUNDING vs Ship,
-  crash resume, partial group failure, legacy no-group G1, shipped POST.
-- R0.1: real MySQL 8.4 migration apply; 0018 re-entry; 0011
-  `chk_switch_settled_expiry`; C-05 evidence PASS.
-- R0.2-R2: C-01/C-02/C-03/C-04/C-05 contract PASS; C-04 release is
-  event/outbox, **no release RPC**.
-- R0.4b/c WIP:
-  - Fulfillment startup reads `settlement_switch_approvals`; paid/shadow/settled
-    fail-closed; `SETTLE_RELEASE_RANGE`;
-  - `order/0022` group_no/24h SLA CHECK;
-  - **not approved**: R0.4 Addendum is DRAFT; no QC/Architect/human/Reviewer;
-  - shadow runtime is deliberately rejected until T4.4; range wiring in
-    Helm/compose and `verify-r01-migrations.sh` extension are not done.
+- **R0.4 Addendum**: accepted by human 2026-11-26 (QC R3 READY; 9 MINOR TODO).
+- **R0.4 implementation**: `c38c54f` + selfcheck `9322e75` (branch B:
+  0022 edited after preflight; 24h equality; exit 3/4; compose/Helm/ops;
+  `verify-r01-migrations.sh` 0021/0022; real MySQL 8.4.13 EXIT=0).
+- **Reviewer R0.4e = FAIL (scoped)**: F-1 missing `ADD CHECK` lock/MDL/
+  maintenance-window evidence; F-2 preflight did not cover staging/prod, so
+  branch B is unsafe under §2.3.3 fail-closed. Gate behavior otherwise passes.
+- **Reviewer R0.3-R2 = PASS (scoped)**: AC-27 assertions real; **AC-27 stays
+  AC-REF** (AC-27A steps 5/6 not implemented; `AC-50-FIX-01`,
+  `AC-27-NOWB-01`, `AC-27-LIVE-01` open). AC-14 now AC-VERIFIED; AC-21/25/27/
+  31/32 AC-REF; 12 orphan mapped to T5.x/T3.
+- **Phase 0-R is NOT closable**: R0.3-R1c, R0.4e F-1/F-2, T2/T3/T4.4 and the
+  ops alarm drill remain.
 
 ## Open — next session first
 
-1. **R0.4 governance/closeout**: accept Addendum via QC/Architect/human, then
-   Reviewer; decide shadow runtime; wire `SETTLE_RELEASE_RANGE` in deploy/ops;
-   add `order/0022` to the real-migration verification script; R0.4d/e.
-2. **R0.3/R0.5**: AC-27 needs `refund_state=REFUNDED` + reservation/waybill
-   CANCELLED branch assertions; INV-45..50 rows need branch descriptions;
-   regression AC-14/21/25/27/31/32 and 12 orphan stay DEFERRED; refresh
-   evidence-matrix to SPEC v1.10.
-3. **T5/AC**: AC-39…68 evidence, real migrations, `-race`/fault; **no
-   AC-VERIFIED yet**.
-4. Only after P0 closure: T2/T3/T4, then release decision. Do not start P3/0012
-   in this thread.
+1. **R0.4e F-2**: switch to branch A (add `order/0023`, do not edit 0022) or
+   obtain real staging/prod `schema_migrations` evidence; then F-1: capture
+   `ADD CHECK` MDL/lock/maintenance-window evidence; Reviewer re-review.
+2. **R0.3-R1c**: close `AC-50-FIX-01` (needs ADR §5.3 additive amendment:
+   `CancelIfCreatedReply` no-waybill result; Order maps to
+   `REFUND_ADMISSION_CONFLICT`, never PRE), `AC-27-NOWB-01`,
+   `AC-27-LIVE-01`; then implement AC-27A steps 5/6 and re-review.
+3. **T5/AC-39…68** evidence, `-race`/fault, real migrations; **no
+   AC-VERIFIED except AC-14**.
+4. Only after all of the above: P0 closure, then T2/T3/T4, then release
+   decision. No P3/0012 in this thread.
 
 ## Canonical pointers
 
@@ -63,13 +60,18 @@
 | Post-merge backlog | `docs/lead/PAY-SETTLE-01/backlog.md` |
 | Tasks / Phase 0-R | `docs/lead/PAY-SETTLE-01/tasks.md` |
 | Evidence matrix | `docs/lead/PAY-SETTLE-01/evidence-matrix.md` |
-| R0.4 design DRAFT | `docs/adr/0007-amd1-addendum-r0.4-c04-release.md` |
+| R0.4 design (ACCEPTED) | `docs/adr/0007-amd1-addendum-r0.4-c04-release.md` |
+| AC-27 ruling / SPEC v1.5 | `docs/specs/0001-fulfillment-quantity-split.md`, `docs/adr/0007-amd1-addendum-r03-ac27-readmodel.md` |
 | T1.7 report | `docs/collab/qc-reports/REV-PAY-SETTLE-01-T1.7.md` |
-| R0.2/R0.3 reports | `docs/collab/qc-reports/REV-PAY-SETTLE-01-R0.2-R2.md`, `...-R0.3.md` |
+| R0.2/R0.3 reports | `docs/collab/qc-reports/REV-PAY-SETTLE-01-R0.2-R2.md`, `...-R0.3.md`, `...-R0.3-R2.md` |
+| R0.4 verdict/QC | `docs/collab/qc-reports/REV-PAY-SETTLE-01-R0.4.md`, `QC-PAY-SETTLE-01-R0.4-ADDENDUM-R3.md` |
 | Developer env/test | `docs/development.md` |
 
 ## Do not say
 
 - “P0 closed” / “Release PASS” / “AC-39…68 verified”.
 - “multi-group stock released” — P0 deferred, reserved/P1.
-- “R0.4 approved” — it is WIP `90b502c`, no Reviewed-by.
+- “R0.4 approved” — the Addendum is accepted, but **R0.4e is FAIL** (F-1/F-2)
+  and `90b502c` was superseded by WIP `c38c54f`.
+- “AC-27 verified” — it is **AC-REF**; AC-27A steps 5/6 and
+  `AC-50-FIX-01`/`AC-27-NOWB-01`/`AC-27-LIVE-01` remain open.

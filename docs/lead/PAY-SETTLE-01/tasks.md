@@ -46,6 +46,17 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 
 > 2026-11-25 Lead 更正：原 R0.3-R1 行内“退款未完成不得投影 CANCELLED”是 Lead 越权写入的业务语义，AC-27 正文没有该要求；Developer 已按反证义务拒绝实现。该句撤回，是否关闭 pre-ship `REFUNDING` 交 R0.3-R1b 裁决。
 
+### Phase 0-R 当前状态（2026-11-26，Plan 视图；运行状态以 review-tracking 为准）
+
+- **R0.4a1/a2/a3 DONE**：QC 三轮（`362b9e2` BLOCKED → `e3998d3` R2 BLOCKED → `bd7c239` R3 READY，0 BLOCKER/9 MINOR）；Addendum ACCEPTED `c432ed6`；人类 2026-11-26 接受（9 MINOR 作 TODO）。
+- **R0.4b/c-impl + d1/d2 DONE（WIP）**：Developer `c38c54f` + selfcheck `9322e75`；0022 分支 B（preflight：所有可达环境无 apply）；真实 MySQL 8.4.13 + `mall/migrate:dev` EXIT=0。Reviewer R0.4e 审查中。
+- **R0.3-R1/R2 DONE**：AC-27 分支测试 `fe1600b`；回归 AC-14/21/25/27/31/32 真实 MySQL PASS（`34d0466`）。
+- **R0.3-R1b DONE（契约）**：Architect 裁决 `111516f` + PO **SPEC-0001 v1.5** `4215b3c`（AC-27/AC-27A、§7.5、AC-50 偏差）；QC V15 BLOCKED → R2 READY + N-1..N-4 CONFIRMED。
+- **R0.3-R1c BLOCKED（contract prerequisites）**：`AC-50-FIX-01`（`CONSUMED+无运单` 写路径/零元/ADR §5.3 amendment）、`AC-27-NOWB-01`（人工终态）、`AC-27-LIVE-01`（DLQ/重放）未关闭前，AC-27 不得 AC-VERIFIED（SPEC-0001 v1.5 §16.2，owner/expiry 2026-12-31）。**本轮不得实现 AC-27A 谓词后自称收敛**。
+- **R0.3-R3 DONE**：evidence-matrix INV-44…50 描述/路径/状态补全；**R0.3-R4 待 Reviewer** 更新 12 orphan reason。
+- **R0.5 DONE**：matrix 到 SPEC-0002 v1.10 + SPEC-0001 v1.5 AC-27A；migration scope 与 ADR 对齐。
+- **Phase 0-R 未闭合**；无 merge/Release/AC-VERIFIED。
+
 ## Phase 1 — P-01 TCC 补偿 / P-03 零元回归（Owner: Developer；依赖: T0.7）
 
 - [ ] **T1.0** P-03 回归：Order 侧 `SettleZero`/`AdmitRefund` 已测；**AC-40 零元售后端到端 BLOCKED**（见 Phase 1a checkpoint）

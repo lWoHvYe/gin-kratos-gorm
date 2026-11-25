@@ -13,6 +13,13 @@
 > config、C-04 release RPC 均有缺口。Phase 0-R 是 **P0 收口/Release 前置**；
 > 当前 merge 只是 WIP，不是 P0 closure。详见 `tasks.md` Phase 0-R。
 
+> **2026-11-26 状态**：R0.4 Addendum 已 ACCEPTED（人类 2026-11-26）；R0.4 实现
+> `c38c54f` 完成，Reviewer **R0.4e FAIL**（F-1 ADD CHECK 锁/MDL 证据、F-2
+> preflight 未覆盖 staging/prod）；R0.3-R2 **PASS（scoped）**，AC-27 仍
+> **AC-REF**（AC-27A 第 5/6 条未实现，`AC-50-FIX-01`/`AC-27-NOWB-01`/
+> `AC-27-LIVE-01` open）；SPEC-0001 v1.5 已批准。**Phase 0-R 未闭合**，
+> 无 P0 closure/Release/merge。
+
 
 | ID | 内容 | 当前状态 / 缺口 | Owner |
 |---|---|---|---|

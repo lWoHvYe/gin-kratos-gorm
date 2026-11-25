@@ -347,6 +347,54 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   pre-ship `REFUNDING` closure; R-5 is SPEC §7.5 drift for PO next version.
   Pending QC; no code until accepted.
 
+### 2026-11-26 Reviewer verdicts: R0.4e FAIL, R0.3-R2 scoped PASS
+
+- Reviewer `fd208b2` (base `90b502c`, head `9322e75`, code `c38c54f`):
+  - **R0.4e FAIL (scoped)**: F-1 missing `ADD CHECK` lock/MDL/maintenance-window
+    evidence (Addendum §2.4/§2.6 R0.4d2); F-2 preflight did not cover
+    staging/prod, so branch B is not safe under §2.3.3 fail-closed. Gate/code
+    behavior, four-package `go test`/`-race`, `verify-r01-migrations.sh`
+    (EXIT=0) and compose/Helm render otherwise pass.
+  - **R0.3-R2 PASS (scoped)**: AC-27 assertions real and re-run at HEAD;
+    AC-27 stays **AC-REF** because AC-27A steps 5/6 are not implemented and
+    `AC-50-FIX-01`/`AC-27-NOWB-01`/`AC-27-LIVE-01` remain open. Regression
+    AC-14/21/25/27/31/32 re-run; ledger now AC-14 **AC-VERIFIED**, others
+    AC-REF; 12 orphan mapped to T5.x/T3.
+- INV-44 evidence row missing the missing-reservation metric deferral
+  (Lead-owned) is now recorded in `evidence-matrix.md`.
+- **Phase 0-R is not closable**: R0.3-R1c, R0.4e F-1/F-2, T2/T3/T4.4, ops
+  alarm drill remain. No merge/Release/P0 closure.
+
+### 2026-11-26 R0.4 implementation + SPEC-0001 v1.5 (WIP)
+
+- **R0.4 Addendum accepted** (`c432ed6`; human 2026-11-26; QC R3 READY
+  `bd7c239`; 9 MINOR as TODO).
+- Developer R0.4 `c38c54f` + selfcheck `9322e75`: 0022 **branch B** (preflight
+  showed no apply in reachable envs), 24h equality CHECK, exit 3/4 +
+  `mode/approval_id/reason`, compose/Helm/ops wiring (default `paid`),
+  `verify-r01-migrations.sh` 0021/0022; real MySQL 8.4.13 + `mall/migrate:dev`
+  EXIT=0. **Reviewer R0.4e pending**; not implementation PASS yet.
+- **SPEC-0001 v1.5 approved** (`4215b3c`; Director authorized 2026-11-26; QC
+  V15 BLOCKED -> R2 READY -> N-1..N-4 confirmed): AC-27 EARS-1 is the S2 read
+  model (no `orders.status` write on refund); AC-27A closure predicate uses
+  Order-owned `permit` + `order_refund_admissions.result`; §7.5 drift fixed;
+  AC-50 `CONSUMED+no-waybill` stays `REFUND_ADMISSION_CONFLICT`.
+- Prerequisites registered, **not closed**: `AC-50-FIX-01`,
+  `AC-27-NOWB-01`, `AC-27-LIVE-01` (owner/expiry 2026-12-31). Until then
+  AC-27 stays **AC-REF, not AC-VERIFIED**, and R0.3-R1c (AC-27A predicate
+  implementation) must not be claimed converged.
+- Phase 0-R remains open; no merge/Release.
+
+### 2026-11-26 R0.4 Addendum human acceptance (R0.4a3)
+
+- Director accepted `docs/adr/0007-amd1-addendum-r0.4-c04-release.md`
+  (DRAFT 0.3 r3, `d5dda12`; ACCEPTED `c432ed6`) on **2026-11-26**, with the
+  **9 MINORs tracked as TODO** (S-1/S-4/S-5/S-8 etc.).
+- Basis: QC round 3 `READY` (0 BLOCKER / 9 MINOR), report `bd7c239`.
+- Scope: Addendum only. Does **not** approve `90b502c`, does not waive
+  Reviewer re-review (R0.4b/c), does not approve R0.4d implementation,
+  merge, Release or AC-VERIFIED.
+
 ### 2026-11-26 human decision: PO SPEC-0001 v1.5 authorized
 
 - Director authorized PO to issue **SPEC-0001 v1.5** to resolve the AC-27

@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **superseded / withdrawn**（2026-11-25 人类接受简化；不再作为实现依据）；**未并入 ADR-0007 Rev 2.1 (2026-11-25)** |
+| Status | **superseded / withdrawn**（2026-11-25 人类接受简化；不再作为实现依据）；**未并入 ADR-0007 Rev 2.3 (2026-11-25)** |
 | Merge note | Rev 2.1 未并入本文件（其 B1/B2/B3 不构成规范）；Rev 2.1 §18.3 记录该处置。 |
 | Superseded by | `docs/lead/PAY-SETTLE-01/t1.4b2-design.md`（Revision 1.3，P0 single-group release + group_count） |
 | Base | ADR-0007 Amd1 + T1.4b2 Design（accepted）+ C-04 RefundBatch（accepted） |

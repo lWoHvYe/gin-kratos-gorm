@@ -782,5 +782,6 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 | Quality Checker | QC-18 `READY FOR HUMAN ZERO AMENDMENT APPROVAL`（0 BLOCKER） | 2026-11-24 |
 | Product Owner | 将已批准的 v1.9 变更应用为 `docs/specs/` v1.9 approved；按 Human 指示登记 AC-67/68 延期行，Reviewer 复核 | 2026-11-24 |
 | 甲方（Director） | K-8：指示 PO amendment，移除 SPEC-0002 中已退役 `G-4` / 已删除 `--release --range` 前置，改用 K-6 人工门禁口径；不设 waiver | 2026-11-25 |
+| Quality Checker | QC-32 / QC-33 `READY`（0 BLOCKER / 0 MAJOR；v1.10 与 ADR-0007 Rev 2.3 一致）；非 Release PASS | 2026-11-25 |
 | 甲方（Director） | 批准 SPEC-0002 v1.10（K-8 amendment；G-4/`--release --range` 由 K-6 人工门禁替代） | 2026-11-25 |
 | Product Owner | 产出 SPEC-0002 v1.10，并按 Director 2026-11-25 批准落库为 `docs/specs/` v1.10 approved：仅 AC-66、§5.9、D-27、§9、§12；未改其他 AC/INV/decision | 2026-11-25 |

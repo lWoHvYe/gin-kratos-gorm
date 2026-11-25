@@ -2,8 +2,8 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **superseded by ADR-0007 Rev 2.1 (2026-11-25)**——原 accepted（Director 2026-11-24 批准；T1.2 Contract Rulings Addendum）；裁决已并入 Rev 2.1（§0.4/§5.2.1/§5.3/§5.5.1/§3.4.2），本文件仅保留历史/审计证据 |
-| Superseded by | [ADR-0007 Rev 2.1](0007-payment-settlement-admission.md)（2026-11-25 合并；merge map 见该文件 §Merge map；原 C-1/C-2 冲突已于 2026-11-25 关闭，见该文件 §18） |
+| Status | **superseded by ADR-0007 Rev 2.3 (2026-11-25)**——原 accepted（Director 2026-11-24 批准；T1.2 Contract Rulings Addendum）；裁决已并入 Rev 2.3（§0.4/§5.2.1/§5.3/§5.5.1/§3.4.2），本文件仅保留历史/审计证据 |
+| Superseded by | [ADR-0007 Rev 2.3](0007-payment-settlement-admission.md)（2026-11-25；merge map 见该文件 §Merge map；原 C-1/C-2 冲突已于 2026-11-25 关闭，见该文件 §18） |
 | Approved | **2026-11-24** |
 | Base | **ADR-0007 Amendment 1（accepted 2026-11-24，Revision 1.0）**；不修改 Amendment 1 / ADR-0007 Rev 1.0 正文 |
 | Revision | **1.0**（Addendum；原 r1 定稿；R-1/R-2/R-3 裁决） |

@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **accepted**（Director 2026-11-24 批准；C-04 RefundBatch）——**superseded by ADR-0007 Rev 2.1 (2026-11-25)**：规范内容已并入 Rev 2.1 §0.7/§5.9/§12.5.8，C-1 已关闭；本文件仅保留历史/审计证据 |
+| Status | **accepted**（Director 2026-11-24 批准；C-04 RefundBatch）——**superseded by ADR-0007 Rev 2.3 (2026-11-25)**：规范内容已并入 Rev 2.3 §0.7/§5.9/§12.5.8，C-1 已关闭；本文件仅保留历史/审计证据 |
 | Approved | **2026-11-24** |
 | Revision | **1.0**（C-04；原 r1 定稿；R-1…R-6 并入） |
 | Owner | System Architect |

@@ -2,8 +2,8 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **superseded by ADR-0007 Rev 2.1 (2026-11-25)**——原 accepted（2026-11-25；QC-28 READY）；设计已并入 Rev 2.1（§3.4.2/§3.7/§10/§13），本文件仅保留历史/审计证据；与 A-08 的文字冲突已收窄并关闭（C-2 CLOSED 2026-11-25，见 Rev 2.1 §18.2） |
-| Superseded by | [ADR-0007 Rev 2.1](0007-payment-settlement-admission.md)（2026-11-25 合并；merge map 见该文件 §Merge map；C-1/C-2 已于 2026-11-25 关闭，见该文件 §18） |
+| Status | **superseded by ADR-0007 Rev 2.3 (2026-11-25)**——原 accepted（2026-11-25；QC-28 READY）；设计已并入 Rev 2.3（§3.4.2/§3.7/§10/§13），本文件仅保留历史/审计证据；与 A-08 的文字冲突已收窄并关闭（C-2 CLOSED 2026-11-25，见 Rev 2.3 §18.2） |
+| Superseded by | [ADR-0007 Rev 2.3](0007-payment-settlement-admission.md)（2026-11-25；merge map 见该文件 §Merge map；C-1/C-2 已于 2026-11-25 关闭，见该文件 §18） |
 | Approved | **2026-11-25** |
 | Revision | **1.0**（T1.6 payment-level cancel；原 r1 定稿） |
 | Tier | **L2**（跨服务/支付级退款/事件/库存补偿） |

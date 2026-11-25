@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT — 未批准、未生效；不批准 T1.4b1 实现**；**未并入 ADR-0007 Rev 2.1 (2026-11-25)** |
+| Status | **DRAFT — 未批准、未生效；不批准 T1.4b1 实现**；**未并入 ADR-0007 Rev 2.3 (2026-11-25)** |
 | Merge note | B-2 合并分类：draft / not normative。R-1…R-5 未被任何批准记录接受；Rev 2.1 只保留已批准条款；其 R-2 涉及的 C-04 状态冲突已由 Director 于 2026-11-25 关闭（Rev 2.1 §18.1 C-1 CLOSED），本文件仍为未批准 DRAFT。 |
 | Base | ADR-0007 Amendment 1（accepted 1.0）+ 零元/T1.2/T1.4a Rulings Addenda（accepted） |
 | WIP | `1f4f2d1`（T1.4b1：PAYING、逐组 Payment.Refund、payment.refunded 收敛）；Reviewer FAIL B1 |

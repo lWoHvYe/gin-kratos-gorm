@@ -18,7 +18,7 @@
   - [0007-amd1-addendum-t14b1-payment-sigma.md](0007-amd1-addendum-t14b1-payment-sigma.md)——**DRAFT（未批准、未生效）**，其 R-1…R-5 未被任何批准记录接受；不得作为实现/验收依据（C-04 的原子性以本文 §5.9 为准，不由该文件授权）。
   - [0007-amd1-addendum-t14b2-inv44-group.md](0007-amd1-addendum-t14b2-inv44-group.md)——**superseded / withdrawn（2026-11-25）**，已由 `docs/lead/PAY-SETTLE-01/t1.4b2-design.md` Rev 1.3 取代；其 B1/B2/B3 不并入本 ADR。
   - [0007-payment-settlement-admission-amd1-c04-c05-handoff.md](0007-payment-settlement-admission-amd1-c04-c05-handoff.md)——**handoff（契约输入清单，非批准）**；其引用的 D-27/D-28/D-29 输入已在正文实现，文件本身不构成契约。
-- Spec: [SPEC-0002 v1.10](../specs/0002-payment-settlement-admission.md)（v1.10；本 ADR 未修改 SPEC；SPEC 的 `依据` 行仍指 Rev 1.0/Amendment 1，PO-owned 指针，见 §17.4）。
+- Spec: [SPEC-0002 v1.10](../specs/0002-payment-settlement-admission.md)（v1.10；本 ADR 未修改 SPEC；SPEC 的 `依据` 行已指向本 ADR **Rev 2.3**（PO 2026-11-25 修复））。
 - Integration owner: **Director**（人类）；设计 owner/秘书：System Architect；deputy：待指派
 - Related: [architecture-baseline.md](../architecture-baseline.md)（INV-01…16）、[ADR 0005](0005-fulfillment-quantity-split.md)（履约/售后基线）、[ADR 0006](0006-collab-gates.md)（retired）、[ext-review-1123-triage.md](../ext-review-1123-triage.md)
 - Change ID: `PAY-SETTLE-01`
@@ -1546,11 +1546,11 @@ AC-62…66 实现映射〔Amd1 §2.3〕：
 | **2.2** | **2026-11-25** | **修复 Reviewer BLOCKER：`shadow`/`settled` 启动校验失败即非零退出，禁止静默回 `paid`；`settled→paid` 仅 §6.4 Director 回滚；`settled` 批准行 `expires_at` NOT NULL（CHECK）；修正 §12.3 step 0 影子 task 冲突** | **accepted 2026-11-25（Director）**；满足 SPEC-0002 INV-49；不新增业务规则 |
 | **2.3** | **2026-11-25** | **N5：`SETTLE_RELEASE_APPROVAL_ID` 非空但未请求 `settled` → 启动失败（非零），不得默认 `paid`；SPEC 指针更新为 v1.10** | **accepted 2026-11-25（Director）**；配置错误 fail-closed；不新增业务规则 |
 
-### 17.4 未同步的仓库内指针（不在本次变更范围内）
+### 17.4 仓库内指针同步状态（2026-11-25）
 
-- `docs/specs/0002-payment-settlement-admission.md:26`（`依据` 行）仍指向 Rev 1.0/Amendment 1/零元 Addendum。
-- `docs/specs/README.md:82` 的 SPEC-0002 索引仍链 Amendment 1/零元 Addendum。
-- 两者均由 PO 维护；B-2 约束禁止改 SPEC，故本 ADR 只记录指针陈旧事实，不代改。
+- **已同步（2026-11-25）**：SPEC-0002 的 `依据` 行指本 ADR **Rev 2.3**；`docs/specs/README.md` 的 SPEC-0002 索引指向 **v1.10 / ADR Rev 2.3**。
+- 历史（修订前）：SPEC `依据` 行曾指 Rev 1.0/Amendment 1；README 曾链 Amendment 1/零元 Addendum。仅作审计记录，不再代表当前状态。
+- 两者由 PO 维护；本 ADR 不代改 SPEC。
 
 ---
 

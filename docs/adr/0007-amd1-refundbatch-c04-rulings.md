@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **superseded by ADR-0007 Rev 2.1 (2026-11-25)**——原 DRAFT；C-04 RefundBatch 已经 Director **accepted（2026-11-24）**，R-1…R-6 已并入 Rev 2.1 §0.7/§5.9/§12.5.8；本文件仅保留历史/审计证据，不得作为实现依据 |
+| Status | **superseded by ADR-0007 Rev 2.3 (2026-11-25)**——原 DRAFT；C-04 RefundBatch 已经 Director **accepted（2026-11-24）**，R-1…R-6 已并入 Rev 2.3 §0.7/§5.9/§12.5.8；本文件仅保留历史/审计证据，不得作为实现依据 |
 | Merge note | 已并入 ADR-0007 Rev 2.1（K-1，2026-11-25）；C-1 关闭；原 B-2 的 `draft / not normative` 分类作废。 |
 | Base | ADR-0007 Amd1 + T1.4b1 Payment Σ Addendum（DRAFT）+ C-04 Draft |
 | WIP | `fc295e5`（Payment `RefundBatch` + C-05 ledger） |

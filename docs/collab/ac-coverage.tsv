@@ -35,3 +35,9 @@ AC-65	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-66	Developer	2026-12-31	WP-E4	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-67	Developer	2026-12-31	WP-R3	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-68	Developer	2026-12-31	WP-R3	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-14	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
+AC-21	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
+AC-25	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
+AC-27	Developer	2026-12-31	AC-27 projection test passes; EARS refund_state=REFUNDED and reservation/waybill branches not covered	developer-reviewer/T-003	unit	internal/services/order/warehouse_quote_test.go:123 TestAC27RevokedGroupIsClosedInProjection	AC-REF
+AC-31	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED
+AC-32	Developer	2026-12-31	R0.3 baseline regression not run; owner/expiry retained	developer-reviewer/T-003	deferred	-	DEFERRED

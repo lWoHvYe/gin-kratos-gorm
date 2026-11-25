@@ -317,6 +317,14 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   **收益**：角色动作与分级对齐、防止再次无界扩张；**停止条件**：本轮为最后编辑，不再新增治理机制。
 - **2026-11-25 §2.8 收口**: 撤回清理由各产物 owner 执行、仅删本次新增行；多文件同步限于首个可验证增量；安全/合规/数据完整性可豁免可测收益；收益与停止条件记录于 review-tracking 或变更输入。
 
+### 2026-11-25 R0.4b/c WIP (not approved)
+
+- `90b502c`: Fulfillment startup switch gate + `order/0022` checks. Addendum is
+  DRAFT; no QC/Architect/human/Reviewer. Shadow runtime rejected until T4.4;
+  range deploy wiring and `verify-r01-migrations.sh` 0022 entry remain open.
+- R0.3 still FAIL: AC-27 AC-REF, INV-45..50 DEFERRED/description gaps,
+  regression AC-14/21/25/27/31/32 not run, 12 orphan open.
+
 ### 2026-11-25 R0.2 FAIL (dated 2026-11-25)
 
 - C-01/C-02/C-03/C-05 contract/evidence PASS; **C-04 FAIL**: release RPC still

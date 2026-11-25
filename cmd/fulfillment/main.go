@@ -39,7 +39,9 @@ func main() {
 	}
 	defer database.Close()
 	// R0.4b: validate the settlement switch before any worker/consumer is
-	// registered. Failure is fatal and must never fall back to paid.
+	// registered. Failure is fatal and must never fall back to paid. Exit code
+	// 3 is the stable "approval-row gate rejected" contract (Addendum §2.1.4);
+	// the log always carries mode/approval_id/reason (plus the human detail).
 	approval, err := fulfillment.VerifySettlementSwitch(startupCtx, database, fulfillment.SettlementSwitchConfig{
 		Mode:         cfg.FulfillmentSettleConsumerMode,
 		ApprovalID:   cfg.SettleReleaseApprovalID,
@@ -50,11 +52,14 @@ func main() {
 		if errors.As(err, &switchErr) {
 			logger.Error("settlement switch verification failed",
 				"mode", switchErr.Mode, "approval_id", switchErr.ApprovalID,
-				"reason", switchErr.Reason, "error", switchErr.Err)
+				"reason", switchErr.Reason, "detail", switchErr.Detail, "error", switchErr)
 		} else {
-			logger.Error("settlement switch verification failed", "error", err)
+			logger.Error("settlement switch verification failed",
+				"mode", cfg.FulfillmentSettleConsumerMode,
+				"approval_id", cfg.SettleReleaseApprovalID,
+				"reason", fulfillment.ReasonApprovalDBUnavailable, "error", err)
 		}
-		os.Exit(1)
+		os.Exit(3)
 	}
 	logger.Info("settlement switch verified",
 		"mode", cfg.FulfillmentSettleConsumerMode,
@@ -63,10 +68,19 @@ func main() {
 	if cfg.FulfillmentSettleConsumerMode == config.FulfillmentSettleConsumerShadow {
 		// T4.4 (dual-consume, record/compare only) is not delivered yet. Running
 		// the paid consumer here would create shipments in shadow mode, so the
-		// only fail-closed choice is to refuse startup.
+		// only fail-closed choice is to refuse startup. This rejection happens
+		// after the approval gate (gate reason wins) and exits 4.
 		logger.Error("shadow settlement consumer is not implemented (T4.4); refusing to start instead of falling back to the paid path",
-			"mode", cfg.FulfillmentSettleConsumerMode)
-		os.Exit(1)
+			"mode", cfg.FulfillmentSettleConsumerMode,
+			"approval_id", approval.ApprovalID,
+			"reason", fulfillment.ReasonShadowNotDelivered,
+			"error", &fulfillment.SettlementSwitchError{
+				Mode:       cfg.FulfillmentSettleConsumerMode,
+				ApprovalID: approval.ApprovalID,
+				Reason:     fulfillment.ReasonShadowNotDelivered,
+				Detail:     "observe-only dual consumer not delivered; do not delete this guard before the T4.4 exit conditions",
+			})
+		os.Exit(4)
 	}
 	client, err := mq.Connect(cfg.NATSURL)
 	if err != nil {

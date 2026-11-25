@@ -151,6 +151,112 @@ MySQL health becomes green only after the init scripts complete: during init
 the entrypoint uses a socket-only temporary server, while the healthcheck
 probes TCP.
 
+## Settlement consumer switch (fulfillment)
+
+`fulfillment` selects its settlement consumer from three environment values
+(ADR-0007 Addendum-r0.4 §2.1, accepted 2026-11-26). The process only **reads**
+`settlement_switch_approvals` at startup; it never writes approval rows.
+
+| Variable | Default | Contract |
+|---|---|---|
+| `FULFILLMENT_SETTLE_CONSUMER_MODE` | `paid` | `paid` / `shadow` / `settled`. Unknown or empty (when set) fails startup. |
+| `SETTLE_RELEASE_APPROVAL_ID` | empty | Required only for `settled`; must be empty for `paid`/`shadow` (N5). |
+| `SETTLE_RELEASE_RANGE` | empty | Required for `shadow`/`settled`; must exactly equal the approval row's `release_range`. Empty is **not** a wildcard. |
+| `FULFILLMENT_CONSUME_ORDER_SETTLED` | unset | Legacy input only: `true` maps to a gated `settled` request, `false`/unset maps to `paid`. It can never select `shadow`. |
+
+`shadow` is **hard-rejected** at startup until T4.4 delivers the observe-only
+dual consumer (Director ruling 2026-11-25). Do not write shadow approval rows
+expecting the pod to run: a valid gate still exits 4 by design. `paid` remains
+the only production default.
+
+### Startup exit codes and reason tokens
+
+| Exit | Meaning | Operator action |
+|---|---|---|
+| `1` | Infrastructure failure (DB pool, NATS, gRPC dial, tracing, run) | Fix the dependency; this is not a switch rejection. |
+| `2` | Config rejection (unknown mode, N5, range missing, legacy conflict) | The error text carries a stable token: `MODE_UNKNOWN`, `N5_APPROVAL_ID_MODE_MISMATCH`, `RELEASE_RANGE_MISSING`; legacy/new conflict keeps its own text. |
+| `3` | Approval-row gate rejection | Query `settlement_switch_approvals` and fix the row/range; reason is one of `APPROVAL_ROW_MISSING`, `APPROVAL_NOT_APPROVED`, `APPROVAL_EXPIRED`, `RELEASE_RANGE_MISMATCH`, `APPROVAL_DB_UNAVAILABLE`. |
+| `4` | Shadow runtime rejection (`T4_4_SHADOW_NOT_DELIVERED`) | Expected until T4.4 closes; do not delete the guard. |
+
+Exit 3/4 logs are JSON records containing `mode`, `approval_id` and `reason`
+(the `error` string repeats `mode=... approval_id=... reason=...`), and they are
+emitted **before** any consumer/worker is registered. Expiry is evaluated with
+the database clock (`NOW(3)`), never the application host clock.
+
+### Writing approval rows (controlled ops/Director action)
+
+`release_range` is mandatory for both shadow and settled rows. Write a new row;
+never `UPDATE` an audit row (revoke and re-issue instead). The application never
+writes `status='EXPIRED'`; `EXPIRED` is not a reachable state in R0.4, so
+dashboards and alerts must use `expires_at <= NOW(3)`, not `status`.
+
+```sql
+-- settled example (shadow rows keep both order.paid retirement columns NULL)
+INSERT INTO settlement_switch_approvals
+  (approval_id, target_mode, approved_by, approved_at, release_range, evidence_ref,
+   expires_at, order_paid_admission_retired_at, order_paid_subject_removal_date, status)
+VALUES
+  ('settled-2026-12-01', 'settled', '<director>', NOW(3), 'prod', '<change/evidence ref>',
+   DATE_ADD(NOW(3), INTERVAL 30 DAY), NOW(3), '2027-01-15', 'APPROVED');
+```
+
+After writing, both checks below must pass. The first must return **0 rows**;
+a non-zero result blocks the deploy and the row must be re-issued by the
+Director/ops (audit rows are immutable), with an incident ticket.
+
+```sql
+-- invariant: no APPROVED row may carry an empty release_range
+SELECT approval_id FROM settlement_switch_approvals
+ WHERE status = 'APPROVED' AND release_range = '';
+
+-- sample sanity print for the row just written
+SELECT approval_id, target_mode, release_range, status, expires_at
+  FROM settlement_switch_approvals
+ WHERE approval_id = 'settled-2026-12-01';
+```
+
+### Expiry alert and rollout stop
+
+- Expiry is a **startup-window** property: a running pod does not stop when
+  `expires_at` passes and there is no hot switch. The only stop path is a
+  Director rollback decision plus a restart.
+- Ops MUST alert on rows that have expired but are still `APPROVED`
+  (owner=ops, expiry 2026-12-31, tracked in
+  `review-tracking/PAY-SETTLE-01`):
+
+```sql
+SELECT approval_id, target_mode, expires_at
+  FROM settlement_switch_approvals
+ WHERE target_mode = 'settled' AND status = 'APPROVED' AND expires_at <= NOW(3);
+```
+
+- Record the alert rule in the on-call runbook with one real drill/trigger
+  output pointer. A verbal "configured" is not acceptance.
+- An instance still running on an expired approval is rolled back/restarted by
+  the Director, not by the application.
+
+### Migrating `order/0022` (R0.4 checks) after a failed attempt
+
+`order/0022_r04_checks.sql` adds `chk_refund_app_group_discriminator` and the
+equality `chk_lpr_expiry_24h` (`expires_at = entered_at + 24h`). MySQL DDL
+commits implicitly, so a dirty row or an interruption can leave the first CHECK
+installed and the second missing while the runner records `FAILED`/`RUNNING`
+in `schema_migration_attempts`; the runner will then refuse to replay the file.
+
+Recovery (see also [runbooks/c-migration-rollback.md](runbooks/c-migration-rollback.md) §6):
+
+1. Read the precheck output / error 3819 to find the blocking row(s). Do not
+   rerun blindly.
+2. Repair data with an audited write only (set the group field or
+   `expires_at = DATE_ADD(entered_at, INTERVAL 24 HOUR)`); never drop the
+   constraint or bulk-update to hide it.
+3. After operator sign-off delete the attempt row for this filename
+   (`status IN ('FAILED','RUNNING')`).
+4. Re-run the migration job.
+5. Verify both constraints exist with the expected `CHECK_CLAUSE` and that the
+   precheck `SELECT` returns 0 rows. `scripts/verify-r01-migrations.sh`
+   performs these text/semantic assertions on a real MySQL 8.4.
+
 ## Startup order
 
 The compose dependency graph is health based:

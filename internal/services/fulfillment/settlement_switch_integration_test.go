@@ -129,7 +129,7 @@ func clearApprovals(t *testing.T, db *sql.DB) {
 	}
 }
 
-func requireSwitchError(t *testing.T, err error, wantMode, wantApproval string, wantSubstrings ...string) {
+func requireSwitchError(t *testing.T, err error, wantMode, wantApproval, wantReason string, wantSubstrings ...string) {
 	t.Helper()
 	if err == nil {
 		t.Fatal("expected a switch rejection, got nil")
@@ -144,6 +144,9 @@ func requireSwitchError(t *testing.T, err error, wantMode, wantApproval string, 
 	if switchErr.ApprovalID != wantApproval {
 		t.Fatalf("error approval = %q, want %q (%v)", switchErr.ApprovalID, wantApproval, err)
 	}
+	if switchErr.Reason != wantReason {
+		t.Fatalf("error reason = %q, want the stable token %q (%v)", switchErr.Reason, wantReason, err)
+	}
 	for _, want := range wantSubstrings {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error = %v, want containing %q", err, want)
@@ -156,22 +159,30 @@ func TestSettlementSwitchConfigFailuresDoNotTouchDB(t *testing.T) {
 	// No DB at all: paid with an approval id and shadow/settled with missing
 	// range/approval must fail before any query.
 	_, err := VerifySettlementSwitch(ctx, nil, SettlementSwitchConfig{Mode: SettlementModePaid, ApprovalID: "apr-1"})
-	requireSwitchError(t, err, SettlementModePaid, "apr-1", "N5")
+	requireSwitchError(t, err, SettlementModePaid, "apr-1", ReasonN5ApprovalIDModeMismatch, "N5")
 
 	_, err = VerifySettlementSwitch(ctx, nil, SettlementSwitchConfig{Mode: SettlementModeShadow, ReleaseRange: ""})
-	requireSwitchError(t, err, SettlementModeShadow, "", "SETTLE_RELEASE_RANGE")
+	requireSwitchError(t, err, SettlementModeShadow, "", ReasonReleaseRangeMissing, "SETTLE_RELEASE_RANGE")
 
 	_, err = VerifySettlementSwitch(ctx, nil, SettlementSwitchConfig{Mode: SettlementModeSettled, ReleaseRange: "prod"})
-	requireSwitchError(t, err, SettlementModeSettled, "", "SETTLE_RELEASE_APPROVAL_ID")
+	requireSwitchError(t, err, SettlementModeSettled, "", ReasonApprovalRowMissing, "SETTLE_RELEASE_APPROVAL_ID")
 
 	_, err = VerifySettlementSwitch(ctx, nil, SettlementSwitchConfig{Mode: SettlementModeSettled, ApprovalID: "apr-1"})
-	requireSwitchError(t, err, SettlementModeSettled, "apr-1", "SETTLE_RELEASE_RANGE")
+	requireSwitchError(t, err, SettlementModeSettled, "apr-1", ReasonReleaseRangeMissing, "SETTLE_RELEASE_RANGE")
 
 	_, err = VerifySettlementSwitch(ctx, nil, SettlementSwitchConfig{Mode: "unknown"})
-	requireSwitchError(t, err, "unknown", "", "unknown settlement consumer mode")
+	requireSwitchError(t, err, "unknown", "", ReasonModeUnknown, "unknown settlement consumer mode")
 
 	_, err = VerifySettlementSwitch(ctx, nil, SettlementSwitchConfig{Mode: ""})
-	requireSwitchError(t, err, "", "", "unknown settlement consumer mode")
+	requireSwitchError(t, err, "", "", ReasonModeUnknown, "unknown settlement consumer mode")
+
+	// A gated mode with a valid range but no database must not be guessed as
+	// paid: it reports the DB-unavailable reason.
+	_, err = VerifySettlementSwitch(ctx, nil, SettlementSwitchConfig{Mode: SettlementModeShadow, ReleaseRange: "prod"})
+	requireSwitchError(t, err, SettlementModeShadow, "", ReasonApprovalDBUnavailable, "database is required")
+
+	_, err = VerifySettlementSwitch(ctx, nil, SettlementSwitchConfig{Mode: SettlementModeSettled, ApprovalID: "apr-1", ReleaseRange: "prod"})
+	requireSwitchError(t, err, SettlementModeSettled, "apr-1", ReasonApprovalDBUnavailable, "database is required")
 }
 
 func TestSettlementSwitchPaidNeedsNoApprovalRow(t *testing.T) {
@@ -199,15 +210,17 @@ func TestSettlementSwitchShadowMatrix(t *testing.T) {
 	base := SettlementSwitchConfig{Mode: SettlementModeShadow, ReleaseRange: "prod"}
 
 	cases := []struct {
-		name    string
-		seed    func(t *testing.T)
-		wantID  string
-		wantErr []string
+		name       string
+		seed       func(t *testing.T)
+		wantID     string
+		wantReason string
+		wantErr    []string
 	}{
 		{
-			name:    "missing row",
-			seed:    func(t *testing.T) {},
-			wantErr: []string{"no APPROVED, unexpired shadow approval row"},
+			name:       "missing row",
+			seed:       func(t *testing.T) {},
+			wantReason: ReasonApprovalRowMissing,
+			wantErr:    []string{"no shadow approval row"},
 		},
 		{
 			name: "approved with NULL expiry",
@@ -228,28 +241,32 @@ func TestSettlementSwitchShadowMatrix(t *testing.T) {
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "shadow-expired", SettlementModeShadow, "APPROVED", "prod", "past")
 			},
-			wantErr: []string{"expired"},
+			wantReason: ReasonApprovalExpired,
+			wantErr:    []string{"expired"},
 		},
 		{
 			name: "not approved",
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "shadow-revoked", SettlementModeShadow, "REVOKED", "prod", "future")
 			},
-			wantErr: []string{"status=REVOKED"},
+			wantReason: ReasonApprovalNotApproved,
+			wantErr:    []string{"status=REVOKED"},
 		},
 		{
 			name: "release range mismatch",
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "shadow-canary", SettlementModeShadow, "APPROVED", "canary", "future")
 			},
-			wantErr: []string{"release_range", "canary"},
+			wantReason: ReasonReleaseRangeMismatch,
+			wantErr:    []string{"release_range", "canary"},
 		},
 		{
 			name: "settled row does not authorize shadow",
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "settled-only", SettlementModeSettled, "APPROVED", "prod", "future")
 			},
-			wantErr: []string{"no APPROVED, unexpired shadow approval row"},
+			wantReason: ReasonApprovalRowMissing,
+			wantErr:    []string{"no shadow approval row"},
 		},
 		{
 			name: "any valid row among invalid rows exists",
@@ -266,7 +283,7 @@ func TestSettlementSwitchShadowMatrix(t *testing.T) {
 			tc.seed(t)
 			approval, err := VerifySettlementSwitch(ctx, db, base)
 			if len(tc.wantErr) > 0 {
-				requireSwitchError(t, err, SettlementModeShadow, "", tc.wantErr...)
+				requireSwitchError(t, err, SettlementModeShadow, "", tc.wantReason, tc.wantErr...)
 				return
 			}
 			if err != nil {
@@ -285,7 +302,7 @@ func TestSettlementSwitchShadowMatrix(t *testing.T) {
 	_, err := VerifySettlementSwitch(ctx, db, SettlementSwitchConfig{
 		Mode: SettlementModeShadow, ApprovalID: "shadow-null", ReleaseRange: "prod",
 	})
-	requireSwitchError(t, err, SettlementModeShadow, "shadow-null", "N5")
+	requireSwitchError(t, err, SettlementModeShadow, "shadow-null", ReasonN5ApprovalIDModeMismatch, "N5")
 }
 
 func TestSettlementSwitchSettledMatrix(t *testing.T) {
@@ -294,14 +311,16 @@ func TestSettlementSwitchSettledMatrix(t *testing.T) {
 	base := SettlementSwitchConfig{Mode: SettlementModeSettled, ApprovalID: "settled-1", ReleaseRange: "prod"}
 
 	cases := []struct {
-		name    string
-		seed    func(t *testing.T)
-		wantErr []string
+		name       string
+		seed       func(t *testing.T)
+		wantReason string
+		wantErr    []string
 	}{
 		{
-			name:    "missing row",
-			seed:    func(t *testing.T) {},
-			wantErr: []string{"not found"},
+			name:       "missing row",
+			seed:       func(t *testing.T) {},
+			wantReason: ReasonApprovalRowMissing,
+			wantErr:    []string{"not found"},
 		},
 		{
 			name: "valid settled",
@@ -314,42 +333,48 @@ func TestSettlementSwitchSettledMatrix(t *testing.T) {
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "settled-1", SettlementModeSettled, "APPROVED", "prod", "past")
 			},
-			wantErr: []string{"expired"},
+			wantReason: ReasonApprovalExpired,
+			wantErr:    []string{"expired"},
 		},
 		{
 			name: "NULL expiry",
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "settled-1", SettlementModeSettled, "APPROVED", "prod", "null")
 			},
-			wantErr: []string{"expires_at is NULL"},
+			wantReason: ReasonApprovalExpired,
+			wantErr:    []string{"expires_at is NULL"},
 		},
 		{
 			name: "not approved",
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "settled-1", SettlementModeSettled, "REVOKED", "prod", "future")
 			},
-			wantErr: []string{"status="},
+			wantReason: ReasonApprovalNotApproved,
+			wantErr:    []string{"status="},
 		},
 		{
 			name: "target mode mismatch",
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "settled-1", SettlementModeShadow, "APPROVED", "prod", "future")
 			},
-			wantErr: []string{"target_mode", "shadow"},
+			wantReason: ReasonApprovalNotApproved,
+			wantErr:    []string{"target_mode", "shadow"},
 		},
 		{
 			name: "release range mismatch",
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "settled-1", SettlementModeSettled, "APPROVED", "canary", "future")
 			},
-			wantErr: []string{"release_range", "canary"},
+			wantReason: ReasonReleaseRangeMismatch,
+			wantErr:    []string{"release_range", "canary"},
 		},
 		{
 			name: "different approval id does not match",
 			seed: func(t *testing.T) {
 				seedApproval(t, db, "settled-other", SettlementModeSettled, "APPROVED", "prod", "future")
 			},
-			wantErr: []string{"not found"},
+			wantReason: ReasonApprovalRowMissing,
+			wantErr:    []string{"not found"},
 		},
 	}
 	for _, tc := range cases {
@@ -358,7 +383,7 @@ func TestSettlementSwitchSettledMatrix(t *testing.T) {
 			tc.seed(t)
 			approval, err := VerifySettlementSwitch(ctx, db, base)
 			if len(tc.wantErr) > 0 {
-				requireSwitchError(t, err, SettlementModeSettled, "settled-1", tc.wantErr...)
+				requireSwitchError(t, err, SettlementModeSettled, "settled-1", tc.wantReason, tc.wantErr...)
 				return
 			}
 			if err != nil {
@@ -378,8 +403,8 @@ func TestSettlementSwitchReadFailureDoesNotFallBackToPaid(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := VerifySettlementSwitch(ctx, db, SettlementSwitchConfig{Mode: SettlementModeShadow, ReleaseRange: "prod"})
-	requireSwitchError(t, err, SettlementModeShadow, "", "cannot read settlement_switch_approvals")
+	requireSwitchError(t, err, SettlementModeShadow, "", ReasonApprovalDBUnavailable, "cannot read settlement_switch_approvals")
 
 	_, err = VerifySettlementSwitch(ctx, db, SettlementSwitchConfig{Mode: SettlementModeSettled, ApprovalID: "settled-1", ReleaseRange: "prod"})
-	requireSwitchError(t, err, SettlementModeSettled, "settled-1", "cannot read settlement_switch_approvals")
+	requireSwitchError(t, err, SettlementModeSettled, "settled-1", ReasonApprovalDBUnavailable, "cannot read settlement_switch_approvals")
 }

@@ -19,8 +19,9 @@ import (
 // from migrations/order (never inline replacement DDL for the schema under
 // test), and then proves both the positive rows and the fail-closed rejection
 // of dirty rows. The dirty-row tests apply 0017/0019 first, insert a row that
-// the new CHECK must reject, and assert the real ALTER fails; after cleanup the
-// same file must converge on a re-run.
+// the CHECK must reject (a 48h deadline is the WIP regression case), and assert
+// the real ALTER fails; after an audited repair the same file must converge on
+// a re-run.
 
 func r04FreshOrderDB(t *testing.T, label string) *sql.DB {
 	t.Helper()
@@ -114,6 +115,21 @@ func r04ConstraintExists(t *testing.T, db *sql.DB, table, name string) bool {
 	return count == 1
 }
 
+func r04CheckClause(t *testing.T, db *sql.DB, table, name string) string {
+	t.Helper()
+	var clause string
+	if err := db.QueryRow(`SELECT cc.CHECK_CLAUSE
+		FROM information_schema.CHECK_CONSTRAINTS cc
+		JOIN information_schema.TABLE_CONSTRAINTS tc
+		  ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA
+		 AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+		WHERE cc.CONSTRAINT_SCHEMA = DATABASE() AND tc.TABLE_NAME = ? AND cc.CONSTRAINT_NAME = ?`,
+		table, name).Scan(&clause); err != nil {
+		t.Fatalf("read CHECK_CLAUSE %s.%s: %v", table, name, err)
+	}
+	return clause
+}
+
 func insertRefundApplication(t *testing.T, db *sql.DB, refundID, source string, groupNo any, amount, goods, freight int64, nonEffective int, state string) error {
 	t.Helper()
 	_, err := db.Exec(`INSERT INTO refund_applications
@@ -124,12 +140,15 @@ func insertRefundApplication(t *testing.T, db *sql.DB, refundID, source string, 
 	return err
 }
 
-func insertLegacyResolution(t *testing.T, db *sql.DB, orderNo, offset string) error {
+// insertLegacyResolution inserts an OPEN legacy resolution whose expires_at is
+// the given SQL expression. entered_at and expires_at both use NOW(3) in the
+// same statement, which MySQL evaluates to one statement timestamp, so
+// "DATE_ADD(NOW(3), INTERVAL 24 HOUR)" is exactly entered_at + 24h.
+func insertLegacyResolution(t *testing.T, db *sql.DB, orderNo, expiresSQL string) error {
 	t.Helper()
-	query := fmt.Sprintf(`INSERT INTO legacy_payment_resolution
+	_, err := db.Exec(fmt.Sprintf(`INSERT INTO legacy_payment_resolution
 		(order_no, state, entered_at, expires_at)
-		VALUES (?, 'OPEN', NOW(3), DATE_ADD(NOW(3), INTERVAL %s))`, offset)
-	_, err := db.Exec(query, orderNo)
+		VALUES (?, 'OPEN', NOW(3), %s)`, expiresSQL), orderNo)
 	return err
 }
 
@@ -167,6 +186,23 @@ func TestR04ChecksFreshSchemaAndValidRows(t *testing.T) {
 		if !r04ConstraintExists(t, db, c.table, c.name) {
 			t.Fatalf("pre-existing CHECK %s.%s was lost", c.table, c.name)
 		}
+	}
+
+	// The installed clauses must carry the accepted semantics, not just the
+	// names: the discriminator must not copy the 0017 source enum and the 24h
+	// window must be equality, never a lower bound.
+	groupClause := strings.ToLower(r04CheckClause(t, db, "refund_applications", "chk_refund_app_group_discriminator"))
+	if !strings.Contains(groupClause, "group_no") || !strings.Contains(groupClause, "is null") {
+		t.Fatalf("group discriminator clause = %q, want a group_no NULL discriminator", groupClause)
+	}
+	for _, copiedSource := range []string{"system_zero", "system_shortage", "aftersale", "tcc"} {
+		if strings.Contains(groupClause, copiedSource) {
+			t.Fatalf("group discriminator clause copies the 0017 enum (%s): %q", copiedSource, groupClause)
+		}
+	}
+	expiryClause := strings.ToLower(r04CheckClause(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h"))
+	if !strings.Contains(expiryClause, "interval 24 hour") || strings.Contains(expiryClause, ">=") {
+		t.Fatalf("24h clause = %q, want equality on entered_at + 24h", expiryClause)
 	}
 
 	valid := []struct {
@@ -212,21 +248,37 @@ func TestR04ChecksFreshSchemaAndValidRows(t *testing.T) {
 		requireCheckViolation(t, err, "chk_refund_app_group_discriminator")
 	}
 
-	// 24h SLA boundary: exactly 24h passes, 48h passes, 23h and 1h fail.
-	if err := insertLegacyResolution(t, db, "ORD-LPR-24H", "24 HOUR"); err != nil {
+	// 24h SLA boundary: exactly 24h passes; 24h+1s, 25h and 48h are rejected.
+	// A lower bound (>=) would accept 48h, which the WIP test wrongly asserted
+	// was legal; the equality rejects it.
+	if err := insertLegacyResolution(t, db, "ORD-LPR-24H", "DATE_ADD(NOW(3), INTERVAL 24 HOUR)"); err != nil {
 		t.Fatalf("expires_at = entered_at + 24h must pass: %v", err)
 	}
-	if err := insertLegacyResolution(t, db, "ORD-LPR-48H", "48 HOUR"); err != nil {
-		t.Fatalf("expires_at = entered_at + 48h must pass: %v", err)
+	for _, tc := range []struct{ orderNo, expr string }{
+		{"ORD-LPR-24H1S", "DATE_ADD(NOW(3), INTERVAL 24 HOUR) + INTERVAL 1 SECOND"},
+		{"ORD-LPR-25H", "DATE_ADD(NOW(3), INTERVAL 25 HOUR)"},
+		{"ORD-LPR-48H", "DATE_ADD(NOW(3), INTERVAL 48 HOUR)"},
+	} {
+		requireCheckViolation(t, insertLegacyResolution(t, db, tc.orderNo, tc.expr), "chk_lpr_expiry_24h")
 	}
-	requireCheckViolation(t, insertLegacyResolution(t, db, "ORD-LPR-23H", "23 HOUR"), "chk_lpr_expiry_24h")
-	requireCheckViolation(t, insertLegacyResolution(t, db, "ORD-LPR-1H", "1 HOUR"), "chk_lpr_expiry")
+	// Shorter windows violate the equality and 0019's existing lower bound;
+	// MySQL reports either constraint name, so assert the shared prefix.
+	for _, tc := range []struct{ orderNo, expr string }{
+		{"ORD-LPR-23H", "DATE_ADD(NOW(3), INTERVAL 23 HOUR)"},
+		{"ORD-LPR-24H-1S", "DATE_ADD(NOW(3), INTERVAL 24 HOUR) - INTERVAL 1 SECOND"},
+		{"ORD-LPR-1H", "DATE_ADD(NOW(3), INTERVAL 1 HOUR)"},
+	} {
+		requireCheckViolation(t, insertLegacyResolution(t, db, tc.orderNo, tc.expr), "chk_lpr_expiry")
+	}
 
 	// Re-running 0022 is safe and does not duplicate the constraints.
 	mustRunOrderMigration(t, db, "0022_r04_checks.sql")
 	if !r04ConstraintExists(t, db, "refund_applications", "chk_refund_app_group_discriminator") ||
 		!r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
 		t.Fatal("0022 re-run lost a CHECK")
+	}
+	if got := strings.ToLower(r04CheckClause(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h")); !strings.Contains(got, "interval 24 hour") || strings.Contains(got, ">=") {
+		t.Fatalf("0022 re-run changed the 24h clause: %q", got)
 	}
 }
 
@@ -255,7 +307,7 @@ func TestR04ChecksDirtyRowsBlockMigration(t *testing.T) {
 	t.Run("24h SLA dirty row", func(t *testing.T) {
 		db := r04FreshOrderDB(t, "dirty_sla")
 		mustRunOrderMigration(t, db, "0017_refund_batch_ledger.sql", "0019_legacy_payment_resolution.sql")
-		if err := insertLegacyResolution(t, db, "ORD-PRE-0022-1H", "1 HOUR"); err != nil {
+		if err := insertLegacyResolution(t, db, "ORD-PRE-0022-1H", "DATE_ADD(NOW(3), INTERVAL 1 HOUR)"); err != nil {
 			t.Fatalf("pre-0022 legacy row: %v", err)
 		}
 		err := runOrderMigrationFile(db, "0022_r04_checks.sql")
@@ -275,6 +327,28 @@ func TestR04ChecksDirtyRowsBlockMigration(t *testing.T) {
 		mustRunOrderMigration(t, db, "0022_r04_checks.sql")
 		if !r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
 			t.Fatal("0022 did not converge after the dirty row was fixed")
+		}
+	})
+
+	// A pre-existing 48h deadline is the exact WIP regression: the old `>=`
+	// CHECK would have accepted it and 0022 would have applied cleanly.
+	t.Run("48h dirty row blocks 0022", func(t *testing.T) {
+		db := r04FreshOrderDB(t, "dirty_48h")
+		mustRunOrderMigration(t, db, "0017_refund_batch_ledger.sql", "0019_legacy_payment_resolution.sql")
+		if err := insertLegacyResolution(t, db, "ORD-PRE-0022-48H", "DATE_ADD(NOW(3), INTERVAL 48 HOUR)"); err != nil {
+			t.Fatalf("pre-0022 48h row: %v", err)
+		}
+		err := runOrderMigrationFile(db, "0022_r04_checks.sql")
+		requireCheckViolation(t, err, "chk_lpr_expiry_24h")
+		if r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
+			t.Fatal("failed ALTER left the 24h CHECK installed")
+		}
+		if _, err := db.Exec("UPDATE legacy_payment_resolution SET expires_at = DATE_ADD(entered_at, INTERVAL 24 HOUR) WHERE order_no = 'ORD-PRE-0022-48H'"); err != nil {
+			t.Fatal(err)
+		}
+		mustRunOrderMigration(t, db, "0022_r04_checks.sql")
+		if !r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
+			t.Fatal("0022 did not converge after the 48h row was repaired")
 		}
 	})
 }

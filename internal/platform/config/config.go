@@ -24,6 +24,23 @@ const (
 	FulfillmentSettleConsumerSettled = "settled"
 )
 
+// Settlement switch rejection reason tokens (ADR-0007 Addendum-r0.4 §2.1.4).
+// These are the stable contract for the startup rejection log and for the
+// config error text operators match during CrashLoopBackOff triage; do not
+// reword them. internal/services/fulfillment re-exports the same values so the
+// gate and the process log cannot drift apart.
+const (
+	ReasonN5ApprovalIDModeMismatch = "N5_APPROVAL_ID_MODE_MISMATCH"
+	ReasonModeUnknown              = "MODE_UNKNOWN"
+	ReasonReleaseRangeMissing      = "RELEASE_RANGE_MISSING"
+	ReasonApprovalRowMissing       = "APPROVAL_ROW_MISSING"
+	ReasonApprovalNotApproved      = "APPROVAL_NOT_APPROVED"
+	ReasonApprovalExpired          = "APPROVAL_EXPIRED"
+	ReasonReleaseRangeMismatch     = "RELEASE_RANGE_MISMATCH"
+	ReasonApprovalDBUnavailable    = "APPROVAL_DB_UNAVAILABLE"
+	ReasonShadowNotDelivered       = "T4_4_SHADOW_NOT_DELIVERED"
+)
+
 const (
 	defaultMySQLMaxOpenConns = 30
 	defaultMySQLMaxIdleConns = 10
@@ -749,7 +766,7 @@ func applySettlementConsumerEnv(c *Config) error {
 	switch mode {
 	case FulfillmentSettleConsumerPaid, FulfillmentSettleConsumerShadow, FulfillmentSettleConsumerSettled:
 	default:
-		return fmt.Errorf("FULFILLMENT_SETTLE_CONSUMER_MODE must be paid, shadow or settled (got %q)", mode)
+		return fmt.Errorf("FULFILLMENT_SETTLE_CONSUMER_MODE must be paid, shadow or settled (got %q) (%s)", mode, ReasonModeUnknown)
 	}
 	if modeSet && legacySet {
 		legacyMode := FulfillmentSettleConsumerPaid
@@ -763,7 +780,7 @@ func applySettlementConsumerEnv(c *Config) error {
 	// N5: the approval id is meaningful only for an explicit settled request.
 	// It must never be used as a standalone switch for paid/shadow.
 	if mode != FulfillmentSettleConsumerSettled && c.SettleReleaseApprovalID != "" {
-		return fmt.Errorf("SETTLE_RELEASE_APPROVAL_ID must be empty when FULFILLMENT_SETTLE_CONSUMER_MODE=%s (N5)", mode)
+		return fmt.Errorf("SETTLE_RELEASE_APPROVAL_ID must be empty when FULFILLMENT_SETTLE_CONSUMER_MODE=%s (N5, %s)", mode, ReasonN5ApprovalIDModeMismatch)
 	}
 	if mode == FulfillmentSettleConsumerSettled && c.SettleReleaseApprovalID == "" {
 		return fmt.Errorf("SETTLE_RELEASE_APPROVAL_ID is required when FULFILLMENT_SETTLE_CONSUMER_MODE=%s", FulfillmentSettleConsumerSettled)
@@ -772,7 +789,7 @@ func applySettlementConsumerEnv(c *Config) error {
 	// every approval row match by accident, so it is a startup error rather
 	// than a wildcard.
 	if (mode == FulfillmentSettleConsumerShadow || mode == FulfillmentSettleConsumerSettled) && c.SettleReleaseRange == "" {
-		return fmt.Errorf("SETTLE_RELEASE_RANGE is required when FULFILLMENT_SETTLE_CONSUMER_MODE=%s", mode)
+		return fmt.Errorf("SETTLE_RELEASE_RANGE is required when FULFILLMENT_SETTLE_CONSUMER_MODE=%s (%s)", mode, ReasonReleaseRangeMissing)
 	}
 	c.FulfillmentSettleConsumerMode = mode
 	return nil

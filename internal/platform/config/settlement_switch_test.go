@@ -41,19 +41,19 @@ func TestSettlementSwitchConfigMatrix(t *testing.T) {
 		{name: "explicit paid", mode: "paid", wantMode: FulfillmentSettleConsumerPaid},
 		{
 			name: "paid with approval id is N5",
-			mode: "paid", approval: "apr-1", wantErr: "N5",
+			mode: "paid", approval: "apr-1", wantErr: ReasonN5ApprovalIDModeMismatch,
 		},
 		{
 			name:     "approval id alone is N5",
-			approval: "apr-1", wantErr: "N5",
+			approval: "apr-1", wantErr: ReasonN5ApprovalIDModeMismatch,
 		},
 		{
 			name: "shadow needs release range",
-			mode: "shadow", wantErr: "SETTLE_RELEASE_RANGE",
+			mode: "shadow", wantErr: ReasonReleaseRangeMissing,
 		},
 		{
 			name: "shadow with approval id is N5 even with range",
-			mode: "shadow", approval: "apr-1", rangeVal: "prod", wantErr: "N5",
+			mode: "shadow", approval: "apr-1", rangeVal: "prod", wantErr: ReasonN5ApprovalIDModeMismatch,
 		},
 		{
 			name: "valid shadow",
@@ -65,7 +65,7 @@ func TestSettlementSwitchConfigMatrix(t *testing.T) {
 		},
 		{
 			name: "settled needs release range",
-			mode: "settled", approval: "apr-1", wantErr: "SETTLE_RELEASE_RANGE",
+			mode: "settled", approval: "apr-1", wantErr: ReasonReleaseRangeMissing,
 		},
 		{
 			name: "valid settled",
@@ -73,15 +73,15 @@ func TestSettlementSwitchConfigMatrix(t *testing.T) {
 		},
 		{
 			name: "empty mode is invalid",
-			mode: " ", wantErr: "FULFILLMENT_SETTLE_CONSUMER_MODE",
+			mode: " ", wantErr: ReasonModeUnknown,
 		},
 		{
 			name: "unknown mode is invalid",
-			mode: "settled-prod", wantErr: "FULFILLMENT_SETTLE_CONSUMER_MODE",
+			mode: "settled-prod", wantErr: ReasonModeUnknown,
 		},
 		{
 			name: "uppercase mode is invalid",
-			mode: "PAID", wantErr: "FULFILLMENT_SETTLE_CONSUMER_MODE",
+			mode: "PAID", wantErr: ReasonModeUnknown,
 		},
 	}
 	for _, tc := range cases {
@@ -141,8 +141,8 @@ func TestSettlementSwitchLegacyBooleanMatrix(t *testing.T) {
 		t.Setenv("FULFILLMENT_CONSUME_ORDER_SETTLED", "true")
 		t.Setenv("SETTLE_RELEASE_APPROVAL_ID", "apr-1")
 		c := &Config{}
-		if err := applySettlementConsumerEnv(c); err == nil || !strings.Contains(err.Error(), "SETTLE_RELEASE_RANGE") {
-			t.Fatalf("err = %v, want missing range", err)
+		if err := applySettlementConsumerEnv(c); err == nil || !strings.Contains(err.Error(), ReasonReleaseRangeMissing) {
+			t.Fatalf("err = %v, want missing range token", err)
 		}
 	})
 	t.Run("legacy false is paid and rejects approval id", func(t *testing.T) {
@@ -150,8 +150,8 @@ func TestSettlementSwitchLegacyBooleanMatrix(t *testing.T) {
 		t.Setenv("FULFILLMENT_CONSUME_ORDER_SETTLED", "false")
 		t.Setenv("SETTLE_RELEASE_APPROVAL_ID", "apr-1")
 		c := &Config{}
-		if err := applySettlementConsumerEnv(c); err == nil || !strings.Contains(err.Error(), "N5") {
-			t.Fatalf("err = %v, want N5", err)
+		if err := applySettlementConsumerEnv(c); err == nil || !strings.Contains(err.Error(), ReasonN5ApprovalIDModeMismatch) {
+			t.Fatalf("err = %v, want the N5 token", err)
 		}
 	})
 	t.Run("new and legacy conflict fails", func(t *testing.T) {

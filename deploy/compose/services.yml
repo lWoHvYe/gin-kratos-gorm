@@ -331,6 +331,14 @@ services:
       GRPC_ADDR: ":9008"
       HTTP_ADDR: ":9108"
       ORDER_ADDR: order:9006
+      # R0.4d1 settlement consumer switch. paid stays the default; shadow is
+      # hard-rejected at startup until T4.4 delivers the observe-only consumer;
+      # settled needs an APPROVED settlement_switch_approvals row whose
+      # release_range equals SETTLE_RELEASE_RANGE. Empty approval id/range are
+      # valid only for paid, and an empty range is never a wildcard.
+      FULFILLMENT_SETTLE_CONSUMER_MODE: "${FULFILLMENT_SETTLE_CONSUMER_MODE:-paid}"
+      SETTLE_RELEASE_APPROVAL_ID: "${SETTLE_RELEASE_APPROVAL_ID:-}"
+      SETTLE_RELEASE_RANGE: "${SETTLE_RELEASE_RANGE:-}"
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9108/healthz"]

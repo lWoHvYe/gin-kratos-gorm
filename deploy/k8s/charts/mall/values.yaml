@@ -38,6 +38,20 @@ shortageCaseEnabled: false
 # aftersales: freight responsibility determination and refund hold.
 freightResponsibilityEnabled: false
 
+# fulfillment: settlement consumer switch (R0.4d1, ADR-0007 Addendum-r0.4).
+# The chart only injects the values; the process still fail-closes at startup.
+settlement:
+  # FULFILLMENT_SETTLE_CONSUMER_MODE. paid is the only production default.
+  # shadow is hard-rejected until T4.4 delivers the observe-only consumer;
+  # settled requires an APPROVED settlement_switch_approvals row.
+  consumerMode: paid
+  # SETTLE_RELEASE_APPROVAL_ID: required for settled, must be empty for
+  # paid/shadow (N5). Injected only when non-empty.
+  approvalID: ""
+  # SETTLE_RELEASE_RANGE: required for shadow/settled and must exactly equal
+  # the approval row's release_range. Empty is never a wildcard.
+  releaseRange: ""
+
 mysql:
   host: mysql.mall-data.svc.cluster.local
   port: 3306

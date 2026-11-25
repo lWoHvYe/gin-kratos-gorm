@@ -3,7 +3,7 @@
 #
 # Proves, on a disposable fresh MySQL 8.4 instance and with the same
 # mall/migrate image the Helm job uses:
-#   * the real migrations/order/0017..0021 + migrations/fulfillment/0010..0011
+#   * the real migrations/order/0017..0022 + migrations/fulfillment/0010..0011
 #     files apply from scratch and are recorded in the checksum ledger;
 #   * order/0018 can be replayed after a successful run and after an interrupted
 #     run (atomic ALTER committed, later statements missing) and converges;
@@ -30,6 +30,8 @@ MIGRATION_FILES=(
   "order/0018_refund_commitment_composition.sql"
   "order/0019_legacy_payment_resolution.sql"
   "order/0020_permit_state_check.sql"
+  "order/0021_zero_application_check.sql"
+  "order/0022_r04_checks.sql"
   "fulfillment/0010_settlement_shadow_switch.sql"
   "fulfillment/0011_switch_expiry_check.sql"
 )
@@ -62,6 +64,30 @@ sha() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
   else shasum -a 256 "$1" | cut -d' ' -f1
   fi
+}
+check_clause() { # database table constraint -> lowercased CHECK_CLAUSE
+  q "$1" "SELECT LOWER(cc.CHECK_CLAUSE)
+    FROM information_schema.CHECK_CONSTRAINTS cc
+    JOIN information_schema.TABLE_CONSTRAINTS tc
+      ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA
+     AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+    WHERE cc.CONSTRAINT_SCHEMA = '$1' AND tc.TABLE_NAME = '$2' AND cc.CONSTRAINT_NAME = '$3'"
+}
+assert_clause_has() { # label database table constraint fragment
+  local label="$1" db="$2" table="$3" name="$4" want="$5" clause
+  clause="$(check_clause "$db" "$table" "$name")"
+  case "$clause" in
+    *"$want"*) echo "OK   $label (CHECK_CLAUSE contains $want)";;
+    *) fail "$label: CHECK_CLAUSE [$clause] does not contain [$want]";;
+  esac
+}
+assert_clause_lacks() { # label database table constraint fragment
+  local label="$1" db="$2" table="$3" name="$4" unwanted="$5" clause
+  clause="$(check_clause "$db" "$table" "$name")"
+  case "$clause" in
+    *"$unwanted"*) fail "$label: CHECK_CLAUSE [$clause] must not contain [$unwanted]";;
+    *) echo "OK   $label (CHECK_CLAUSE omits $unwanted)";;
+  esac
 }
 mysql_exec() { docker exec -e MYSQL_PWD=root "$NAME" mysql -uroot "$@"; }
 mysql_file() { # database file
@@ -123,7 +149,7 @@ for f in "${MIGRATION_FILES[@]}"; do
 done
 
 echo
-echo "== 0017-0021 + fulfillment/0010-0011 objects =="
+echo "== 0017-0022 + fulfillment/0010-0011 objects =="
 assert_eq "0017 refund_batches" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mall_order' AND table_name='refund_batches'")"
 assert_eq "0017 refund_applications" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mall_order' AND table_name='refund_applications'")"
 assert_eq "0018 header columns" 4 "$(count mall_order "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='mall_order' AND table_name='order_refund_commitments' AND column_name IN ('goods_cent','freight_cent','composition_known','composition_source')")"
@@ -132,6 +158,21 @@ assert_eq "0018 releases" 1 "$(count mall_order "SELECT COUNT(*) FROM informatio
 assert_eq "0019 legacy_payment_resolution" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mall_order' AND table_name='legacy_payment_resolution'")"
 assert_eq "0019 order_refund_sequences" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mall_order' AND table_name='order_refund_sequences'")"
 assert_eq "0020 chk_permit_state" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='mall_order' AND TABLE_NAME='order_shipping_permits' AND CONSTRAINT_NAME='chk_permit_state' AND CONSTRAINT_TYPE='CHECK'")"
+assert_eq "0021 chk_refund_app_system_zero" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='mall_order' AND TABLE_NAME='refund_applications' AND CONSTRAINT_NAME='chk_refund_app_system_zero' AND CONSTRAINT_TYPE='CHECK'")"
+assert_clause_has "0021 zero-amount semantics" mall_order refund_applications chk_refund_app_system_zero "system_zero"
+assert_clause_has "0021 zero-amount semantics" mall_order refund_applications chk_refund_app_system_zero "amount_cent"
+assert_eq "0022 chk_refund_app_group_discriminator" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='mall_order' AND TABLE_NAME='refund_applications' AND CONSTRAINT_NAME='chk_refund_app_group_discriminator' AND CONSTRAINT_TYPE='CHECK'")"
+assert_eq "0022 chk_lpr_expiry_24h" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='mall_order' AND TABLE_NAME='legacy_payment_resolution' AND CONSTRAINT_NAME='chk_lpr_expiry_24h' AND CONSTRAINT_TYPE='CHECK'")"
+# Name equality is not semantics: read CHECK_CLAUSE. The discriminator must not
+# copy the 0017 source enum, and the 24h window must be equality, not a bound.
+assert_clause_has "0022 discriminator NULL check" mall_order refund_applications chk_refund_app_group_discriminator "group_no"
+assert_clause_has "0022 discriminator NULL check" mall_order refund_applications chk_refund_app_group_discriminator "is null"
+assert_clause_lacks "0022 discriminator no enum copy" mall_order refund_applications chk_refund_app_group_discriminator "system_zero"
+assert_clause_lacks "0022 discriminator no enum copy" mall_order refund_applications chk_refund_app_group_discriminator "system_shortage"
+assert_clause_lacks "0022 discriminator no enum copy" mall_order refund_applications chk_refund_app_group_discriminator "aftersale"
+assert_clause_lacks "0022 discriminator no enum copy" mall_order refund_applications chk_refund_app_group_discriminator "tcc"
+assert_clause_has "0022 24h equality" mall_order legacy_payment_resolution chk_lpr_expiry_24h "interval 24 hour"
+assert_clause_lacks "0022 24h equality" mall_order legacy_payment_resolution chk_lpr_expiry_24h ">="
 assert_eq "fulfillment/0010 shadow diffs" 1 "$(count mall_fulfillment "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mall_fulfillment' AND table_name='settlement_shadow_diffs'")"
 assert_eq "fulfillment/0010 switch approvals" 1 "$(count mall_fulfillment "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mall_fulfillment' AND table_name='settlement_switch_approvals'")"
 assert_eq "fulfillment/0011 chk_switch_settled_expiry" 1 "$(count mall_fulfillment "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='mall_fulfillment' AND TABLE_NAME='settlement_switch_approvals' AND CONSTRAINT_NAME='chk_switch_settled_expiry' AND CONSTRAINT_TYPE='CHECK'")"
@@ -143,6 +184,89 @@ assert_error "0020 rejects GRANTED" "3819" mysql_exec mall_order -e \
 mysql_exec mall_order -e \
   "INSERT INTO order_shipping_permits (order_no, fulfillment_group_no, state) VALUES ('ORD-R01-PERMIT','G1','NONE')" >/dev/null
 assert_eq "0020 accepts NONE" 1 "$(count mall_order "SELECT COUNT(*) FROM order_shipping_permits WHERE order_no='ORD-R01-PERMIT' AND state='NONE'")"
+
+echo
+echo "== 0021/0022 fail closed on dirty values, accept the exact boundaries =="
+assert_error "0021 rejects nonzero system_zero" "3819" mysql_exec mall_order -e \
+  "INSERT INTO refund_applications (refund_id, source, order_no, group_no, non_effective_capture, amount_cent, goods_cent, freight_cent)
+   VALUES ('APP-R04-ZERO-BAD','system_zero','ORD-R04-ZERO','G1',0,100,100,0)"
+mysql_exec mall_order -e \
+  "INSERT INTO refund_applications (refund_id, source, order_no, group_no, non_effective_capture, amount_cent, goods_cent, freight_cent)
+   VALUES ('APP-R04-ZERO-OK','system_zero','ORD-R04-ZERO','G1',0,0,0,0)" >/dev/null
+assert_eq "0021 accepts zero system_zero" 1 "$(count mall_order "SELECT COUNT(*) FROM refund_applications WHERE refund_id='APP-R04-ZERO-OK'")"
+assert_error "0022 rejects payment with group" "3819" mysql_exec mall_order -e \
+  "INSERT INTO refund_applications (refund_id, source, order_no, group_no, non_effective_capture, amount_cent, goods_cent, freight_cent)
+   VALUES ('APP-R04-PAY-BAD','payment','ORD-R04-PAY','G1',1,100,100,0)"
+mysql_exec mall_order -e \
+  "INSERT INTO refund_applications (refund_id, source, order_no, group_no, non_effective_capture, amount_cent, goods_cent, freight_cent)
+   VALUES ('APP-R04-PAY-OK','payment','ORD-R04-PAY',NULL,1,100,100,0)" >/dev/null
+assert_eq "0022 accepts payment-level row" 1 "$(count mall_order "SELECT COUNT(*) FROM refund_applications WHERE refund_id='APP-R04-PAY-OK'")"
+assert_error "0022 rejects group row without group" "3819" mysql_exec mall_order -e \
+  "INSERT INTO refund_applications (refund_id, source, order_no, group_no, non_effective_capture, amount_cent, goods_cent, freight_cent)
+   VALUES ('APP-R04-GROUP-BAD','aftersale','ORD-R04-GROUP',NULL,0,100,90,10)"
+mysql_exec mall_order -e \
+  "INSERT INTO refund_applications (refund_id, source, order_no, group_no, non_effective_capture, amount_cent, goods_cent, freight_cent)
+   VALUES ('APP-R04-GROUP-OK','aftersale','ORD-R04-GROUP','G1',0,100,90,10)" >/dev/null
+assert_eq "0022 accepts group row" 1 "$(count mall_order "SELECT COUNT(*) FROM refund_applications WHERE refund_id='APP-R04-GROUP-OK'")"
+mysql_exec mall_order -e \
+  "INSERT INTO legacy_payment_resolution (order_no, state, entered_at, expires_at)
+   VALUES ('ORD-R04-LPR-24H','OPEN',NOW(3),DATE_ADD(NOW(3),INTERVAL 24 HOUR))" >/dev/null
+assert_eq "0022 accepts exactly 24h" 1 "$(count mall_order "SELECT COUNT(*) FROM legacy_payment_resolution WHERE order_no='ORD-R04-LPR-24H'")"
+assert_error "0022 rejects 48h" "3819" mysql_exec mall_order -e \
+  "INSERT INTO legacy_payment_resolution (order_no, state, entered_at, expires_at)
+   VALUES ('ORD-R04-LPR-48H','OPEN',NOW(3),DATE_ADD(NOW(3),INTERVAL 48 HOUR))"
+assert_error "0022 rejects 24h+1s" "3819" mysql_exec mall_order -e \
+  "INSERT INTO legacy_payment_resolution (order_no, state, entered_at, expires_at)
+   VALUES ('ORD-R04-LPR-24H1S','OPEN',NOW(3),DATE_ADD(NOW(3),INTERVAL 24 HOUR) + INTERVAL 1 SECOND)"
+assert_error "0022 rejects 25h" "3819" mysql_exec mall_order -e \
+  "INSERT INTO legacy_payment_resolution (order_no, state, entered_at, expires_at)
+   VALUES ('ORD-R04-LPR-25H','OPEN',NOW(3),DATE_ADD(NOW(3),INTERVAL 25 HOUR))"
+assert_error "0022 rejects 23h" "chk_lpr_expiry" mysql_exec mall_order -e \
+  "INSERT INTO legacy_payment_resolution (order_no, state, entered_at, expires_at)
+   VALUES ('ORD-R04-LPR-23H','OPEN',NOW(3),DATE_ADD(NOW(3),INTERVAL 23 HOUR))"
+# Replay the real 0022 file: conditional ADD must not fail or duplicate.
+mysql_file mall_order "$ROOT/migrations/order/0022_r04_checks.sql" >/dev/null
+assert_eq "0022 replay keeps one discriminator" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='mall_order' AND TABLE_NAME='refund_applications' AND CONSTRAINT_NAME='chk_refund_app_group_discriminator'")"
+assert_eq "0022 replay keeps one 24h CHECK" 1 "$(count mall_order "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='mall_order' AND TABLE_NAME='legacy_payment_resolution' AND CONSTRAINT_NAME='chk_lpr_expiry_24h'")"
+
+echo
+echo "== 0022 partial failure: first ALTER committed, second blocked, repair converges =="
+q '' "DROP DATABASE IF EXISTS r04_dirty; CREATE DATABASE r04_dirty" >/dev/null
+mysql_file r04_dirty "$ROOT/migrations/order/0017_refund_batch_ledger.sql" >/dev/null
+mysql_file r04_dirty "$ROOT/migrations/order/0019_legacy_payment_resolution.sql" >/dev/null
+# Both rows are legal before 0022: payment with a group (0022-1) and a 48h
+# deadline (0022-2). The WIP migration accepted both; the accepted contract
+# must reject them.
+q r04_dirty "INSERT INTO refund_applications (refund_id, source, order_no, group_no, non_effective_capture, amount_cent, goods_cent, freight_cent)
+  VALUES ('APP-R04-DIRTY','payment','ORD-R04-DIRTY','G1',1,100,100,0)" >/dev/null
+q r04_dirty "INSERT INTO legacy_payment_resolution (order_no, state, entered_at, expires_at)
+  VALUES ('ORD-R04-DIRTY-48H','OPEN',NOW(3),DATE_ADD(NOW(3),INTERVAL 48 HOUR))" >/dev/null
+set +e
+dirty_out="$(mysql_file r04_dirty "$ROOT/migrations/order/0022_r04_checks.sql" 2>&1)"
+dirty_rc=$?
+set -e
+[ "$dirty_rc" -ne 0 ] || fail "0022 should reject the dirty group discriminator row"
+case "$dirty_out" in
+  *"chk_refund_app_group_discriminator"*) echo "OK   0022 blocked by the dirty discriminator row";;
+  *) fail "0022 failed without the discriminator diagnostic: $dirty_out";;
+esac
+assert_eq "blocked 0022 added no discriminator" 0 "$(count r04_dirty "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='r04_dirty' AND CONSTRAINT_NAME='chk_refund_app_group_discriminator'")"
+q r04_dirty "DELETE FROM refund_applications WHERE refund_id='APP-R04-DIRTY'" >/dev/null
+set +e
+dirty2_out="$(mysql_file r04_dirty "$ROOT/migrations/order/0022_r04_checks.sql" 2>&1)"
+dirty2_rc=$?
+set -e
+[ "$dirty2_rc" -ne 0 ] || fail "0022 should now fail on the 48h dirty row"
+case "$dirty2_out" in
+  *"chk_lpr_expiry_24h"*) echo "OK   0022 blocked by the 48h dirty row (first ALTER committed)";;
+  *) fail "0022 failed without the 24h diagnostic: $dirty2_out";;
+esac
+assert_eq "partial 0022 kept the discriminator" 1 "$(count r04_dirty "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='r04_dirty' AND CONSTRAINT_NAME='chk_refund_app_group_discriminator'")"
+assert_eq "partial 0022 did not add the 24h CHECK" 0 "$(count r04_dirty "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='r04_dirty' AND CONSTRAINT_NAME='chk_lpr_expiry_24h'")"
+q r04_dirty "UPDATE legacy_payment_resolution SET expires_at=DATE_ADD(entered_at,INTERVAL 24 HOUR) WHERE order_no='ORD-R04-DIRTY-48H'" >/dev/null
+mysql_file r04_dirty "$ROOT/migrations/order/0022_r04_checks.sql" >/dev/null
+assert_eq "repaired 0022 adds the 24h CHECK" 1 "$(count r04_dirty "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA='r04_dirty' AND CONSTRAINT_NAME='chk_lpr_expiry_24h'")"
+assert_eq "repaired 0022 has 0 blocking rows" 0 "$(count r04_dirty "SELECT COUNT(*) FROM legacy_payment_resolution WHERE expires_at <> DATE_ADD(entered_at, INTERVAL 24 HOUR)")"
 
 echo
 echo "== 0018 re-entry: full replay is a no-op =="
@@ -228,7 +352,7 @@ docker run --rm --add-host=host.docker.internal:host-gateway \
   -e MYSQL_HOST=host.docker.internal -e MYSQL_PORT="$BASE_PORT" \
   -e MYSQL_USER=root -e MYSQL_PASSWORD=root \
   -e MIGRATION_LOCK_WAIT_SECONDS=60 \
-  -v "$ROOT/migrations:/migrations:ro" "$MIGRATE_IMAGE" | grep -E 'order/0017|order/0018|order/0019|order/0020|fulfillment/0010|fulfillment/0011|complete'
+  -v "$ROOT/migrations:/migrations:ro" "$MIGRATE_IMAGE" | grep -E 'order/0017|order/0018|order/0019|order/0020|order/0021|order/0022|fulfillment/0010|fulfillment/0011|complete'
 
 echo
 echo "== runner-level partial failure: FAILED attempt refuses replay, operator repair converges =="

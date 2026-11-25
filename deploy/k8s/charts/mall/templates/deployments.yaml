@@ -184,6 +184,19 @@ spec:
               value: {{ $.Values.carrierRegistryEnabled | quote }}
             - name: DELIVERY_AUTO_CONFIRM_ENABLED
               value: {{ $.Values.deliveryAutoConfirmEnabled | quote }}
+            {{- /* R0.4d1 settlement switch. paid is the default; empty approval
+                   id/range are not injected so the process sees "unset" (an
+                   explicit empty mode would be rejected as MODE_UNKNOWN). */}}
+            - name: FULFILLMENT_SETTLE_CONSUMER_MODE
+              value: {{ $.Values.settlement.consumerMode | default "paid" | quote }}
+            {{- with $.Values.settlement.approvalID }}
+            - name: SETTLE_RELEASE_APPROVAL_ID
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $.Values.settlement.releaseRange }}
+            - name: SETTLE_RELEASE_RANGE
+              value: {{ . | quote }}
+            {{- end }}
             {{- end }}
             {{- if eq $name "order" }}
             - name: SHORTAGE_CASE_ENABLED

@@ -38,22 +38,24 @@
   AC-REF** (AC-27A steps 5/6 not implemented; `AC-50-FIX-01`,
   `AC-27-NOWB-01`, `AC-27-LIVE-01` open). AC-14 now AC-VERIFIED; other
   regression ACs AC-REF; 12 orphan mapped to T5.x/T3.
-- **AC-50-FIX-01 BLOCKED**: amendment DRAFT 0.2 (`c9be297`) not accepted; QC
-  round 2 found R-2a `ListShipments` pre-read conflicts with ADR Rev 2.3
-  §5.2.2 and replay idempotency. Needs human/Architect decision (ADR revision
-  vs documented deviation vs separate redesign). No code written.
+- **AC-50-FIX-01 FROZEN**: amendment DRAFT 0.3 (`b5129b5`) not accepted; QC
+  round 3 BLOCKED — `result=CONFLICT` is not a legal TCC admission result
+  (`tcc_settlement.go:847-876`), partial `CONSUMED+CANCELLED` cancels the
+  `CREATED` waybill before returning PARTIAL (violates AC-50 `0002:217`),
+  route A did not authorize persisting CONFLICT / no-re-probe. Needs a
+  PO/SPEC-0002 ruling (bounded CONFLICT/PENDING outcome + TCC authorization,
+  or keep the PRE deviation). No code written.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 
 ## Open — next session first
 
-1. **Decide AC-50-FIX-01**: amend ADR §5.2.2 via a versioned revision (bounded
-   pre-read + deadline + persisted-result replay), keep the PRE deviation with
-   expiry, or separate redesign change_id. Then re-QC and implement.
-2. **R0.3-R1c**: close `AC-50-FIX-01` (`CancelIfCreatedReply` no-waybill
-   result; Order maps to `REFUND_ADMISSION_CONFLICT`, never PRE),
-   `AC-27-NOWB-01`, `AC-27-LIVE-01`; then implement AC-27A steps 5/6 and
-   re-review.
+1. **Decide AC-50-FIX-01**: amend SPEC-0002/ADR to add a bounded persisted
+   CONFLICT/PENDING admission outcome (and authorize TCC handling), or keep
+   the current PRE mapping as an explicit deviation to 2026-12-31. Then re-QC
+   and implement; no Lead/Developer patch.
+2. **R0.3-R1c**: close `AC-50-FIX-01`, `AC-27-NOWB-01`, `AC-27-LIVE-01`;
+   then implement AC-27A steps 5/6 and re-review.
 3. **T5/AC-39…68** evidence, `-race`/fault, real migrations; no AC-VERIFIED
    except AC-14.
 4. Only after all of the above: P0 closure, then T2/T3/T4, then release

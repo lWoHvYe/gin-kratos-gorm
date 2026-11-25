@@ -379,6 +379,25 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   re-QC; (b) keep the current PRE mapping as an explicit deviation with
   expiry 2026-12-31; (c) redesign the admission protocol as a separate L2
   change_id. No option may be chosen by Lead/Developer alone.
+- **2026-11-26 human decision: route A** — drop the `ListShipments` pre-read;
+  accept the Tx1-written artifacts and route `NO_SHIPMENT` to
+  `REFUND_ADMISSION_CONFLICT` + manual `AC-27-NOWB-01` queue (commitment
+  stays RESERVED, outbox placeholder kept, no PRE/refund/release). No
+  ADR §5.2.2 exception. Architect to revise DRAFT 0.3, then QC round 3.
+- **2026-11-26 AC-50-FIX-01 FROZEN (QC round 3 BLOCKED)**: route A as drafted
+  still cannot be implemented without a contract change —
+  R3-B1 `result=CONFLICT` is not a legal TCC admission result
+  (`tcc_settlement.go:847-876`; `tcc_*.go` outside the amendment's
+  allowed_paths); R3-B2 partial `CONSUMED+CANCELLED` makes `CancelIfCreated`
+  cancel the `CREATED` waybill before returning `PARTIAL`, violating
+  AC-50 `0002:217`; R3-B3 route A did not authorize persisting `CONFLICT` or
+  "same `refund_id` no re-probe" (SPEC-0001:645 only allows PRE/POST;
+  `CONFLICT-SPEC-SYNC` was only a stop condition); R3-B4 "application stays
+  retryable" vs "no re-probe" contradiction.
+- **Decision needed**: PO/SPEC-0002 must either (a) add a bounded, persisted
+  CONFLICT/PENDING admission outcome and authorize TCC handling of it, or
+  (b) keep the current PRE mapping as an explicit deviation to 2026-12-31.
+  No Lead/Developer patch. AC-27 stays AC-REF.
 
 ### 2026-11-26 human decisions: F-2 branch A, UAT as prod, AC-50-FIX-01 start
 

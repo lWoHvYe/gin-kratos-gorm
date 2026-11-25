@@ -15,11 +15,11 @@
 
 > **2026-11-26 状态**：R0.4 Addendum 已 ACCEPTED（人类 2026-11-26）；分支 A 修复
 > `aec9ac8` + `4549ccb`，Reviewer **R0.4e-R2 PASS（scoped）**（F-1/F-2 CLOSED）；
-> R0.3-R2 **PASS（scoped）**，AC-27 仍 **AC-REF**（AC-27A 第 5/6 条未实现，
-> `AC-50-FIX-01`/`AC-27-NOWB-01`/`AC-27-LIVE-01` open）；**AC-50-FIX-01 的 ADR
-> amendment 被 QC BLOCKED（R-2a 与 accepted ADR §5.2.2 冲突）**，需人类/Architect
-> 裁决后再动；SPEC-0001 v1.5 已批准。**Phase 0-R 未闭合**，无 P0
-> closure/Release/merge。
+> R0.3-R2 **PASS（scoped）**，AC-27 仍 **AC-REF**（AC-27A 第 5/6 条未实现）；
+> **AC-50-FIX-01 冻结**：QC 第三轮 BLOCKED（`result=CONFLICT` 非合法 TCC 结果、
+> 部分 `CONSUMED+CANCELLED` 先取消运单、route A 未授权持久化/不再探测），需
+> PO/SPEC-0002 裁决；`AC-27-NOWB-01`/`AC-27-LIVE-01` 同开。SPEC-0001 v1.5
+> 已批准。**Phase 0-R 未闭合**，无 P0 closure/Release/merge。
 
 
 | ID | 内容 | 当前状态 / 缺口 | Owner |

@@ -569,3 +569,171 @@ R-1 的“新增 `NO_SHIPMENT` 字符串值、无字段/无 RPC/无枚举变更�
 **R2 Actor**：`qc-ac50`
 **R2 Reviewed-by**：待 Architect 修订 / 人类批准
 **R2 Status**：**BLOCKED — DRAFT 0.2 不得进入实现**
+
+---
+
+# R3 终审（DRAFT 0.3）
+
+| 项 | 值 |
+|---|---|
+| 审查对象 | `docs/adr/0007-amd1-addendum-ac50-nowaybill.md` **DRAFT 0.3**（工作树，未 commit；693 行；删除 R-2a/全部 `ListShipments`） |
+| 结论 | **BLOCKED**（4 个 `[BLOCKER]` + 2 个 `[MAJOR]` + 3 个 `[TODO]`；0 BLOCKER 才 READY，不满足） |
+| 日期 | **2026-11-26** |
+| Actor | `qc-ac50`（Quality Checker；与 `arch-ac50` 不同 actor） |
+| base | `47db2e0d35d92520b9f9a55c26af3230fe85c2cc` |
+| head | `47db2e0d35d92520b9f9a55c26af3230fe85c2cc`（`git rev-parse HEAD`；被审 ADR 为工作树修改，blob `b5129b51371180ee6ce247a8c3143ee3ed73cd27`，sha256 `013a65d5bea4296f0d031bd13e248d04d764ed18340e42987f5b8a7fb17258d2`） |
+| review_scope | 只审 0.3 的 A 协议 delta：`NO_SHIPMENT` 的 Tx2 `result=CONFLICT/state=PENDING_REMOTE`、R-2b 部分金额、R-2a 删除、B-3/W9、M-1…M-13/R2 项的关闭/延期、§1.3/§8.2/§8.3、5 个崩溃窗口 + 重复/乱序。不重审全文、不执行代码/测试。 |
+| release_status | **NOT RELEASE**；不批准 merge/Release/AC-VERIFIED；0.3 仍为 DRAFT。 |
+
+## R3.0 结论
+
+**BLOCKED。**
+
+- **B-1/B-2** 保持 CLOSED；**B-3** 的人工侧协议在本稿是诚实的：W9 不再声称“迟到 `order.paid` 不建 placeholder”，而是承认真实 placeholder、CONFLICT 后不自动 PRE，阻断另立 `ORDER-PAID-PLACEHOLDER-01`（DEFERRED）。**B-3 可判 CLOSED（人工侧）/正常 consumer DEFERRED**。
+- **R-2a 与全部 `ListShipments`/事务外预读已删除**：R2-B1（幂等）与 R2-B2（ADR §5.2.2）在本稿消失；`AdmitRefund` 先读 existing、CONFLICT 直接返回、`A8` 四分支 0 行语义已补；**R2-B1/B2 CLOSED**。
+- **但 A 协议本身仍不满足“0 BLOCKER”**：
+  1. **R3-B1（TCC）**：`result=REFUND_ADMISSION_CONFLICT` 被 TCC 侧 `ensureTccRemoteAdmissionTx` 判为“非法 result”，TCC 重试在到达 `AdmitRefund` 的 CONFLICT 短路之前就失败；TCC 的 A 协议不可执行，且 `allowed_paths` 禁止改生产 `tcc_*.go`。
+  2. **R3-B2（部分金额 CANCELLED）**：无预读后，`CONSUMED` 部分金额在 Tx2 调 `CancelIfCreated`；一个真实 `CREATED` 行会先被取消，然后才返回 `PARTIAL`。AC-50 `0002:217` 明确部分金额“不得改动许可/运单/打款”；这与 R-2b 直接冲突。
+  3. **R3-B3（A 记录/SPEC）**：`docs/review-tracking.md:382-387` 记录的 route A 只授权“`NO_SHIPMENT` → `REFUND_ADMISSION_CONFLICT` + 人工队列”，**没有**授权 `result=REFUND_ADMISSION_CONFLICT` 持久化，也没有授权“同 `refund_id` 不再探测”；0.3 `:10`/`:75` 把这两项加进“人类 A”，但 canonical 记录未同步。另 `SPEC-0001:645` 仍写 `result` 只允许 PRE/POST；`CONFLICT-SPEC-SYNC` 只是 stop，不是已关闭。
+  4. **R3-B4（AC-50 `0002:228`）**：`§8:460` 仍写“申请保持可重试（AC-50 `0002:228`）”，而 `§3.5.4:295` 规定同 `refund_id` 读 CONFLICT 后**不再探测**、不再写；`AfterSales` 重试只会得到同一错误，不能自动收敛。这是“保持可重试”与“不再探测”的**自相矛盾**，需把“可重试”限定为人工 re-arm 后，或取得 AC-50 的书面豁免。
+
+## R3.1 A 协议逐项核对（0016 / AC-50 / INV-45 / AC-62）
+
+| 项 | 结论 | 依据/说明 |
+|---|---|---|
+| `0016` 表约束 | **PASS** | `order_refund_admissions.result/state` 为 `VARCHAR(32) NOT NULL DEFAULT 'PENDING_REMOTE'`，无 CHECK（`migrations/order/0016_settlement_admission.sql:7-19`）；`REFUND_ADMISSION_CONFLICT` 25 字符，可容纳；`state` 保持 `PENDING_REMOTE`，不新增 state；无迁移。 |
+| AC-50 `0002:223`（整组 CONFLICT） | **PASS（整组）** | `CONSUMED+无运单` 返回 `REFUND_ADMISSION_CONFLICT`；0.3 只在整组 `amount == 组剩余` 写 CONFLICT（`:242`、`:282`），部分金额优先 PARTIAL（V15-3/`0002:217`）。 |
+| AC-50 `0002:217`（部分金额） | **FAIL（`CANCELLED` 分支）** | `CONSUMED` 部分金额在 Tx2 调 `CancelIfCreated`；`CREATED→CANCELLED`（`cancel_if_created.go:72-82`）后再返回 PARTIAL，**改动运单**，违反“不得改动许可/运单/打款”。`NO_SHIPMENT` 分支无副作用；`ALREADY_SHIPPED` 部分 POST 合法。 |
+| AC-50 `0002:227`（同 `refund_id`） | **PARTIAL** | 持久化 CONFLICT 后返回同一错误符合“读已持久化结果”；但需 `AdmitRefund` 在 `GetIntent`/远程前读 existing（0.3 `:295`；当前代码 `:179-185` 在 `GetIntent` 之后，实施须前移，allowed_paths 允许）。 |
+| AC-50 `0002:228`（保持可重试） | **FAIL** | `§8:460` 与 `§3.5.4:295` 冲突；冲突行无自动重探；人工 re-arm 才可继续。 |
+| INV-45（准入不可逆/释放纪律） | **PASS** | CONFLICT/PARTIAL 不写 permit、不释放、不恢复 `CONSUMED`；commitment 保持 `RESERVED`；AC-62 人工授权是唯一释放例外。 |
+| AC-62（人工释放） | **PASS（规则）** | `§8:462`/`§1.3:169` 明确授权释放只释放额度、不恢复 permit、不关闭组、不写 `DONE`；T3 未实现为 DEFERRED。 |
+| `PENDING_REMOTE` 收敛 | **PARTIAL** | 正金额由发起方 task 重放/FAILED + ops re-arm；TCC 被 `ensureTccRemoteAdmissionTx` 挡住（R3-B1）；无 Order 扫描 worker，符合 W8/AC-27-LIVE-01，但 TCC 不可按 A 协议重放。 |
+| worker 误重试 | **FAIL（TCC）** | TCC `TccCancelMarkPaid` 先 `applyTccCompensation`（`tcc_settlement.go` `writeTccBatchGroupsTx` → `ensureTccRemoteAdmissionTx`），再 `admitTccBatch`（`tcc.go:356`）；`ensureTccRemoteAdmissionTx` 的 switch 只接受 `PENDING/PRE/POST`（`tcc_settlement.go:847-876`），`result=CONFLICT` 走 `default` → `Failed("tcc refund admission result is not a legal value")`。TCC batch 停 `ADMITTING`、application `PENDING`；不会到达 `AdmitRefund` 的 CONFLICT 短路，也不返回同一 `REFUND_ADMISSION_CONFLICT`。 |
+
+## R3.2 新增 `[BLOCKER]`
+
+### `[BLOCKER]` R3-B1 — `result=CONFLICT` 在 TCC 侧是非法 result；TCC A 协议不可执行
+
+**证据**
+
+- 0.3 `:91`/`:242`/`:293`/`:521` O1b：TCC `NO_SHIPMENT` 写 `result=REFUND_ADMISSION_CONFLICT,state=PENDING_REMOTE`，同 `refund_id` 重放返回同一错误。
+- `TccCancelMarkPaid` 的重试顺序：`applyTccCompensation`（`tcc_settlement.go:312`/`resumeTccCompensationTx`/`writeTccBatchGroupsTx`）先于 `admitTccBatch`（`tcc.go:356`）。`writeTccBatchGroupsTx` 对 `CONSUMED` 组调用 `ensureTccRemoteAdmissionTx`（`tcc_settlement.go:717`）。
+- `ensureTccRemoteAdmissionTx`（`tcc_settlement.go:847-876`）先 `INSERT ... ON DUPLICATE KEY`，再 `SELECT result,state`，`switch result { case refundPending, refundResultPre, refundResultPost: return nil; default: return apperr.Failed("tcc refund admission result is not a legal value") }`。`result=CONFLICT` → **default**，TCC 重试在到达 `AdmitRefund` 的 existing CONFLICT 短路前就失败。
+- 0.3 `forbidden_paths:20` 禁止改生产 `internal/services/order/tcc_*.go`；`allowed_paths:19` 只允许 `tcc_admission_integration_test.go`（测试）。因此**按本稿无法修复 TCC**。
+- 这不是“TCC 停 ADMITTING 等待人工”的正常状态：`TccCancelMarkPaid` 返回的是“非法 result”错误，不是 `REFUND_ADMISSION_CONFLICT`；TCC 的 manual 查询仍能发现 batch，但**同 `refund_id` 重放不返回同一 CONFLICT**，违反 0.3 自己的 R-2/A9 和 O1b 预期（O1b 若只调 `AdmitRefund` 会绕过此路径）。
+
+**具体修改（二选一）**
+
+1. **允许 TCC 识别 CONFLICT**：把 `ensureTccRemoteAdmissionTx` 的 `switch` 加 `refundResultConflict`（或等价值），返回 `REFUND_ADMISSION_CONFLICT` 同一错误；这需要把生产 `tcc_settlement.go` 加入 `allowed_paths`（或另拆 change_id），并补 `TccCancelMarkPaid` 级 O1b（不是只调 `AdmitRefund`）。
+2. **TCC 不持久化 CONFLICT**：TCC `NO_SHIPMENT` 只返回错误、不写 `result=CONFLICT`；同 `refund_id` TCC 重试仍重探（不满足 A 的“不再探测”），需要人类 A/PO 明确 TCC 例外；或 TCC 改用 `refund_applications` 状态标记，但那是 schema/新状态字段，超出本 amendment。
+
+### `[BLOCKER]` R3-B2 — R-2b 的 `CONSUMED + 部分 + CANCELLED` 先取消运单再返回 PARTIAL，违反 AC-50 `0002:217`
+
+**证据**
+
+- 0.3 `§3.4:277`：`CONSUMED` + `< 组剩余` + `CANCELLED`（pre-ship）→ `PARTIAL_REFUND_REQUIRES_FULL_GROUP`；`§3.4:283` 说“接受 Tx1 占位 + 人工队列的代价”；`§8:463` 同样把 `CANCELLED` 部分金额列入人工队列。
+- 但 `finishRemoteAdmission` 在 Tx2 中先调 `CancelIfCreated`（`refund_admission.go:570-584`）；`CancelIfCreated` 对 `CREATED` 行执行 `UPDATE ... status=CANCELLED`（`cancel_if_created.go:72-82`），然后 0.3 才在 Tx2 用本地事实判定 partial 并返回 PARTIAL。
+- AC-50 `0002:217`：“IF 该组未离仓 AND 本次金额 < 整组退款金额，THEN ... `PARTIAL_REFUND_REQUIRES_FULL_GROUP`；**不得改动许可/运单/打款**。”`CREATED→CANCELLED` 就是改动运单。`CANCELLED` 分支无法区分“真实已取消（无副作用）”和“本次刚取消的 `CREATED`（有副作用）”；0.3 的表把两者混为 `CANCELLED`。
+- 0.3 已无 `ListShipments`/预读，无法在调用 `CancelIfCreated` 前知道 `CREATED` 还是 `SHIPPED`；要区分 `ALREADY_SHIPPED`（部分合法 POST）和 `CREATED`（部分 PARTIAL），当前唯一探测就是会改运单的 `CancelIfCreated`。因此 **A 路线与 AC-50 `0002:217` 在“部分金额 + `CREATED`”上不可同时满足**。
+
+**具体修改（需人类/PO 裁决，不是 Developer 可修）**
+
+1. **保留 A 路线**：由人类/PO 书面明确“部分金额 `CONSUMED+CREATED` 的 `CancelIfCreated` 副作用（取消运单）被接受”，并同步 AC-50 `0002:217` 的例外/新版本；在此之前 `R-2b` 不得实现。
+2. **或**允许一个**只读**的 `PeekShipment`/`ListShipments`（仅 partial、无副作用），但这违反人类 A 的“无预读”；需人类重新裁决。
+3. **或**部分金额 `CONSUMED` 一律不探测、一律返回 PARTIAL（放弃部分 post-ship 的 `0002:226` 合法性），需 PO 裁决；不能让 `CancelIfCreated` 的副作用被“人工队列”掩盖。
+
+### `[BLOCKER]` R3-B3 — canonical 人类 A 未授权 `result=CONFLICT` 持久化/不再探测；与 `SPEC-0001:645` 仍漂移
+
+**证据**
+
+- `docs/review-tracking.md:382-387`（route A）：“drop the `ListShipments` pre-read; accept the Tx1-written artifacts and route `NO_SHIPMENT` to `REFUND_ADMISSION_CONFLICT` + manual `AC-27-NOWB-01` queue (commitment stays RESERVED, outbox placeholder kept, no PRE/refund/release).” **没有** `result=REFUND_ADMISSION_CONFLICT` 持久化，也**没有**“同 `refund_id` 不再探测”。
+- 0.3 `Human decision:10` 却写“③`NO_SHIPMENT` 时持久化 `result=REFUND_ADMISSION_CONFLICT`…④同 `refund_id` 重放返回已持久化 CONFLICT、不再远程探测”，并归为“人类 A”；`:75`/`:499` 也把该值写成“人类 A 授权”。
+- `SPEC-0001:645` 仍写“`result` 只允许 `PRE_SHIP_REVOKED`/`POST_SHIP_ALLOWED`”；0.3 `:499` 承认漂移，仅登记 `CONFLICT-SPEC-SYNC`（PO，2026-12-31；PO 拒绝 → 实现停止），**不是已关闭**。
+- 结论：A 的**记录范围**小于 0.3 的 `Human decision`，且 `result=CONFLICT` 是与 `SPEC-0001` 注冲突的新值；仅凭 Addendum 的转述不能生效。按 `AGENTS.md`/宪法 Governance 4/6/7，人类裁决必须有书面记录；PO 未同步前不能把 `result=CONFLICT` 作为已批准契约。
+
+**具体修改**
+
+- Lead 必须在 `docs/review-tracking.md` 记录**完整 A**（含 `result=CONFLICT`、`state=PENDING_REMOTE`、同 `refund_id` 不再探测、部分金额/人工队列），并由人类确认；PO 必须在 SPEC-0001 下次升版同步/书面接受 `CONFLICT` 值（或删除该持久化）。
+- 在 `CONFLICT-SPEC-SYNC` 关闭前，`result=CONFLICT` 只能作为 **DRAFT 设计**，不得进入实施 Brief 的已批准契约；`PO 拒绝 → 实现停止` 的 stop 必须前置为“未同步 → 不实现”，而不是实施时再停。
+
+### `[BLOCKER]` R3-B4 — AC-50 `0002:228`“申请保持可重试”与“同 `refund_id` 不再探测”自相矛盾
+
+**证据**
+
+- 0.3 `§8:460`：“申请状态：**保持可重试（AC-50 `0002:228`）**；不得打款、不得自动释放、不得置 `FAILED_PERMANENT`…”。
+- 0.3 `§3.5.4:295`：同 `refund_id` 且 `result=CONFLICT` → **返回同一 `REFUND_ADMISSION_CONFLICT`，不再调用 `CancelIfCreated`/`GetIntent`**、不再写任何行；`§7.3:414` 同。
+- `AfterSales` 的 `releaseRefundTask` 以同一 `refund_id` 重试（`workers.go:399-405,724-748`），每次得到同一 CONFLICT，`maxTaskAttempts=8` 后 `FAILED`；这不是 AC-50 的“申请保持可重试”，而是“等人工 re-arm”。0.3 的 `§8` 与 `§3.5/§7.3` 不能同时为真。
+- 影响：Reviewer 无法判定 `AC-50 0002:228` 是否满足；`AC-27-NOWB-01` 的“保持可重试”与 A 的“no probe”冲突，且 `INV-42` 的“可重试”被降为人工。
+
+**具体修改**
+
+- 二选一：①在 §8 改为“申请保持**人工可重试**（普通 replay 返回同一 CONFLICT；仅 ops re-arm/AC-62 后可继续）”，并取得 PO/人类对 AC-50 `0002:228` 的书面口径；或②允许同 `refund_id` 在人工 re-arm 前**不探测但可转人工**（仍不是自动重试），并把这写成 AC-50 的例外。
+- 在 §1.3 增加 `AC-50-RETRY-01`（owner PO，expiry 2026-12-31，stop：PO 不接受 → 实现停止），与 `CONFLICT-SPEC-SYNC` 并列。
+
+## R3.3 新增 `[MAJOR]` / `[TODO]`
+
+- **`[MAJOR]` R3-M1 — W9“由 Fulfillment/ops 取消”没有 owner/runbook**：`§7.2:407` 说迟到 placeholder “由 Fulfillment/ops 取消并走人工队列”，但 `§1.3` 只登记 `ORDER-PAID-PLACEHOLDER-01`（阻断创建，DEFERRED），没有“取消迟到 placeholder”的 owner/expiry/stop；`§8` 的 TCC/普通队列查询也不含该行。补一个 runbook（Fulfillment 取消 `CREATED`；ops 审计；不得当证据），或明确该行在 CONFLICT 后保持 `CREATED` 直到人工处置；否则 W9 的“由 Fulfillment/ops 取消”无执行主体。
+- **`[MAJOR]` R3-M2 — W9 对 partial PENDING 断言“重探可取消→PRE”不准确**：`§7.2:407` 的“若 admission 仍 PENDING → 重探可取消→PRE”未区分整组/部分。若 PENDING 是**部分金额**，重探 `CANCELLED` 应返回 `PARTIAL`（R-2b），不是 PRE；补“整组→PRE / 部分→PARTIAL”，并在 F7b/O14b 加部分金额的 late `order.paid` 用例。
+- **`[TODO]` R3-M3 — `§8.3` re-arm 的 version/审计**：`:484` 的 `UPDATE ... WHERE result=CONFLICT AND state=PENDING` 已有 result/state CAS，第二个并发 re-arm 会 0 行，不是阻断；建议（非必须）加 `AND version=?` 或 `SELECT FOR UPDATE` 作为审计强化，并在工单记录版本。`§1.3:176` 已有 stop。
+- **`[TODO]` R3-T1** `§8.2:460` 与 `§3.5.4:295` 的“可重试”矛盾见 R3-B4；修复后同步 `§1.3` 的 `AC-50-RETRY-01`。
+- **`[TODO]` R3-T2** `A8` 的 0 行分支已补 nil/CONFLICT/PRE-POST/PENDING-non-CONFLICT；但**`state=PRE/POST` 且 `result=CONFLICT`**（非法组合）未定义，补 `Internal/Conflict` 与测试；`result=CONFLICT` 加 `state=PENDING` 以外值应 fail-closed。
+- **`[TODO]` R3-T3** `§8.3` re-arm 的 `placeholder` 对正金额写 `POST_SHIP_ALLOWED`，对 TCC 写 `PENDING_REMOTE`；但 `§8.2` 的“申请保持可重试”仍以 `result/state` 判定，补一段“re-arm 后的 result/state 组合是唯一合法过渡”的表，避免 Reviewer 把 `POST/PENDING` 当终态（A2 已排除，但 runbook 未写）。
+
+## R3.4 13 MAJOR / §1.2 / §1.3 / §8.2 / §8.3 关闭表
+
+| QC 项 | 0.3 状态 | R3 判定 | 缺口 |
+|---|---|---|---|
+| **M-1** legacy | PARTIAL（DEFERRED） | **CLOSED（deferred）** | `§1.2:145`/`§1.3:168` owner/expiry/stop；审计 `LEFT JOIN` 已补；仍需 ops 执行。 |
+| **M-2** 部分金额 | CLOSED（规则）/人工债务 | **NOT CLOSED** | R3-B2：`CONSUMED+CANCELLED` 取消运单；AC-50 `0002:217`。 |
+| **M-3** A4/AC-62 | CLOSED 规则/DEFERRED | **CLOSED（规则）/DEFERRED** | `§1.3:169` owner/expiry/stop；T3 未实现。 |
+| **M-4** TCC result | CLOSED 读者/DEFERRED | **CLOSED（读者）/DEFERRED** | `§1.3:170`；A2 双条件；`TCC-PENDING-RESULT-01`。 |
+| **M-5** 存量 PRE | CLOSED 协议/DEFERRED | **CLOSED（协议）/DEFERRED** | `§8:469` `LEFT JOIN`/无 group/`PENDING` 分支；`§1.3:171`。 |
+| **M-6** TCC 测试路径 | CLOSED | **CLOSED** | allowed `tcc_*_test.go`；生产 forbidden。 |
+| **M-7** TCC 队列 | CLOSED 查询/DEFERRED | **CLOSED（查询）/DEFERRED** | `§8:468`；`§1.3:172`。 |
+| **M-8** 重复/乱序 | CLOSED | **CLOSED（测试）** | W9/F7/O14/F7b/O14b；R3-M2 补 partial。 |
+| **M-9** Tx2 守卫 | CLOSED 规则 | **CLOSED** | A8 + 0 行；O11b/O11c。 |
+| **M-10** POST commitment | CLOSED | **CLOSED** | `§3.1` 分行；O5/O5b。 |
+| **M-11** consumer | CLOSED | **CLOSED** | `§2.2` no-op；F7/O14。 |
+| **M-12** 可达性 | CLOSED（说明） | **CLOSED（说明）** | `§0.2`/F8；`§1.2:156` stop。 |
+| **M-13** setup | CLOSED | **CLOSED** | `§10` setup。 |
+| **R2-B1** 幂等 | CLOSED（删除 R-2a） | **CLOSED** | 无 `ListShipments`；`AdmitRefund` 先读 existing（`:295`）。 |
+| **R2-B2** §5.2.2 | CLOSED（删除） | **CLOSED** | 0.3 无预读；`§5.2.2` 不例外。 |
+| **R2-M1** late order.paid | CLOSED（协议/DEFERRED） | **CLOSED（协议）** | W9 真实；`ORDER-PAID-PLACEHOLDER-01`；R3-M1 owner 待补。 |
+| **R2-M2** 审计无 group | CLOSED | **CLOSED** | `§8:469` `LEFT JOIN`/`g.group_no IS NULL`。 |
+| **R2-M3** per-item stop | CLOSED | **CLOSED** | `§1.3` 逐项。 |
+| **R2-M4** R-2a deadline | CLOSED（删除） | **CLOSED** | 无 `ListShipments`。 |
+| **R2-M5** A8 0 行 | CLOSED | **CLOSED** | A8 四分支；O11c。 |
+| **T-1 / T-3** | TODO / DEFERRED | **CLOSED（defer）** | `§1.3:174`/`:173`；`T-1` PO 同步。 |
+
+**结论**：13 MAJOR 中 **M-2 未关闭**（R3-B2）；M-1/M-3/M-4/M-5/M-7/T-1/T-3 的 DEFERRED 有 owner/expiry/stop（§1.3）；其余文本可接受。**但 A 协议的两个新 B（TCC、部分 CANCELLED）使 M-2 与 R-2b 不能实施。**
+
+## R3.5 5 个崩溃窗口 + 消息重复/乱序
+
+| 窗口 | 0.3 覆盖 | R3 判断 |
+|---|---|---|
+| 1 本地提交后崩溃 | W1；Tx1 已写，重放 PENDING → 重探 | **PASS**（R3-B3 的 result 记录仍需先授权） |
+| 2 RPC 成功后崩溃 | W2/W3/W6；NO_SHIPMENT/CANCELLED/CONFLICT 重放 | **PASS**（positive）；TCC 重放被 R3-B1 挡 |
+| 3 消息重复/乱序 | W9/W5；consumer 终态 PRE、NO_SHIPMENT no-op、order.paid 真实 placeholder | **PASS（协议）**；R3-M1 取消 owner；R3-M2 partial PRE 断言 |
+| 4 取消/确认竞态 | W4；Ship/取消行 CAS | **PASS**（正常状态机）；partial `CREATED` 取消副作用见 R3-B2 |
+| 5 外部重放缺失 | W8；AfterSales/TCC task + AC-27-LIVE-01 + TCC 查询 | **PASS（发现）**；TCC 被 R3-B1 挡；conflict 无自动收敛，符合 A |
+| 重复/乱序（W9） | W9；F7/O14/F7b/O14b | **PARTIAL**；R3-M1/M2 |
+
+**§7.4.1** 的“Tx1 前存在性预检不能消除 conflict”在 0.3 中已明确是**假设性论证**，不是实现；其结论（线性化点在 Tx1+探测）与 A 路线一致，**PASS**。`§8.2/§8.3` 的队列/re-arm runbook 有 owner/expiry/stop（`§1.3`），但 re-arm 的版本审计（R3-M3，TODO）和 AC-50 retry（R3-B4）未闭合。
+
+## R3.6 最终判定
+
+**BLOCKED。**
+
+- **R2-B1/B2**：**CLOSED**（R-2a/`ListShipments` 已删除；`AdmitRefund` existing 先行）。
+- **B-1/B-2**：**CLOSED**；**B-3**：**CLOSED（人工侧）/正常 consumer DEFERRED**；W9 不再用“不建 placeholder”掩盖代码行为，诚实。
+- **B-3/W9** 的 `ORDER-PAID-PLACEHOLDER-01` 是诚实的 DEFERRED；但 W9 的取消 owner（R3-M1）和 partial PRE 断言（R3-M2）需补。
+- **A 协议**：`0016`/`AC-50:223`/`INV-45`/`AC-62` 的“整组 CONFLICT”基本成立；**`AC-50:217`（partial CANCELLED 取消运单）**、**`AC-50:228`（不再探测 vs 可重试）**、**TCC `ensureTccRemoteAdmissionTx`（CONFLICT 非法 result）** 与 **canonical A/SPEC-0001:645** 未闭合 → 4 BLOCKER。
+- **M-2**：**NOT CLOSED**（R3-B2）；其余 M-1/M-3/M-4/M-5/M-7 的 DEFERRED 有 owner/expiry/stop。
+- **5 窗 + 重复/乱序**：窗口齐备；TCC 重放与 partial 取消仍阻断；conflict 的 `PENDING_REMOTE` 不会自动收敛，符合 A 的人工队列，但必须补齐 TCC/partial 的契约。
+
+**只读声明**：未执行 `go test`/`-race`/MySQL/迁移；只审 0.3 delta；未改 ADR/SPEC/代码/测试/台账；只追加本 R3 小节；未 commit。**AC-27 仍 AC-REF**；AC-50/AC-27A 未 AC-VERIFIED。
+
+**R3 Actor**：`qc-ac50`
+**R3 Reviewed-by**：待 Architect 修订 / 人类批准
+**R3 Status**：**BLOCKED — DRAFT 0.3 不得进入实现**

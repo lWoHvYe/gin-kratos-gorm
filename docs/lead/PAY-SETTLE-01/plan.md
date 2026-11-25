@@ -43,6 +43,7 @@ Review-01 的实现级 FAIL 有 6 个阻断项（P-01…P-06）。本 Plan 的�
 Phase 0 退出标准：C-01..C-05 全部经 QC/Reviewer/人类批准；否则不得进入 Phase 1。
 
 **2026-11-25 追溯复核**：Developer `RETRO PASS WITH CONDITIONS`、Reviewer `RETRO FAIL`；Phase 0 exit 未被支持而 Phase 1 已推进 → 记为 **process deviation**；P0 收口/Release 前必须完成 `tasks.md` **Phase 0-R（R0.1..R0.5）**。不补签 2026-11-24。
+**2026-11-25 Director decision**：接受为 **process deviation**；Phase 0-R 为 P0 收口/Release 前置；不补签。
 
 ## 4. 关键设计（修订后）
 

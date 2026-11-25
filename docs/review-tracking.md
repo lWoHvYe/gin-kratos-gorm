@@ -330,6 +330,8 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   tests absent, missing `chk_switch_settled_expiry`, fail-closed config
   unimplemented, no C-04 release RPC. No back-dating; remediation is `tasks.md`
   Phase 0-R (R0.1..R0.5) before P0 closure/Release. PAY-SETTLE-01 remains frozen.
+  **Closed 2026-11-25**: Director accepted the historical Phase 0 deviation; no
+  back-fill; Phase 0-R stays as a precondition for P0 closure/Release.
 - **K-1 (C-1)**: C-04 RefundBatch is **accepted (2026-11-24)**; merge into
   ADR-0007 Rev 2.1; fix the DRAFT wording in the c04 rulings/draft headers.
 - **K-2 (C-2)**: T1.6 payment-level cancel **supersedes A-08's absolute wording**;

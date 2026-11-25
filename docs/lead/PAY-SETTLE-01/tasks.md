@@ -13,7 +13,7 @@ Status: **APPROVED Plan (2026-11-24)**。本文件是 **Plan 视图**，不拥�
 - [x] **T0.6** migrations（C-05，QC-16 READY FOR MERGE；已合入 main）：`refund_applications`、commitment lines、`legacy_payment_resolution`、`refund_seq`；真实迁移测试（Owner: Developer；依赖: T0.4）
 - [ ] **T0.7 [retro FAIL 2026-11-25]** QC/Reviewer/PO/Architect/Human 批准 Phase 0（C-01…C-05；C-04/C-05 QC-16）（Owner: Lead 组织；依赖: T0.2–T0.6）——原 `[x]` 不成立：无 Reviewer 日期化 verdict；Phase 0 exit 由追溯复核推翻。
 
-## Phase 0-R — 追溯复核整改（2026-11-25，RETRO FAIL；P0 收口/Release 前必做）
+## Phase 0-R — 追溯复核整改（2026-11-25，RETRO FAIL；Director 已接受偏差，以下为 P0 收口/Release 前置）
 
 - [ ] **R0.1** 真实迁移 apply（fresh DB）`migrations/order/0017-0020` + `migrations/fulfillment/0010`，绑定精确 HEAD；补 `chk_switch_settled_expiry`；修复 0018 重入/部分失败；记录日志（Owner: Developer；依赖: 无）
 - [ ] **R0.2** Reviewer 对 C-01..C-05 出**日期化** verdict（Actor≠Reviewed-by、base/head、review_scope）；不得倒签（Owner: Reviewer；依赖: R0.1）

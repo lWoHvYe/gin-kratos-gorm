@@ -1,6 +1,6 @@
 # AC Evidence Matrix — PAY-SETTLE-01 Remediation
 
-- Source: SPEC-0002 v1.7；C-02 升 v1.8 后刷新本矩阵。
+- Source: SPEC-0002 **v1.10**、ADR-0007 **Rev 2.3**；C-02/C-03 当前版本。
 - **唯一 AC 台账**：`docs/collab/ac-coverage.tsv`，Owner 固定为 **Reviewer**。本文件只是 Plan 视图，不拥有 AC 状态。
 - `Test owner`：Developer；`AC status owner`：Reviewer。两者不得混写。
 - Status: `NOT STARTED` / `AC-REF` / `AC-VERIFIED` / `DEFERRED`。只有真实执行日志（绑定 HEAD）+ Reviewer 核对断言才能标 AC-VERIFIED；SKIP/FAIL 不算。
@@ -34,6 +34,19 @@
 | AC-61 | 30min 处理中告警；永久失败人工重放；每日对账 | fault + ops | reconciliation/alert/manual replay test | Developer | NOT STARTED |
 
 ## 2. New semantics requiring AC (C-02)
+## 2b. New invariants INV-45…50 (SPEC v1.10)
+
+本表只作 Plan/证据索引，不拥有 AC 状态；AC-VERIFIED 仍只由 Reviewer 写入 `ac-coverage.tsv`。
+
+| INV | 必须覆盖的分支（摘） | Test type | Evidence path / planned task | Owner | Status |
+|---|---|---|---|---|---|
+| INV-45 | 准入不可逆；释放仅人工授权/审计；不恢复 permit；worker 不得静默释放 | MySQL + fault | `migrations/order/0018_refund_commitment_composition.sql`（表/约束）；T3 release tests（planned） | Developer | DEFERRED（T3） |
+| INV-46 | 历史 PAID 解析唯一候选/零元/0 或多候选 24h 终态；不猜 payment_no | MySQL + backfill + fault | T2 `legacy_payment_resolution` / backfill（planned） | Developer | DEFERRED（T2） |
+| INV-47 | 行级 ≤ 行剩余、合计 ≤ captured；商品+运费；责任唯一；168h | MySQL + `-race` | T3 line/freight tests（planned） | Developer | DEFERRED（T3） |
+| INV-48 | Σ 活动组 == 剩余 captured；逐组准入/打款；部分失败/崩溃续跑 | MySQL + `-race` + fault | `internal/services/order/t17_evidence_integration_test.go`（test-only PASS）；T5 evidence | Developer | AC-REF（未 AC-VERIFIED） |
+| INV-49 | shadow 不具准入权威；默认关闭；切换需 release 门禁 | MySQL + fault | T4.4 shadow tests（planned）；ADR Rev 2.3 §12.3 | Developer | DEFERRED（T4） |
+| INV-50 | 零元不调 Payment；S19 DONE；AfterSales REFUNDED/0/CONSUMED | MySQL | T1.4b2b zero tests；`tcc_admission_integration_test.go` | Developer | AC-REF（未 AC-VERIFIED） |
+
 
 | 新语义 | 建议 AC | Test type | Evidence path / planned test | Test owner | Status |
 |---|---|---|---|---|---|

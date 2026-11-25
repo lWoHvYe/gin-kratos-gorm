@@ -118,7 +118,12 @@ integration_owner
 baseline_impact
 affected_AC
 allowed_paths
+forbidden_paths
+stop_conditions
+evidence_and_output
 ```
+
+派单 Brief 是本节 change input 的**视图**：MUST 由上述字段生成，另补 `assigned_role`（角色 + 开场自读要求）；只传 canonical 指针，不承载结论；chat 回传仅为摘要，完整结论写进对应产物。Brief 字段以本节为准，其他文档不得另立 schema。
 
 Reviewer 开始审查前再记录精确 `head`。审查期间 HEAD 变化，必须重新确认差异和受影响验证。
 

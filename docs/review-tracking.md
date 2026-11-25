@@ -341,6 +341,7 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **K-7**: pair README/threads/index archive edits are **L0 non-normative
   companion cleanup**, not light-path L2; the light-path L2 scope for B-1 is the
   `CONVENTIONS.md` rule change only. No allowlist expansion is needed.
+- **2026-11-25 Lead Brief 收口**: `prompt/Lead.md` 用 6 要素清单替代 9 行模板；`CONVENTIONS §3` 增 `forbidden_paths`/`stop_conditions`/`evidence_and_output` 并声明 Brief 是其 View；收益=消除三处重复，停止条件=不再新增模板；Reviewer PASS。
 - **K-8**: Director chose a **PO amendment** (not a waiver) for SPEC-0002:
   v1.10 replaces `G-4` / `--release --range` in AC-66/§5.9/D-27/§9/§12 with the
   K-6 human gate; QC-32 READY 0/0/12; separate human approval + separate commit.

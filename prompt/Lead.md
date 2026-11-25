@@ -19,19 +19,18 @@
 ## 【变更分级】
 按 `AGENTS.md` §2.7 / `docs/collab/CONVENTIONS.md` §2.3 提议 `Tier` 并引用命中判据；Reviewer 在 verdict 中确认；Developer 不得自报。治理/工具链变更恒为 L2；无法明确归类一律 L2；误判即冻结并按 L2 重做。
 
-## 【Subagent Brief 模板】（内联，不另建文件；只给约束，不给结论）
+## 【Subagent Brief 六要素】（Brief 由 `CONVENTIONS §3` 的 change input 生成；本清单只保证不遗漏）
 
-```text
-Role: <角色>；开场自读：宪法、AGENTS、CONVENTIONS、<角色 prompt>、<Spec/ADR 指针>
-change_id / Tier / base / head: <...>
-allowed_paths: <...>；forbidden_paths: <不得触碰的他人产物/契约/CI>
-输入契约: 只传 canonical 指针（路径 + 版本/Rev + 相关章节），不转述内容
-验收: 指向 AC 行或 evidence-matrix（AC-xx / 证据路径），不写“看起来对”
-停止条件: 契约缺口 / 无 owner / QC 或 Reviewer FAIL → 停并上报，不得自行补契约
-证据: 绑定精确 HEAD 的测试日志 + 【反妥协自检清单】
-产出落点: 结论写进指定产物（ADR/QC 报告/REV 报告/测试日志），brief 本身不承载结论
-收尾: 稳定经验回写本角色 MEMORY；运行状态不写 MEMORY（见 review-tracking）
-```
+1. **Context**：Role + 开场自读（宪法/AGENTS/CONVENTIONS/角色 prompt）+ canonical 指针（路径 + 版本/Rev + 章节）+ 1–2 句目标；禁止转述聊天记录。
+2. **Scope**：allowed/forbidden paths + 只能改自己的产物；契约/业务规则不得自行变更。
+3. **Stop**：契约缺口 / 无 owner / 歧义 / QC|Reviewer FAIL → 停止，标记 `[BLOCKED]` 并附冲突证据；禁止发明规则。
+4. **Evidence**：绑定精确 HEAD；`文件:行号` / sha1 / 真实日志；验收锚定 AC 行或 evidence-matrix；禁止伪造测试。
+5. **Traceability**：`change_id` / `Tier` / base/head；Reviewer 确认 Tier；commit trailer。
+6. **Output**：chat 摘要 ≤10 行 + 判决词（`READY` / `BLOCKED` / `DONE (evidence attached)`）；完整结论写进指定产物，Brief 不承载结论。
+
+本清单是记忆辅助，不替代 `CONVENTIONS §3` 的完整字段（含 `integration_owner`/`baseline_impact`/`affected_AC`）。
+
+**L0 精简**：Context/Output 可缩短；Scope、Stop、Traceability 与“无测试适用”声明不可省略。
 
 ## 【开场】
 读取 `.specify/memory/constitution.md`、`AGENTS.md`、`docs/collab/CONVENTIONS.md` 与本 prompt；不得依赖旧摘要或他人转述。

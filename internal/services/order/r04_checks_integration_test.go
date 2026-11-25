@@ -13,15 +13,26 @@ import (
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
 
-// R0.4c: real-migration coverage for order/0022_r04_checks.sql.
+// R0.4c (branch A): real-migration coverage for the frozen
+// order/0022_r04_checks.sql and its replacement order/0023_r04_checks_v2.sql.
 //
-// Each scenario creates a disposable database, applies the real migration files
-// from migrations/order (never inline replacement DDL for the schema under
-// test), and then proves both the positive rows and the fail-closed rejection
-// of dirty rows. The dirty-row tests apply 0017/0019 first, insert a row that
-// the CHECK must reject (a 48h deadline is the WIP regression case), and assert
-// the real ALTER fails; after an audited repair the same file must converge on
-// a re-run.
+// Branch A keeps 0022 byte-identical to its pre-edit blob and puts every
+// semantic correction in 0023: install the `_v2` constraints first, then (only
+// after both adds succeeded) drop the old names. 0022's "conditional ALTERs
+// make a re-run after cleanup safe" header claim is therefore superseded here,
+// not edited in that file.
+//
+// These scenarios apply the real files in fresh order
+// (0017 -> 0019 -> 0021 -> 0022 -> 0023) and prove:
+//   * the replacement semantics (v2 present, old names gone, CHECK_CLAUSE is the
+//     equality/discriminator, no 0017 enum copy);
+//   * the fail-closed boundaries (24h+1s / 25h / 48h and <24h are rejected);
+//   * replay of 0023 is idempotent;
+//   * 0022's `>=` accepts a 48h row (the WIP regression) and 0023 must stop on
+//     it without dropping the old constraints, converging after an audited
+//     repair;
+//   * the partial state "v2 added, old not dropped" (interrupted 0023) converges
+//     when the same file is re-run.
 
 func r04FreshOrderDB(t *testing.T, label string) *sql.DB {
 	t.Helper()
@@ -59,18 +70,13 @@ func r04FreshOrderDB(t *testing.T, label string) *sql.DB {
 	return db
 }
 
-// runOrderMigrationFile executes one real migration file on a single
-// connection (0018/0021/0022 use session-scoped PREPARE statements). It
+// execMigrationSQL runs comment-stripped migration statements on one
+// connection (0018/0021/0022/0023 use session-scoped PREPARE statements). It
 // returns the first SQL error instead of failing the test so the dirty-row
 // scenarios can assert the hard stop.
-func runOrderMigrationFile(db *sql.DB, name string) error {
-	path := filepath.Join("..", "..", "..", "migrations", "order", name)
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read migration %s: %w", name, err)
-	}
+func execMigrationSQL(db *sql.DB, name, body string) error {
 	var cleaned strings.Builder
-	for _, line := range strings.Split(string(body), "\n") {
+	for _, line := range strings.Split(body, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "--") {
 			continue
 		}
@@ -93,6 +99,40 @@ func runOrderMigrationFile(db *sql.DB, name string) error {
 		}
 	}
 	return nil
+}
+
+func runOrderMigrationFile(db *sql.DB, name string) error {
+	path := filepath.Join("..", "..", "..", "migrations", "order", name)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read migration %s: %w", name, err)
+	}
+	return execMigrationSQL(db, name, string(body))
+}
+
+// runOrderMigrationPrefixBefore replays the real file up to (excluding) the
+// first line containing marker. The scenarios use it to reproduce the crash
+// window after the v2 ADDs but before the old-name drops.
+func runOrderMigrationPrefixBefore(db *sql.DB, name, marker string) error {
+	path := filepath.Join("..", "..", "..", "migrations", "order", name)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read migration %s: %w", name, err)
+	}
+	var kept strings.Builder
+	found := false
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.Contains(line, marker) {
+			found = true
+			break
+		}
+		kept.WriteString(line)
+		kept.WriteString("\n")
+	}
+	if !found {
+		return fmt.Errorf("marker %q not found in %s", marker, name)
+	}
+	return execMigrationSQL(db, name+" (prefix)", kept.String())
 }
 
 func mustRunOrderMigration(t *testing.T, db *sql.DB, names ...string) {
@@ -162,21 +202,43 @@ func requireCheckViolation(t *testing.T, err error, constraint string) {
 	}
 }
 
+// requireV2Replacement asserts the end state of a successful 0022 -> 0023
+// apply: exactly the v2 constraints, no legacy names.
+func requireV2Replacement(t *testing.T, db *sql.DB) {
+	t.Helper()
+	for _, c := range []struct{ table, name string }{
+		{"refund_applications", "chk_refund_app_group_discriminator_v2"},
+		{"legacy_payment_resolution", "chk_lpr_expiry_24h_v2"},
+	} {
+		if !r04ConstraintExists(t, db, c.table, c.name) {
+			t.Fatalf("replacement CHECK %s.%s missing", c.table, c.name)
+		}
+	}
+	for _, c := range []struct{ table, name string }{
+		{"refund_applications", "chk_refund_app_group_discriminator"},
+		{"legacy_payment_resolution", "chk_lpr_expiry_24h"},
+	} {
+		if r04ConstraintExists(t, db, c.table, c.name) {
+			t.Fatalf("legacy CHECK %s.%s must be dropped by 0023", c.table, c.name)
+		}
+	}
+}
+
 func TestR04ChecksFreshSchemaAndValidRows(t *testing.T) {
 	db := r04FreshOrderDB(t, "fresh")
+	// Branch A order: the frozen 0022 first (it installs the legacy checks),
+	// then the replacement 0023.
 	mustRunOrderMigration(t, db,
 		"0017_refund_batch_ledger.sql",
 		"0019_legacy_payment_resolution.sql",
 		"0021_zero_application_check.sql",
 		"0022_r04_checks.sql",
+		"0023_r04_checks_v2.sql",
 	)
-	if !r04ConstraintExists(t, db, "refund_applications", "chk_refund_app_group_discriminator") {
-		t.Fatal("group discriminator CHECK missing after fresh 0022")
-	}
-	if !r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
-		t.Fatal("24h SLA CHECK missing after fresh 0022")
-	}
-	// 0017/0019/0021 constraints must still be present (0022 is additive).
+	requireV2Replacement(t, db)
+
+	// 0017/0019/0021 constraints must still be present (0023 only replaces the
+	// two 0022 checks).
 	for _, c := range []struct{ table, name string }{
 		{"refund_applications", "chk_refund_app_source"},
 		{"refund_applications", "chk_refund_app_non_effective_source"},
@@ -189,20 +251,20 @@ func TestR04ChecksFreshSchemaAndValidRows(t *testing.T) {
 	}
 
 	// The installed clauses must carry the accepted semantics, not just the
-	// names: the discriminator must not copy the 0017 source enum and the 24h
-	// window must be equality, never a lower bound.
-	groupClause := strings.ToLower(r04CheckClause(t, db, "refund_applications", "chk_refund_app_group_discriminator"))
+	// names: the v2 discriminator must not copy the 0017 source enum and the
+	// v2 24h window must be equality, never a lower bound.
+	groupClause := strings.ToLower(r04CheckClause(t, db, "refund_applications", "chk_refund_app_group_discriminator_v2"))
 	if !strings.Contains(groupClause, "group_no") || !strings.Contains(groupClause, "is null") {
-		t.Fatalf("group discriminator clause = %q, want a group_no NULL discriminator", groupClause)
+		t.Fatalf("v2 group discriminator clause = %q, want a group_no NULL discriminator", groupClause)
 	}
 	for _, copiedSource := range []string{"system_zero", "system_shortage", "aftersale", "tcc"} {
 		if strings.Contains(groupClause, copiedSource) {
-			t.Fatalf("group discriminator clause copies the 0017 enum (%s): %q", copiedSource, groupClause)
+			t.Fatalf("v2 group discriminator clause copies the 0017 enum (%s): %q", copiedSource, groupClause)
 		}
 	}
-	expiryClause := strings.ToLower(r04CheckClause(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h"))
+	expiryClause := strings.ToLower(r04CheckClause(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h_v2"))
 	if !strings.Contains(expiryClause, "interval 24 hour") || strings.Contains(expiryClause, ">=") {
-		t.Fatalf("24h clause = %q, want equality on entered_at + 24h", expiryClause)
+		t.Fatalf("v2 24h clause = %q, want equality on entered_at + 24h", expiryClause)
 	}
 
 	valid := []struct {
@@ -245,12 +307,12 @@ func TestR04ChecksFreshSchemaAndValidRows(t *testing.T) {
 	for _, row := range invalid {
 		err := insertRefundApplication(t, db, "BAD-"+strings.ReplaceAll(row.name, " ", "-"),
 			row.source, row.groupNo, 0, 0, 0, row.nonEff, "PENDING")
-		requireCheckViolation(t, err, "chk_refund_app_group_discriminator")
+		requireCheckViolation(t, err, "chk_refund_app_group_discriminator_v2")
 	}
 
-	// 24h SLA boundary: exactly 24h passes; 24h+1s, 25h and 48h are rejected.
-	// A lower bound (>=) would accept 48h, which the WIP test wrongly asserted
-	// was legal; the equality rejects it.
+	// 24h SLA boundary: exactly 24h passes; 24h+1s, 25h and 48h are rejected by
+	// the v2 equality. A lower bound (>=, 0022's frozen shape) would accept 48h,
+	// which the WIP test wrongly asserted was legal.
 	if err := insertLegacyResolution(t, db, "ORD-LPR-24H", "DATE_ADD(NOW(3), INTERVAL 24 HOUR)"); err != nil {
 		t.Fatalf("expires_at = entered_at + 24h must pass: %v", err)
 	}
@@ -259,9 +321,9 @@ func TestR04ChecksFreshSchemaAndValidRows(t *testing.T) {
 		{"ORD-LPR-25H", "DATE_ADD(NOW(3), INTERVAL 25 HOUR)"},
 		{"ORD-LPR-48H", "DATE_ADD(NOW(3), INTERVAL 48 HOUR)"},
 	} {
-		requireCheckViolation(t, insertLegacyResolution(t, db, tc.orderNo, tc.expr), "chk_lpr_expiry_24h")
+		requireCheckViolation(t, insertLegacyResolution(t, db, tc.orderNo, tc.expr), "chk_lpr_expiry_24h_v2")
 	}
-	// Shorter windows violate the equality and 0019's existing lower bound;
+	// Shorter windows violate the v2 equality and 0019's existing lower bound;
 	// MySQL reports either constraint name, so assert the shared prefix.
 	for _, tc := range []struct{ orderNo, expr string }{
 		{"ORD-LPR-23H", "DATE_ADD(NOW(3), INTERVAL 23 HOUR)"},
@@ -271,22 +333,81 @@ func TestR04ChecksFreshSchemaAndValidRows(t *testing.T) {
 		requireCheckViolation(t, insertLegacyResolution(t, db, tc.orderNo, tc.expr), "chk_lpr_expiry")
 	}
 
-	// Re-running 0022 is safe and does not duplicate the constraints.
-	mustRunOrderMigration(t, db, "0022_r04_checks.sql")
-	if !r04ConstraintExists(t, db, "refund_applications", "chk_refund_app_group_discriminator") ||
-		!r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
-		t.Fatal("0022 re-run lost a CHECK")
-	}
-	if got := strings.ToLower(r04CheckClause(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h")); !strings.Contains(got, "interval 24 hour") || strings.Contains(got, ">=") {
-		t.Fatalf("0022 re-run changed the 24h clause: %q", got)
+	// Re-running 0023 is idempotent: conditional add/drop must not duplicate a
+	// v2 CHECK and must not resurrect an old name.
+	mustRunOrderMigration(t, db, "0023_r04_checks_v2.sql")
+	requireV2Replacement(t, db)
+	if got := strings.ToLower(r04CheckClause(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h_v2")); !strings.Contains(got, "interval 24 hour") || strings.Contains(got, ">=") {
+		t.Fatalf("0023 re-run changed the v2 24h clause: %q", got)
 	}
 }
 
 func TestR04ChecksDirtyRowsBlockMigration(t *testing.T) {
-	t.Run("group discriminator dirty row", func(t *testing.T) {
+	// 0022's frozen `>=` accepts a 48h deadline; 0023's v2 equality must stop on
+	// it without dropping the old checks, and a repaired re-run converges.
+	t.Run("48h dirty row blocks 0023 then converges", func(t *testing.T) {
+		db := r04FreshOrderDB(t, "dirty_48h")
+		mustRunOrderMigration(t, db, "0017_refund_batch_ledger.sql", "0019_legacy_payment_resolution.sql", "0022_r04_checks.sql")
+		if !r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
+			t.Fatal("frozen 0022 should have installed the legacy 24h CHECK")
+		}
+		// Legal under 0022 (`>=`), forbidden by the accepted equality contract.
+		if err := insertLegacyResolution(t, db, "ORD-PRE-0023-48H", "DATE_ADD(NOW(3), INTERVAL 48 HOUR)"); err != nil {
+			t.Fatalf("pre-0023 48h row: %v", err)
+		}
+		err := runOrderMigrationFile(db, "0023_r04_checks_v2.sql")
+		requireCheckViolation(t, err, "chk_lpr_expiry_24h_v2")
+		// Both v2 ADDs run before any DROP: the 24h ADD stops the file with the
+		// committed v2 discriminator, the legacy checks still in force and no old
+		// name dropped. No table is ever left without a constraint.
+		if !r04ConstraintExists(t, db, "refund_applications", "chk_refund_app_group_discriminator_v2") {
+			t.Fatal("partial 0023 should keep the committed v2 discriminator")
+		}
+		if !r04ConstraintExists(t, db, "refund_applications", "chk_refund_app_group_discriminator") {
+			t.Fatal("failed 0023 must not drop the legacy discriminator before both v2 adds")
+		}
+		if !r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
+			t.Fatal("failed 0023 must not drop the legacy 24h CHECK")
+		}
+		if r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h_v2") {
+			t.Fatal("failed ALTER left the v2 24h CHECK installed")
+		}
+		if _, err := db.Exec("UPDATE legacy_payment_resolution SET expires_at = DATE_ADD(entered_at, INTERVAL 24 HOUR) WHERE order_no = 'ORD-PRE-0023-48H'"); err != nil {
+			t.Fatal(err)
+		}
+		mustRunOrderMigration(t, db, "0023_r04_checks_v2.sql")
+		requireV2Replacement(t, db)
+	})
+
+	// Interrupted 0023: both v2 ADDs committed, no old-name DROP yet. Re-running
+	// the same file must converge (drop the old names) instead of failing.
+	t.Run("partial failure v2 added old not dropped converges", func(t *testing.T) {
+		db := r04FreshOrderDB(t, "partial_0023")
+		mustRunOrderMigration(t, db, "0017_refund_batch_ledger.sql", "0019_legacy_payment_resolution.sql", "0022_r04_checks.sql")
+		if err := runOrderMigrationPrefixBefore(db, "0023_r04_checks_v2.sql",
+			"-- Only after both v2 CHECKs exist are the old names dropped."); err != nil {
+			t.Fatalf("reproduce interrupted 0023: %v", err)
+		}
+		for _, c := range []struct{ table, name string }{
+			{"refund_applications", "chk_refund_app_group_discriminator_v2"},
+			{"legacy_payment_resolution", "chk_lpr_expiry_24h_v2"},
+			{"refund_applications", "chk_refund_app_group_discriminator"},
+			{"legacy_payment_resolution", "chk_lpr_expiry_24h"},
+		} {
+			if !r04ConstraintExists(t, db, c.table, c.name) {
+				t.Fatalf("interrupted 0023 should leave %s.%s installed", c.table, c.name)
+			}
+		}
+		mustRunOrderMigration(t, db, "0023_r04_checks_v2.sql")
+		requireV2Replacement(t, db)
+	})
+
+	// The discriminating row must stay fail-closed before 0022: a payment-level
+	// row that names a fulfillment group is rejected by 0022 itself, so 0023
+	// cannot be reached with a dirty discriminator that 0022 accepted.
+	t.Run("discriminator dirty row still blocked by 0022", func(t *testing.T) {
 		db := r04FreshOrderDB(t, "dirty_group")
 		mustRunOrderMigration(t, db, "0017_refund_batch_ledger.sql", "0019_legacy_payment_resolution.sql")
-		// Before 0022 this row is legal; the new discriminator must block it.
 		if err := insertRefundApplication(t, db, "PRE-0022-PAYMENT", "payment", "G1", 100, 100, 0, 1, "PENDING"); err != nil {
 			t.Fatalf("pre-0022 payment row: %v", err)
 		}
@@ -298,57 +419,7 @@ func TestR04ChecksDirtyRowsBlockMigration(t *testing.T) {
 		if _, err := db.Exec("DELETE FROM refund_applications WHERE refund_id = 'PRE-0022-PAYMENT'"); err != nil {
 			t.Fatal(err)
 		}
-		mustRunOrderMigration(t, db, "0022_r04_checks.sql")
-		if !r04ConstraintExists(t, db, "refund_applications", "chk_refund_app_group_discriminator") {
-			t.Fatal("0022 did not converge after the dirty row was removed")
-		}
-	})
-
-	t.Run("24h SLA dirty row", func(t *testing.T) {
-		db := r04FreshOrderDB(t, "dirty_sla")
-		mustRunOrderMigration(t, db, "0017_refund_batch_ledger.sql", "0019_legacy_payment_resolution.sql")
-		if err := insertLegacyResolution(t, db, "ORD-PRE-0022-1H", "DATE_ADD(NOW(3), INTERVAL 1 HOUR)"); err != nil {
-			t.Fatalf("pre-0022 legacy row: %v", err)
-		}
-		err := runOrderMigrationFile(db, "0022_r04_checks.sql")
-		requireCheckViolation(t, err, "chk_lpr_expiry_24h")
-		// The first ALTER (group discriminator) is committed before the second
-		// fails; the re-run must skip it via information_schema and add the 24h
-		// check after the dirty row is fixed.
-		if !r04ConstraintExists(t, db, "refund_applications", "chk_refund_app_group_discriminator") {
-			t.Fatal("partial 0022 should keep the first committed CHECK")
-		}
-		if r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
-			t.Fatal("failed ALTER left the 24h CHECK installed")
-		}
-		if _, err := db.Exec("UPDATE legacy_payment_resolution SET expires_at = DATE_ADD(entered_at, INTERVAL 24 HOUR) WHERE order_no = 'ORD-PRE-0022-1H'"); err != nil {
-			t.Fatal(err)
-		}
-		mustRunOrderMigration(t, db, "0022_r04_checks.sql")
-		if !r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
-			t.Fatal("0022 did not converge after the dirty row was fixed")
-		}
-	})
-
-	// A pre-existing 48h deadline is the exact WIP regression: the old `>=`
-	// CHECK would have accepted it and 0022 would have applied cleanly.
-	t.Run("48h dirty row blocks 0022", func(t *testing.T) {
-		db := r04FreshOrderDB(t, "dirty_48h")
-		mustRunOrderMigration(t, db, "0017_refund_batch_ledger.sql", "0019_legacy_payment_resolution.sql")
-		if err := insertLegacyResolution(t, db, "ORD-PRE-0022-48H", "DATE_ADD(NOW(3), INTERVAL 48 HOUR)"); err != nil {
-			t.Fatalf("pre-0022 48h row: %v", err)
-		}
-		err := runOrderMigrationFile(db, "0022_r04_checks.sql")
-		requireCheckViolation(t, err, "chk_lpr_expiry_24h")
-		if r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
-			t.Fatal("failed ALTER left the 24h CHECK installed")
-		}
-		if _, err := db.Exec("UPDATE legacy_payment_resolution SET expires_at = DATE_ADD(entered_at, INTERVAL 24 HOUR) WHERE order_no = 'ORD-PRE-0022-48H'"); err != nil {
-			t.Fatal(err)
-		}
-		mustRunOrderMigration(t, db, "0022_r04_checks.sql")
-		if !r04ConstraintExists(t, db, "legacy_payment_resolution", "chk_lpr_expiry_24h") {
-			t.Fatal("0022 did not converge after the 48h row was repaired")
-		}
+		mustRunOrderMigration(t, db, "0022_r04_checks.sql", "0023_r04_checks_v2.sql")
+		requireV2Replacement(t, db)
 	})
 }

@@ -235,27 +235,129 @@ SELECT approval_id, target_mode, expires_at
 - An instance still running on an expired approval is rolled back/restarted by
   the Director, not by the application.
 
-### Migrating `order/0022` (R0.4 checks) after a failed attempt
+### Migrating `order/0022` + `order/0023` (R0.4 checks, branch A)
 
-`order/0022_r04_checks.sql` adds `chk_refund_app_group_discriminator` and the
-equality `chk_lpr_expiry_24h` (`expires_at = entered_at + 24h`). MySQL DDL
-commits implicitly, so a dirty row or an interruption can leave the first CHECK
-installed and the second missing while the runner records `FAILED`/`RUNNING`
-in `schema_migration_attempts`; the runner will then refuse to replay the file.
+Branch A (Director decision 2026-11-26) keeps `order/0022_r04_checks.sql`
+**byte-identical** (blob `240b45f`, sha256 `8339df07…`) and moves every semantic
+fix into `order/0023_r04_checks_v2.sql`:
 
-Recovery (see also [runbooks/c-migration-rollback.md](runbooks/c-migration-rollback.md) §6):
+| file | constraints | ordering |
+|---|---|---|
+| `0022` (frozen) | `chk_refund_app_group_discriminator` (copies the 0017 enum), `chk_lpr_expiry_24h` (lower bound `>=`) | applies first on a fresh DB |
+| `0023` (replacement) | `chk_refund_app_group_discriminator_v2` (set membership, no enum copy), `chk_lpr_expiry_24h_v2` (exactly `entered_at + 24h`) | adds both `_v2` first, then drops the old names |
+
+Never replay `0022` after `0023`: the runner ledger prevents it, and a manual
+replay would reinstall the legacy `>=` / enum-copy checks.
+
+#### DDL lock profile (F-1; measured on disposable MySQL 8.4.13)
+
+| operation | explicit `ALGORITHM=INPLACE, LOCK=NONE` | actual behaviour |
+|---|---|---|
+| `ADD CHECK` | **rejected** (`ERROR 1845 ... Try ALGORITHM=COPY`) | `COPY`: table rebuild, `SHARED_NO_WRITE` MDL for the whole rebuild, writes blocked |
+| `DROP CHECK` | **accepted** | online, metadata only |
+
+Measured with 500,000 `refund_applications` rows + 200,000
+`legacy_payment_resolution` rows on a disposable `mysql:8.4.13` (HEAD bound in
+the R0.4-FIX selfcheck):
+
+- `0022` apply (both ADDs, 500,000 / 200,000 rows): 56.5 s.
+- `ADD CHECK ..., ALGORITHM=COPY, LOCK=SHARED` on `refund_applications`
+  (500,000 rows): 45.0 s wall / 43.7 s statement; MDL `SHARED_NO_WRITE`
+  GRANTED from +0.37 s to +43.4 s while a concurrent writer stayed
+  `SHARED_WRITE PENDING` and its inserts blocked for 43.8 s (0 errors).
+- `ADD CHECK ..., ALGORITHM=COPY, LOCK=SHARED` on `legacy_payment_resolution`
+  (200,000 rows): 17.4 s wall / 16.0 s statement; the writer was blocked 16.1 s.
+- `DROP CHECK ..., ALGORITHM=INPLACE, LOCK=NONE`: statement time 0.014-0.022 s,
+  no blocked writer (max 54 ms), 0 errors.
+- `0023` end-to-end on the same scale without a concurrent writer: 49.7 s; a
+  replay is a no-op and leaves exactly the two `_v2` constraints.
+
+**Consequence:** the two `ADD CHECK` statements of `0023` MUST run inside a
+write-frozen maintenance window, not as an online migration. The two
+`DROP CHECK` statements are online. The raw F-1 output is attached to the
+R0.4-FIX selfcheck (【F-1】 section).
+
+#### Preflight (read-only) — UAT is treated as prod
+
+Director (2026-11-26) treats **UAT as production** for this migration's
+preflight, evidence and lock/maintenance-window scope until further notice:
+UAT MUST NOT receive the `ADD CHECK` DDL outside its maintenance window, and it
+MUST NOT be used as the "we already applied it" proof for any other environment.
+
+Before a window, run the read-only preflight on every persistent environment
+(shared dev, UAT-as-prod, prod, any shared/durable pre-prod):
+
+```sql
+SELECT filename, checksum, applied_at FROM schema_migrations
+ WHERE filename IN ('order/0022_r04_checks.sql','order/0023_r04_checks_v2.sql');
+SELECT status, COUNT(*) FROM schema_migration_attempts
+ WHERE filename IN ('order/0022_r04_checks.sql','order/0023_r04_checks_v2.sql')
+ GROUP BY status;
+```
+
+Record environment, output rows/checksum, operator, time and HEAD, plus
+`sha256sum migrations/order/0022_r04_checks.sql`. Branch A is the fail-closed
+choice, so this preflight does not change the path; it tells ops which
+environment still needs `0023` and whether any environment recorded a 0022
+checksum other than `8339df…` (an interim branch-B apply). A different 0022
+checksum is a data-integrity incident: do not edit the file; re-issue the
+migration through the window and record it in `docs/review-tracking.md`.
+
+#### Maintenance window (UAT-as-prod and production)
+
+Owner: Developer + ops; expiry 2026-12-31.
+
+1. Approve/announce the window. Measure the exact row counts first
+   (`SELECT COUNT(*)` on both tables) and scale the estimate from the F-1
+   numbers above; if the tables are much larger than the evidence run, extend
+   the window instead of assuming online DDL (there is none for `ADD CHECK`).
+2. Back up `mall_order` (`mysqldump --single-transaction`) and record its
+   sha256 plus the current ledger rows.
+3. Freeze Order writes for the window (scale the `order` deployment to zero or
+   stop the writers; the `SHARED_NO_WRITE` MDL blocks all DML, so app writes
+   during the rebuild would only queue and time out).
+4. Run the prechecks from `0022`/`0023`; they must return 0 rows. A non-zero
+   result means stop and repair the data with an audited write.
+5. Run the migration job (`mall/migrate:dev`): `0022` on a fresh env, then
+   `0023` (both COPY adds + the online drops).
+6. Verify before resuming writes: the two `_v2` constraints exist, the old
+   names are gone, `CHECK_CLAUSE` matches the equality/discriminator semantics
+   (`scripts/verify-r01-migrations.sh`), the prechecks return 0 rows, and the
+   ledger checksums match.
+7. Resume writes and watch the error rate; the `ADD CHECK` validation is
+   fail-closed (error 3819) for any row that still violates it.
+
+Rollback / recovery (no down migration, ADR §10):
+
+- Before `0023` commits: kill the job. A `COPY` `ADD CHECK` that is killed rolls
+  back. Both v2 adds run before any old-name DROP, so a blocked second ADD
+  leaves both legacy checks in force (and the v2 names are skipped on the next
+  run). Use the failed-attempt flow below.
+- After `0023` commits: restore the `mall_order` dump (or a fresh instance and
+  repoint), or write a reviewed forward fix. Never `DROP` the v2 constraint or
+  bulk-update rows just to make data fit; never edit `0022`.
+- A wrong manual row is corrected by an audited write; the constraint stays.
+
+#### Failed attempt recovery
+
+`0022`/`0023` run against MySQL's implicit DDL commit: a dirty row or an
+interruption can leave the first CHECK installed and the next missing while the
+runner records `FAILED`/`RUNNING` in `schema_migration_attempts`; the runner
+then refuses a replay. The `0022` header's "conditional ALTERs make a re-run
+after cleanup safe" claim is superseded and MUST NOT be used.
 
 1. Read the precheck output / error 3819 to find the blocking row(s). Do not
    rerun blindly.
 2. Repair data with an audited write only (set the group field or
    `expires_at = DATE_ADD(entered_at, INTERVAL 24 HOUR)`); never drop the
    constraint or bulk-update to hide it.
-3. After operator sign-off delete the attempt row for this filename
+3. After operator sign-off delete the attempt row for the filename
    (`status IN ('FAILED','RUNNING')`).
-4. Re-run the migration job.
-5. Verify both constraints exist with the expected `CHECK_CLAUSE` and that the
-   precheck `SELECT` returns 0 rows. `scripts/verify-r01-migrations.sh`
-   performs these text/semantic assertions on a real MySQL 8.4.
+4. Re-run the migration job (`0023` converges: the v2 adds are skipped and the
+   old names are dropped).
+5. Verify both v2 `CHECK_CLAUSE` values and a zero precheck count.
+   `scripts/verify-r01-migrations.sh` performs these semantic assertions on a
+   real MySQL 8.4, including the partial "v2 added, old not dropped" state.
 
 ## Startup order
 

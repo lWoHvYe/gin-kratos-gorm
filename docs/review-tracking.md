@@ -37,6 +37,13 @@ T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
   path (`pay:<payment_no>:cancel`) and then becomes observe-only.
 - No code change in T1.5.
 
+### 2026-11-25 T1.6-R PASS (scoped)
+
+- Reviewer PASS for `8dc1766..20df5b7`: warehouse_id, PENDING authoritative
+  snapshot, durable compensation, legacy net. T1.6 scoped close; no merge.
+- Residual: `inventory.confirm.requested` lacks warehouse_id (paid-confirm
+  path); separate task, not T1.6 blocker.
+
 ### 2026-11-25 T1.6 FAIL — warehouse/captured/compensation
 
 - B1: `order.cancelled`/compensation payload lacks `warehouse_id`; multi-warehouse

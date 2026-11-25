@@ -121,7 +121,16 @@ Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `
 
 ## T1.6-R (Reviewer FAIL)
 
-- [ ] B1: order.cancelled/compensation payload warehouse_id; Inventory multi-WH release/restock; W2 test.
-- [ ] B2: PENDING_PAYMENT always read Payment snapshot, independent of req.PaidCent.
-- [ ] B3: Inventory nil/queue failure returns error/persists; legacy net captured-refunded.
-- [ ] Reviewer re-review.
+- [x] B1: order.cancelled/compensation payload warehouse_id; Inventory multi-WH release/restock; W2 test.
+- [x] B2: PENDING_PAYMENT always read Payment snapshot, independent of req.PaidCent.
+- [x] B3: Inventory nil/queue failure returns error/persists; legacy net captured-refunded.
+- [x] Reviewer re-review (T1.6-R PASS).
+
+## Remaining after T1.6
+
+- T1.7/T5 evidence matrix, real migrations, -race/fault.
+- T2 historical PAID resolution.
+- T3 line/freight responsibility.
+- T4 fail-closed/shadow (default paid).
+- Separate: inventory.confirm.requested warehouse_id (paid-confirm path).
+- P0 merge only after human approve.

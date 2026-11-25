@@ -8,10 +8,10 @@
 | Tier-Rationale | 命中 `migrations/**` 触发条；Order/Fulfillment 两个服务的结算与退款 schema；资金链路迁移，恒为 L2 |
 | Spec-Ref | SPEC-0002 **v1.10**：INV-45（承诺释放纪律）、INV-47（商品/运费组成）、INV-49（`order.settled` 影子不具准入权威）、AC-65（TCC Σ/逐组扇出）、AC-66（shadow/switch 默认不切换）；ADR-0007 **Rev 2.3** §4.3/§6.2/§6.3/§6.4/§7.2/§10/§12.5.6 |
 | Base（任务） | `93380d5`（Lead 派单时的 `main` HEAD） |
-| Base（实际父提交） | `2a05c1d`（并发 T1.7 evidence 提交；仅新增 `internal/services/order/t17_evidence_integration_test.go`，未触及 R0.1 路径） |
-| Code head | 本 WIP 提交（迁移、脚本、测试 helper 与本文件同提交）；post-commit 证据日志头部固定该提交 hash |
-| Evidence log | `docs/implementation/PAY-SETTLE-01-phase0-r-r01.log`（同一 code head 上重跑 `scripts/verify-r01-migrations.sh` 的完整输出） |
-| allowed_paths | `migrations/order/0018_refund_commitment_composition.sql`、`migrations/fulfillment/0011_switch_expiry_check.sql`、`scripts/verify-r01-migrations.sh`、`internal/services/order/settlement_integration_test.go`（仅测试 helper）、`docs/implementation/PAY-SETTLE-01-phase0-r-r01.md`、`docs/implementation/PAY-SETTLE-01-phase0-r-r01.log` |
+| Base（实际父提交） | `29bb54a`（派单后 `main` 前进：`2a05c1d` T1.7 evidence + 若干 docs 提交；均未触及 R0.1 路径。`93380d5` 为派单时 HEAD） |
+| Code head | **`42a8db5`**（迁移、脚本、测试 helper 与本文件同提交）；post-commit 证据日志头部固定该 hash |
+| Evidence log | `docs/implementation/PAY-SETTLE-01-phase0-r-r01-evidence.txt`（在 code head `42a8db5`、clean worktree 上重跑 `scripts/verify-r01-migrations.sh` 的完整输出） |
+| allowed_paths | `migrations/order/0018_refund_commitment_composition.sql`、`migrations/fulfillment/0011_switch_expiry_check.sql`、`scripts/verify-r01-migrations.sh`、`internal/services/order/settlement_integration_test.go`（仅测试 helper）、`docs/implementation/PAY-SETTLE-01-phase0-r-r01.md`、`docs/implementation/PAY-SETTLE-01-phase0-r-r01-evidence.txt` |
 | 明确不做 | 业务代码、proto、API 契约、ADR/SPEC 文本、`migrations/order/0017/0019/0020`、`migrations/fulfillment/0010`、`docs/lead/**`、AC 台账 |
 | Status | **WIP；未批准**。无 `Reviewed-by`；不声称实现 PASS / Release PASS，不标 AC-VERIFIED |
 
@@ -336,7 +336,7 @@ docker exec mysql-unicorn mysql -uroot -proot -N -B \
 | `scripts/verify-r01-migrations.sh` | **新增**：fresh 8.4 + 真实 runner + 真实文件的全链/重入/CHECK 验证 |
 | `internal/services/order/settlement_integration_test.go` | 仅 `applyOrderTestMigration`：每条语句固定在同一 `*sql.Conn` 执行（0018 的 PREPARE 需要单会话） |
 | `docs/implementation/PAY-SETTLE-01-phase0-r-r01.md` | 本文件 |
-| `docs/implementation/PAY-SETTLE-01-phase0-r-r01.log` | post-commit 证据日志（同一 code head 重跑） |
+| `docs/implementation/PAY-SETTLE-01-phase0-r-r01-evidence.txt` | post-commit 证据日志（同一 code head 重跑） |
 
 ### 9.2 [架构侵入性]
 
@@ -369,7 +369,7 @@ docker exec mysql-unicorn mysql -uroot -proot -N -B \
 
 - 脚本：`scripts/verify-r01-migrations.sh`
 - 运行：`./scripts/verify-r01-migrations.sh 2>&1 | tee /tmp/r01-verify.log`
-- 提交后完整日志：`docs/implementation/PAY-SETTLE-01-phase0-r-r01.log`（头部含精确 HEAD、worktree 状态、镜像与文件 sha256）
+- 提交后完整日志：`docs/implementation/PAY-SETTLE-01-phase0-r-r01-evidence.txt`（头部含 code head `42a8db5`、`WORKTREE clean`、镜像与文件 sha256；本次证据提交只新增该日志并修正 Base/Code head 元数据，不改代码）
 - 关键摘要：§2（fresh apply/ledger）、§3.3（0018 重入/部分失败/runner）、§4.3（0011 CHECK/fail-closed）、§6.2（Order 全包测试）。
 
 > 说明：本文件中的日志摘要是真实执行输出的截取；未执行/未覆盖项已在 §7 显式列出，不以“预期通过”代替日志。

@@ -1,0 +1,195 @@
+== R0.1 HEAD binding ==
+HEAD             42a8db57012691d64b7aef2c40e4dab49b4675c0
+MYSQL_IMAGE      mysql:8.4
+MIGRATE_IMAGE    mall/migrate:dev
+WORKTREE         clean
+== migration checksums (sha256 of the files under test) ==
+64bc9f6afeefda4427810e518e4d5b4aa3a37dd063c4f1b7f4641921eba7c1d6  order/0017_refund_batch_ledger.sql
+683f2df86eec78cc4b1c9cbb9426285463efa15e7e4f672edef8ac557e342110  order/0018_refund_commitment_composition.sql
+20ed70a1289421edb01fcff59c588738a2225446549418bf44fbcdc11ac148c9  order/0019_legacy_payment_resolution.sql
+3762b1794d5d4e8fcf5c00a02adcc6480e82b1b7e50e35d90cb1a8b7e55701d8  order/0020_permit_state_check.sql
+c68fe49beb831ceb0e7634cf76251658119b527b130825bb2920503f9e0888f3  fulfillment/0010_settlement_shadow_switch.sql
+6188ba771db492a5504286fcbdbc24362e292d1652c92784ee23c6d5ddaf220d  fulfillment/0011_switch_expiry_check.sql
+== start disposable MySQL 8.4 on 127.0.0.1:13319 ==
+MySQL version: 8.4.13
+
+== fresh apply through the real mall/migrate runner ==
+mysqld is alive
+[migrate] creating databases
+[migrate] creating DTM schema
+[migrate] mall_aftersales <- /migrations/aftersales/0001_init.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0002_return_flow.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0005_outbox_retry.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0006_client_request_id.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0006_outbox_lease.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0007_outbox_traceparent.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0009_outbox_dead_letter_archive.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0010_settlement_protocol.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0011_group_items.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0012_line_ledger.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0013_responsibility.sql
+[migrate] mall_aftersales <- /migrations/aftersales/0014_line_pending_amount.sql
+[migrate] mall_cart <- /migrations/cart/0001_init.sql
+[migrate] mall_cart <- /migrations/cart/0004_cart_draft_confirmations.sql
+[migrate] mall_cart <- /migrations/cart/0005_outbox_retry.sql
+[migrate] mall_cart <- /migrations/cart/0006_outbox_lease.sql
+[migrate] mall_cart <- /migrations/cart/0007_outbox_traceparent.sql
+[migrate] mall_cart <- /migrations/cart/0009_outbox_dead_letter_archive.sql
+[migrate] mall_catalog <- /migrations/catalog/0001_init.sql
+[migrate] mall_catalog <- /migrations/catalog/0002_product_media_and_search.sql
+[migrate] mall_catalog <- /migrations/catalog/0005_outbox_retry.sql
+[migrate] mall_catalog <- /migrations/catalog/0006_outbox_lease.sql
+[migrate] mall_catalog <- /migrations/catalog/0007_outbox_traceparent.sql
+[migrate] mall_catalog <- /migrations/catalog/0009_outbox_dead_letter_archive.sql
+[migrate] mall_catalog <- /migrations/catalog/0010_spu_ngram_search.sql
+[migrate] mall_catalog <- /migrations/catalog/0011_catalog_version_columns.sql
+[migrate] mall_catalog <- /migrations/catalog/0012_skus_stock_version.sql
+[migrate] mall_catalog <- /migrations/catalog/0014_remove_smoke_seed.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0001_init.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0002_shipment_events.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0003_group_shipments.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0004_carrier_delivery.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0005_outbox_retry.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0006_outbox_lease.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0007_outbox_traceparent.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0009_outbox_dead_letter_archive.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0010_settlement_shadow_switch.sql
+[migrate] mall_fulfillment <- /migrations/fulfillment/0011_switch_expiry_check.sql
+[migrate] mall_identity <- /migrations/identity/0001_init.sql
+[migrate] mall_identity <- /migrations/identity/0002_address_management.sql
+[migrate] mall_identity <- /migrations/identity/0003_address_version.sql
+[migrate] mall_identity <- /migrations/identity/0004_token_version.sql
+[migrate] mall_inventory <- /migrations/inventory/0001_init.sql
+[migrate] mall_inventory <- /migrations/inventory/0004_drop_dead_barrier.sql
+[migrate] mall_inventory <- /migrations/inventory/0005_outbox_retry.sql
+[migrate] mall_inventory <- /migrations/inventory/0006_outbox_lease.sql
+[migrate] mall_inventory <- /migrations/inventory/0006_seckill_stock.sql
+[migrate] mall_inventory <- /migrations/inventory/0007_outbox_traceparent.sql
+[migrate] mall_inventory <- /migrations/inventory/0007_seckill_order_stock.sql
+[migrate] mall_inventory <- /migrations/inventory/0008_seckill_order_ref_unique.sql
+[migrate] mall_inventory <- /migrations/inventory/0009_outbox_dead_letter_archive.sql
+[migrate] mall_inventory <- /migrations/inventory/0012_inventory_ledger_archive.sql
+[migrate] mall_inventory <- /migrations/inventory/0014_remove_smoke_seed.sql
+[migrate] mall_inventory <- /migrations/inventory/0015_inventory_operations.sql
+[migrate] mall_inventory <- /migrations/inventory/0016_reservation_warehouse_keys.sql
+[migrate] mall_order <- /migrations/order/0001_init.sql
+[migrate] mall_order <- /migrations/order/0002_refund_projection.sql
+1
+1
+[migrate] mall_order <- /migrations/order/0003_refund_status.sql
+[migrate] mall_order <- /migrations/order/0004_promotion_snapshot.sql
+[migrate] mall_order <- /migrations/order/0005_outbox_retry.sql
+[migrate] mall_order <- /migrations/order/0006_outbox_lease.sql
+[migrate] mall_order <- /migrations/order/0007_outbox_traceparent.sql
+[migrate] mall_order <- /migrations/order/0009_outbox_dead_letter_archive.sql
+[migrate] mall_order <- /migrations/order/0010_settlement_protocol.sql
+[migrate] mall_order <- /migrations/order/0011_fulfillment_groups.sql
+[migrate] mall_order <- /migrations/order/0012_group_shipping_permits.sql
+[migrate] mall_order <- /migrations/order/0013_group_refund_state.sql
+[migrate] mall_order <- /migrations/order/0014_quantity_split.sql
+[migrate] mall_order <- /migrations/order/0015_shortage_timing.sql
+[migrate] mall_order <- /migrations/order/0016_settlement_admission.sql
+[migrate] mall_order <- /migrations/order/0017_refund_batch_ledger.sql
+[migrate] mall_order <- /migrations/order/0018_refund_commitment_composition.sql
+[migrate] mall_order <- /migrations/order/0019_legacy_payment_resolution.sql
+[migrate] mall_order <- /migrations/order/0020_permit_state_check.sql
+[migrate] mall_order <- /migrations/order/0021_zero_application_check.sql
+[migrate] mall_payment <- /migrations/payment/0001_init.sql
+[migrate] mall_payment <- /migrations/payment/0002_partial_refunds.sql
+[migrate] mall_payment <- /migrations/payment/0004_drop_dead_barrier.sql
+[migrate] mall_payment <- /migrations/payment/0005_outbox_retry.sql
+[migrate] mall_payment <- /migrations/payment/0006_outbox_lease.sql
+[migrate] mall_payment <- /migrations/payment/0007_outbox_traceparent.sql
+[migrate] mall_payment <- /migrations/payment/0009_outbox_dead_letter_archive.sql
+[migrate] mall_payment <- /migrations/payment/0010_refund_breakdown.sql
+[migrate] mall_payment <- /migrations/payment/0011_settlement_tasks.sql
+[migrate] mall_payment <- /migrations/payment/0012_refund_batch.sql
+1
+1
+1
+1
+1
+1
+[migrate] mall_pricing <- /migrations/pricing/0001_init.sql
+[migrate] mall_pricing <- /migrations/pricing/0002_promotions.sql
+[migrate] mall_pricing <- /migrations/pricing/0004_drop_dead_barrier.sql
+[migrate] mall_pricing <- /migrations/pricing/0005_outbox_retry.sql
+[migrate] mall_pricing <- /migrations/pricing/0006_outbox_lease.sql
+[migrate] mall_pricing <- /migrations/pricing/0007_outbox_traceparent.sql
+[migrate] mall_pricing <- /migrations/pricing/0008_coupon_locked_at.sql
+[migrate] mall_pricing <- /migrations/pricing/0009_outbox_dead_letter_archive.sql
+[migrate] mall_pricing <- /migrations/pricing/0010_quote_warehouse.sql
+[migrate] mall_pricing <- /migrations/pricing/0011_split_money.sql
+[migrate] mall_seckill <- /migrations/seckill/0001_init.sql
+[migrate] mall_seckill <- /migrations/seckill/0002_order_fields.sql
+[migrate] mall_seckill <- /migrations/seckill/0003_payment_no.sql
+[migrate] mall_seckill <- /migrations/seckill/0004_qualification_version.sql
+[migrate] complete
+
+== ledger checksum binding (order + fulfillment) ==
+OK   ledger order/0017_refund_batch_ledger.sql = 64bc9f6afeefda4427810e518e4d5b4aa3a37dd063c4f1b7f4641921eba7c1d6
+OK   ledger order/0018_refund_commitment_composition.sql = 683f2df86eec78cc4b1c9cbb9426285463efa15e7e4f672edef8ac557e342110
+OK   ledger order/0019_legacy_payment_resolution.sql = 20ed70a1289421edb01fcff59c588738a2225446549418bf44fbcdc11ac148c9
+OK   ledger order/0020_permit_state_check.sql = 3762b1794d5d4e8fcf5c00a02adcc6480e82b1b7e50e35d90cb1a8b7e55701d8
+OK   ledger fulfillment/0010_settlement_shadow_switch.sql = c68fe49beb831ceb0e7634cf76251658119b527b130825bb2920503f9e0888f3
+OK   ledger fulfillment/0011_switch_expiry_check.sql = 6188ba771db492a5504286fcbdbc24362e292d1652c92784ee23c6d5ddaf220d
+
+== 0017-0021 + fulfillment/0010-0011 objects ==
+OK   0017 refund_batches = 1
+OK   0017 refund_applications = 1
+OK   0018 header columns = 4
+OK   0018 commitment lines = 1
+OK   0018 releases = 1
+OK   0019 legacy_payment_resolution = 1
+OK   0019 order_refund_sequences = 1
+OK   0020 chk_permit_state = 1
+OK   fulfillment/0010 shadow diffs = 1
+OK   fulfillment/0010 switch approvals = 1
+OK   fulfillment/0011 chk_switch_settled_expiry = 1
+
+== 0020 permits fail closed on GRANTED ==
+OK   0020 rejects GRANTED (rejected: 3819)
+OK   0020 accepts NONE = 1
+
+== 0018 re-entry: full replay is a no-op ==
+OK   0018 replay keeps 4 columns = 4
+
+== 0018 partial failure: atomic ALTER committed, then replay converges ==
+OK   partial run added header columns = 4
+OK   replay created lines table = 1
+OK   replay created releases table = 1
+OK   legacy backfill = 500|0|0|legacy
+OK   second replay keeps backfill = 500|0|0|legacy
+
+== 0018 partial failure: one existing column is not duplicated ==
+OK   partial column set converges to 4 = 4
+
+== 0011 CHECK semantics on the applied schema ==
+OK   settled NULL expires rejected (rejected: 3819)
+OK   settled with expires accepted = 1
+OK   shadow NULL expires accepted = 1
+OK   0011 replay keeps one CHECK = 1
+
+== 0011 fail-closed on a pre-existing settled row with NULL expires_at ==
+OK   0011 fail-closed diagnostic: d27 precheck
+OK   blocked run adds no CHECK = 0
+OK   blocked run keeps the row = 1
+OK   after re-sign 0011 adds the CHECK = 1
+
+== runner replay: checksum-stable ledger, no file replayed ==
+[migrate] fulfillment/0010_settlement_shadow_switch.sql already applied
+[migrate] fulfillment/0011_switch_expiry_check.sql already applied
+[migrate] order/0017_refund_batch_ledger.sql already applied
+[migrate] order/0018_refund_commitment_composition.sql already applied
+[migrate] order/0019_legacy_payment_resolution.sql already applied
+[migrate] order/0020_permit_state_check.sql already applied
+[migrate] complete
+
+== runner-level partial failure: FAILED attempt refuses replay, operator repair converges ==
+OK   runner refuses replay after a FAILED 0018 attempt
+OK   refused run records no 0018 ledger row = 0
+OK   operator repair records 0018 ledger row = 683f2df86eec78cc4b1c9cbb9426285463efa15e7e4f672edef8ac557e342110
+OK   operator repair created lines table = 1
+OK   operator repair created releases table = 1
+
+R0.1 real migration verification passed

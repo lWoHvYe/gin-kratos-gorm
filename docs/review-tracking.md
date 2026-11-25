@@ -347,6 +347,19 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   pre-ship `REFUNDING` closure; R-5 is SPEC §7.5 drift for PO next version.
   Pending QC; no code until accepted.
 
+### 2026-11-26 human decisions: F-2 branch A, UAT as prod, AC-50-FIX-01 start
+
+- Director chose **branch A** for the 0022/0023 decision: restore
+  `migrations/order/0022_r04_checks.sql` byte-identically and add
+  `order/0023_r04_checks_v2.sql` (replace both checks, `_v2` names, add then
+  drop old; no missing-constraint window).
+- Director directed that **UAT is treated as prod** for the R0.4 migration
+  preflight/evidence and lock/maintenance-window scope until further notice.
+- Director authorized starting **AC-50-FIX-01**: ADR §5.3 additive amendment
+  first (no-waybill `CancelIfCreated` result; Order maps to
+  `REFUND_ADMISSION_CONFLICT`, never PRE), then QC, then implementation.
+- No merge/Release/AC-VERIFIED implied.
+
 ### 2026-11-26 Reviewer verdicts: R0.4e FAIL, R0.3-R2 scoped PASS
 
 - Reviewer `fd208b2` (base `90b502c`, head `9322e75`, code `c38c54f`):

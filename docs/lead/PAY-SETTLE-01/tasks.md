@@ -16,7 +16,7 @@ Status: **APPROVED Plan (2026-11-24)**。本文件是 **Plan 视图**，不拥�
 ## Phase 0-R — 追溯复核整改（2026-11-25，RETRO FAIL；Director 已接受偏差，以下为 P0 收口/Release 前置）
 
 - [ ] **R0.1** 真实迁移 apply（fresh DB）`migrations/order/0017-0020` + `migrations/fulfillment/0010`，绑定精确 HEAD；补 `chk_switch_settled_expiry`；修复 0018 重入/部分失败；记录日志（Owner: Developer；依赖: 无）
-- [ ] **R0.2** Reviewer 对 C-01..C-05 出**日期化** verdict（Actor≠Reviewed-by、base/head、review_scope）；不得倒签（Owner: Reviewer；依赖: R0.1）
+- [ ] **R0.2** Reviewer 对 C-01..C-05 出**日期化** verdict（FAIL 2026-11-25：C-04 release RPC 缺；AC-27/INV-45..50 台账缺；见 REV-R0.2）
 - [ ] **R0.3** 台账：AC-27、回归 AC-14/21/25/27/31/32、INV-45..50 的覆盖/延期决策；12 orphan 去留（Owner: Reviewer；依赖: R0.2）
 - [ ] **R0.4** config fail-closed 测试（`settlement_switch_approvals` 读取）；C-04 release RPC；`group_no` 判别 CHECK；24h SLA CHECK（Owner: Developer + Architect；依赖: R0.2）
 - [ ] **R0.5** evidence-matrix 刷新到 SPEC v1.10；migration scope 与 ADR 对齐（Owner: Lead + PO；依赖: R0.3）

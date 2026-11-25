@@ -2,9 +2,9 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT 0.3 — pending QC round 3 and human acceptance**；未批准，不构成实现依据，不代表实现 PASS / merge / Release PASS |
-| Approved | —（待 QC round 3；人类接受见 R0.4a3） |
-| Revision | **0.3-draft（r3）**；修订记录见 §0.3 |
+| Status | **ACCEPTED（2026-11-26，human accepted；9 MINOR as TODO）**；设计已接受，不代表实现 PASS / merge / Release PASS / AC-VERIFIED |
+| Approved | **2026-11-26**（Director，按 R0.4a3 接受） |
+| Revision | **0.3（r3）— accepted 2026-11-26**；修订记录见 §0.3 |
 | Tier | **L2**（跨服务事件 / 库存 / 迁移 / 启动门禁） |
 | change_id | `PAY-SETTLE-01` |
 | Base（仓库） | `e3998d3`（本文件 DRAFT 0.2 r2 落盘；QC round 2 BLOCKED 报告 `QC-PAY-SETTLE-01-R0.4-ADDENDUM-R2.md` 以此为被审对象） |
@@ -16,7 +16,7 @@
 | forbidden_paths | `docs/specs/**`、`docs/collab/**`、`docs/lead/**`、`docs/implementation/**`、`api/**`、`deploy/**`（R0.4d1 单独 L2 变更，不在本裁决的 allowed_paths 内）、`internal/services/order/**`、`internal/services/inventory/**`（本 R0.4 范围） |
 | baseline_impact | **涉及**：INV-44（release event/schema/consumer，P0 单组）、INV-45（release 只释放库存预留，不改承诺额度状态）、INV-46（历史队列 24h CHECK 由下限改等值）、INV-47（不改行级/运费语义，仅 0022 约束不改变其判定）、INV-49（shadow 启动硬拒绝）、INV-50（零元与正金额同一 release 路径）。C-04 `RefundBatch` 不变；不涉及 Payment/AfterSales 状态机；**INV-44 的可观测性缺口（多组 metric / missing-reservation metric）在本 r3 明确移出 R0.4 范围并登记延期，见 §2.7** |
 | Actor | `arch-r04-r3`（System Architect） |
-| Reviewed-by | **待 QC round 3**（本文件不代签）；实现复核见 R0.4e |
+| Reviewed-by | `qc-r04-r3 (READY 2026-11-26) + Director (accepted 2026-11-26)`；实现复核见 R0.4e |
 | Integration owner | System Architect（契约）；实现 owner = Developer（R0.4b-impl / R0.4c-impl / R0.4d1 / R0.4d2）、ops（重放/告警/批准行写入） |
 | Scope | 只裁决 R0.4：① C-04 release event v1 契约（no RPC）与 P0 单组边界；② Fulfillment 启动门禁（含 shadow 运行态、legacy bool、range、到期语义、退出语义）；③ `order/0022`（或 `0023`）的 `group_no` 判别与 24h SLA 约束，含**编辑前 preflight 决策门**；④ 迁移 apply/重跑/证据口径；⑤ R0.4 **不交付**项的显式延期登记 |
 | 硬边界 | 不写代码/迁移/tests/台账/SPEC；不改已 accepted ADR Rev 2.3（errata 由 Architect 在 Rev 2.4 另做）；不新增 subject/RPC/持久化字段；不把 T2/T3/T4.4 业务塞进 R0.4；**不扩大 R0.4 的 allowed_paths 来"顺手"满足验收**（QC N-2） |
@@ -356,7 +356,7 @@ GROUP BY status;
 
 | ID | 任务 | Owner | 验收 / 证据 |
 |---|---|---|---|
-| **R0.4a** | 本 Addendum 修订并交 **QC round 3**；人类接受（R0.4a3） | Architect | 本文件（DRAFT 0.3）+ QC round 3 结论 + `docs/review-tracking.md` 接受行；**不要求 Reviewer 撤回 B1**（B1 已撤回）；R0.4a3 是**设计接受**，Reviewer 的 R0.4e 仍可 FAIL |
+| **R0.4a** | 本 Addendum 修订并交 **QC round 3**；人类接受（R0.4a3） | Architect | 本文件（ACCEPTED 0.3，2026-11-26）+ QC round 3 结论 + `docs/review-tracking.md` 接受行；**不要求 Reviewer 撤回 B1**（B1 已撤回）；R0.4a3 是**设计接受**，Reviewer 的 R0.4e 仍可 FAIL |
 | **R0.4b-impl** | Fulfillment 启动门禁：paid/shadow/settled/legacy bool/range/expiry/approval-id；**shadow 硬拒绝（T4.4）+ 退出码 3/4 + reason 码 + 门禁/shadow 日志三字段 + config exit 2 稳定 token** | Developer + Architect | `cmd/fulfillment/main_test.go`（子进程真实退出码 2/3/4 + stderr 三字段/token，需 `TEST_MYSQL_DSN`）、`internal/services/fulfillment/settlement_switch_test.go`（门禁分支）；无 paid fallback；shadow 在 consumer 注册前非零退出。**不含** Order/Inventory metric（§2.7） |
 | **R0.4c-impl** | **preflight（§2.3.3）** → `order/0022`（分支 A 为 `0023`）判别 CHECK + 等值 24h CHECK + 去枚举复制 + 48h 拒绝测试 | Developer + Architect | **preflight 证据先行**；真实 MySQL 8.4 日志绑定 HEAD；`48h/24h+1s/25h` 拒绝、`<24h` 拒绝；0017/0018/0019/0020/0021 不改；R0.4d2 前只能算“SQL 已写” |
 | **R0.4d1** | `SETTLE_RELEASE_RANGE` / mode / ops 批准行模板（含 `release_range <> ''` 校验 SQL）/ 告警接线（compose + Helm + `docs/ops.md`） | Developer | `docker compose config` / Helm 渲染日志；模板 + 校验 SQL 0 行输出；ops 告警规则落 runbook；默认仍 `paid`；不改变运行语义 |
@@ -507,7 +507,8 @@ GROUP BY status;
 
 ## 8. 状态
 
-- **Status: DRAFT 0.3 — pending QC round 3 and human acceptance**。未批准；不进入实现；不构成 AC-VERIFIED / merge / Release PASS。
+- **Status: ACCEPTED — 2026-11-26（human accepted；9 MINOR as TODO）**。设计已接受；**不**构成实现 PASS / merge / Release PASS / AC-VERIFIED。
+- **人类接受记录（R0.4a3，2026-11-26）**：Director 按 R0.4a3 接受本 Addendum；接受前的 QC round 3 结论为 **READY**（0 BLOCKER / 0 未处置 MAJOR / **9 个 `[MINOR]`**，`docs/collab/qc-reports/QC-PAY-SETTLE-01-R0.4-ADDENDUM-R3.md`）。**9 个 MINOR 作为 TODO 跟踪**：owner/落点以该报告为准，关闭由对应 owner 在实现任务或 R0.4e 内完成，**不得**因本文件已 accepted 而视为已关闭。接受事实记录于 `docs/review-tracking.md` 的 **2026-11-26 R0.4a3** human decision（Lead 落盘）。
 - 本文件只改自己；未改 ADR Rev 2.3 / SPEC / 迁移 / 代码 / tasks / 台账。`0022`/`0023` 的 SQL 是约束设计，不是本文件交付的迁移。
-- 下游顺序：**QC round 3** → **R0.4a3 人类设计接受**（记录于 `docs/review-tracking.md`）→ `R0.4b-impl` / `R0.4c-impl`（preflight 先行）/ `R0.4d1` / `R0.4d2` → **R0.4e Reviewer 日期化 verdict**（`release_status=NOT RELEASE`）。任何一步 FAIL 都冻结 `PAY-SETTLE-01` 的 R0.4 范围，不得用新 `change_id` 绕过。
-- 本文件的 r2 已被本 r3 取代；r3 仍未通过 QC，**不得**被引用为“已关闭 QC round 2”。
+- 已完成：**QC round 3（READY 2026-11-26）** → **R0.4a3 人类设计接受（2026-11-26）**。后续：`R0.4b-impl` / `R0.4c-impl`（preflight 先行）/ `R0.4d1` / `R0.4d2` → **R0.4e Reviewer 日期化 verdict**（`release_status=NOT RELEASE`）。任何一步 FAIL 都冻结 `PAY-SETTLE-01` 的 R0.4 范围，不得用新 `change_id` 绕过。
+- 本文件的 r2 已被 r3 取代；r3 已通过 QC round 3 并由 Director 接受（仅设计层面），9 个 MINOR 仍未关闭。

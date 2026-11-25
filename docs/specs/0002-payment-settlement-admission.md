@@ -2,29 +2,29 @@
 id: SPEC-0002
 title: 支付结算与履约准入
 status: approved         # draft | in-review | approved | superseded
-version: 1.9
-updated_at: 2026-11-24
+version: 1.10
+updated_at: 2026-11-25
 owner: Product Owner
 approved_by: Director
-approved_at: 2026-11-24
+approved_at: 2026-11-25
 domain: payment
 supersedes: []
 superseded_by: null
 adr: [0007]
 ```
 
-# SPEC-0002 — 支付结算与履约准入（P0，v1.9 approved）
+# SPEC-0002 — 支付结算与履约准入（P0，v1.10 approved）
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.9（已批准：v1.8 全部内容 + 零元售后补充：S19、INV-50、AC-67/68、AC-55 零元例外） |
-| 日期 | 2026-11-24 |
-| 状态 | **已批准**：Director 2026-11-24 批准零元售后 amendment；QC-18 `READY FOR HUMAN ZERO AMENDMENT APPROVAL` |
+| 版本 | v1.10（approved：v1.9 全部内容 + K-8 amendment：移除已退役的 G-4 / 已删除的 `--release --range` 前置，改用 K-6 人工门禁口径；Director 2026-11-25 批准） |
+| 日期 | 2026-11-25 |
+| 状态 | **已批准**：Director 2026-11-25 批准 SPEC-0002 v1.10（K-8 amendment；G-4/`--release --range` 由 K-6 人工门禁替代） |
 | 位置 | `docs/specs/`：AC-40 收窄、AC-62…66（v1.8）、AC-67/68（v1.9）；按 Human 指示登记 AC-62…68 延期行；Reviewer 复核 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件与 QC 报告，不接收口头补充） |
-| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` v1.3/v1.4；`docs/adr/0007-payment-settlement-admission.md` Rev 1.0 + `0007-payment-settlement-admission-amd1.md` Amendment 1 + `0007-amd1-addendum-zero-after-sale.md`；`docs/lead/PAY-SETTLE-01/plan.md` C-02；`docs/review-tracking.md` 2026-11-24 裁决；QC-10…QC-18 |
-| 范围 | H1/H2 批准的业务口径：首次支付、结算、取消竞态、库存就绪、发货准入、退款统一准入、缺货、收货；v1.8 增加 P-04/P-05/P-06、TCC Σ、历史队列 `COMPENSATING`、`order.settled` shadow；v1.9 增加零元售后闭环 |
+| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` v1.3/v1.4；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3（latest；switch/gate 见 §12.3/§17.2）；`docs/lead/PAY-SETTLE-01/plan.md` C-02；`docs/review-tracking.md` 2026-11-25 K-6/K-8；QC-10…QC-18 |
+| 范围 | H1/H2 批准的业务口径：首次支付、结算、取消竞态、库存就绪、发货准入、退款统一准入、缺货、收货；v1.8 增加 P-04/P-05/P-06、TCC Σ、历史队列 `COMPENSATING`、`order.settled` shadow；v1.9 增加零元售后闭环；v1.10 仅将退役机器门禁前置替换为 K-6 人工门禁 |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准（EARS）。**不定义**表结构、事件名、RPC 形态、事务边界、重试算法或开关实现；这些由 Architect 在 ADR 中设计并接受本文件验收。
 
@@ -390,8 +390,8 @@ adr: [0007]
 - WHEN 影子消费发现 `order.settled` 与 `order.paid`/订单权威事实不一致，THE SYSTEM SHALL 告警并记录差异（`order_no`、`payment_no`、差异字段），不得自动切换消费者、不得据此放行或阻断发货、不得修改结算事实。
 - IF 影子消费者自身失败、超时或崩溃，THEN THE SYSTEM SHALL 不影响结算、发货准入与用户展示，只在告警与对账中体现；不得把影子失败当作结算失败。
 - IF 收到未知版本或缺少必填字段的 `order.settled` 事件，THEN THE SYSTEM SHALL 拒绝该影子事实并告警，不得按默认值猜测。
-- WHEN 从 `OFF→SHADOW` 开启影子消费，THE SYSTEM SHALL 仅需 Director 影子批准，不要求 SPEC-0002 §7/G-4/五方终态/`--release --range` 的全量 release 门禁；`SHADOW` 仍只记录/比对，不建单、不放行。
-- WHEN 从 `SHADOW→ON` 切换为实际消费，THE SYSTEM SHALL 必须通过 SPEC-0002 §7 矩阵、G-4、五方终态核对、`--release --range`，并经 Director/人类批准；否则不得切换。
+- WHEN 从 `OFF→SHADOW` 开启影子消费，THE SYSTEM SHALL 仅需 Director 影子批准，不要求全量 release 人工门禁（协作闸门已退役，无命令可跑）；`SHADOW` 仍只记录/比对，不建单、不放行。
+- WHEN 从 `SHADOW→ON` 切换为实际消费，THE SYSTEM SHALL 必须同时满足 SPEC-0002 §7 矩阵 + 五方终态 + Reviewer 人工核对 + `review-tracking` 记录（协作闸门已退役，无命令可跑），并经 Director/人类批准；否则不得切换。
 - WHEN 从 `ON→SHADOW/OFF` 回滚，THE SYSTEM SHALL 经人类批准后执行；IF 非批准的开关变更（配置、运维、脚本、自动任务），THEN THE SYSTEM SHALL fail-closed 并告警，变更不生效，当前状态保持。
 - WHEN 切换完成，THE SYSTEM SHALL 以 `order.settled`（或经 ADR 批准的等价事实）作为履约建单/准入依据；`order.paid` 只保留 BFF/旧消费者兼容，不得再作为准入依据；IF 无移除日期或回滚路径，THEN 不得宣称切换完成。
 - IF 开关被误置为开启而门禁未通过，THEN THE SYSTEM SHALL fail-closed 并按关闭处理，告警；不得在门禁未通过时走新准入路径。
@@ -569,12 +569,12 @@ COMPENSATING --补偿失败/超时--> COMPENSATING（告警，重试未完成步
 
 ```text
 OFF（生产默认） --Director 影子批准--> SHADOW（只记录/比对）
-SHADOW --SPEC-0002 §7/G-4/五方终态/--release --range + Director--> ON（以 order.settled 为履约准入依据）
+SHADOW --SPEC-0002 §7 矩阵 + 五方终态 + Reviewer 人工核对 + review-tracking 记录（协作闸门已退役，无命令可跑）+ Director--> ON（以 order.settled 为履约准入依据）
 ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migration）
 ```
 
-- `OFF→SHADOW` 仅需 Director 影子批准，不要求全量 release 门禁；`SHADOW` 仍只记录/比对，不建单、不放行。
-- `SHADOW→ON` 必须通过 SPEC-0002 §7 矩阵、G-4、五方终态核对、`--release --range` 与 Director/人类批准；`ON` 必须写明移除日期与回滚路径。
+- `OFF→SHADOW` 仅需 Director 影子批准，不要求全量 release 人工门禁（协作闸门已退役，无命令可跑）；`SHADOW` 仍只记录/比对，不建单、不放行。
+- `SHADOW→ON` 必须同时满足 SPEC-0002 §7 矩阵 + 五方终态 + Reviewer 人工核对 + `review-tracking` 记录（协作闸门已退役，无命令可跑），并经 Director/人类批准；`ON` 必须写明移除日期与回滚路径。
 - `ON→SHADOW/OFF` 回滚须经人类批准；非批准变更 fail-closed 并告警。
 - `OFF/SHADOW` 均不得以 `order.settled` 建单或放行发货；切换不在本 Spec 的默认批准范围，默认 false 不得改变。
 
@@ -675,7 +675,7 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 
 - 每条 AC 必须有 `TestAC<NN>`；资金、库存、竞态必须有并发或故障注入用例，至少一个异常分支。
 - 直接路径与 TCC 路径必须接受**同等**故障注入。
-- 验收绑定精确 HEAD 与显式范围（`--release --range`），输出五方终态核对表。
+- 验收绑定精确 HEAD、五方终态核对表、Reviewer 人工核对与 `review-tracking` 记录（协作闸门已退役，无命令可跑）。
 - Mock 数据必须符合真实业务边界（零元单、多 intent、多组订单、历史 `PAID`、补货到货）。
 - 未运行、SKIP、仅 AC-REF 均不算 AC-VERIFIED（`CONVENTIONS §6.1`）。
 
@@ -701,13 +701,13 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 | D-24 | 人工释放权限矩阵（谁可授权、金额阈值、是否双人复核/审计） | **HUMAN APPROVED 2026-11-24（默认）**：仅授权角色可授权；金额 ≥1000 元必须双人复核；全量审计；按 AC-62 的最小证据字段校验 | AC-62/INV-45 |
 | D-25 | `RELEASED` 后额度是否可立即被同一订单的新退款申请使用 | **HUMAN APPROVED 2026-11-24（默认）**：释放额度可回到**同一订单/同一组**的可退余额；不得跨订单/跨组复用；新退款仍需新申请并重新准入；释放动作不得自动触发退款 | AC-62/AC-64 |
 | D-26 | 168h 运费挂起在多组/多次售后/后置补退场景的计时起点 | **HUMAN APPROVED 2026-11-24（默认）**：从该组该次售后**首次进入 `UNDETERMINED`** 的时间起算并记录证据；其他组/后续申请不重置；不按订单创建时间起算 | AC-64/AC-31/AC-32 |
-| D-27 | `order.settled` shadow 的字段/版本/比对口径、切换步骤与移除日期 | **ADR-0007 Amendment 1（accepted 2026-11-24）A-09/A-10 已决策**：本 Spec 不切换；`OFF→SHADOW` 仅 Director 影子批准；`SHADOW→ON` 需 SPEC §7/G-4/五方/`--release --range` + Director；`ON→SHADOW/OFF` 回滚需人类批准；非批准变更 fail-closed | AC-66/D-4 |
+| D-27 | `order.settled` shadow 的字段/版本/比对口径、切换步骤与移除日期 | **ADR-0007 Rev 2.3（latest，accepted 2026-11-25）A-09/A-10 已决策**：本 Spec 不切换；`OFF→SHADOW` 仅 Director 影子批准；`SHADOW→ON` 需 `SPEC-0002 §7 矩阵 + 五方终态 + Reviewer 人工核对 + review-tracking 记录（协作闸门已退役，无命令可跑）` + Director/人类批准；`ON→SHADOW/OFF` 回滚需人类批准；非批准变更 fail-closed；`ON` 必须记录移除日期与回滚路径 | AC-66/D-4 |
 | D-28 | `legacy_payment_resolution` 与“`PAID` 空 `settlement_payment_no`”的写入竞态、唯一键、队列 owner | **ADR-0007 Amendment 1（accepted 2026-11-24）A-04 已决策**：Order 唯一写队列；运营/Director 唯一裁决；不得由 Payment 写订单队列 | AC-63/S16/C-05 |
 | D-29 | 代码中的 `GRANTED` 许可值与 v1.7 `<NONE/CONSUMED/REVOKED>` 枚举漂移如何收敛 | **ADR-0007 Amendment 1（accepted 2026-11-24）A-11 已决策**：以 v1.7 为准；`GRANTED` 若为历史兼容值必须显式映射，不得成为第二许可状态；不得改 Spec 迁就代码 | v1.7 §2/§5.2 |
 
 **零元边界（B-3）**：`EXPIRED_ZERO` 只适用于 `pay_cent=0` 且**不存在任何已捕获 intent**；`pay_cent=0` 但存在已捕获 intent 时不得 `zero:<order_no>`/`EXPIRED_ZERO`，必须按 AC-40 保留的第二、三条与 AC-39 支付级处理并进 `legacy_payment_resolution` 人工队列。
 
-**裁决状态**：D-22…D-26 已 **HUMAN APPROVED 2026-11-24（默认）**；D-27…D-29 已由 **ADR-0007 Amendment 1（accepted 2026-11-24）** 决策。
+**裁决状态**：D-22…D-26 已 **HUMAN APPROVED 2026-11-24（默认）**；D-27 已由 **ADR-0007 Rev 2.3（latest，accepted 2026-11-25）** 决策；D-28/D-29 已由 **ADR-0007 Amendment 1（accepted 2026-11-24）** 决策。
 
 ---
 
@@ -728,10 +728,10 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 
 1. 本 Spec v1.8 不废止 v1.7 的任何 INV/AC；新增 S15…S18、INV-45…49、AC-62…66，并收窄 AC-40（不重编号）。
 2. SPEC-0001 v1.3 的 D-17 组退款释放口径继续有效；v1.4 完成 AC-27 的 EARS 基线迁移（C-01，独立批准）。P-06 的行级/运费/责任必须与 0001 §6.5.1/§6.5.2/§6.5.3/§6.6.1 一致。
-3. ADR-0007 Rev 1.0 继续有效；ADR-0007 Amendment 1（accepted 2026-11-24）逐条映射 AC-62…66，并关闭 D-27…D-29；两者冲突时以 Amendment 1 为准。ADR 文件状态头由 Architect 同步；本 Spec 记录 Human 批准事实。
-4. 宪法 II.5：permit 恢复与 commitment 释放由本 Spec + ADR Amendment 1 规定；实现不得自行恢复 `REVOKED` permit 或静默释放承诺。
+3. ADR-0007 Rev 2.3（latest）继续有效；Rev 1.0 / Amendment 1 已被 Rev 2.0+ 取代，仅历史审计；AC-62…66 与 D-27…D-29 以 Rev 2.3 为准。ADR 文件状态头由 Architect 同步；本 Spec 记录 Human 批准事实。
+4. 宪法 II.5：permit 恢复与 commitment 释放由本 Spec + ADR-0007 Rev 2.3 规定；实现不得自行恢复 `REVOKED` permit 或静默释放承诺。
 5. D-4：本 Spec 不切换 `order.settled`，只做 shadow；默认 false；AC-66 不授权任何默认开启。
-6. D-5：`order.refund_requested` 保留 subject 兼容；Payment 消费者改为观察/告警、不得直接 `Refund` 的移除日期与回滚由 ADR Amendment 1 定义。
+6. D-5：`order.refund_requested` 保留 subject 兼容；Payment 消费者改为观察/告警、不得直接 `Refund` 的移除日期与回滚由 ADR-0007 Rev 2.3 定义。
 7. 非目标不变：不引入多仓行为、部分支付、新支付渠道、Kafka/Temporal/新 ORM；不改变 0001 的拆量/选仓/签收；不改变 AI 权限。
 
 ---
@@ -741,7 +741,7 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 - 本 Spec 不规定存储结构；ADR 决定是否新增持久意图/任务/案件序号。若新增，必须同时提供历史数据回填、回滚与旧镜像 smoke 方案。
 - 历史 `PAID` 订单按 AC-60 展示与收敛；不得因缺少四事实而直接放行，也不得永久阻断。
 - 上线顺序建议：先实现只读事实与守卫（不改变现有写入路径）→ 再切换写入协议 → 最后开启相关开关；每个阶段必须有回滚条件。
-- 生产开关保持关闭，直到 §7 矩阵、五方终态核对与 G-4 通过；UAT 结果不得作为 Release PASS 证据。
+- 生产开关保持关闭，直到 §7 矩阵 + 五方终态 + Reviewer 人工核对 + `review-tracking` 记录（协作闸门已退役，无命令可跑）；UAT 结果不得作为 Release PASS 证据。
 
 ---
 
@@ -760,6 +760,7 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 | **v1.7（冻结）** | 2026-11-23 | 甲方批准 ADR-0007 v0.4 时同步澄清 INV-43 适用范围：组级退款需准入；支付级退款（非生效/超少付/取消）是 capture correction，不经组许可 | 仅澄清 INV-43 适用边界；不删除/重编号 AC；ADR-0007 引用 v1.7 |
 | **v1.8（冻结）** | 2026-11-24 | 甲方批准 v1.8：P-04 历史 `PAID` 解析/`legacy_payment_resolution`/`COMPENSATING`；P-05 准入不可逆与人工释放；P-06 行级 INV-24/商品运费组成/责任/168h/后置补退；TCC Σ 预检与逐组扇出；`order.settled` shadow；AC-40 零元边界收窄；新增 S15…S18、INV-45…49、AC-62…66、E22…E31、D-22…D-29；ADR-0007 Amendment 1 accepted 同日 | 影响 INV-01/04/05/06/07/14/21/24/26/30…44 + 新增 INV-45…49；既有 AC-50/51/52/53/60/61 收窄；基线回归 AC-14/21/25/27/31/32；AC-62…66 以延期行登记；不删除/重编号 AC |
 | **v1.9（冻结）** | 2026-11-24 | 甲方批准零元售后 amendment：零元单售后/取消/缺货不调用 Payment；`AdmitRefund` 零元短路同事务写 S19 `DONE`（无 `PENDING`）；AfterSales 最终 `REFUNDED/0/CONSUMED/refund_no=''`、展示 `DONE(zero_amount)`；AC-55 零元例外正式成立且正金额 Payment 事实优先不变；有捕获不得走零元、未 `PAID` 不创建 S19；新增 S19、INV-50、AC-67/68 | 影响 AC-55；新增 AC-67/68；不改变 AC-39…66 其他正文；AC-67/68 以延期行登记；SPEC 仍非 Release PASS |
+| **v1.10（approved）** | 2026-11-25 | 按 Director K-8 指示做 PO amendment：AC-66、§5.9、D-27、§9、§12 将已退役 `G-4` / 已删除 `--release --range` 替换为 K-6 人工门禁口径——`SPEC-0002 §7 矩阵 + 五方终态 + Reviewer 人工核对 + review-tracking 记录（协作闸门已退役，无命令可跑）`；保留 Director/人类批准、§7 矩阵、五方终态、移除日期与回滚路径；Director 2026-11-25 批准 | 仅 AC-66 语义更新；D-27 改引 ADR-0007 Rev 2.3（latest）；不新增/删除 AC、INV；v1.10 approved |
 
 
 ---
@@ -780,3 +781,6 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 | 甲方（Director） | 批准 SPEC-0002 v1.9 零元售后补充（AC-67/68、S19、INV-50、AC-55 零元例外） | 2026-11-24 |
 | Quality Checker | QC-18 `READY FOR HUMAN ZERO AMENDMENT APPROVAL`（0 BLOCKER） | 2026-11-24 |
 | Product Owner | 将已批准的 v1.9 变更应用为 `docs/specs/` v1.9 approved；按 Human 指示登记 AC-67/68 延期行，Reviewer 复核 | 2026-11-24 |
+| 甲方（Director） | K-8：指示 PO amendment，移除 SPEC-0002 中已退役 `G-4` / 已删除 `--release --range` 前置，改用 K-6 人工门禁口径；不设 waiver | 2026-11-25 |
+| 甲方（Director） | 批准 SPEC-0002 v1.10（K-8 amendment；G-4/`--release --range` 由 K-6 人工门禁替代） | 2026-11-25 |
+| Product Owner | 产出 SPEC-0002 v1.10，并按 Director 2026-11-25 批准落库为 `docs/specs/` v1.10 approved：仅 AC-66、§5.9、D-27、§9、§12；未改其他 AC/INV/decision | 2026-11-25 |

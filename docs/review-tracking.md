@@ -363,6 +363,15 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 human decision: PO authorized to upgrade SPEC-0002 (AC-50 outcome)
+
+- Director authorized the PO to issue a **SPEC-0002 v1.11** amendment adding a
+  **bounded, persisted CONFLICT/PENDING admission outcome** (and its TCC
+  handling), so AC-50 `CONSUMED+no-waybill` no longer silently maps to PRE.
+- Scope: AC-50/51/62/65, INV-45/46; impact analysis (business + technical)
+  must be produced and QC-reviewed before implementation. No code until
+  accepted; no merge/Release/AC-VERIFIED implied.
+
 ### 2026-11-26 AC-50-FIX-01 BLOCKED (QC round 2)
 
 - Architect amendment `docs/adr/0007-amd1-addendum-ac50-nowaybill.md`

@@ -119,11 +119,15 @@ func TestMultiGroupActionsExposeTypedGroupActions(t *testing.T) {
 }
 
 // AC-27: a refunded unshipped group is closed in the projection and does not
-// block the remaining group.
+// block the remaining group. The EARS-2 precondition is refund_state=REFUNDED
+// plus a revoked permit (the reservation was released by refund admission), so
+// the fixture and the assertions use exactly those read-model fields.
 func TestAC27RevokedGroupIsClosedInProjection(t *testing.T) {
 	groups := []*fulfillmentGroup{
-		{GroupNo: "G1", Status: "SHIPPED"},
-		{GroupNo: "G2", Status: statusAllocated, PermitState: permitRevoked},
+		{GroupNo: "G1", Status: "SHIPPED", RefundState: refundStateNone,
+			ReservationState: "HELD", PermitState: permitConsumed},
+		{GroupNo: "G2", Status: statusAllocated, RefundState: groupRefundStateRefunded,
+			ReservationState: "RELEASED", PermitState: permitRevoked},
 	}
 	if got := shipmentStatusForGroups(statusAllocated, groups); got != "SHIPPED" {
 		t.Fatalf("shipment status = %s", got)
@@ -133,5 +137,40 @@ func TestAC27RevokedGroupIsClosedInProjection(t *testing.T) {
 	}
 	if got := effectiveGroupStatus(groups[1]); got != "CANCELLED" {
 		t.Fatalf("effective group status = %s", got)
+	}
+
+	// AC-27 EARS-2: refund progress is carried only by refund_state; the
+	// lifecycle stays inside PAID/ALLOCATED/SHIPPED. Asserted through the same
+	// read model the order RPCs return (repo.go toProto).
+	record := &orderRecord{
+		OrderNo: "ORD-AC27", Status: statusAllocated,
+		PaidCent: 1000, RefundedCent: 400, RefundState: refundStatePartial,
+	}
+	out := record.toProto(nil, groups)
+	if got := out.GetStatus(); got != statusAllocated {
+		t.Fatalf("order lifecycle polluted by refund progress: %s", got)
+	}
+	if got := out.GetShipmentStatus(); got != "SHIPPED" {
+		t.Fatalf("order shipment projection = %s", got)
+	}
+	var projected *pb.OrderFulfillmentGroup
+	for _, group := range out.GetFulfillmentGroups() {
+		if group.GetGroupNo() == "G2" {
+			projected = group
+		}
+	}
+	if projected == nil {
+		t.Fatal("G2 missing from order projection")
+	}
+	if got := projected.GetStatus(); got != "CANCELLED" {
+		t.Fatalf("projected G2 status = %s", got)
+	}
+	if got := projected.GetRefundState(); got != groupRefundStateRefunded {
+		t.Fatalf("projected G2 refund_state = %s", got)
+	}
+	for _, action := range out.GetGroupActions() {
+		if action.GetGroupNo() == "G2" {
+			t.Fatalf("closed refunded G2 still exposes action %v", action)
+		}
 	}
 }

@@ -30,7 +30,7 @@ Status: **APPROVED Plan (2026-11-24)**。本文件是 **Plan 视图**，不拥�
 - [x] **T1.4** 逐组 `AdmitRefund`；全部成功后才打款；已发货组 POST（T1.4b1/T1.4b2a scoped PASS；T1.4a 独立 verdict = P0-3）
 - [x] **T1.5** TCC bypass removed；consumer 仅保留 cancel-after-confirm，observe-only 归 T1.6/后置
 - [x] **T1.6** `PENDING_PAYMENT+已捕获` 分支按 C-03 裁决（T1.6-R scoped PASS）
-- [ ] **T1.7** 测试：Σ 不等、REFUNDING vs Ship 竞态、崩溃续跑、部分失败、无组 G1、已发货组（next）
+- [x] **T1.7** 测试：Σ 不等、REFUNDING vs Ship 竞态、崩溃续跑、部分失败、无组 G1、已发货组（test-only PASS；无 AC-VERIFIED）
 - [x] **T1.2b** 按 Architect Addendum R-1/R-2/R-3 修复：
   - R-1：Σ 不等写 `refund_batches(state=PRECHECK_FAILED)` 审计，其他零写入；调整“零行”测试。
   - R-2：Tx1 外读 `ListShipments`，`exception_state != 'NONE' && shipped_at_unix>0` 判已离仓；不可用/不明确 fail-closed；T1.4 `CancelIfCreated` 返回 `ALREADY_SHIPPED`。

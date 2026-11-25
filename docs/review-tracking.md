@@ -317,6 +317,14 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   **收益**：角色动作与分级对齐、防止再次无界扩张；**停止条件**：本轮为最后编辑，不再新增治理机制。
 - **2026-11-25 §2.8 收口**: 撤回清理由各产物 owner 执行、仅删本次新增行；多文件同步限于首个可验证增量；安全/合规/数据完整性可豁免可测收益；收益与停止条件记录于 review-tracking 或变更输入。
 
+### 2026-11-25 T1.7 TEST PASS (scoped)
+
+- Reviewer PASS for `93380d5..2a05c1d` test-only: Sigma mismatch, REFUNDING vs
+  Ship, crash resume, partial group failure, legacy no-group G1, shipped POST.
+- No production/contract/migration change; no AC-VERIFIED. Non-blocking note:
+  test header says "real C-05 migrations" but uses inline mirrored schema; T5
+  still needs real-migration rehearsal.
+
 ### 2026-11-25 docs IA: handoff / development split
 
 - `docs/handoff.md` is now a session-boundary snapshot only; durable local

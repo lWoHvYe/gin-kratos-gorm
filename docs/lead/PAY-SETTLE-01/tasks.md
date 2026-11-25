@@ -134,3 +134,9 @@ Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `
 - T4 fail-closed/shadow (default paid).
 - Separate: inventory.confirm.requested warehouse_id (paid-confirm path).
 - P0 merge only after human approve.
+
+## P0 merge (2026-11-25)
+
+- [x] Human approved merge; `main` merge commit `d7c2f30`.
+- [ ] T1.7/T5 evidence, T2/T3/T4, AC-VERIFIED, release gates.
+- [ ] Separate: inventory.confirm.requested warehouse_id.

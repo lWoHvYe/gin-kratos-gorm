@@ -37,6 +37,16 @@ T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
   path (`pay:<payment_no>:cancel`) and then becomes observe-only.
 - No code change in T1.5.
 
+### 2026-11-25 P0 WIP merged to main (human approved)
+
+- Director approved merge; merge commit `d7c2f30` on `main` (18 commits ahead
+  of origin, not pushed).
+- Main now contains the PAY-SETTLE-01 P0 WIP: settlement/refund, RefundBatch,
+  zero after-sale, single-group release, payment-level cancel, reconcile.
+- **Not a Release PASS**: T1.7/T5 evidence, T2/T3/T4, AC-VERIFIED, release
+  gates remain open. Multi-group physical release is deferred (reserved).
+- `inventory.confirm.requested` warehouse_id remains a separate task.
+
 ### 2026-11-25 T1.6-R PASS (scoped)
 
 - Reviewer PASS for `8dc1766..20df5b7`: warehouse_id, PENDING authoritative

@@ -5,10 +5,11 @@
 ## Ratification
 
 - v1.2.0 经人类指挥官于 2026-11-24 批准；G1–G4 同日完成，状态 **EFFECTIVE**。
+- v1.2.1（2026-11-25）：协作闸门工具退役；v1.2.2（2026-11-25）：L0/L1/L2 分级路由与 Workflow/Governance 对齐；v1.2.3（2026-11-25）：历史记录与人工清单口径澄清（PATCH，无语义变更）。
 - 层级：**本宪法 > `AGENTS.md` > `docs/collab/CONVENTIONS.md`**；冲突时以本宪法为准。
 - G1：AGENTS/CONVENTIONS 已对齐；G2：G-1 已校验 `change_id`/`Actor`/`Reviewed-by`；
   G3：`ac-coverage.tsv` 已含 `test_type/evidence_path/status`；G4：人类裁决 B 已记录在
-  `docs/review-tracking.md`。
+  `docs/review-tracking.md`。（G-1…G-4 为已退役的协作闸门代号，仅作历史记录。）
 - 遗留：SPEC-0001 AC-27 在下一次版本升级改为 EARS；PAY-SETTLE-01 WIP 按裁决 B 冻结。
 
 ## Core Principles
@@ -44,7 +45,7 @@
 
 ### IV. 测试与交付标准 (Testing & DoD)
 
-1. **测试证据不可妥协**：口头 `done` 无效。交付物必须包含实际执行日志，并绑定精确 HEAD。AC 文本引用（AC-REF）不等于 AC-VERIFIED；每条**受影响 AC** MUST 映射到 `docs/collab/ac-coverage.tsv`（`test_type`、`evidence_path`、`status`，Owner 固定为 Reviewer）；只有真实执行日志才能标记 AC-VERIFIED。在 G-3/ledger 扩展落地前，以 Reviewer 人工矩阵为准，MUST NOT 宣称 AC-VERIFIED。
+1. **测试证据不可妥协**：口头 `done` 无效。交付物必须包含实际执行日志，并绑定精确 HEAD。AC 文本引用（AC-REF）不等于 AC-VERIFIED；每条**受影响 AC** MUST 映射到 `docs/collab/ac-coverage.tsv`（`test_type`、`evidence_path`、`status`，Owner 固定为 Reviewer）；只有真实执行日志才能标记 AC-VERIFIED。机器门禁已于 2026-11-25 退役；AC-VERIFIED 永久以 Reviewer 人工矩阵 + 真实执行日志为准，MUST NOT 仅凭 AC-REF 宣称 AC-VERIFIED；机器阀门为可选辅助，不构成宪法要求。
 2. **重灾区强制抗压**：资金、库存、权限和跨服务恢复 MUST 提供**并发竞态测试**（如 Go `-race`）或**故障注入测试**（模拟下游超时/崩溃）的日志。不适用时 MUST 书面说明依据并经人类确认，严禁以"不适用"静默跳过。仅功能测试通过、仅 Mock 全绿，不构成抗压证据。
 3. **Mock 数据真实性**：测试用例中的 Mock 数据必须符合真实业务边界（支付/退款金额 MUST > 0；零元单 `pay_cent=0` 是合法路径，需单独覆盖），且必须包含至少一个异常分支，严禁用假数据糊弄全绿。
 4. **组合与发布隔离**：实现测试绿色（Implementation PASS）不等于 Spec 全量验收，更不等于 Release PASS。跨服务变更必须包含受影响基线的非回归证据。
@@ -72,7 +73,7 @@
 
 本宪法只定义不可谈判的结果约束；执行细则（角色矩阵、产物所有权、线程协议）以 `AGENTS.md` 与 `docs/collab/CONVENTIONS.md` 为准。优先级 MUST 为 **本宪法 > `AGENTS.md` > `CONVENTIONS.md`**；二者不得与本宪法冲突。`AGENTS.md` §4/§5 为领域铁律，§1/§2/§6 为角色、SDD 与 DoD 执行细则，均与本宪法并行有效：本宪法未显式覆盖处仍受其约束，不得以"宪法未禁止"为由放行。
 
-1. **阶梯门禁**：业务想法 → PO 输出 Spec Draft → QC 审查 Spec → 人类批准 `SPEC_APPROVED` → Architect 输出 ADR Draft → QC 审查 ADR → 人类批准 `ADR_APPROVED` → Developer 实现 → Reviewer 按精确 base/head 审查 → integration owner 组织基线与组合验证 → 人类决定 `RELEASE_APPROVED`。
+1. **阶梯门禁**：业务想法 → PO 输出 Spec Draft → QC 审查 Spec → 人类批准 `SPEC_APPROVED` → Architect 输出 ADR Draft → QC 审查 ADR → 人类批准 `ADR_APPROVED` → Developer 实现 → Reviewer 按精确 base/head 审查 → integration owner 组织基线与组合验证 → 人类决定 `RELEASE_APPROVED`。L0/L1 的适用与减免以 `docs/collab/CONVENTIONS.md` §2.3 为准；L2 MUST 走本条完整阶梯。任何级别保留人类合入与 Release。
 2. **批准不得越级**：Spec 未批准 MUST NOT 开始 ADR；ADR 未批准 MUST NOT 开始实现。PO/Architect 的批准是业务与架构批准，不构成代码验收。
 3. **验收语义隔离**：线程 CLOSED、实现 PASS、代码合入、Release PASS 是四种不同状态，MUST NOT 互相替代；Reviewer 的 PASS 必须声明 `review_scope`。
 4. **反证义务**：Developer 若认为 ADR 存在架构缺陷，MUST 停止编码并附上至少一个会引发崩溃或资损的具体时序推演或伪代码，MUST NOT 只提问题不提供证据。
@@ -90,7 +91,7 @@
 1. **Lead 的职责边界**：Lead 负责拆分任务、选择 subagent、维护 Plan/Tasks 与证据索引、集成交付、向人类报告；MUST NOT 编写 Spec、ADR、业务代码、QC 报告、Reviewer 裁决或本宪法文本（人类明确指示的治理修订草案除外，且仍须人类批准并记录指示）。若没有合适的 owner，Lead MUST 停下并向人类请求角色，不得自任。
 2. **SubAgent 的治理义务**：每个 subagent MUST 自行读取 `AGENTS.md`、本宪法、`docs/collab/CONVENTIONS.md` 与自身角色 prompt；MUST NOT 仅依赖 Lead 摘要。Brief MUST 包含 role、`change_id`、允许/禁止路径、输入契约、验收标准、停止条件与证据要求。
 3. **Reviewer 独立性**：Reviewer MUST 与作者为不同 actor；报告 MUST 逐条核对本宪法 Article I–V 以及 Governance/Workflow 相关条款，写明 `review_scope`、精确 base/head、`release_status` 与 `Actor/Reviewed-by`。Reviewer 的 PASS 只在声明范围内有效；FAIL 触发 Stop-the-line。
-4. **人类检查点**：Spec 批准、ADR 批准、Plan 批准、每个 `change_id` 的首次与重审 FAIL、merge、release 均须人类知会/裁决；Lead 与 subagent MUST NOT 代行。
+4. **人类检查点**：在适用时，Spec 批准、ADR 批准、Plan 批准、每个 `change_id` 的首次与重审 FAIL、merge、release 均须人类知会/裁决；L0/L1 无 Spec/ADR/Plan 时仍保留人类合入；任何级别均保留人类 Release。Lead 与 subagent MUST NOT 代行。
 5. **治理基线同步**：`AGENTS.md`、本宪法或 `CONVENTIONS.md` 变更后，Lead 与所有 subagent MUST 重新读取，并在 `docs/review-tracking.md`（或对应 `docs/collab/<pair>/threads/`）记录 delta audit（日期、版本、差异摘要）；MUST NOT 依赖旧摘要或"未看到新版本"作为免责理由。
 6. **进度度量**：不得以 round 数、commit 数、测试数量作为合规或交付进度的替代；无合规产出的轮次 MUST 停手并报告阻断。
 
@@ -104,6 +105,6 @@
 6. **人类豁免**：人类指挥官可对本宪法条款给出有范围的 Trade-off 豁免。豁免 MUST 以书面形式记录于 `docs/` 并在受影响的 Spec/ADR/线程中引用，MUST 注明范围、期限与受影响不变量；豁免不修改本宪法文本，MUST NOT 由 AI 自行推断或扩大适用范围。无记录的豁免视为不存在。
 7. **过渡条款**：本宪法 1.2.0 生效前已存在于 `main` 的 WIP（含 PAY-SETTLE-01）按人类裁决 B 处理：**隔离 = 保留在 `main`、冻结、不合并到 release、不发布**；其 open 项（当前 P-01 安全网、P-04、P-05、P-06）在冻结清单中列明，不得据此新增半成品协议路径，也不得把"已存在"作为继续扩展的理由。B 裁决 MUST 记录在 `docs/review-tracking.md` 的 human decisions 区并被本章引用。
 
-**Version**: 1.2.0 | **Approved**: 2026-11-24 | **Effective**: 2026-11-24 | **Ratified**: 2026-11-24 | **Last Amended**: 2026-11-24
+**Version**: 1.2.3 | **Approved**: 2026-11-25 | **Effective**: 2026-11-25 | **Ratified**: 2026-11-24 | **Last Amended**: 2026-11-25
 
 **Status**: EFFECTIVE.

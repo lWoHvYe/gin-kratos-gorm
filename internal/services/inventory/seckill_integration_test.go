@@ -39,7 +39,7 @@ func seckillTestDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { _ = db.Close() })
 	// These two tables changed keys in phase 3; drop so an older test schema is
 	// rebuilt instead of silently missing warehouse_id/unique keys.
-	for _, table := range []string{"inventory_operation_items", "stock_reservations"} {
+	for _, table := range []string{"inventory_operation_items", "stock_reservations", "inventory_ledger"} {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
 			t.Fatal(err)
 		}
@@ -53,7 +53,8 @@ func seckillTestDB(t *testing.T) *sql.DB {
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, reservation_no VARCHAR(64) NOT NULL,
 			order_no VARCHAR(64) NOT NULL, sku_id BIGINT NOT NULL, warehouse_id BIGINT NOT NULL,
 			quantity BIGINT NOT NULL, status VARCHAR(16) NOT NULL, expires_at DATETIME(3) NOT NULL,
-			created_at DATETIME(3) NOT NULL, updated_at DATETIME(3) NOT NULL,
+			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			UNIQUE KEY uk_reservations_order_sku_warehouse (order_no, sku_id, warehouse_id))`,
 		`CREATE TABLE IF NOT EXISTS seckill_stocks (
 			activity_id BIGINT NOT NULL PRIMARY KEY, sku_id BIGINT NOT NULL, warehouse_id BIGINT NOT NULL,

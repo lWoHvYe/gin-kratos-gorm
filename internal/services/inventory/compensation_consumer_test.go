@@ -29,7 +29,7 @@ func (f *fakeCompensation) applyInventoryOperation(_ context.Context, typ, order
 
 func TestCompensationHandlerRetriesAndSkipsInvalidItems(t *testing.T) {
 	fake := &fakeCompensation{failed: true}
-	payload := []byte(`{"order_no":"ORD-1","items":[{"sku_id":1,"quantity":1},{"sku_id":0,"quantity":2}]}`)
+	payload := []byte(`{"order_no":"ORD-1","items":[{"sku_id":1,"warehouse_id":1,"quantity":1},{"sku_id":0,"quantity":2}]}`)
 	if err := handleCompensation(context.Background(), fake, payload); err == nil {
 		t.Fatal("expected retryable error")
 	}

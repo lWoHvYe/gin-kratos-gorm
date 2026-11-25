@@ -238,6 +238,10 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 	if err != nil {
 		return nil, err
 	}
+	// AC-67: only Order's authoritative zero-settlement facts may create a
+	// zero-amount after-sale. A user-supplied amount of 0 on any other order
+	// keeps the positive-amount path.
+	zeroSettlement := isZeroSettlementOrder(order)
 	// A retried submit must return the first request instead of creating a
 	// second after-sale; the client sends the key as gRPC metadata.
 	requestID := clientRequestID(ctx)
@@ -284,24 +288,32 @@ func (s *Service) CreateAfterSale(ctx context.Context, req *pb.CreateAfterSaleRe
 		if !holdFreight {
 			computedCent += freightCent
 		}
-	} else {
+	} else if !zeroSettlement {
 		refunds = nil
 	}
-	if goodsCent > 0 && capturedCent > 0 {
-		ledgerPreview, err := s.ensureAmountLedgerTx(ctx, tx, input.orderNo, capturedCent, capturedSource)
+	if zeroSettlement {
+		// A zero after-sale must not invent a positive amount (AC-67).
+		if computedCent != 0 {
+			return nil, apperr.Failed("zero-amount after-sale requires amount_cent 0 (REFUND_ADMISSION_CONFLICT)").
+				WithDetails(map[string]any{"order_no": input.orderNo, "amount_cent": computedCent})
+		}
+	} else {
+		if goodsCent > 0 && capturedCent > 0 {
+			ledgerPreview, err := s.ensureAmountLedgerTx(ctx, tx, input.orderNo, capturedCent, capturedSource)
+			if err != nil {
+				return nil, err
+			}
+			if available := ledgerPreview.captured - ledgerPreview.consumed; computedCent > available {
+				computedCent = available
+			}
+		}
+		ledger, err := s.ensureAmountLedgerTx(ctx, tx, input.orderNo, capturedCent, capturedSource)
 		if err != nil {
 			return nil, err
 		}
-		if available := ledgerPreview.captured - ledgerPreview.consumed; computedCent > available {
-			computedCent = available
+		if err := reserveAmountTx(ctx, tx, ledger, computedCent); err != nil {
+			return nil, err
 		}
-	}
-	ledger, err := s.ensureAmountLedgerTx(ctx, tx, input.orderNo, capturedCent, capturedSource)
-	if err != nil {
-		return nil, err
-	}
-	if err := reserveAmountTx(ctx, tx, ledger, computedCent); err != nil {
-		return nil, err
 	}
 	key := sql.NullString{String: requestID, Valid: requestID != ""}
 	res, err := tx.ExecContext(ctx, "INSERT INTO after_sales (after_sale_no, order_no, user_id, `type`, status, amount_cent, effective_amount_cent, amount_state, restock_state, reason, client_request_id, source, responsibility_party, responsibility_source, responsibility_evidence_ref, responsibility_reason_code, responsibility_determined_by, responsibility_determined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'USER', ?, ?, ?, ?, ?, NOW(3))",
@@ -414,6 +426,9 @@ func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.Afte
 	if err != nil {
 		return nil, err
 	}
+	// AC-67: a zero-settled order's after-sale stays at 0 and never touches the
+	// amount ledger; a positive amount requires a payment-level order.
+	zeroSettlement := isZeroSettlementOrder(order)
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -450,6 +465,10 @@ func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.Afte
 			return nil, apperr.Internal("waive rejected freight hold", err)
 		}
 	} else if req.GetAmountCent() > 0 {
+		if zeroSettlement {
+			return nil, apperr.Failed("zero-amount after-sale cannot be approved with a positive amount (REFUND_ADMISSION_CONFLICT)").
+				WithDetails(map[string]any{"after_sale_no": afterSaleNo, "amount_cent": req.GetAmountCent()})
+		}
 		var newLineCount int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM after_sale_items
 			WHERE after_sale_id = ? AND line_no > 0`, row.id).Scan(&newLineCount); err != nil {
@@ -471,21 +490,30 @@ func (s *Service) Approve(ctx context.Context, req *pb.ApproveRequest) (*pb.Afte
 		}
 		nextEffective = req.GetAmountCent()
 	}
-	ledger, err := s.ensureAmountLedgerTx(ctx, tx, row.orderNo, capturedCent, capturedSource)
-	if err != nil {
-		return nil, err
-	}
-	delta := nextEffective - row.effectiveAmountCent
-	if next == statusRejected {
-		delta = -row.effectiveAmountCent
-	}
-	if delta > 0 {
-		if err := reserveAmountTx(ctx, tx, ledger, delta); err != nil {
+	if zeroSettlement {
+		// Rejection stays a legal closure; an approved zero after-sale must
+		// remain at 0 because it has no payment-level amount to reserve.
+		if next != statusRejected && nextEffective != 0 {
+			return nil, apperr.Failed("zero-amount after-sale cannot carry a positive effective amount (REFUND_ADMISSION_CONFLICT)").
+				WithDetails(map[string]any{"after_sale_no": afterSaleNo, "effective_amount_cent": nextEffective})
+		}
+	} else {
+		ledger, err := s.ensureAmountLedgerTx(ctx, tx, row.orderNo, capturedCent, capturedSource)
+		if err != nil {
 			return nil, err
 		}
-	} else if delta < 0 {
-		if err := releaseAmountTx(ctx, tx, ledger, -delta); err != nil {
-			return nil, err
+		delta := nextEffective - row.effectiveAmountCent
+		if next == statusRejected {
+			delta = -row.effectiveAmountCent
+		}
+		if delta > 0 {
+			if err := reserveAmountTx(ctx, tx, ledger, delta); err != nil {
+				return nil, err
+			}
+		} else if delta < 0 {
+			if err := releaseAmountTx(ctx, tx, ledger, -delta); err != nil {
+				return nil, err
+			}
 		}
 	}
 	action := "APPROVE"
@@ -573,9 +601,12 @@ func (s *Service) groupForAfterSale(ctx context.Context, afterSaleNo string) (st
 	return groupNo, nil
 }
 
-// Refund first blocks new shipments in Order, then persists REFUNDING plus a
-// durable refund task. Payment is idempotent by after_sale_no; a failed inline
-// attempt is retried by the refund worker, never by a status scanner.
+// Refund persists REFUNDING plus a durable refund task, then runs the refund
+// worker inline. The task/lease is written before any remote Order admission
+// (R-C): a zero-amount after-sale can therefore retry CancelIfCreated after a
+// crash, and a failed admission never loses the intent. Payment is idempotent
+// by after_sale_no; a failed inline attempt is retried by the refund worker,
+// never by a status scanner.
 func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*pb.AfterSale, error) {
 	afterSaleNo := strings.TrimSpace(req.GetAfterSaleNo())
 	if afterSaleNo == "" {
@@ -594,22 +625,9 @@ func (s *Service) Refund(ctx context.Context, req *pb.RefundAfterSaleRequest) (*
 	if err := refundableStatus(pre); err != nil {
 		return nil, err
 	}
-	if s.orders == nil {
-		return nil, apperr.Unavailable("order client is not configured", nil)
-	}
 	groupNo, err := s.groupForAfterSale(ctx, afterSaleNo)
 	if err != nil {
 		return nil, err
-	}
-	refundAmount := pre.effectiveAmountCent
-	if refundAmount <= 0 {
-		refundAmount = pre.amountCent
-	}
-	if _, err := s.orders.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: afterSaleNo, OrderNo: pre.orderNo, GroupNo: groupNo,
-		AmountCent: refundAmount, Source: "aftersale",
-	}); err != nil {
-		return nil, apperr.Unavailable("refund admission", err)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)

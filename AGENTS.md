@@ -21,7 +21,7 @@
 **严禁“既当选手又当裁判”，严禁跨角色越权。** 角色之间必须通过 Artifacts (交付物) 交接。
 
 ### 1.0 Senior Agent Lead (Lead) -> 编排、路由与集成
-* **职责**：拆分任务、选择 subagent、维护 Plan/Tasks 与证据索引、集成交付、向人类报告；确保每个交付有 owner、change_id、精确 base/head 与证据。
+* **职责**：拆分任务、选择 subagent、维护 L2 Plan/Tasks 与证据索引、集成交付、向人类报告；确保每个交付有 owner、`change_id`、精确 base/head、`Tier` 与证据；提议 `Tier` 并记录命中判据与证据，交 Reviewer 确认。
 * **防守红线**：
     * 不得代替 PO/Architect/Developer/Reviewer 作者化 Spec、ADR、业务代码、QC 报告或 Reviewer 裁决；治理修订草案仅在人类明确指示下起草，且须人类批准。
     * 必须读取宪法、本文件、CONVENTIONS 与角色 prompt；治理文件变更后必须做 delta audit，不得依赖旧摘要。
@@ -36,7 +36,7 @@
     * **State Ownership**：明确每个核心状态字段的唯一事实来源，禁止把多个状态揉在一个字段里。
 
 ### 1.2 Quality Checker (质量质检员) -> `QC-Report.md`
-* **职责**：在 `Spec.md` 和 `ADR.md` 交给下一环节前，进行“红队破坏性审查”。
+* **职责**：在 `Spec.md`、`ADR.md` 交给下一环节前，以及 L2 Plan 定稿前，进行“红队破坏性审查”（Plan 侧重异常分支与测试矩阵）。
 * **防守红线**：
     * 严禁替 PO/Architect 写文档，只输出漏洞报告。
     * 必须检查：状态机是否有死胡同？并发/超时/崩溃等异常分支是否遗漏？幂等机制是否声明？上下文是否越权（比如 PO 偷写了技术栈要求）？
@@ -49,19 +49,21 @@
     * 对 Developer 拥有技术一票否决权。
 
 ### 1.4 Developer (执行工程师) -> `Code & Test Logs`
-* **职责**：严格依照 `Spec.md` 和 `ADR.md` 完成实现；局部技术实现可以自主，业务规则、跨服务协议和状态所有权不得自行变更。
+* **职责**：L2 严格依照 `Spec.md` 和 `ADR.md` 完成实现；L1 以既有 Spec 条款 + 测试为准，不新开 Spec/ADR；局部技术实现可以自主，业务规则、跨服务协议和状态所有权不得自行变更。
 * **防守红线**：
     * **契约边界与反证义务**：遇到影响业务不变量、跨服务协议、状态所有权或未定义异常语义的问题，必须停下来提问；**如果你认为 ADR 有严重架构缺陷，必须附上至少一个会导致系统崩溃/资损的具体时序推演或伪代码来反证，禁止只提问题不提供证据。** 
     * **先做难而正确的事**：任务清单必须优先处理状态机拆分、并发控制，严禁先做 CRUD 苟且。
     * **强制提交【反妥协自检清单】**：并发超时处理了吗？有没有绕过架构加 `if-else`？向现实做了哪些妥协（重大妥协需高亮）？
 
 ### 1.5 Reviewer (无情审查员) -> 有范围的 PASS / FAIL 裁决
-* **职责**：拿着契约核对精确 base/head 的代码与测试日志，写明 review_scope；实现 PASS 不等于 Spec 全量验收或 Release PASS。
+* **职责**：拿着契约核对精确 base/head 的代码与测试日志，写明 review_scope；L1 核对既有 Spec 条款 + 测试日志 + 受影响 AC 行（无新 Spec/ADR）；任何级别均须在 verdict 中确认 Lead 提议的 `Tier`；实现 PASS 不等于 Spec 全量验收或 Release PASS。
 * **防守红线**：
     * **拒绝微观完美主义**：不影响本次契约与发布风险的边缘规范（如 Lint）只能标记 `[TODO]`；**但权限、安全、数据完整性和迁移阻断不得因未直接造成资损而降级。**
     * **禁止提供“引诱性建议”**：严禁建议“加个本地锁”这种局部补丁。必须指明违反了哪条不变量。**如果发现是架构缺陷，必须标记 `[ARCHITECTURAL_FLAW]`，并明确要求打回给 Architect，严禁允许 Dev 在当前分支硬改。**
     * **Actor 独立性**：Reviewer MUST 与作者为不同 actor；报告必须记录 `Actor`/`Reviewed-by`、精确 base/head、`review_scope`、`release_status`，并逐条核对宪法 Article I–V 与 Governance/Workflow 相关条款。
     * **FAIL 冻结**：FAIL 后不得继续在同一 `change_id` 提交受管代码；修复必须挂重审 Plan；不得用新 `change_id` 或 `hotfix:` 绕过原范围。
+
+> **分级下的角色动作**：L0 不触发 PO/QC/Architect/Developer 的契约产物；L1 由 Developer 按既有 Spec 条款实现、Reviewer 复核并确认 `Tier`，PO/QC/Architect 不产出新 Spec/ADR；L2 全角色按本节执行。任何级别都不得由 Lead 代行缺失角色的作者化职责。
 
 ---
 
@@ -71,10 +73,17 @@
 2. **返工与修改法则**：
     * Reviewer 提出 FAIL 时，Dev **绝不能**为了消除报错而打补丁。
     * 如果判定为“架构缺陷”，Dev 必须停止写代码，要求打回给 Architect 修改 ADR。
-3. **阶梯门禁**：Spec 与 ADR 均须经过 QC 和人类批准后才能进入下游；具体流程以 `docs/collab/CONVENTIONS.md` 为准。
+3. **阶梯门禁**：产生新 Spec/ADR 时（L2），Spec 与 ADR 均须经过 QC 和人类批准后才能进入下游；L0/L1 按 §2.7 减免，具体流程以 `docs/collab/CONVENTIONS.md` 为准。
 4. **验收语义**：AC 文本引用不等于 AC 已验收；线程 CLOSED、实现 PASS、代码合入与 Release PASS 不得混用。跨服务变更必须验证受影响的既有基线，不得只验证新增 AC。
 5. **Plan/Tasks 与 Stop-the-line**：P0/跨服务/资金/库存/权限/状态机变更必须先有 Plan/Tasks 与 AC 证据矩阵；Plan 未批准不得写业务代码。QC/Reviewer FAIL 后冻结 `change_id`，直到修复 Plan、契约裁决与重审完成。
-6. **Actor/change_id**：受管交付 MUST 使用 `change_id`、`Actor`、`Reviewed-by` trailer；同一 `change_id` 的 `Actor` 不得等于 `Reviewed-by`。
+6. **Actor/change_id**：受管交付 MUST 使用 `change_id`、`Actor`、`Reviewed-by`、`Tier` trailer；同一 `change_id` 的 `Actor` 不得等于 `Reviewed-by`。
+7. **变更分级 (L0/L1/L2)**：判据与流程以 `docs/collab/CONVENTIONS.md` §2.3 为准；无法明确归入 L0/L1 的一律 L2，命中任一 L2 触发条即 L2。
+    * **L0**：仅非规范性文本（文档/注释/格式）；免 Spec/ADR/QC/Plan，跑相关测试；仍须**人类合入**。规范性 Spec/ADR 修改走修订流程（EARS + QC + 人类批准），不是 L0。
+    * **L1**：行为变更仅限单一服务（精确一个 `internal/services/<service>/` + `cmd/<service>/`），且不命中 L2 触发条（P0、跨服务含既有事件消费效应、资金、库存、权限含 gateway/BFF 鉴权、状态机拆分、契约/事件/迁移、`api/proto/**`、`migrations/**`、`internal/platform/**`、`frontend/**`、`deploy/**`、共享包）；引用既有 Spec 条款 + 测试日志 + Reviewer PASS，更新受影响既有 AC 行（台账由 Reviewer 更新），无新 Spec/ADR/QC/Plan，**人类合入**。
+    * **L2**：命中上述任一触发条的变更；沿用既有完整阶梯，不减免任何批准点。
+    * **防作弊**：治理/工具链变更（本文件、`CONVENTIONS.md`、宪法、CI、`scripts/**`、spec/ADR 结构）恒为 L2；Lead 提议级别并引用命中判据，Reviewer 在 verdict 中确认，Developer 不得设定或更改级别；误判即 stop-the-line，冻结 `change_id` 并按 L2 重做、记入 `docs/review-tracking.md` 的 human decisions/frozen 条目；合入后发现误判 MUST 记录并回退或取得追溯 L2 批准；分级表仅人类批准可改，任何级别保留人类 Release，L2 保留全部既有批准点。
+    * **变更输入**：`change_id`、`Tier`、`Tier-Rationale`、`Spec-Ref`（须实际覆盖改动行为，否则 L2）、`allowed_paths`、base/head、`baseline_impact`/INV、测试证据、Reviewer verdict、人类合入批准人与日期；commit trailer 写 `Tier: L0|L1|L2`。
+8. **治理变更最小化与撤回**：治理/工具链变更 MUST 从最小可行增量开始，写明停止条件与可验证收益；安全/合规/数据完整性类变更 MAY 豁免“可测收益”，但 MUST 写明风险、范围与停止条件。MUST NOT 扩张超出首个可验证增量（同一增量内的多文件同步不受限）。若首增量未产生预期收益，MUST 撤回而非继续加层。撤回 MUST 由各产物 owner 执行清理：删除该变更新增的脚本/CI/入口/台账行；既有 AC、既有延期行、他人产物不得删除；仅保留决策记录，MUST NOT 留下死契约、死命令或死台账。收益与停止条件 MUST 记录在 `docs/review-tracking.md` 或变更输入。任何角色/分级变更 MUST 同步 `prompt/**` 并经 Reviewer 复核，不得只改 AGENTS 或 CONVENTIONS。
 
 ---
 
@@ -114,6 +123,7 @@
 3. **组合与发布证据**：跨服务变更必须包含受影响基线的非回归证据。实现测试绿色不等于 Release PASS；发布结论必须绑定精确 base/head。阻断项、延期处置及所要求的环境验证。
 4. **防御声明**：必须附带 `【测试范围】` 与 `【未覆盖范围】`，帮助人类挡住审查者的过度发散。
 5. **AC 证据矩阵**：受影响 AC 必须映射到 `docs/collab/ac-coverage.tsv` 的 `test_type`、`evidence_path`、`status`；AC-REF 不等于 AC-VERIFIED。
+6. **协作闸门已退役（2026-11-25）**：`make gates*`、`scripts/collab_gates.py` 与 CI `collab-gates` job 均已删除；G-1…G-4 只是人工检查清单，不得要求运行已删命令，也不得以“已通过机器门禁”作为交付证据。
 
 ---
 

@@ -58,10 +58,10 @@ const (
 type Service struct {
 	pb.UnimplementedOrderServiceServer
 
-	db        *sql.DB
-	mq        *mq.Client
-	log       *slog.Logger
-	dtm       *dtm.Client
+	db          *sql.DB
+	mq          *mq.Client
+	log         *slog.Logger
+	dtm         *dtm.Client
 	pricing     pricingPort
 	inventory   inventoryPort
 	payments    paymentPort
@@ -646,7 +646,10 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 					OrderNo: orderNo, Items: attempted,
 				}); cerr != nil {
 					s.log.Error("compensate partially confirmed inventory", "order_no", orderNo, "error", cerr)
-					s.queueInventoryCompensation(ctx, orderNo, attempted)
+					if qerr := s.queueInventoryCompensation(ctx, orderNo, attempted); qerr != nil {
+						return nil, apperr.Internal("confirm inventory before payment and persist its compensation",
+							errors.Join(err, cerr, qerr))
+					}
 				}
 				return nil, apperr.Unavailable("confirm inventory before payment: "+err.Error(), err)
 			}
@@ -723,8 +726,13 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 		if updated.Status == statusCancelled {
 			// Stock was already confirmed for an order that a concurrent cancel
 			// closed. Return the captured money instead of leaving the caller
-			// with a silently consumed reservation.
-			s.refundCancelledAfterConfirm(ctx, updated, paidCent, paymentNo)
+			// with a silently consumed reservation. A command persistence
+			// failure is an error, not a log-only event: the capture must not be
+			// reported as settled while no durable refund exists.
+			if rerr := s.refundCancelledAfterConfirm(ctx, updated, paymentNo); rerr != nil {
+				s.log.Error("emit payment-level refund for cancelled order", "order_no", orderNo, "error", rerr)
+				return nil, apperr.Internal("order cancelled after confirm and the payment refund command was not persisted", rerr)
+			}
 		}
 		return nil, apperr.Conflict(fmt.Sprintf("order cannot be paid in status %s", updated.Status))
 	}
@@ -734,10 +742,26 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 	return s.replyFor(ctx, s.db, updated)
 }
 
-func (s *Service) queueInventoryCompensation(ctx context.Context, orderNo string, items []*pb.OrderItem) {
+// queueInventoryCompensation persists a durable Inventory retry. The caller
+// must treat a returned error as a real failure: compensating stock must never
+// be dropped just because the outbox append failed (T1.6-R B3).
+func (s *Service) queueInventoryCompensation(ctx context.Context, orderNo string, items []*pb.OrderItem) error {
+	if orderNo == "" || len(items) == 0 {
+		return apperr.Invalid("inventory compensation requires order_no and items")
+	}
 	payload := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		payload = append(payload, map[string]any{"sku_id": item.GetSkuId(), "quantity": item.GetQuantity()})
+		if item.GetWarehouseId() <= 0 {
+			return apperr.Failed("inventory compensation item is missing warehouse_id").
+				WithDetails(map[string]any{
+					"order_no": orderNo, "sku_id": item.GetSkuId(),
+					"reason": "INVENTORY_COMPENSATION_NO_WAREHOUSE",
+				})
+		}
+		payload = append(payload, map[string]any{
+			"sku_id": item.GetSkuId(), "warehouse_id": item.GetWarehouseId(),
+			"quantity": item.GetQuantity(),
+		})
 	}
 	if err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
 		return outbox.Append(ctx, tx, outbox.Event{
@@ -746,8 +770,9 @@ func (s *Service) queueInventoryCompensation(ctx context.Context, orderNo string
 			Payload: map[string]any{"order_no": orderNo, "items": payload, "created_at": time.Now().Unix()},
 		})
 	}); err != nil {
-		s.log.Error("queue inventory compensation", "order_no", orderNo, "error", err)
+		return apperr.Internal("queue inventory compensation", err)
 	}
+	return nil
 }
 
 // queueInventoryConfirm emits a durable retry when an already-paid order still
@@ -769,47 +794,29 @@ func (s *Service) queueInventoryConfirm(ctx context.Context, orderNo string, ite
 	}
 }
 
-// refundCancelledAfterConfirm asks the payment service to refund a capture whose
-// order was cancelled between the inventory confirm and the status CAS.
-func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *orderRecord, paidCent int64, paymentNo string) {
-	// MarkPaid confirms inventory before the status CAS. If a concurrent cancel
-	// won that CAS, the reservation is CONFIRMED and must be restocked here;
-	// otherwise the stock stays consumed for a refunded, cancelled order.
-	if s.inventory != nil {
-		items, err := loadOrderItems(ctx, s.db, record.OrderNo)
-		if err != nil {
-			s.log.Error("load items for cancelled-after-confirm restock", "order_no", record.OrderNo, "error", err)
-		} else if _, err := s.inventory.TccCancelConfirm(ctx, &pb.TccPaymentRequest{
-			OrderNo: record.OrderNo, Items: items,
-		}); err != nil {
-			s.log.Error("restock cancelled-after-confirm order", "order_no", record.OrderNo, "error", err)
-			s.queueInventoryCompensation(ctx, record.OrderNo, items)
-		}
+// refundCancelledAfterConfirm compensates a capture whose order was cancelled
+// between the inventory confirm and the status CAS. The authoritative captured
+// amount is read from Payment (never guessed from the order), the reservation is
+// restocked, and a durable payment-level cancel command is written. Repeat calls
+// are safe: TccCancelConfirm and the fixed `pay:<payment_no>:cancel` identity are
+// both idempotent.
+func (s *Service) refundCancelledAfterConfirm(ctx context.Context, record *orderRecord, paymentNo string) error {
+	if record == nil {
+		return apperr.Internal("cancel-after-confirm refund requires an order", nil)
 	}
-	if paidCent <= 0 || paymentNo == "" {
-		s.log.Error("payment captured for cancelled order without refund details",
-			"order_no", record.OrderNo, "paid_cent", paidCent, "payment_no", paymentNo)
-		return
+	paymentNo = strings.TrimSpace(paymentNo)
+	if paymentNo == "" {
+		s.log.Error("payment captured for cancelled order without payment_no; no refund command written",
+			"order_no", record.OrderNo, "reason", "PAYMENT_CANCEL_NO_PAYMENT_NO")
+		return nil
 	}
-	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
-		return outbox.Append(ctx, tx, outbox.Event{
-			Topic:         topicOrderRefundRequested,
-			AggregateType: "order",
-			AggregateID:   record.OrderNo,
-			EventType:     "order.refund_requested",
-			Payload: map[string]any{
-				"order_no":   record.OrderNo,
-				"payment_no": paymentNo,
-				"reason":     "order cancelled after inventory confirm",
-				"status":     record.Status,
-				"paid_cent":  paidCent,
-				"created_at": time.Now().Unix(),
-			},
-		})
-	})
+	snapshot, err := s.readTccPaymentSnapshot(ctx, record, paymentNo)
 	if err != nil {
-		s.log.Error("emit refund for cancelled order", "order_no", record.OrderNo, "error", err)
+		// Fail closed: an unavailable authoritative capture must not become a
+		// guessed order-amount refund.
+		return apperr.Unavailable("load authoritative captured amount for cancelled order", err)
 	}
+	return s.refundCancelledWithSnapshot(ctx, record, snapshot, paymentNo, paymentCancelReasonAfterConfirm)
 }
 
 // afterPaid confirms the inventory reservations and consumes the quote coupon.
@@ -1292,13 +1299,20 @@ func branchError(action string, err error) error {
 func orderItemsPayload(items []*pb.OrderItem) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		out = append(out, map[string]any{
+		payload := map[string]any{
 			"sku_id":        item.GetSkuId(),
 			"name":          item.GetName(),
 			"price_cent":    item.GetPriceCent(),
 			"quantity":      item.GetQuantity(),
 			"discount_cent": item.GetDiscountCent(),
-		})
+		}
+		// INV-44/AC-46: Inventory must locate the exact reservation. Never emit
+		// an implicit W1 item; an absent warehouse makes the consumer fail
+		// closed instead of compensating the wrong warehouse.
+		if item.GetWarehouseId() > 0 {
+			payload["warehouse_id"] = item.GetWarehouseId()
+		}
+		out = append(out, payload)
 	}
 	return out
 }

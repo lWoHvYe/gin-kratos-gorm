@@ -1,6 +1,6 @@
 # PAY-SETTLE-01 Remediation Tasks (Revision 1)
 
-Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未批准前不得写业务代码。
+Status: **APPROVED Plan (2026-11-24); T1.2 FROZEN pending T1.2-R**. change_id: `PAY-SETTLE-01`（原 id）。T1.2-R 批准前不得写受管代码。
 依赖：`plan.md`；每条任务必须有 Owner、依赖、验收与证据路径。
 
 ## Phase 0 — Contract（批准前不进入 Phase 1）
@@ -15,14 +15,20 @@ Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未
 
 ## Phase 1 — P-01 TCC 补偿 / P-03 零元回归（Owner: Developer；依赖: T0.7）
 
-- [ ] **T1.0** P-03 回归：零元 `SettleZero`/`AdmitRefund`/0 元售后；确认不调 Payment，AC-40 证据
-- [ ] **T1.1** Σ 预检：事务外 Payment 快照；Tx1 订单锁下用同一快照复核；不等不改状态，告警+人工
+- [ ] **T1.0** P-03 回归：Order 侧 `SettleZero`/`AdmitRefund` 已测；**AC-40 零元售后端到端 BLOCKED**（见 Phase 1a checkpoint）
+- [x] **T1.1** Σ 预检 helper + 测试（未接线 `TccCancelMarkPaid`；T1.2 接线）
 - [ ] **T1.2** Tx1：REFUNDING + batch；`NONE→REVOKED`，`CONSUMED` 只写 PENDING_REMOTE + commitment（不得写 REVOKED）
-- [ ] **T1.3** 持久 batch/task；`REFUNDING` 不早退；崩溃重跑只补未完成组
+- [x] **T1.3** 持久 batch/task；`REFUNDING` 不早退；崩溃重跑只补未完成组
 - [ ] **T1.4** 逐组 `AdmitRefund`；全部成功后才打款；已发货组 POST
 - [ ] **T1.5** `order.refund_requested` 消费者改为观察/告警；不直接 Refund
 - [ ] **T1.6** `PENDING_PAYMENT+已捕获` 分支按 C-03 裁决（CAS→CANCELLED 或 PAID+写生效支付）
 - [ ] **T1.7** 测试：Σ 不等、REFUNDING vs Ship 竞态、崩溃续跑、部分失败、无组 G1、已发货组
+- [x] **T1.2b** 按 Architect Addendum R-1/R-2/R-3 修复：
+  - R-1：Σ 不等写 `refund_batches(state=PRECHECK_FAILED)` 审计，其他零写入；调整“零行”测试。
+  - R-2：Tx1 外读 `ListShipments`，`exception_state != 'NONE' && shipped_at_unix>0` 判已离仓；不可用/不明确 fail-closed；T1.4 `CancelIfCreated` 返回 `ALREADY_SHIPPED`。
+  - R-3：`PENDING_PAYMENT && captured>0` 在 T1.2b 只加 fail-closed guard，不建 batch；CAS→CANCELLED 归 T1.6。
+  - 测试：审计 batch、exception 已离仓、PENDING 捕获 guard、其他零写入。
+
 
 ## Phase 2 — P-04 历史 PAID（Owner: Developer；依赖: T1.2 生产者修复 + T0.7）
 
@@ -70,3 +76,61 @@ Status: **DRAFT — not approved**. change_id: `PAY-SETTLE-01`（原 id）。未
 - Reviewer FAIL → 冻结 `PAY-SETTLE-01`；不得新 id/hotfix 绕过。
 - AC 矩阵无 AC 编号/owner/evidence → 不得进入 Phase 5。
 - 默认开关未过 Director release 门禁 → 保持 false。
+
+## Phase 1a checkpoint (2026-11-24)
+
+- Implemented: `internal/services/order/tcc_precheck.go` (pure precheck, 13 tests) and AC-40 `SettleZero` capture check; commit `053896b`; build/gates OK.
+- **Contract gap (stop condition)**: zero after-sales end-to-end cannot be represented:
+  - `internal/services/aftersales/settlement.go` rejects zero-pay orders with no captured payment;
+  - `workers.go` rejects `refundCent <= 0`;
+  - `after_sales.amount_state` has no `DONE(zero_amount)` value.
+- No code was invented. Needs PO/Architect amendment: define where `DONE(zero_amount)` lives (recommended: Order `refund_applications(source=system_zero, amount=0, DONE)` as execution ledger; AfterSales projects `REFUNDED` with zero amount).
+- T1.2 (batch/permit) paused until this gap is ruled, per Plan stop condition.
+
+## T1.2-R（Reviewer FAIL 后）
+
+- [ ] R-1 B1 真实 ALLOCATED/SHIPPED/COMPLETED（Developer）
+- [ ] R-2 M1 historical composition（Developer + Architect）
+- [ ] R-3 M2 no active groups（Developer）
+- [ ] R-4 m1 resume audit（Developer）
+- [ ] R-5 B2 self-check canonical（Developer）
+- [x] R-6 M3 Plan 状态（Lead）
+- [ ] R-7 Reviewer 复审（Reviewer）
+
+## T1.4b1-R2 (Reviewer B2/B3)
+
+- [ ] R2-1 persistent TCC reconcile worker: scan ADMITTED/PAYING batches, GetRefundByKey, update commitment/app/batch + order amount projection in one tx; no event required; config interval.
+- [ ] R2-2 order projection: refunded_cent/refund_status/refund_state monotonic; active batch REFUNDING; all done PARTIAL/FULL.
+- [ ] R2-3 no-event fault-injection test: batch DONE + order FULL/PARTIAL without payment.refunded.
+- [ ] R2-4 canonical selfcheck bound to new HEAD; Plan approval rows.
+- [ ] R2-5 Reviewer re-review.
+
+## Human decisions 2026-11-25
+
+- T1.4b2 C-04 release event：不需单独人类批准，按 Amendment 流程。
+- T1.5/T1.6：若触及 `order.refund_requested` 消费者/支付级退款，先出 Amendment。
+- P0 收尾后 merge：必须人类批准。
+- 临时豁免：PAY-SETTLE-01 WIP 期间 ADR/SPEC Amendment 不需单独人类 Approve；QC/Architect 仍需；merge/Release/AC-VERIFIED 不豁免。
+
+## T1.4 closure (2026-11-25)
+
+- [x] T1.4b2a P0-R2 Reviewer PASS (60130e1..1de09e3): single-group release only.
+- [x] T1.5 TCC bypass removed; consumer retained only for cancelled-after-confirm; observe-only deferred to T1.6.
+- [ ] T1.6 payment-level cancel: `pay:<payment_no>:cancel`, PENDING/CANCELLED+captured, then consumer observe-only (Amendment first).
+- [ ] T1.7/T5 evidence.
+
+## T1.6-R (Reviewer FAIL)
+
+- [x] B1: order.cancelled/compensation payload warehouse_id; Inventory multi-WH release/restock; W2 test.
+- [x] B2: PENDING_PAYMENT always read Payment snapshot, independent of req.PaidCent.
+- [x] B3: Inventory nil/queue failure returns error/persists; legacy net captured-refunded.
+- [x] Reviewer re-review (T1.6-R PASS).
+
+## Remaining after T1.6
+
+- T1.7/T5 evidence matrix, real migrations, -race/fault.
+- T2 historical PAID resolution.
+- T3 line/freight responsibility.
+- T4 fail-closed/shadow (default paid).
+- Separate: inventory.confirm.requested warehouse_id (paid-confirm path).
+- P0 merge only after human approve.

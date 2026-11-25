@@ -184,6 +184,12 @@ type fakeOrderService struct {
 	blockedGroups []string
 	blockErr      error
 	blockCalls    int
+	// db lets a test prove the durable refund task exists before the remote
+	// admission is called (T1.4b2b R-C ordering).
+	db                *sql.DB
+	taskStatusAtAdmit string
+	sourceAtAdmit     string
+	amountAtAdmit     int64
 }
 
 func (f *fakeOrderService) GetOrder(context.Context, *pb.GetOrderRequest, ...grpc.CallOption) (*pb.Order, error) {
@@ -194,9 +200,20 @@ func (f *fakeOrderService) AdmitRefund(_ context.Context, in *pb.AdmitRefundRequ
 	f.blockCalls++
 	f.blocked = append(f.blocked, in.GetRefundId())
 	f.blockedGroups = append(f.blockedGroups, in.GetGroupNo())
+	f.sourceAtAdmit = in.GetSource()
+	f.amountAtAdmit = in.GetAmountCent()
+	if f.db != nil {
+		_ = f.db.QueryRow(`SELECT status FROM after_sale_refund_tasks WHERE after_sale_no = ?`, in.GetRefundId()).
+			Scan(&f.taskStatusAtAdmit)
+	}
 	result := "PRE_SHIP_REVOKED"
 	if f.blockErr == nil && f.order != nil && f.order.GetStatus() == "SHIPPED" {
 		result = "POST_SHIP_ALLOWED"
+	}
+	if in.GetSource() == zeroAfterSaleSource {
+		return &pb.AdmitRefundReply{
+			RefundId: in.GetRefundId(), Result: result, State: zeroRefundApplicationDone, AmountCent: 0,
+		}, f.blockErr
 	}
 	return &pb.AdmitRefundReply{RefundId: in.GetRefundId(), Result: result, State: result}, f.blockErr
 }
@@ -207,9 +224,11 @@ type fakePaymentService struct {
 	refundErr    error
 	refundCalls  int
 	refundAmount []int64
+	lookupCalls  int
 }
 
 func (f *fakePaymentService) GetPaymentByOrder(context.Context, *pb.GetPaymentByOrderRequest, ...grpc.CallOption) (*pb.Intent, error) {
+	f.lookupCalls++
 	return &pb.Intent{PaymentNo: "PAY-1", CapturedCent: f.captured, Status: "SUCCEEDED"}, nil
 }
 

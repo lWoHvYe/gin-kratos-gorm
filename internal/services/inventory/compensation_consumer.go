@@ -20,8 +20,9 @@ type compensationService interface {
 type compensationEvent struct {
 	OrderNo string `json:"order_no"`
 	Items   []struct {
-		SkuID    int64 `json:"sku_id"`
-		Quantity int32 `json:"quantity"`
+		SkuID       int64 `json:"sku_id"`
+		WarehouseID int64 `json:"warehouse_id"`
+		Quantity    int32 `json:"quantity"`
 	} `json:"items"`
 }
 
@@ -49,11 +50,19 @@ func handleCompensation(ctx context.Context, svc compensationService, data []byt
 		return nil
 	}
 	items := make([]*pb.OrderItem, 0, len(event.Items))
-	for _, item := range event.Items {
+	for i, item := range event.Items {
 		if item.SkuID <= 0 || item.Quantity <= 0 {
 			continue
 		}
-		items = append(items, &pb.OrderItem{SkuId: item.SkuID, Quantity: item.Quantity})
+		// INV-44: no implicit W1. Persisted compensation must carry the exact
+		// warehouse of the reservation or it is a contract violation.
+		if item.WarehouseID <= 0 {
+			return consumer.Permanent(fmt.Errorf("inventory.compensation_requested item[%d] for order %s is missing warehouse_id",
+				i, event.OrderNo))
+		}
+		items = append(items, &pb.OrderItem{
+			SkuId: item.SkuID, WarehouseId: item.WarehouseID, Quantity: item.Quantity,
+		})
 	}
 	if len(items) == 0 {
 		return nil

@@ -2,7 +2,7 @@
 id: SPEC-0002
 title: 支付结算与履约准入
 status: approved         # draft | in-review | approved | superseded
-version: 1.8
+version: 1.9
 updated_at: 2026-11-24
 owner: Product Owner
 approved_by: Director
@@ -13,18 +13,18 @@ superseded_by: null
 adr: [0007]
 ```
 
-# SPEC-0002 — 支付结算与履约准入（P0，v1.8 approved）
+# SPEC-0002 — 支付结算与履约准入（P0，v1.9 approved）
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.8（已批准：P-04/P-05/P-06、TCC Σ、`legacy_payment_resolution`/`COMPENSATING`、`order.settled` 影子、AC-40 收窄） |
+| 版本 | v1.9（已批准：v1.8 全部内容 + 零元售后补充：S19、INV-50、AC-67/68、AC-55 零元例外） |
 | 日期 | 2026-11-24 |
-| 状态 | **已批准**：Director 2026-11-24 批准；ADR-0007 Amendment 1 同日 accepted；QC-14 `READY FOR HUMAN SPEC APPROVAL` |
-| 位置 | `docs/specs/`：AC-40 收窄、AC-62…66 新增；按 Human 指示登记 AC-62…66 延期行；Reviewer 复核；AC-39…66 先以延期行登记 |
+| 状态 | **已批准**：Director 2026-11-24 批准零元售后 amendment；QC-18 `READY FOR HUMAN ZERO AMENDMENT APPROVAL` |
+| 位置 | `docs/specs/`：AC-40 收窄、AC-62…66（v1.8）、AC-67/68（v1.9）；按 Human 指示登记 AC-62…68 延期行；Reviewer 复核 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件与 QC 报告，不接收口头补充） |
-| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` v1.3/v1.4；`docs/adr/0007-payment-settlement-admission.md` Rev 1.0 + `0007-payment-settlement-admission-amd1.md` Amendment 1；`docs/lead/PAY-SETTLE-01/plan.md` C-02；`docs/review-tracking.md` 2026-11-24 裁决；QC-10…QC-14 |
-| 范围 | H1/H2 批准的业务口径：首次支付、结算、取消竞态、库存就绪、发货准入、退款统一准入、缺货、收货；v1.8 增加 P-04/P-05/P-06、TCC Σ、历史队列 `COMPENSATING`、`order.settled` shadow |
+| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` v1.3/v1.4；`docs/adr/0007-payment-settlement-admission.md` Rev 1.0 + `0007-payment-settlement-admission-amd1.md` Amendment 1 + `0007-amd1-addendum-zero-after-sale.md`；`docs/lead/PAY-SETTLE-01/plan.md` C-02；`docs/review-tracking.md` 2026-11-24 裁决；QC-10…QC-18 |
+| 范围 | H1/H2 批准的业务口径：首次支付、结算、取消竞态、库存就绪、发货准入、退款统一准入、缺货、收货；v1.8 增加 P-04/P-05/P-06、TCC Σ、历史队列 `COMPENSATING`、`order.settled` shadow；v1.9 增加零元售后闭环 |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准（EARS）。**不定义**表结构、事件名、RPC 形态、事务边界、重试算法或开关实现；这些由 Architect 在 ADR 中设计并接受本文件验收。
 
@@ -81,6 +81,7 @@ adr: [0007]
 | **S16 历史支付解析队列** | **Order 记录事实；运营/Director 作裁决** | `legacy_payment_resolution`，按 `order_no` 唯一；状态 `OPEN/RESOLVING/COMPENSATING/RESOLVED/EXPIRED_REFUND/EXPIRED_ZERO/EXPIRED_FINANCE/REJECTED`（顺序与 ADR A-04 对齐）；24h 到期按 D-22 已批准分支收敛；有捕获且无离仓组必须先经 `COMPENSATING` | 发货准入、退款准入、对账、运营 | 不是生效支付事实，不能替代 Payment `captured/refunded`；不得猜 `payment_no`；不得长期停留在 `OPEN` |
 | **S17 退款金额组成与责任** | **AfterSales（售后责任与行已退事实）+ 缺货事实（SYSTEM 缺货责任）**；Order 只拥有准入计算与在途承诺 | 行剩余、商品/运费组成、责任枚举与证据引用；`freight_refundable_cent` 由责任方产出 | Order 准入、Payment 执行、对账、用户展示 | Order 不得改责任、不得从自由文本推断责任；AfterSales 不得改准入结果；不得把商品金额与运费混算 |
 | **S18 `order.settled` 影子事实** | **Order 产出；Fulfillment 影子消费** | 影子消费记录/比对结果；**不是**发货准入事实 | 告警、对账、切换前比对 | 不建运单；不推进组；不放行发货；不得替代 `order.paid` 兼容路径或 permit/库存事实 |
+| **S19 零元退款执行事实** | **Order**（`refund_applications`，`source=system_zero`） | 每条零元退款申请有全局唯一 `refund_id`；`amount_cent=0`、`goods_cent=0`、`freight_cent=0`；状态 **`DONE`（由 `AdmitRefund` 零元短路在同一事务直接写入，不创建 `PENDING`）** | AfterSales、BFF、对账、运营 | 不是 Payment 退款事实；不产生 Payment `refunded`；不得用正金额；不得在未完成时标 `DONE` |
 
 补充约束：
 
@@ -97,10 +98,14 @@ adr: [0007]
 - S16 的 `RESOLVED` 必须回写生效支付并以幂等恢复命令继续被阻断的动作；`EXPIRED_*` 与 `REJECTED` 是终态，不得回退到 `OPEN`。
 - S17 的行级“已退”事实沿用 SPEC-0001 S14（AfterSales 唯一）；Order 的在途承诺是 S15，二者不得互相替代。订单/组剩余可退额 = 行实付 − S14 已退 − S15 在途，且不超过订单 Payment captured 剩余（INV-24）。
 - S18 的影子消费失败只影响告警/对账，不影响结算、发货准入和用户展示；默认关闭时不得以任何方式放行发货。
+- S19 的 `DONE` 只表示“零元退款执行闭环”（许可/运单/预留或回库已处理），**不表示 Payment 已退款**；Payment 不得出现该 `refund_id` 的退款记录。
+- S19 **没有 `PENDING` 中间态**：由 `AdmitRefund` 的零元短路分支在同一事务直接创建为 `DONE`；短路失败/回库未完成时不创建 S19，不得留下无 worker 的 `PENDING` 悬挂。
+- S19 的 `refund_id` 由发起方确定：普通售后/缺货使用 `after_sale_no`；历史无售后单按 v1.8 的 `legacy:<order_no>:<refund_seq>` 规则，不另造身份。
+- AfterSales 的 `status=REFUNDED` 只投影 S19 `DONE`；S19 未 `DONE` 时不得提前置 `REFUNDED`。
 
 ---
 
-## 3. 业务不变量（INV-30…INV-49）
+## 3. 业务不变量（INV-30…INV-50）
 
 > 基线 INV-01…16 与 SPEC-0001 INV-17…29 继续有效；本节新增或收窄，冲突时以更严格者为准，并在 §11 说明。
 
@@ -126,6 +131,7 @@ adr: [0007]
 | **INV-47** | **行级额度、商品/运费组成与责任唯一**：每笔组级退款同时满足“行级 ≤ 行剩余可退额”和“合计 ≤ 订单 captured 剩余”（INV-24 双层）；金额拆为商品 + 可退运费；责任与可退运费只由 AfterSales / 缺货事实产出，Order 只校验与计算；`UNDETERMINED` 商品照退、运费挂起 ≤168h；后置补退同组、累计退运费 ≤ 用户实付运费 | 只查组总额不查行；Order 自行判责；商品退款被运费判定阻塞；补退新建案件或超退运费 |
 | **INV-48** | **TCC Σ 预检与逐组扇出**：改任何状态前，`Σ 活动组系统责任上限 == 订单剩余 captured`；不等则阻断+告警+人工，不得部分打款；每个活动组独立准入/打款；部分失败只补未完成组，崩溃续跑不得重退已完成组 | Σ 不等仍打款；用整单退款事件替代逐组准入；重跑时重复退款 |
 | **INV-49** | **`order.settled` 影子不具准入权威**：默认关闭；影子只记录/比对，不建单、不放行；影子不一致/失败只告警；切换必须经独立 release 门禁与人类批准；切换后 `order.paid` 不得再作准入依据 | 用 shadow 结果发货；shadow 失败阻断结算；默认 false 长期保留旧准入路径；未批准就切换 |
+| **INV-50** | **零元售后闭环不经过 Payment**：`pay_cent=0` 且无任何已捕获 intent 的订单，普通售后/退货/取消/缺货只释放预留或回库，不调用 Payment；零元退款申请以 `source=system_zero`、`amount=0` 形成 Order 执行事实，终态 `DONE`；AfterSales 投影为 `REFUNDED` 且 `amount_state=CONSUMED`、`effective_amount_cent=0`、`refunded_cent=0`、`refund_no=''`；不得用正金额退款、不得写 `orders.status=REFUNDED`、不得在订单未 `PAID` 时伪造已退款 | 零元售后调用 Payment；产生正金额退款；把零元申请停在 `ACTIVE`/失败；把未 `PAID` 订单写成已退款；新增第二套退款状态 |
 
 ---
 
@@ -254,6 +260,7 @@ adr: [0007]
 **AC-55** 退款完成口径
 - WHEN 用户查看退款结果，THE SYSTEM SHALL 以 Payment 退款事实为准；Order 投影延迟只能显示“退款处理中”。
 - IF 退款执行超时未知，THEN THE SYSTEM SHALL 保持可重试并展示处理中，不得显示“已退款”。
+- IF 订单 `pay_cent=0` 且不存在任何已捕获 intent，THEN THE SYSTEM SHALL 按 AC-68 的零元例外展示 `DONE(zero_amount)`；该例外不改变本 AC 对正金额退款的 Payment 事实优先。
 
 ### 4.6 缺货
 
@@ -389,6 +396,29 @@ adr: [0007]
 - WHEN 切换完成，THE SYSTEM SHALL 以 `order.settled`（或经 ADR 批准的等价事实）作为履约建单/准入依据；`order.paid` 只保留 BFF/旧消费者兼容，不得再作为准入依据；IF 无移除日期或回滚路径，THEN 不得宣称切换完成。
 - IF 开关被误置为开启而门禁未通过，THEN THE SYSTEM SHALL fail-closed 并按关闭处理，告警；不得在门禁未通过时走新准入路径。
 - WHEN 已切换后回滚，THE SYSTEM SHALL 在人类批准后恢复 `order.paid` 的 BFF/旧消费者兼容消费并保留既有任务/退款申请可重放，不得重复建单、重复发货或重复退款；IF 回滚需要恢复建单，THEN 只允许经许可/库存/缺货判定的路径，不得把 `order.paid` 直接作为准入依据。
+
+### 4.10 零元单售后与零元退款执行事实
+
+**AC-67** 零元单售后/取消/缺货不调用 Payment
+
+- WHEN `pay_cent=0` 且**不存在任何已捕获 intent**（生效支付=`zero:<order_no>`）的订单在 `PAID` 后发生售后或缺货退款，THE SYSTEM SHALL 只调用 `AdmitRefund` 的**零元短路分支**；该分支在同一事务写入 S19 `DONE`，不创建 `PENDING`，不调用 Payment，只按组释放或回库。
+- WHEN `pay_cent=0` 且无捕获的订单仍为 `PENDING_PAYMENT` 并取消，THE SYSTEM SHALL 只按 AC-46 进入 `CANCELLED` 并释放预留，不创建 S19、不调用 Payment；IF 订单未 `PAID` 但不是取消，THEN THE SYSTEM SHALL 不创建 S19、不写 `orders.status=REFUNDED`；IF 该订单存在任何已捕获 intent，THEN THE SYSTEM SHALL 不得走零元路径，按 AC-40/AC-63 的非零路径处理。
+- WHEN 零元单发起售后，THE SYSTEM SHALL 将该售后可用额度视为 0；不得按正金额 captured/行实付计算，也不得占用正金额额度。
+- IF 售后申请金额 > 0 或调用方要求 Payment 退款，THEN THE SYSTEM SHALL 拒绝该零元退款请求并返回 `REFUND_ADMISSION_CONFLICT`；不得用正金额退款、不得把 0 元申请改成有金额申请。
+- WHEN 零元售后需要退货回库，THE SYSTEM SHALL 在回库完成前不调用零元短路、不创建 S19，AfterSales 保持非终态；回库完成后调用零元短路，同事务置 S19 `DONE`。REFUND_ONLY/缺货无需回库时可直接调用短路。
+- IF 零元短路失败（准入/释放/落库失败），THEN THE SYSTEM SHALL 不创建 S19，AfterSales 保持 `REFUNDING`/非终态并重试；不得留下无 worker 的 `PENDING` 行，不得提前展示 `DONE(zero_amount)`，不得调用 Payment。
+- IF 同一 `refund_id` 重复提交零元申请，THEN THE SYSTEM SHALL 幂等返回同一条 S19 `DONE` 与同一终态；IF 同一售后重复执行，THEN 不得产生第二条 `DONE` 或第二次释放/回库。
+- IF 零元单发生缺货，THEN 按 AC-52/AC-56 的组级流程处理，但金额为 0、不调用 Payment；IF 零元单在 `PENDING_PAYMENT` 取消，THEN 只按 AC-46 释放，不产生 Payment 退款、不创建 S19；IF 零元单发生退货且需要回库，THEN 按 SPEC-0001 回库规则完成后再调用零元短路并置 `DONE`。
+
+**AC-68** 零元退款终态投影（`DONE(zero_amount)`）与 AC-55 的零元例外
+
+- WHEN S19 零元退款为 `DONE`，THE SYSTEM SHALL 将 AfterSales 最终置为 `status=REFUNDED`、`effective_amount_cent=0`、`refunded_cent=0`、`amount_state=CONSUMED`、`refund_no=''`；`DONE(zero_amount)` 由 `source=system_zero` + `amount=0` + `status=REFUNDED` 推导，不新增字段。该表示是最终表示，不接受 `RELEASED` 或 `ZERO_DONE` 等替代。
+- WHEN 用户查看零元退款结果，THE SYSTEM SHALL 以 S19 `DONE`/AfterSales `REFUNDED` 展示 `DONE(zero_amount)`；该零元例外**仅适用于 `pay_cent=0` 且不存在任何已捕获 intent**；IF 存在任何已捕获 intent，THEN 不适用零元例外，按 AC-40/AC-63 处理，AC-55 的 Payment 事实优先不变。
+- WHILE 退款为正金额，THE SYSTEM SHALL 继续按 AC-55 以 Payment 退款事实为准；AC-68 不改变 AC-55 对正金额退款的任何口径。
+- IF S19 不是 `DONE`，THEN THE SYSTEM SHALL 不得把 AfterSales 标成 `REFUNDED` 或展示 `DONE(zero_amount)`；只能展示“退款处理中”并按零元短路重试。
+- IF AfterSales 读取不到 S19 的 `DONE` 事实，THEN THE SYSTEM SHALL 保持非终态并告警；不得根据“金额为 0”自行推断已完成。
+- IF 订单未 `PAID`，THEN THE SYSTEM SHALL 不创建 S19、不写 `REFUNDED`/`CONSUMED`；未支付取消只按 AC-46 处理。IF 订单存在任何已捕获 intent，THEN 不得以零元路径创建 S19/`CONSUMED`。
+- WHEN 对账，THE SYSTEM SHALL 将零元退款单列为“`DONE(zero_amount)`、无 Payment 退款、无订单级 refunded 增量”，并与 S19 `DONE` 计数对平；差异告警，不得静默。
 
 ---
 
@@ -729,6 +759,7 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 | **v1.6（冻结）** | 2026-11-23 | 甲方批准 v1.6；C-1（SPEC-0001 v1.3）已先行批准；D-11…D-21 全部按建议默认生效；C-9 落库（台账/索引/提交） | 新增 INV-30…44、AC-39…61；ADR-0007 启动 |
 | **v1.7（冻结）** | 2026-11-23 | 甲方批准 ADR-0007 v0.4 时同步澄清 INV-43 适用范围：组级退款需准入；支付级退款（非生效/超少付/取消）是 capture correction，不经组许可 | 仅澄清 INV-43 适用边界；不删除/重编号 AC；ADR-0007 引用 v1.7 |
 | **v1.8（冻结）** | 2026-11-24 | 甲方批准 v1.8：P-04 历史 `PAID` 解析/`legacy_payment_resolution`/`COMPENSATING`；P-05 准入不可逆与人工释放；P-06 行级 INV-24/商品运费组成/责任/168h/后置补退；TCC Σ 预检与逐组扇出；`order.settled` shadow；AC-40 零元边界收窄；新增 S15…S18、INV-45…49、AC-62…66、E22…E31、D-22…D-29；ADR-0007 Amendment 1 accepted 同日 | 影响 INV-01/04/05/06/07/14/21/24/26/30…44 + 新增 INV-45…49；既有 AC-50/51/52/53/60/61 收窄；基线回归 AC-14/21/25/27/31/32；AC-62…66 以延期行登记；不删除/重编号 AC |
+| **v1.9（冻结）** | 2026-11-24 | 甲方批准零元售后 amendment：零元单售后/取消/缺货不调用 Payment；`AdmitRefund` 零元短路同事务写 S19 `DONE`（无 `PENDING`）；AfterSales 最终 `REFUNDED/0/CONSUMED/refund_no=''`、展示 `DONE(zero_amount)`；AC-55 零元例外正式成立且正金额 Payment 事实优先不变；有捕获不得走零元、未 `PAID` 不创建 S19；新增 S19、INV-50、AC-67/68 | 影响 AC-55；新增 AC-67/68；不改变 AC-39…66 其他正文；AC-67/68 以延期行登记；SPEC 仍非 Release PASS |
 
 
 ---
@@ -746,3 +777,6 @@ ON --人类批准--> SHADOW/OFF（任务保留、可重放；不做 down migrati
 | 甲方（Director） | 批准 SPEC-0002 v1.8；同时批准 SPEC-0001 v1.4 与 ADR-0007 Amendment 1 | 2026-11-24 |
 | Quality Checker | QC-14 `READY FOR HUMAN SPEC APPROVAL`（0 BLOCKER；2 条非阻断待批准记录） | 2026-11-24 |
 | Product Owner | 将已批准的 v1.8 变更应用为 `docs/specs/` v1.8 approved；更新变更记录/批准记录；按 Human 指示登记 AC-62…66 延期行，Reviewer 复核 | 2026-11-24 |
+| 甲方（Director） | 批准 SPEC-0002 v1.9 零元售后补充（AC-67/68、S19、INV-50、AC-55 零元例外） | 2026-11-24 |
+| Quality Checker | QC-18 `READY FOR HUMAN ZERO AMENDMENT APPROVAL`（0 BLOCKER） | 2026-11-24 |
+| Product Owner | 将已批准的 v1.9 变更应用为 `docs/specs/` v1.9 approved；按 Human 指示登记 AC-67/68 延期行，Reviewer 复核 | 2026-11-24 |

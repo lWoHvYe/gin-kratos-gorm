@@ -9,6 +9,175 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-24 Phase 1 parallel authorization
+
+Director authorized T1.2/T1.3 (TCC batch + permit Tx1 + resume) to proceed in
+parallel with the AC-40 zero after-sales amendment. This is a scoped waiver of
+the "any contract gap stops implementation" rule for this isolated gap. T1.0
+Order-side work is complete; AC-40 end-to-end remains blocked until the PO/
+Architect amendment is approved. No AC-VERIFIED or Release PASS.
+
+### 2026-11-25 T1.4 re-decomposition (Option A accepted)
+
+Director accepted re-decomposition instead of patching T1.4b2. The draft is
+`docs/lead/PAY-SETTLE-01/decomposition-review.md`: WP-R1 Payment refund,
+WP-R2 Order refund ledger, WP-R3 Zero, WP-I1 group reservation identity,
+WP-I2 release, WP-I3 restock, WP-B1/B2 backfill, WP-E1..E4 compatibility,
+WP-V1 evidence. Each WP owns one invariant, one branch, one scoped Reviewer.
+T1.4b2 is frozen until WP-I1 fixes reservation identity. No code yet.
+
+### 2026-11-25 T1.5 re-scope: TCC no longer uses refund_requested
+
+- Verified `TccCancelMarkPaid` no longer emits `shop.order.refund_requested.v1`
+  (T1.4 admission/batch path uses `refund_applications` + `RefundBatch`).
+- The only remaining producer is `refundCancelledAfterConfirm` (payment-level
+  cancel after inventory confirm). Making the consumer observe-only now would
+  drop that refund. Therefore T1.5 is closed as "TCC bypass removed"; the
+  remaining consumer stays until T1.6 adds the durable payment-level cancel
+  path (`pay:<payment_no>:cancel`) and then becomes observe-only.
+- No code change in T1.5.
+
+### 2026-11-25 T1.6-R PASS (scoped)
+
+- Reviewer PASS for `8dc1766..20df5b7`: warehouse_id, PENDING authoritative
+  snapshot, durable compensation, legacy net. T1.6 scoped close; no merge.
+- Residual: `inventory.confirm.requested` lacks warehouse_id (paid-confirm
+  path); separate task, not T1.6 blocker.
+
+### 2026-11-25 T1.6 FAIL — warehouse/captured/compensation
+
+- B1: `order.cancelled`/compensation payload lacks `warehouse_id`; multi-warehouse
+  W2 reservation is not released/restocked.
+- B2: PENDING_PAYMENT with request PaidCent=0 does not read Payment snapshot;
+  captured funds can be cancelled without a payment cancel command.
+- B3: inventory nil/queue failure is silent; legacy cancel-after-confirm uses
+  PaidCent, not captured-refunded net.
+- T1.6 frozen; T1.6-R required; no merge.
+
+### 2026-11-25 T1.4b2a P0-R2 PASS (scoped)
+
+- Reviewer PASS for `60130e1..1de09e3`: group_count=1, single-group release,
+  multi-group reserved/P1, no scan/backfill. T1.4b2a scoped close; T1.4 still
+  WIP. No merge/Release; T1.5/T1.6 next with Amendments.
+
+### 2026-11-25 P0 simplification: single-group physical release only (Tier L2)
+
+Director accepted: for P0, only single-group orders emit an immediate full
+Inventory release. Multi-group orders complete refund admission but do not emit
+a physical release; stock stays reserved and is deferred to P1/manual. This
+removes the TCC group REFUNDED projection, deferred scan, watermark/cursor,
+manual queue and production backfill. No AC-VERIFIED/Release PASS; no merge.
+
+### 2026-11-25 T1.4b2-R FAIL — deferred release still too complex
+
+- B1: TCC groups stay REFUNDING; no TCC REFUNDED projection, so multi-group
+  last-active never emits. B2: scan has no watermark/cursor; starves and would
+  backfill production. B3: shared POST/unknown group has no durable manual
+  marker; unknown group can fail-open release.
+- Old group/reservation B1 and system_shortage B2 are closed.
+- T1.4b2 frozen. Proposed simplification: P0 releases only single-group orders;
+  multi-group physical release deferred to P1/manual. Awaiting human decision.
+
+### 2026-11-25 T1.4b2 FAIL — group/reservation identity
+
+- B1 [ARCHITECTURAL_FLAW]: release event carries group quantity, but Inventory
+  reservations are order/sku/warehouse totals and Release/TccCancelConfirm
+  require the full reservation. A partial group refund cannot release a shared
+  reservation; DLQ, INV-44 not executed.
+- B2: SYSTEM shortage source is sent as `aftersale`, not `system_shortage`.
+- B3: existing PRE admissions/S19 have no release/backfill path.
+- T1.4b2 frozen; Architect ruling required before code; no merge.
+
+### 2026-11-25 T1.4b1-R2 PASS (scoped)
+
+- B2 persistent reconcile worker/order projection and B3 selfcheck closed;
+  Reviewer PASS for `198c623..6ac218e`.
+- Continue WIP; no merge. T1.4b2 next: INV-44 release/restock + zero
+  AfterSales task; C-04 release event no separate human approval.
+
+### 2026-11-25 T1.4b1-R FAIL — B2/B3
+
+- B1 external refund/atomicity closed; B2 lazy reconcile is not persistent and
+  does not update order amount projection; B3 Plan/selfcheck not bound to
+  `198c623`.
+- T1.4b1-R frozen; T1.4b1-R2 required: persistent reconcile worker + order
+  projection in same tx + canonical selfcheck/Plan status. No merge.
+
+### 2026-11-24 C-04 RefundBatch accepted
+
+Director accepted the C-04 `RefundBatch` contract (expected_total/new-only
+remaining, first-reply idempotency, batch ledger schema, error mapping). Payment
+WIP `fc295e5` remains unapproved; Order preflight and Reviewer are next. No
+merge/AC-VERIFIED.
+
+### 2026-11-24 T1.4b1-R scope approved
+
+Director approved the atomic `Payment.RefundBatch` + T1.4b1-R scope. Contract
+and plan still require Architect/QC review; no code until then.
+
+### 2026-11-24 T1.4b1 Reviewer FAIL — stop-the-line
+
+- Scope `dff267d..1f4f2d1`; FAIL. B1: pre-payment does not re-read Payment
+  remaining vs batch outstanding, so an external partial refund can allow G1
+  payment then G2 rejection (partial payment). Must preflight all groups before
+  any Payment.Refund; distinguish own accepted refunds via GetRefundByKey from
+  external refunds; mismatch -> MANUAL_HOLD with zero payments.
+- T1.4b1 frozen; no merge; T1.4b2 not started.
+- Requires Architect/Plan ruling and Reviewer re-review.
+
+### 2026-11-24 T1.4a Addendum approved
+
+Director approved the T1.4a contract rulings Addendum (R-A INV-44 owner,
+R-B POST commitment timing, R-C zero cancel). T1.4a code `6be5c5a` remains
+WIP; T1.4b/T3 and Reviewer are still required. No AC-VERIFIED/merge.
+
+### 2026-11-24 T1.2-R2 PASS (scoped)
+
+- G1/g1/g2/g3 closed; Reviewer PASS for `e7e29e5..72b984b`.
+- T1.2 scoped close; still WIP, no merge, no T1.4 yet.
+- No AC-VERIFIED; AC-51/AC-65 remain DEFERRED.
+
+### 2026-11-24 T1.2-R Reviewer PASS (scoped)
+
+- Scope `a3f080f..e7e29e5`; PASS for T1.2-R B1/B2/M1/M2/m1. Not merge/Release.
+- G1 remains MAJOR: legacy orders with no fulfillment group and status
+  SHIPPED/COMPLETED can be misclassified as not shipped when ListShipments has
+  no facts; fix before T1.4. g1 mixed composition/g2 no-active dependency are
+  minor follow-ups.
+- T1.2 is still WIP; T1.4/T1.6/T1.7/T5 not done.
+
+### 2026-11-24 T1.2-R approved
+
+Director approved the T1.2-R remediation plan (B1/B2/M1/M2/m1); implementation
+of R-1..R-5 is authorized on the WIP branch. T1.2 remains unmerged; Reviewer
+re-review and human merge decision are still required.
+
+### 2026-11-24 T1.2/T1.2b Reviewer FAIL — stop-the-line
+
+- Review scope `998e896..4e5d07f`; verdict FAIL:
+  B1 real lifecycle states (ALLOCATED/SHIPPED/COMPLETED) are silently ignored
+  by TCC cancel (no batch/permit/refund); B2 missing canonical Developer
+  self-check/test-scope artifact; M1 historical commitment composition can
+  block whole TCC; M2 no-active-group case still creates FROZEN batch;
+  M3 Plan approval state stale.
+- `PAY-SETTLE-01` is frozen: no further managed code, no merge, no T1.4.
+- Required: T1.2 remediation plan, regression tests for real lifecycle states,
+  canonical self-check, Reviewer re-review, then human merge decision.
+- Zero after-sale amendment remains approved; T1.2 code is not approved.
+
+### 2026-11-25 human decisions: WIP continuation and amendment waiver
+
+- T1.4b1-R2: if Reviewer PASS, continue on the WIP branch; do not merge main.
+- T1.4b2 C-04 release event: no separate human approval required.
+- T1.5/T1.6: if they touch the `order.refund_requested` consumer or
+  payment-level refund semantics, issue an Amendment first.
+- Merge after P0 closure still requires explicit human approval.
+- **Temporary waiver (scoped)**: during the PAY-SETTLE-01 WIP, ADR/SPEC
+  Amendments do not require separate human approval. QC/Architect review still
+  applies; merge, Release PASS, and AC-VERIFIED are NOT waived. Scope ends at
+  P0 closure/merge decision (or 2026-12-31, whichever is earlier). Recorded per
+  constitution Article Governance 6.
+
 ## 2026-11-24 human decisions: constitution v1.2.0
 
 - Director approved constitution v1.2.0 and set the hierarchy:
@@ -43,6 +212,99 @@ old table still described P2#10 as rejected and Phase 7 as not started.
   ADR-0007 Amendment 1 were approved on 2026-11-24 (see the next section).
   D-27..D-29 are closed by ADR-0007 Amendment 1.
 
+## 2026-11-24 human decisions: governance cost reduction (D-CR-1…D-CR-5)
+- Director approved **all recommendations** D-CR-1…D-CR-5 from
+  `docs/cost-reduction-proposal.md` on 2026-11-24 (session directive to Lead:
+  "已经批准了 D-CR-1 至 D-CR-5 的所有建议"). Recorded here by Lead; the approval
+  is the Director's, not the Lead's, and this entry is the canonical approval
+  evidence referenced by SPEC-0003.
+  - D-CR-1: adopt the three-tier change classification L0/L1/L2 with the proposal
+    §3 objective criteria; criteria changes require human-approved Spec versions.
+  - D-CR-2: L1 stage approval delegated to **QC + Reviewer joint sign-off**
+    (conservative option; not Reviewer-only).
+  - D-CR-3: approve QC delta review for small versions, keeping the two mandatory
+    full-QC nodes (major version bump, before Release gate).
+  - D-CR-4: mis-tiering = stop-the-line + redo at L2 + Reviewer ledger record.
+  - D-CR-5: CI gate-triggering paths must include `docs/**`, `prompt/**`,
+    `.specify/**`.
+- Scope: governance/process only; no business AC/INV change; no waiver of EARS,
+  fail-closed, stop-the-line, or red lines R-1…R-6.
+- Open: D-CR-6 (root `AGENTS.md` / full managed-path CI coverage) and D-CR-7
+  (QC scope inside L1 joint sign-off) remain undecided.
+- Tracking: SPEC-0003 (`docs/specs/0003-platform-governance-cost-reduction.md`)
+  draft; QC-01 returned BLOCKED (0 BLOCKER / 10 MAJOR / 11 MINOR) and the spec is
+  in revision. Not a Spec approval; SPEC-0003 `approved_by` stays null.
+
+## 2026-11-24 human decisions: GOV-COST-01 bootstrap, IV and commit timing
+
+Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
+
+- **Bootstrap G-4 (QC-05 Q-02)**: choose **SPEC-0003 v1.4 amendment**. AC-106/112
+  bootstrap evidence = legacy **G-1…G-3 PASS** (scoped AC-01…68) plus an explicit
+  `G-4 NOT-RUN(not-implemented-at-BASE)` record that does **not** block P0a/P0b;
+  G-4 is implemented in P0b and required from then on. NOT-RUN never counts as PASS;
+  this is a bootstrap-only, time-boxed, human-approved evidence exception and does
+  not authorize Release. Spec v1.4 was subsequently QC-passed and approved
+  (see below).
+- **Independent Verifier (AC-107/GV-S21)**: held by the **Director**, or a
+  per-run **written designee** recorded in GV-S21 (`designated_by` +
+  `independence_evidence`); the designee must not author the change.
+- **Commit timing**: approved SPEC-0003 remains **untracked until P0a**. P0a lands
+  atomically: approved spec + G-3 governance-evidence extension + ledger/base
+  seeding. Until then the committed HEAD gate stays green; batch `DEFERRED`
+  registration remains forbidden (INV-69/AC-99).
+- ADR-0008 Rev 1.1 was approved on 2026-11-24 (QC-02 READY 0/0/7; Q-01…Q-20 20/20
+  CLOSED; bound to SPEC-0003 v1.4 approved).
+- **2026-11-24 approvals**: Director approved SPEC-0003 v1.4 (QC-05 READY 0/0/7,
+  M-1…M-7 editorial; `adr: [0008]` backfilled) and ADR-0008 Rev 1.1 (QC-02 READY
+  0/0/7, MINORs N-1…N-7 editorial).
+- **2026-11-24 Plan approval + bootstrap authorization**: Director approved the
+  `GOV-COST-01` Plan (`docs/lead/GOV-COST-01/plan.md`) and authorized the
+  P0a/P0b bootstrap exception: GV-S20 `mode=bootstrap`, approver=Director,
+  expiry=2026-12-31, scope=AC-106/AC-112. NOT-RUN never counts as PASS; the
+  exception does not authorize Release or AC-VERIFIED and ends when P0b lands G-4.
+- **2026-11-25 CI NOT-RUN policy**: Director decided the CI gate job **accepts
+  executor exit 4 (NOT-RUN)** as a successful job while recording
+  `RELEASE_ELIGIBLE=false`, uploading the gate artifacts and annotating the run;
+  **Release/tag workflows still require exit 0**, and `--mode=warn` /
+  `continue-on-error` remain forbidden in CI. Rationale: main must stay green
+  while governance ACs are verified incrementally, without treating NOT-RUN as
+  PASS. Requires ADR-0008 **Amendment 1** + QC + Director approval before T-B7
+  wiring; until then P0b is not committed.
+- **2026-11-25 scope reduction (Director)**: 门禁**大幅放宽**——「作为一环没必要做那么复杂」。
+  `GOV-COST-01` **冻结在 P0a**（已提交 `0d57398`/`3cac054`）；P0b（G-4、Release
+  模式、CI 退出码映射、自保护 IV）、P1（分级/联签）、P2（QC delta/scaffold）全部
+  **deferred**。未提交的 P0b/CI/Makefile/执行器改动已**回退**；Amendment 1 保留为
+  未实现的草案（`docs/adr/0008-governance-cost-reduction-amd1.md`），不作为契约执行。
+  运行时门禁保持 G-1/G-2/G-3 + 人类 Release：治理 AC 的 `NOT-RUN` 仅提示、不阻断
+  提交；Release 仍由人类放行。不新增 CI workflow，不改 `go.yml`。
+- **2026-11-25 gate retirement (Director)**: 门禁工具**整体退役**，不再保留任何脚本/CI
+  强制。已删除 `scripts/collab_gates.py`、`scripts/check-collab-gates.sh`、
+  `scripts/test-collab-gates.sh`、`scripts/test_collab_gates_p0a.py`；`Makefile` 移除
+  `gates`/`gates-strict`/`gates-test` 且 `verify` 不再依赖 `gates`；`.github/workflows/go.yml`
+  移除 `collab-gates` job（`verify` 保留）。G-1…G-4 降级为 `CONVENTIONS §7` 的人工检查清单；
+  `ADR-0006` 标记 retired，`ADR-0008`/Amendment 1 标记 withdrawn。GOV-COST-01 正式撤回，
+  不再推进 P0a 之后的任何实现。测试/构建/迁移/proto 门禁不变；Release 仍由人类放行。
+- **2026-11-25 artifact cleanup**: 已删除 GOV-COST-01 的全部产物——
+  SPEC-0003、ADR-0008、Amendment 1、9 份相关 QC 报告、`docs/lead/GOV-COST-01/`；
+  AC-69…AC-112 从 `ac-baseline.txt`/`ac-coverage.tsv` 移除（台账回到 AC-01…68 / 36 行），
+  `docs/specs/README.md` 的 SPEC-0003 索引行移除。仅保留本决策记录与
+  `docs/cost-reduction-proposal.md` 作为历史；不再有任何门禁/脚本引用它们。
+- **2026-11-25 tiering decision (Director)**: 分级以人工约定写入 `AGENTS.md` §2.7 /
+  `CONVENTIONS.md` §2.3，无脚本、无 CI、无新状态字段。**L1 审批 = Reviewer PASS + 人类合入**，
+  取代已撤回 GOV-COST-01 的 D-CR-2（QC+Reviewer 联签，从未实施）；**L0 同样保留人类合入**
+  （宪法 Governance 4：merge 是人类检查点，Lead/subagent 不得代行）；L2 不减免任何批准点。
+  判据变更须人类批准；误判即 stop-the-line、按 L2 重做并记录在此。
+- **2026-11-25 delta audit (Governance 5)**: 治理基线变更——AGENTS.md §2.7 与
+  CONVENTIONS.md §2.3 新增 L0/L1/L2 分级；宪法 **v1.2.3**（v1.2.2 Workflow 1 L0/L1 路由、Governance 4 适用时检查点；
+  v1.2.1 门禁退役；v1.2.3 历史记录与人工清单口径）；5 份角色 prompt 增加分级口径并新增
+  `prompt/Lead.md`；协作闸门脚本/CI 已删除。所有 Lead/subagent 必须重新读取 AGENTS、
+  宪法、CONVENTIONS 与自身 prompt，不得依赖旧摘要。
+- **2026-11-25 delta audit (AGENTS 角色矩阵 + §2.8)**: §1.0 Lead 限定 L2 Plan 并提议 Tier；
+  §1.4/§1.5 补 L1 口径与全级别 Tier 确认；新增分级角色动作总括；§2.8 治理变更最小化与撤回。
+  **收益**：角色动作与分级对齐、防止再次无界扩张；**停止条件**：本轮为最后编辑，不再新增治理机制。
+- **2026-11-25 §2.8 收口**: 撤回清理由各产物 owner 执行、仅删本次新增行；多文件同步限于首个可验证增量；安全/合规/数据完整性可豁免可测收益；收益与停止条件记录于 review-tracking 或变更输入。
+
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 
 Director approved on 2026-11-24, and PO applied the approved drafts to canonical
@@ -64,6 +326,24 @@ AC-39…61 remain deferred; AC-62…66 are newly registered as deferred
 (`Developer`, expiry `2026-12-31`, `developer-reviewer/T-002`). Any
 implementation/release still requires Reviewer verdict, AC evidence, affected
 baseline regression (AC-14/21/25/27/31/32), and human `RELEASE_APPROVED`.
+
+### 2026-11-24 zero after-sale amendment: SPEC-0002 v1.9
+
+Director approved the zero after-sale amendment on 2026-11-24; PO applied it to
+`docs/specs/0002-payment-settlement-admission.md` **v1.9 approved**.
+
+- Formalized **S19** (zero refund execution, `refund_applications(source=system_zero)`),
+  **INV-50**, and **AC-67/AC-68**; AC-55 gains a formal zero-only exception
+  (`pay_cent=0` and no captured intent) while positive refunds keep Payment-fact
+  priority unchanged.
+- Zero after-sale uses `AdmitRefund` zero short-circuit: same-transaction S19
+  `DONE`, no `PENDING`; AfterSales final `REFUNDED/0/CONSUMED/refund_no=''`.
+- QC-18: `READY FOR HUMAN ZERO AMENDMENT APPROVAL` (0 BLOCKER).
+
+**Scope**: contract approval only, not AC-VERIFIED, not implementation PASS, not
+Release PASS. AC-67/68 are registered as deferred for Developer
+(expiry 2026-12-31, `developer-reviewer/T-002`); implementation/C-05 remain
+separate gates.
 
 ## P1
 

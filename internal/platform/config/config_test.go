@@ -44,3 +44,22 @@ func TestLoadEtcdOverlay(t *testing.T) {
 		t.Fatalf("access ttl = %s", c.AccessTTL)
 	}
 }
+
+func TestApplyEnvTccReconcileInterval(t *testing.T) {
+	t.Setenv("TCC_RECONCILE_INTERVAL", "15s")
+	c := &Config{TccReconcileInterval: time.Minute}
+	if err := applyEnv(c); err != nil {
+		t.Fatal(err)
+	}
+	if c.TccReconcileInterval != 15*time.Second {
+		t.Fatalf("interval = %s, want 15s", c.TccReconcileInterval)
+	}
+	t.Setenv("TCC_RECONCILE_INTERVAL", "0s")
+	if err := applyEnv(&Config{}); err == nil {
+		t.Fatal("non-positive TCC_RECONCILE_INTERVAL accepted")
+	}
+	t.Setenv("TCC_RECONCILE_INTERVAL", "not-a-duration")
+	if err := applyEnv(&Config{}); err == nil {
+		t.Fatal("malformed TCC_RECONCILE_INTERVAL accepted")
+	}
+}

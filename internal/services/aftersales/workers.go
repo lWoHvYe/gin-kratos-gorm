@@ -21,6 +21,30 @@ import (
 // after the lease expires; no status scanner over business states is involved.
 const taskLease = time.Minute
 
+// T1.4b2b / SPEC-0002 v1.9 AC-67/AC-68: zero-amount after-sales never call
+// Payment. They are admitted through Order's zero short-circuit, whose source
+// and DONE state are contract values (S19). AfterSales must only use these
+// constants; it must not infer a zero refund from the requested amount alone.
+const (
+	zeroAfterSaleSource        = "system_zero"
+	zeroSettlementPaymentNoPre = "zero:"
+	zeroRefundApplicationDone  = "DONE"
+	// zeroCaptureSource is only an audit label for a zero-settled order; the
+	// zero path never writes the after_sale_amount_ledger or a refund
+	// commitment, so no amount is ever reserved.
+	zeroCaptureSource = "zero_settlement"
+)
+
+// isZeroSettlementOrder reports whether Order's authoritative facts describe a
+// zero-amount settlement: pay_cent=0 and the synthetic `zero:<order_no>`
+// settlement identity (AC-67). A pay_cent=0 order whose settlement identity is
+// something else may still have a captured intent and must not be turned into a
+// zero refund.
+func isZeroSettlementOrder(order *pb.Order) bool {
+	return order != nil && order.GetPayCent() == 0 &&
+		order.GetSettlementPaymentNo() == zeroSettlementPaymentNoPre+order.GetOrderNo()
+}
+
 type restockTask struct {
 	afterSaleNo string
 	skuID       int64
@@ -304,6 +328,16 @@ func runRefundBatch(ctx context.Context, database *sql.DB, svc *Service, logger 
 	}
 }
 
+// refundAdmissionSource maps the after-sale origin onto Order's closed refund
+// source. SYSTEM shortage refunds are `system_shortage` (T1.4b2 B2); ordinary
+// after-sales keep `aftersale`.
+func refundAdmissionSource(row *afterSaleRow) string {
+	if row.source == sourceSystem {
+		return "system_shortage"
+	}
+	return "aftersale"
+}
+
 func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) error {
 	owner, ok, err := s.claimRefundTask(ctx, afterSaleNo)
 	if err != nil || !ok {
@@ -327,11 +361,6 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 		return err
 	}
-	if s.payments == nil {
-		err := apperr.Unavailable("payment client is not configured", nil)
-		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
-		return err
-	}
 	groupNo, err := s.groupForAfterSale(ctx, afterSaleNo)
 	if err != nil {
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
@@ -347,6 +376,18 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 		return err
 	}
+	// T1.4b2b: a zero-settled order takes the zero short-circuit, so the
+	// Payment dependency and the positive-amount guard below are never
+	// reached. The task was already claimed (persisted intent + lease) before
+	// this call, satisfying the R-C precondition for CancelIfCreated.
+	if isZeroSettlementOrder(order) {
+		return s.processZeroRefundTask(ctx, afterSaleNo, owner, row, items, groupNo)
+	}
+	if s.payments == nil {
+		err := apperr.Unavailable("payment client is not configured", nil)
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return err
+	}
 	// Refund admission is a remote Order call; do it before opening the local
 	// line-ledger transaction. It is idempotent by after_sale_no, so the
 	// ordinary Refund path and this worker converge on one admission result.
@@ -357,7 +398,7 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		}
 		if _, err := s.orders.AdmitRefund(ctx, &pb.AdmitRefundRequest{
 			RefundId: afterSaleNo, OrderNo: row.orderNo, GroupNo: groupNo,
-			AmountCent: amount, Source: "aftersale",
+			AmountCent: amount, Source: refundAdmissionSource(row),
 		}); err != nil {
 			s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 			return apperr.Unavailable("refund admission", err)
@@ -430,6 +471,9 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 	if current.effectiveAmountCent > 0 && refundCent > current.effectiveAmountCent {
 		refundCent = current.effectiveAmountCent
 	}
+	// Zero-amount after-sales were completed by the zero short-circuit above;
+	// reaching this guard with <= 0 is a positive-path anomaly, never a
+	// "nothing to refund" success.
 	if refundCent <= 0 {
 		return apperr.Failed("after sale has no positive refund amount")
 	}
@@ -524,6 +568,124 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 	return tx.Commit()
 }
 
+// processZeroRefundTask completes a zero-amount after-sale through Order's
+// zero short-circuit (SPEC-0002 v1.9 AC-67/AC-68, AZ-02/AZ-03/AZ-05):
+//
+//  1. the durable refund task is already claimed (PENDING -> PROCESSING +
+//     lease), so a crash after the remote admission can always be retried;
+//  2. Order.AdmitRefund(source=system_zero, amount=0) performs the group
+//     admission and writes S19 DONE in one transaction; a failed retry returns
+//     the existing S19 instead of a second one;
+//  3. only a DONE reply may mark the local after-sale REFUNDED. S19 is the
+//     execution fact; if it is missing, this function releases the task for
+//     retry and never fabricates REFUNDED/refunded_cent;
+//  4. the local transaction writes REFUNDED, refunded_cent=0,
+//     amount_state=CONSUMED, refund_no=” and task DONE together, then emits
+//     aftersale.completed. Payment is never called.
+func (s *Service) processZeroRefundTask(ctx context.Context, afterSaleNo, owner string, row *afterSaleRow, items []*pb.AfterSaleItem, groupNo string) error {
+	if row.amountCent != 0 || row.effectiveAmountCent != 0 {
+		// A zero-settled order cannot legitimately carry a refund amount. Fail
+		// closed instead of silently discarding the requested amount.
+		err := apperr.Conflict("zero-settled order after-sale must not carry a refund amount")
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return err
+	}
+	reply, err := s.orders.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: afterSaleNo, OrderNo: row.orderNo, GroupNo: groupNo,
+		AmountCent: 0, Source: zeroAfterSaleSource,
+	})
+	if err != nil {
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return apperr.Unavailable("zero-amount refund admission", err)
+	}
+	if reply.GetState() != zeroRefundApplicationDone || reply.GetAmountCent() != 0 {
+		// AC-68: S19 must be DONE before AfterSales becomes REFUNDED.
+		err := apperr.Failed("zero-amount refund admission is not DONE").
+			WithDetails(map[string]any{
+				"after_sale_no": afterSaleNo, "state": reply.GetState(), "amount_cent": reply.GetAmountCent(),
+			})
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return apperr.Internal("begin zero refund completion", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	current, err := lockAfterSale(ctx, tx, afterSaleNo)
+	if err != nil {
+		_ = tx.Rollback()
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return err
+	}
+	if current.status == statusRefunded {
+		// S19 DONE was already projected; only the task may still need closing.
+		_ = tx.Rollback()
+		return s.completeRefundTask(ctx, afterSaleNo, owner)
+	}
+	if current.amountCent != 0 || current.effectiveAmountCent != 0 {
+		err := apperr.Conflict("zero-settled order after-sale must not carry a refund amount")
+		_ = tx.Rollback()
+		s.releaseRefundTask(ctx, afterSaleNo, owner, err)
+		return err
+	}
+	if current.status == statusApproved && current.source == sourceSystem {
+		if _, err := tx.ExecContext(ctx, `UPDATE after_sales SET status = ?, version = version + 1 WHERE id = ?`,
+			statusRefunding, current.id); err != nil {
+			return apperr.Internal("system zero refund to REFUNDING", err)
+		}
+		current.status = statusRefunding
+	}
+	if current.status != statusRefunding {
+		return apperr.Conflict(fmt.Sprintf("after sale is %s, not REFUNDING", current.status))
+	}
+	if err := s.clearPendingForAfterSaleTx(ctx, tx, afterSaleNo); err != nil {
+		return err
+	}
+	// Quantity accounting matches the positive path; the amount is zero and no
+	// line-refunded event is emitted for the zero short-circuit.
+	for _, item := range items {
+		if item.GetLineNo() <= 0 || item.GetQuantity() <= 0 {
+			continue
+		}
+		if err := s.recordLineRefundTx(ctx, tx, current.orderNo, lineRefund{
+			LineNo: item.GetLineNo(), SkuID: item.GetSkuId(), Quantity: int64(item.GetQuantity()), AmountCent: 0,
+		}); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE after_sales
+		SET status = ?, effective_amount_cent = 0, refund_no = '', refunded_cent = 0, amount_state = ?, version = version + 1
+		WHERE id = ?`, statusRefunded, amountConsumed, current.id); err != nil {
+		return apperr.Internal("mark zero after sale refunded", err)
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE after_sale_refund_tasks
+		SET status = ?, last_error = '', lease_owner = '', lease_until = NULL, updated_at = NOW(3)
+		WHERE after_sale_no = ? AND lease_owner = ?`, taskDone, afterSaleNo, owner)
+	if err != nil {
+		return apperr.Internal("complete zero refund task", err)
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return apperr.Conflict("refund task lease was lost before zero completion")
+	}
+	if err := appendLog(ctx, tx, current.id, "REFUND", current.status, statusRefunded, "zero-amount refund completed"); err != nil {
+		return err
+	}
+	payload, _ := json.Marshal(events.AfterSaleCompleted{
+		AfterSaleNo: afterSaleNo, OrderNo: current.orderNo, GroupNo: groupNo, UserID: current.userID,
+		Type: current.typ, Status: statusRefunded, AmountCent: current.amountCent,
+		EffectiveAmountCent: 0, AmountState: amountConsumed,
+		RestockState: current.restockState, Reason: current.reason,
+	})
+	if err := outbox.Append(ctx, tx, outbox.Event{
+		Topic: topicAfterSaleCompleted, AggregateType: aggregateAfterSale,
+		AggregateID: afterSaleNo, EventType: "aftersale.completed", Payload: payload,
+	}); err != nil {
+		return apperr.Internal("append zero aftersale.completed", err)
+	}
+	return tx.Commit()
+}
+
 func (s *Service) claimRefundTask(ctx context.Context, afterSaleNo string) (string, bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -575,7 +737,8 @@ func (s *Service) releaseRefundTask(ctx context.Context, afterSaleNo, owner stri
 		return
 	}
 	next := taskPending
-	if attempts >= maxTaskAttempts {
+	permanent := attempts >= maxTaskAttempts
+	if permanent {
 		next = taskFailed
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE after_sale_refund_tasks
@@ -583,7 +746,7 @@ func (s *Service) releaseRefundTask(ctx context.Context, afterSaleNo, owner stri
 		WHERE after_sale_no = ?`, next, cutRunes(cause.Error(), 512), afterSaleNo); err != nil {
 		return
 	}
-	if next == taskFailed {
+	if permanent {
 		if err := s.releasePendingForAfterSaleTx(ctx, tx, afterSaleNo); err != nil {
 			return
 		}
@@ -607,7 +770,14 @@ func (s *Service) releaseRefundTask(ctx context.Context, afterSaleNo, owner stri
 			}
 		}
 	}
-	_ = tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return
+	}
+	if permanent {
+		// Alertable terminal overflow: the task stays FAILED_PERMANENT and the
+		// after-sale is never marked REFUNDED (no faked completion).
+		metrics.AfterSaleRefundRecovery.WithLabelValues("failed_permanent").Inc()
+	}
 }
 
 func (s *Service) completeRefundTask(ctx context.Context, afterSaleNo, owner string) error {

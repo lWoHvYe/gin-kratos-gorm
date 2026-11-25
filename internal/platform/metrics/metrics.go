@@ -95,6 +95,15 @@ var (
 		Help: "order.refund_requested events handled by payment, by result.",
 	}, []string{"result"})
 
+	// PaymentCancelCASLost counts PENDING_PAYMENT->CANCELLED CAS losses on the
+	// T1.6 payment-level cancel path. The metric name is fixed by the accepted
+	// T1.6 Addendum §4.2 ruling 1 (`CANCEL_CAS_LOST`); reason must match the log
+	// and details.reason, result records how the loss converged.
+	PaymentCancelCASLost = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "payment_cancel_cas_lost_total",
+		Help: "PENDING_PAYMENT->CANCELLED CAS losses in the T1.6 payment-level cancel path, by reason and result.",
+	}, []string{"reason", "result"})
+
 	// GRPCDuration tracks gRPC handler latency by operation and outcome.
 	GRPCDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "mall_grpc_request_duration_seconds",
@@ -239,6 +248,7 @@ var (
 func init() {
 	prometheus.MustRegister(HTTPRequests, HTTPDuration, OutboxPublished, OutboxPublishErrors,
 		SeckillAdmissions, SeckillOrderCommands, SeckillReconcileMismatch, PaymentRefundEvents,
+		PaymentCancelCASLost,
 		OutboxPending, OutboxOldestSeconds, OutboxDeadLettered, ConsumerOutcomes, AfterSaleRefundRecovery, GRPCDuration, Errors,
 		AIRequests, AIDuration, AIToolCalls, AITokens, AIRateLimited, AIInfo,
 		AIBudgetExceeded, AICostCents, AICircuitState, AIRAGUpdates, AIRAGSearch, AIRAGEmpty,

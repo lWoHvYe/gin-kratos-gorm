@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **APPROVED (Plan) — implementation not started** |
+| Status | **APPROVED (Plan); Phase 1 T1.2 FROZEN pending T1.2-R** |
 | Approved | 2026-11-24（Human / Director） |
 | change_id | `PAY-SETTLE-01`（**原 change_id**；不使用新 id 绕过 Review-01 冻结） |
 | Review base/head | `d38f282..03a0717`（Review-01 FAIL）；补救 `6550a2c`；当前治理 head `3afdfe2` |

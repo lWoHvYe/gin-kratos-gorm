@@ -77,6 +77,7 @@ func main() {
 	workers.Go(func(ctx context.Context) { inventory.RunOrderCancelledConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { inventory.RunCompensationConsumer(ctx, client, svc, logger) })
 	workers.Go(func(ctx context.Context) { inventory.RunConfirmConsumer(ctx, client, svc, logger) })
+	workers.Go(func(ctx context.Context) { inventory.RunRefundReleaseConsumer(ctx, client, svc, logger) })
 	pb.RegisterInventoryServiceServer(gs, svc)
 	app := runtime.NewApp(cfg, logger, gs, runtime.HealthServer(cfg, database, logger, client.Healthy))
 	if err := app.Run(); err != nil {

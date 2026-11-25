@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,6 +46,7 @@ func orderTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	for _, table := range []string{"order_refund_admissions", "order_refund_commitments",
+		"order_refund_commitment_lines", "refund_applications", "refund_batches",
 		"order_shipping_permits", "order_fulfillment_groups", "order_items",
 		"order_allocation_snapshots", "order_allocation_decisions", "order_shortage_cases",
 		"order_reconciliation_diffs", "order_status_logs", "orders", "outbox_events"} {
@@ -120,7 +123,8 @@ func orderTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE IF NOT EXISTS order_refund_commitments (
 			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, order_no VARCHAR(64) NOT NULL,
 			group_no VARCHAR(64) NOT NULL, refund_id VARCHAR(128) NOT NULL,
-			amount_cent BIGINT NOT NULL, state VARCHAR(16) NOT NULL DEFAULT 'RESERVED',
+			amount_cent BIGINT NOT NULL,
+			state VARCHAR(16) NOT NULL DEFAULT 'RESERVED',
 			version BIGINT NOT NULL DEFAULT 1,
 			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 			updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -168,14 +172,58 @@ func orderTestDB(t *testing.T) *sql.DB {
 			t.Fatalf("create order test table: %v", err)
 		}
 	}
+	// The refund batch/application/commitment-composition schema comes from the
+	// real C-05 migrations, not a hand-written projection (Plan T1.2-R R-2 /
+	// Review m6). This exercises the order/0017, order/0018 and order/0021 DDL
+	// (CHECK constraints, columns, indexes) in every order integration test.
+	for _, migration := range []string{
+		"0017_refund_batch_ledger.sql",
+		"0018_refund_commitment_composition.sql",
+		"0021_zero_application_check.sql",
+	} {
+		applyOrderTestMigration(t, db, migration)
+	}
 	for _, table := range []string{"order_allocation_decisions", "order_allocation_snapshots", "order_shortage_cases",
 		"order_reconciliation_diffs", "order_fulfillment_groups", "order_items", "order_shipping_permits",
-		"order_status_logs", "orders", "outbox_events"} {
+		"order_status_logs", "orders", "outbox_events",
+		"refund_applications", "refund_batches", "order_refund_commitment_lines",
+		"order_refund_commitments", "order_refund_admissions"} {
 		if _, err := db.Exec("DELETE FROM " + table); err != nil {
 			t.Fatal(err)
 		}
 	}
 	return db
+}
+
+// applyOrderTestMigration executes a real migrations/order/*.sql file against
+// the test database. The C-05 files are plain statements (no DELIMITER blocks);
+// splitting on ";" lets database/sql run them without multiStatements=true.
+func applyOrderTestMigration(t *testing.T, db *sql.DB, name string) {
+	t.Helper()
+	path := filepath.Join("..", "..", "..", "migrations", "order", name)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read migration %s: %v", name, err)
+	}
+	// Drop full-line SQL comments first: the header comments contain ";" and
+	// would otherwise be split into invalid fragments.
+	var cleaned strings.Builder
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "--") {
+			continue
+		}
+		cleaned.WriteString(line)
+		cleaned.WriteString("\n")
+	}
+	for _, statement := range strings.Split(cleaned.String(), ";") {
+		statement = strings.TrimSpace(statement)
+		if statement == "" {
+			continue
+		}
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatalf("apply migration %s: %v\n%s", name, err, statement)
+		}
+	}
 }
 
 func seedSettlementOrder(t *testing.T, db *sql.DB, orderNo, status string, paid, refunded int64, refundState string) {
@@ -386,32 +434,49 @@ func containsAction(actions []string, want string) bool {
 
 func TestTccCancelKeepsLifecycleAndSetsRefundState(t *testing.T) {
 	db := orderTestDB(t)
-	svc := settlementService(db)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 1000})
 	ctx := context.Background()
-	seedSettlementOrder(t, db, "ORD-TCC-PENDING", statusPendingPayment, 1000, 0, refundStateNone)
+	// T1.2b R-3 moved the captured PENDING_PAYMENT branch to T1.6, so the
+	// compensation lifecycle assertions use a PAID order.
+	seedSettlementOrder(t, db, "ORD-TCC-PAID-1", statusPaid, 1000, 0, refundStateNone)
+	seedTccLine(t, db, "ORD-TCC-PAID-1", 1, defaultGroupNo, 1000)
+	if _, err := db.Exec(`UPDATE orders SET settlement_payment_no = 'PAY-1' WHERE order_no = 'ORD-TCC-PAID-1'`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
-		OrderNo: "ORD-TCC-PENDING", PaymentNo: "PAY-1", PaidCent: 1000,
+		OrderNo: "ORD-TCC-PAID-1", PaymentNo: "PAY-1", PaidCent: 1000,
 	}); err != nil {
 		t.Fatal(err)
 	}
 	var status, refundState string
 	var paid int64
-	if err := db.QueryRow(`SELECT status, refund_state, paid_cent FROM orders WHERE order_no = 'ORD-TCC-PENDING'`).
+	if err := db.QueryRow(`SELECT status, refund_state, paid_cent FROM orders WHERE order_no = 'ORD-TCC-PAID-1'`).
 		Scan(&status, &refundState, &paid); err != nil {
 		t.Fatal(err)
 	}
 	if status != statusPaid || refundState != refundStateRefunding || paid != 1000 {
-		t.Fatalf("pending tcc cancel = %s/%s/%d", status, refundState, paid)
+		t.Fatalf("paid tcc cancel = %s/%s/%d", status, refundState, paid)
 	}
-	var topic string
-	if err := db.QueryRow(`SELECT topic FROM outbox_events ORDER BY id DESC LIMIT 1`).Scan(&topic); err != nil {
+	// T1.2: the legacy order.refund_requested trigger is gone; refunds go
+	// through the durable batch/admission ledger instead.
+	var refundRequested int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM outbox_events WHERE topic = ?`, topicOrderRefundRequested).
+		Scan(&refundRequested); err != nil {
 		t.Fatal(err)
 	}
-	if topic != topicOrderRefundRequested {
-		t.Fatalf("outbox topic = %s", topic)
+	if refundRequested != 0 {
+		t.Fatalf("tcc cancel still emits order.refund_requested (%d rows)", refundRequested)
 	}
 
 	seedSettlementOrder(t, db, "ORD-TCC-PAID", statusPaid, 1000, 0, refundStateNone)
+	seedTccLine(t, db, "ORD-TCC-PAID", 1, defaultGroupNo, 1000)
+	if _, err := db.Exec(`UPDATE orders SET settlement_payment_no = 'PAY-2' WHERE order_no = 'ORD-TCC-PAID'`); err != nil {
+		t.Fatal(err)
+	}
+	// The fake intent is shared by both orders; PAY-2 is a different captured
+	// payment with its own refunded total, so reset the fake's projection.
+	payments := svc.payments.(*fakePaymentPort)
+	payments.refunded = 0
 	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
 		OrderNo: "ORD-TCC-PAID", PaymentNo: "PAY-2", PaidCent: 1000,
 	}); err != nil {
@@ -428,9 +493,12 @@ func TestTccCancelKeepsLifecycleAndSetsRefundState(t *testing.T) {
 
 func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
 	db := orderTestDB(t)
-	svc := settlementService(db)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 1000})
 	ctx := context.Background()
-	seedSettlementOrder(t, db, "ORD-GROUP", statusPendingPayment, 1000, 0, refundStateNone)
+	seedSettlementOrder(t, db, "ORD-GROUP", statusPaid, 1000, 0, refundStateNone)
+	if _, err := db.Exec(`UPDATE orders SET settlement_payment_no = 'PAY-G' WHERE order_no = 'ORD-GROUP'`); err != nil {
+		t.Fatal(err)
+	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -446,6 +514,9 @@ func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
 	}, 1000); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := tx.ExecContext(ctx, `UPDATE order_fulfillment_groups SET status = ? WHERE order_no = 'ORD-GROUP'`, statusAllocated); err != nil {
+		t.Fatal(err)
+	}
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +525,7 @@ func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(groups) != 1 || groups[0].GroupNo != defaultGroupNo || groups[0].WarehouseID != defaultWarehouseID ||
-		groups[0].Status != "PENDING" || groups[0].FreightCent != 1000 {
+		groups[0].Status != statusAllocated || groups[0].FreightCent != 1000 {
 		t.Fatalf("groups = %+v", groups)
 	}
 	var line, warehouse int64
@@ -480,9 +551,12 @@ func TestFulfillmentGroupShadowTracksOrder(t *testing.T) {
 
 func TestMultiGroupShadowAllocatedTogether(t *testing.T) {
 	db := orderTestDB(t)
-	svc := settlementService(db)
+	svc := tccTestService(t, db, &fakePaymentPort{captured: 1000})
 	ctx := context.Background()
-	seedSettlementOrder(t, db, "ORD-MULTI", statusPendingPayment, 1000, 0, refundStateNone)
+	seedSettlementOrder(t, db, "ORD-MULTI", statusPaid, 1000, 0, refundStateNone)
+	if _, err := db.Exec(`UPDATE orders SET settlement_payment_no = 'PAY-M' WHERE order_no = 'ORD-MULTI'`); err != nil {
+		t.Fatal(err)
+	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -497,6 +571,9 @@ func TestMultiGroupShadowAllocatedTogether(t *testing.T) {
 		{GroupNo: "G1", WarehouseId: 1, FreightCent: 500},
 		{GroupNo: "G2", WarehouseId: 2, FreightCent: 500},
 	}, 1000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE order_fulfillment_groups SET status = ? WHERE order_no = 'ORD-MULTI'`, statusAllocated); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {

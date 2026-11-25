@@ -780,6 +780,9 @@ service PaymentService {
   // return type is package-qualified because the legacy Refund method name
   // shadows the unqualified Refund message in protoc name resolution.
   rpc GetRefundByKey (GetRefundByKeyRequest) returns (.mall.v1.Refund);
+  // RefundBatch is the atomic group-refund batch. Every item commits in the
+  // same transaction; a batch-level error writes no refund row and no event.
+  rpc RefundBatch (RefundBatchRequest) returns (RefundBatchReply);
 }
 message Intent {
   string payment_no = 1;
@@ -856,6 +859,41 @@ message Refund {
 message ListRefundsRequest { string payment_no = 1; string order_no = 2; int32 page = 3; int32 page_size = 4; }
 message RefundList { repeated Refund refunds = 1; int64 total = 2; }
 message GetRefundByKeyRequest { string payment_no = 1; string refund_id = 2; }
+
+message RefundBatchItem {
+  // refund_id is the stable group-level refund key; it must not be reused
+  // with a different amount.
+  string refund_id = 1;
+  // amount_cent must be positive.
+  int64 amount_cent = 2;
+}
+message RefundBatchRequest {
+  string payment_no = 1;
+  // batch_id is idempotent within payment_no.
+  string batch_id = 2;
+  // expected_total_cent must equal the sum of item amounts; Order derives it
+  // from outstanding = B - done - inFlight, not from B.
+  int64 expected_total_cent = 3;
+  repeated RefundBatchItem items = 4;
+  string reason = 5;
+}
+message RefundBatchItemResult {
+  string refund_id = 1;
+  // refund_no is the existing or newly created refund number.
+  string refund_no = 2;
+  // status is REFUNDED or ALREADY_REFUNDED. Item order is not guaranteed.
+  string status = 3;
+  int64 amount_cent = 4;
+}
+message RefundBatchReply {
+  string batch_id = 1;
+  // status is REFUNDED or ALREADY_REFUNDED.
+  string status = 2;
+  // refunded_cent is the sum of this batch's item amounts, not the intent's
+  // cumulative refunded total.
+  int64 refunded_cent = 3;
+  repeated RefundBatchItemResult item_results = 4;
+}
 
 // ---------------------------------------------------------------- promotion
 

@@ -6,6 +6,10 @@
 | Approved | **2026-11-24** |
 | Base | **ADR-0007 Rev 1.0**（accepted，2026-11-23）；本文件**不修改** Rev 1.0 正文 |
 | Revision | **1.0**（Amendment 1；原 r5 定稿；QC-13/QC-14 收口：Payment 成功后才终态） |
+| Addendum | [0007-amd1-addendum-zero-after-sale.md](0007-amd1-addendum-zero-after-sale.md)（accepted 2026-11-24） |
+| T1.2 Addendum | [0007-amd1-addendum-t12-contract-rulings.md](0007-amd1-addendum-t12-contract-rulings.md)（accepted 2026-11-24） |
+| T1.4a Addendum | [0007-amd1-addendum-t14a-contract-rulings.md](0007-amd1-addendum-t14a-contract-rulings.md)（accepted 2026-11-24） |
+| C-04 RefundBatch | [0007-amd1-refundbatch-c04-draft.md](0007-amd1-refundbatch-c04-draft.md)（accepted 2026-11-24） |
 | Date | 2026-11-24 |
 | Target Spec | **SPEC-0002 v1.8（approved 2026-11-24）**；QC-13/QC-14 已复核；AC-63 零元精确条件、AC-66 三级开关门禁、`COMPENSATING` 已对齐；SPEC-0001 v1.4（approved 2026-11-24，C-01） |
 | Change ID | `PAY-SETTLE-01` |

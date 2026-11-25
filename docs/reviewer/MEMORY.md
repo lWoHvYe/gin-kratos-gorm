@@ -23,7 +23,7 @@
 | 实施线程 | `architect-developer/T-001`、`T-002` 均 **CLOSED**（`c085006` 追认 scope） |
 | 审查线程 | `docs/collab/developer-reviewer/threads/T-001.md` **CLOSED / PASS**（`closed_by=f162ecf`） |
 | 审查结论 | **PASS**：P0-1…P0-7 全关闭；P0-6 剩余项为有 owner/expiry 的到期项 |
-| 闸门命令 | `make gates-strict` → 38/38、`G-1=0 G-2=0 G-3=0 exit=0`；默认范围只到 `HEAD^..HEAD` |
+| 协作闸门 | **2026-11-25 已退役**：无 `make gates*`；以人工核对 + `make test`/`make verify`（不含 gates）为准 |
 | AC 台账 | `ac-coverage.tsv` 已有 AC-22/28/29/30/35/37 的 owner/expiry/thread，Reviewer 复核接受为到期项 |
 
 > `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false；P0-7 已修复并复跑通过，按 ADR §13.1 分阶段灰度，不在本审查中自动打开。
@@ -58,9 +58,8 @@ for n in $(seq -w 1 38); do
   [ "$c" = "0" ] && echo "MISSING AC-$n"
 done
 
-# 闸门
-make gates-strict
-RANGE=origin/main..HEAD make gates-strict   # 合并前扫全量，不要只看 HEAD
+# 协作闸门已于 2026-11-25 退役；不再运行 make gates*
+# 合并前以 make test / make verify（不含 gates）为准
 
 # 目标测试（示例）
 export PATH="$PWD/.tmp/bin:$PATH"
@@ -76,7 +75,7 @@ git log --oneline -8 && git status --short
 
 1. `38/38` 只证明测试文件里出现过 `AC-NN`，**不证明** AC 语义和 ADR §14 指定的验证方式。
 2. `TestAC<NN>` 薄 wrapper 共用同一 body（AC-21/37、AC-31/32/33）时，要逐条看断言是否覆盖各自 AC。
-3. `gates-strict` 默认范围是单笔提交；Reviewer 需要显式用 `RANGE=...` 扫合并范围，否则历史混提看不见。
+3. 协作闸门已退役，不存在机器扫描范围；合并范围改由人工 `git log`/`git diff` 核对。
 4. 台账 `ac-coverage.tsv` 归 Reviewer；空台账 + 测试引用 = 虚假 38/38。
 5. 签收链路：`delivered_at` 是事实时刻，`occurred_at` 是事件声明的时刻；job 的 `due_at` 不得被后来的重复事件用 `LEAST` 提前。
 6. 资金链路：`after_sale_line_ledger.pending_*`、`after_sale_amount_ledger.consumed`、Payment captured 三层缺一不可；`recordLineRefundTx` 没有 DB 上限约束，别只看代码。
@@ -98,7 +97,7 @@ git log --oneline -8 && git status --short
 - 记忆区：`docs/reviewer/**`（唯一作者 Reviewer）。
 - 审查渠道：`docs/collab/developer-reviewer/**`（README + threads.md + threads/T-NNN.md）。
 - 提交 scope：`docs(reviewer)`；线程与索引沿用 `docs(collab)`；trailer 用 `Thread: developer-reviewer/T-NNN`、`Role: Reviewer`。
-- 闸门脚本 `scripts/collab_gates.py` 的 `MANAGED` 尚未登记 `docs/reviewer/`；该脚本改动需 Architect + Reviewer 双方复核（CONVENTIONS §A.6），当前记 `[TODO]`，不单方面改。
+- 协作闸门脚本已删除（2026-11-25）；不再有 `MANAGED` 登记或脚本复核问题。
 
 ## 9. 与其他文档的关系
 
@@ -108,4 +107,4 @@ git log --oneline -8 && git status --short
 | `docs/adr/**` | 设计结论，唯一事实源；Reviewer 只读 |
 | `docs/implementation/*-deviation-register.md` | 实现偏差（owner + expiry）；Reviewer 核验 |
 | `docs/collab/developer-reviewer/threads/` | 审查过程与红队问题；**结论以代码+日志+Spec/ADR 为准** |
-| `docs/collab/ac-baseline.txt` / `ac-coverage.tsv` | 闸门台账；Reviewer 维护 |
+| `docs/collab/ac-baseline.txt` / `ac-coverage.tsv` | 人工 AC 台账；Reviewer 维护（无机器校验） |

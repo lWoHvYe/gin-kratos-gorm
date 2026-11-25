@@ -45,7 +45,7 @@ func TestOrderCancelledConsumerNATS(t *testing.T) {
 	})
 	time.Sleep(500 * time.Millisecond)
 	if err := client.Publish(context.Background(), "shop.order.cancelled.v1",
-		[]byte(`{"order_no":"ORD-CANCEL-NATS","items":[{"sku_id":1,"quantity":1}]}`)); err != nil {
+		[]byte(`{"order_no":"ORD-CANCEL-NATS","items":[{"sku_id":1,"warehouse_id":1,"quantity":1}]}`)); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(5 * time.Second)

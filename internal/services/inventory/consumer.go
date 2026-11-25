@@ -16,8 +16,9 @@ import (
 type orderCancelledEvent struct {
 	OrderNo string `json:"order_no"`
 	Items   []struct {
-		SkuID    int64 `json:"sku_id"`
-		Quantity int32 `json:"quantity"`
+		SkuID       int64 `json:"sku_id"`
+		WarehouseID int64 `json:"warehouse_id"`
+		Quantity    int32 `json:"quantity"`
 	} `json:"items"`
 }
 
@@ -45,10 +46,20 @@ func handleOrderCancelled(ctx context.Context, svc *Service, data []byte) error 
 		return nil
 	}
 	items := make([]*pb.OrderItem, 0, len(event.Items))
-	for _, item := range event.Items {
-		if item.SkuID > 0 && item.Quantity > 0 {
-			items = append(items, &pb.OrderItem{SkuId: item.SkuID, Quantity: item.Quantity})
+	for i, item := range event.Items {
+		if item.SkuID <= 0 || item.Quantity <= 0 {
+			continue
 		}
+		// INV-44: never fall back to W1. A missing warehouse_id cannot locate
+		// the reservation, so the event is a contract violation (DLQ) rather
+		// than a silent wrong-warehouse compensation.
+		if item.WarehouseID <= 0 {
+			return consumer.Permanent(fmt.Errorf("order.cancelled item[%d] for order %s is missing warehouse_id",
+				i, event.OrderNo))
+		}
+		items = append(items, &pb.OrderItem{
+			SkuId: item.SkuID, WarehouseId: item.WarehouseID, Quantity: item.Quantity,
+		})
 	}
 	if len(items) == 0 {
 		return nil

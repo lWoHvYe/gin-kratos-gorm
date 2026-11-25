@@ -17,7 +17,7 @@ func TestCompensationHandlerRestocksOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &Service{db: db}
-	payload := []byte(`{"order_no":"ORD-COMP","items":[{"sku_id":1,"quantity":1}]}`)
+	payload := []byte(`{"order_no":"ORD-COMP","items":[{"sku_id":1,"warehouse_id":1,"quantity":1}]}`)
 	for i := 0; i < 2; i++ {
 		if err := handleCompensation(context.Background(), svc, payload); err != nil {
 			t.Fatalf("attempt %d: %v", i+1, err)

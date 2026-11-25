@@ -2,15 +2,21 @@
 
 | 项 | 值 |
 |---|---|
-| 基线 | `main` `47f460b`（P0 WIP merge `d7c2f30`） |
+| 基线 | `main` `db5602f`；SPEC-0002 **v1.10** / ADR-0007 **Rev 2.3**；P0 WIP merge `d7c2f30` |
 | 日期 | 2026-11-25 |
 | 状态 | P0 主链路已 merge，**不是 Release PASS**；AC-39…68 仍 DEFERRED |
 | 用途 | 区分“P0 收尾 / 同 Plan 未做 / 因主任务搁置 / 已撤回”四类，防止再次混做 |
 
 ## 1. P0 收尾（Release 前必须清）
+> **2026-11-25 其他 agent 追溯复核（D-LC-5）**：Phase 0 exit 未被支持；
+> T0.7 五方签署、C-05 真实迁移、`chk_switch_settled_expiry`、fail-closed
+> config、C-04 release RPC 均有缺口。Phase 0-R 是 **P0 收口/Release 前置**；
+> 当前 merge 只是 WIP，不是 P0 closure。详见 `tasks.md` Phase 0-R。
+
 
 | ID | 内容 | 当前状态 / 缺口 | Owner |
 |---|---|---|---|
+| **P0-0** | **Phase 0-R 追溯整改（最高优先）** | R0.1 真实迁移 `order/0017-0020`+`fulfillment/0010`、`chk_switch_settled_expiry`、0018 重入/部分失败；R0.2 C-01..C-05 日期化 Reviewer verdict；R0.3 AC-27/回归/INV-45..50 + 12 orphan；R0.4 config fail-closed、C-04 release RPC、group_no/24h CHECK；R0.5 evidence-matrix 到 SPEC v1.10 | Developer + Reviewer + Architect + Lead/PO |
 | P0-1 | **T1.7 竞态/故障测试**：Σ 不等、REFUNDING vs Ship、崩溃续跑、部分失败、无组 G1、已发货组 | 未开始 | Developer + Reviewer |
 | P0-2 | **T5 证据矩阵**：AC-39…68、`evidence_path`、真实迁移、`-race`、故障注入、五方终态 | 未开始；台账全部 DEFERRED | Reviewer + Developer |
 | P0-3 | **T1.4a 独立 scoped 裁决 / T-002 关闭** | T1.4a 被 T1.4b2 测试覆盖，但没有独立 Reviewer PASS；T-002 仍 OPEN | Reviewer |

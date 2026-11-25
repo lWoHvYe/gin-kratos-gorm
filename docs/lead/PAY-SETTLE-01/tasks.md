@@ -15,11 +15,32 @@ Status: **APPROVED Plan (2026-11-24)**。本文件是 **Plan 视图**，不拥�
 
 ## Phase 0-R — 追溯复核整改（2026-11-25，RETRO FAIL；Director 已接受偏差，以下为 P0 收口/Release 前置）
 
-- [ ] **R0.1** 真实迁移 apply（fresh DB）`migrations/order/0017-0020` + `migrations/fulfillment/0010`，绑定精确 HEAD；补 `chk_switch_settled_expiry`；修复 0018 重入/部分失败；记录日志（Owner: Developer；依赖: 无）
-- [ ] **R0.2** Reviewer 对 C-01..C-05 出**日期化** verdict（FAIL 2026-11-25：C-04 release RPC 缺；AC-27/INV-45..50 台账缺；见 REV-R0.2）
+- [x] **R0.1** 真实迁移 apply（fresh DB）`migrations/order/0017-0020` + `migrations/fulfillment/0010`，绑定精确 HEAD；补 `chk_switch_settled_expiry`；修复 0018 重入/部分失败；记录日志（Owner: Developer；依赖: 无）——PASS 2026-11-25（`42a8db5`/`aaef9f9`，见 REV-R0.3）
+- [ ] **R0.2** Reviewer 对 C-01..C-05 出**日期化** verdict（FAIL 2026-11-25：C-04 release RPC 缺；AC-27/INV-45..50 台账缺；见 REV-R0.2）——**C-01..C-05 contract PASS（R0.2-R2，2026-11-25，B1 已撤回）**；overall 仍 FAIL 仅因 B2/B3，由 R0.3/R0.5 收口
 - [ ] **R0.3** 台账：AC-27、回归 AC-14/21/25/27/31/32、INV-45..50 的覆盖/延期决策；12 orphan 去留（FAIL 2026-11-25：AC-27 AC-REF、回归 deferred、INV 描述缺口；见 REV-R0.3）
 - [ ] **R0.4** config fail-closed 测试（`settlement_switch_approvals` 读取）；**C-04 release event/schema/consumer 验证（无 RPC）**；`group_no` 判别 CHECK；24h SLA CHECK（Owner: Developer + Architect；依赖: R0.2）
 - [ ] **R0.5** evidence-matrix 刷新到 SPEC v1.10；migration scope 与 ADR 对齐（Owner: Lead + PO；依赖: R0.3）
+
+### Phase 0-R closeout plan（Lead，2026-11-25；Base `9111740`，WIP `90b502c`）
+
+Scope：只做 R0.3/R0.4/R0.5 收口，不进入 T2/T3/T4/P3；无 Reviewer 日期化 verdict + 人类批准前不标 AC-VERIFIED、不 merge、不 Release。Tier L2（事件/迁移/deploy）。本小节即 R0.3 FAIL 与 R0.4 WIP 的修复/重审 Plan（宪法 Workflow 9）。
+
+| ID | 内容 | Owner | 证据 / 验收 |
+|---|---|---|---|
+| R0.4a1 | QC 对 Addendum R0.4 DRAFT 做红队审查（状态机/异常分支/运行态矛盾） | QC | `docs/collab/qc-reports/QC-R04-ADDENDUM.md` |
+| R0.4a2 | Architect 处理 QC 缺口并把 Addendum 置 accepted；明文写入 shadow 运行态裁决与 T4.4 收口条件 | Architect | `docs/adr/0007-amd1-addendum-r0.4-c04-release.md` |
+| R0.4a3 | 人类显式接受 Addendum（WIP waiver 下仍记录） | Human | `docs/review-tracking.md` 决策行 |
+| R0.4b/c | Reviewer 复审 `90b502c`（精确 base/head；C-04 release 只按 event/schema/consumer，不要求 RPC） | Reviewer | `docs/collab/qc-reports/REV-PAY-SETTLE-01-R0.4.md` |
+| R0.4d1 | `SETTLE_RELEASE_RANGE` 部署/运维接线（compose + Helm `values.yaml`/`deployments.yaml` + `docs/ops.md`）；不改变默认 `paid` | Developer | 渲染/`docker compose config` 日志；`deploy/**` L2 |
+| R0.4d2 | `scripts/verify-r01-migrations.sh` 增 `order/0022` entry + 真实 MySQL 8.4 运行（含 replay/脏行 fail-closed） | Developer | 脚本日志绑定 HEAD；0022 未改 0017/0018/0019 |
+| R0.4e | Reviewer R0.4 verdict（R0.4a–d 全范围，日期化；release_status=NOT RELEASE） | Reviewer | `REV-...-R0.4.md`；不替代人类 merge |
+| R0.3-R1 | AC-27 补 `refund_state=REFUNDED`、reservation released、waybill CANCELLED 分支断言（含反向：退款未完成不得投影 CANCELLED） | Developer | `internal/services/order/` 测试；`-race`；无法表达时附反证并停 |
+| R0.3-R2 | 回归 AC-14/21/25/27/31/32 真实执行（real MySQL，SKIP 不算） | Developer | 各 package 命令 + 日志 + HEAD |
+| R0.3-R3 | INV-45..50 行按 SPEC v1.10 补全描述/分支/evidence path，状态保持诚实 | Lead | `docs/lead/PAY-SETTLE-01/evidence-matrix.md` |
+| R0.3-R4 | 12 orphan（AC-39/42/43/47/48/49/56/57/58/59/62/64）逐个映射到 T5/T3 或显式延期 | Lead + Reviewer | Plan 映射 + `ac-coverage.tsv` reason/expiry |
+| R0.5 | evidence-matrix 刷新到 SPEC v1.10；migration scope 与 ADR 对齐 | Lead + PO | source/行与 SPEC v1.10 一致 |
+
+Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Architect；R0.3/R0.4 任何 FAIL 冻结本 change_id 直到本 Plan 完成。
 
 ## Phase 1 — P-01 TCC 补偿 / P-03 零元回归（Owner: Developer；依赖: T0.7）
 

@@ -34,13 +34,17 @@ Scope：只做 R0.3/R0.4/R0.5 收口，不进入 T2/T3/T4/P3；无 Reviewer 日�
 | R0.4d1 | `SETTLE_RELEASE_RANGE` 部署/运维接线（compose + Helm `values.yaml`/`deployments.yaml` + `docs/ops.md`）；不改变默认 `paid` | Developer | 渲染/`docker compose config` 日志；`deploy/**` L2 |
 | R0.4d2 | `scripts/verify-r01-migrations.sh` 增 `order/0022` entry + 真实 MySQL 8.4 运行（含 replay/脏行 fail-closed） | Developer | 脚本日志绑定 HEAD；0022 未改 0017/0018/0019 |
 | R0.4e | Reviewer R0.4 verdict（R0.4a–d 全范围，日期化；release_status=NOT RELEASE） | Reviewer | `REV-...-R0.4.md`；不替代人类 merge |
-| R0.3-R1 | AC-27 补 `refund_state=REFUNDED`、reservation released、waybill CANCELLED 分支断言（含反向：退款未完成不得投影 CANCELLED） | Developer | `internal/services/order/` 测试；`-race`；无法表达时附反证并停 |
-| R0.3-R2 | 回归 AC-14/21/25/27/31/32 真实执行（real MySQL，SKIP 不算） | Developer | 各 package 命令 + 日志 + HEAD |
+| R0.3-R1 | AC-27 补 `refund_state=REFUNDED`+permit `REVOKED`、`CANCELLED` 组、§7.5 全退款未发、post-ship `REFUNDING/REFUNDED` 反向断言（unit + 真实行回读） | Developer | `fe1600b` 已交付；证据见 `docs/implementation/PAY-SETTLE-01-R0.3-selfcheck.md` |
+| R0.3-R1b | 裁决 3 支读模型 BLOCKED：①运单 `CANCELLED` 未进 Order 读模型（`CONSUMED`+`CancelIfCreated` 后组仍 `ALLOCATED`）；②退款释放不回写 `reservation_state`；③pre-ship `REFUNDING` 是否算关闭。含 SPEC-0001 §7.5:405 与 AC-27 EARS-1 描述不一致 | Architect + PO | 新 ADR Addendum（不写代码）；QC 复核；§7.5 交 PO 下一版修正 |
+| R0.3-R1c | 按 R0.3-R1b 裁决补断言；如裁决要求最小生产修复，仅改 Order 读模型并挂重审 Plan | Developer | 精确 HEAD；不自行改状态所有权 |
+| R0.3-R2 | 回归 AC-14/21/25/27/31/32 真实执行（real MySQL，SKIP 不算） | Developer | `fe1600b` PASS；日志见 selfcheck §3 |
 | R0.3-R3 | INV-45..50 行按 SPEC v1.10 补全描述/分支/evidence path，状态保持诚实 | Lead | `docs/lead/PAY-SETTLE-01/evidence-matrix.md` |
 | R0.3-R4 | 12 orphan（AC-39/42/43/47/48/49/56/57/58/59/62/64）逐个映射到 T5/T3 或显式延期 | Lead + Reviewer | Plan 映射 + `ac-coverage.tsv` reason/expiry |
 | R0.5 | evidence-matrix 刷新到 SPEC v1.10；migration scope 与 ADR 对齐 | Lead + PO | source/行与 SPEC v1.10 一致 |
 
 Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Architect；R0.3/R0.4 任何 FAIL 冻结本 change_id 直到本 Plan 完成。
+
+> 2026-11-25 Lead 更正：原 R0.3-R1 行内“退款未完成不得投影 CANCELLED”是 Lead 越权写入的业务语义，AC-27 正文没有该要求；Developer 已按反证义务拒绝实现。该句撤回，是否关闭 pre-ship `REFUNDING` 交 R0.3-R1b 裁决。
 
 ## Phase 1 — P-01 TCC 补偿 / P-03 零元回归（Owner: Developer；依赖: T0.7）
 
@@ -90,7 +94,7 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 
 ## Phase 5 — Evidence & Review（Owner: Reviewer + Developer；依赖: Phase 1–4）
 
-- [ ] **T5.1** 矩阵补 `evidence_path`；统一 `ac-coverage.tsv`（Reviewer Owner）
+- [ ] **T5.1** 矩阵补 `evidence_path`；统一 `ac-coverage.tsv`（Reviewer Owner）；12 orphan 处置见 `evidence-matrix.md` §4（10 条进 T5、AC-62/64 为 T3 依赖）
 - [ ] **T5.2** `-race`：AC-41/45/46/50/51/54/56 + 退款准入 vs Ship
 - [ ] **T5.3** 故障注入：AC-43/47/50/51/55/56/59/61 + TCC 崩溃续跑 + 惰性对账
 - [ ] **T5.4** 真实迁移测试（非内联 DDL）；AC-60 回填

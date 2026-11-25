@@ -325,6 +325,38 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - R0.3 still FAIL: AC-27 AC-REF, INV-45..50 DEFERRED/description gaps,
   regression AC-14/21/25/27/31/32 not run, 12 orphan open.
 
+### 2026-11-25 R0.3 progress: AC-27 branches, regression, Architect ruling
+
+- Developer `fe1600b` + selfcheck `34d0466`: AC-27 EARS-2
+  (`REFUNDED`+`REVOKED` via real row read-back), `CANCELLED` group, §7.5
+  all-refunded-unshipped, post-ship `REFUNDING/REFUNDED` reverse — PASS.
+  Regression AC-14/21/25/27/31/32 real MySQL PASS (no SKIP); T1.7 + zero
+  evidence paths verified. No AC-VERIFIED.
+- **3 branches BLOCKED** with time-sequence counterexamples: waybill
+  `CANCELLED` absent from Order read model; refund release does not write
+  `reservation_state`; pre-ship `REFUNDING` closure semantics. Developer did
+  not add `if-else` or change production semantics.
+- Lead withdrew the unsupported "refunding must not project CANCELLED" line
+  (not in AC-27); recorded in `tasks.md`.
+- Architect DRAFT `111516f` (R-1..R-5): closure predicate =
+  Order-owned `order_refund_admissions.result=PRE_SHIP_REVOKED` (not
+  `refund_state`); R-2 requires re-aggregating order lifecycle inside the
+  existing `aftersale.completed` projection (single tx, CAS, outbox unchanged);
+  R-3 forbids Order writing `reservation_state` and records the multi-group
+  release gap (`refund_release.go:182-186`, P1/manual); R-4 keeps current
+  pre-ship `REFUNDING` closure; R-5 is SPEC §7.5 drift for PO next version.
+  Pending QC; no code until accepted.
+
+### 2026-11-25 human decision: R0.4 shadow runtime
+
+- Director decision (scoped to R0.4): keep
+  `FULFILLMENT_SETTLE_CONSUMER_MODE=shadow` **hard-rejected at startup until
+  T4.4** delivers the observe-only dual consumer. R0.4 does not implement
+  shadow consumption; the Addendum must record the runtime ruling, the
+  fail-closed exit semantics and the T4.4 exit condition. Default stays `paid`.
+- Scope: R0.4 only. Does not approve `90b502c`, does not waive Reviewer/
+  Architect review, human merge, Release or AC-VERIFIED.
+
 ### 2026-11-25 R0.2 FAIL (dated 2026-11-25)
 
 - C-01/C-02/C-03/C-05 contract/evidence PASS; **C-04 FAIL**: release RPC still

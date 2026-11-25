@@ -215,4 +215,8 @@ See [docs/access.md](docs/access.md) for the live `mall.local` route and port-fo
 
 ## New session
 
-Start from [docs/handoff.md](docs/handoff.md) and run `make status`; this avoids re-planning completed work.
+For current state and gaps start from [docs/review-tracking.md](docs/review-tracking.md)
+and [docs/roadmap-status.md](docs/roadmap-status.md); run `make status` for the
+repo snapshot. Environment and test commands live in
+[docs/development.md](docs/development.md). [docs/handoff.md](docs/handoff.md)
+is only a session-boundary snapshot, not a rule source.

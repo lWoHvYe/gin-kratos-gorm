@@ -42,6 +42,8 @@ Review-01 的实现级 FAIL 有 6 个阻断项（P-01…P-06）。本 Plan 的�
 
 Phase 0 退出标准：C-01..C-05 全部经 QC/Reviewer/人类批准；否则不得进入 Phase 1。
 
+**2026-11-25 追溯复核**：Developer `RETRO PASS WITH CONDITIONS`、Reviewer `RETRO FAIL`；Phase 0 exit 未被支持而 Phase 1 已推进 → 记为 **process deviation**；P0 收口/Release 前必须完成 `tasks.md` **Phase 0-R（R0.1..R0.5）**。不补签 2026-11-24。
+
 ## 4. 关键设计（修订后）
 
 ### 4.1 P-01 TCC 补偿（顺序修正）
@@ -116,6 +118,6 @@ Phase 0 退出标准：C-01..C-05 全部经 QC/Reviewer/人类批准；否则不
 | PO | Human approved D-1..D-5; SPEC authoring pending | 2026-11-24 | C-01/C-02 |
 | Architect | Review RESOLVED; Amendment authoring pending | 2026-11-24 | C-03/C-04 |
 | QC | Review RESOLVED | 2026-11-24 | 异常分支/测试矩阵 |
-| Developer | Phase 0 sign-off pending | | 可执行性/风险 |
-| Reviewer | Phase 0 sign-off pending | | 可验证性 |
+| Developer | **RETRO PASS WITH CONDITIONS**（追溯 2026-11-25；非倒签） | 2026-11-25 | 可执行性/风险：条件见 tasks.md Phase 0-R R0.1/R0.4 |
+| Reviewer | **RETRO FAIL**（追溯 2026-11-25；非倒签） | 2026-11-25 | 可验证性：Phase 0 exit 不成立；见 Phase 0-R |
 | Human | **APPROVED** | 2026-11-24 | D-1..D-5、Plan |

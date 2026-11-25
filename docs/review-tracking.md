@@ -324,9 +324,12 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **D-LC-2 / D-LC-3**: Batch B 的治理文本项（B-1/B-3/B-4/B-5）走**轻路径**
   （Architect -> QC -> 人类 -> Reviewer；不建 Spec/ADR/Plan）；**B-2 的 ADR-0007
   合并是独立 ADR 修订**（Rev 2.0 作为合并版批准，Rev 2.1 为其增量），不属轻路径。
-- **D-LC-5**: Phase 0 sign-off gap — Lead verified that `review-tracking` records
-  the Phase 0 exit but no individual Developer/Reviewer sign-off; human decision
-  pending (do not back-fill signatures).
+- **D-LC-5**: Phase 0 sign-off gap — **retrospective review 2026-11-25**: Developer
+  `RETRO PASS WITH CONDITIONS`; Reviewer `RETRO FAIL`. Phase 0 exit unsupported:
+  T0.7 five-party sign-off false (no Reviewer dated verdict), C-05 real migration
+  tests absent, missing `chk_switch_settled_expiry`, fail-closed config
+  unimplemented, no C-04 release RPC. No back-dating; remediation is `tasks.md`
+  Phase 0-R (R0.1..R0.5) before P0 closure/Release. PAY-SETTLE-01 remains frozen.
 - **K-1 (C-1)**: C-04 RefundBatch is **accepted (2026-11-24)**; merge into
   ADR-0007 Rev 2.1; fix the DRAFT wording in the c04 rulings/draft headers.
 - **K-2 (C-2)**: T1.6 payment-level cancel **supersedes A-08's absolute wording**;

@@ -38,26 +38,24 @@
   AC-REF** (AC-27A steps 5/6 not implemented; `AC-50-FIX-01`,
   `AC-27-NOWB-01`, `AC-27-LIVE-01` open). AC-14 now AC-VERIFIED; other
   regression ACs AC-REF; 12 orphan mapped to T5.x/T3.
-- **AC-50-FIX-01 FROZEN**: amendment DRAFT 0.3 (`b5129b5`) not accepted; QC
-  round 3 BLOCKED — `result=CONFLICT` is not a legal TCC admission result
-  (`tcc_settlement.go:847-876`), partial `CONSUMED+CANCELLED` cancels the
-  `CREATED` waybill before returning PARTIAL (violates AC-50 `0002:217`),
-  route A did not authorize persisting CONFLICT / no-re-probe. Needs a
-  PO/SPEC-0002 ruling (bounded CONFLICT/PENDING outcome + TCC authorization,
-  or keep the PRE deviation). No code written.
+- **AC-50-FIX-01 impact analysis done; implementation still blocked**: PO
+  SPEC-0002 v1.11 (`REVIEW_REQUIRED`, `c2bca33`) + Architect DRAFT 0.4 +
+  impact analysis (`43bbe5a`). QC round 4 BLOCKED: after-sales has no
+  `refund_applications` row, zero-amount no-persist exception missing, review
+  audit retention conflicts with ADR §8.3. No code.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 
 ## Open — next session first
 
-1. **Decide AC-50-FIX-01**: amend SPEC-0002/ADR to add a bounded persisted
-   CONFLICT/PENDING admission outcome (and authorize TCC handling), or keep
-   the current PRE mapping as an explicit deviation to 2026-12-31. Then re-QC
-   and implement; no Lead/Developer patch.
+1. **Decide AC-50 scope**: close the three R4 blockers (after-sales row,
+   zero exception, audit retention) and get human `ADR_APPROVED` + a separate
+   Plan/change_id; or narrow to the PRE deviation to 2026-12-31. Then
+   implement (TCC legal result/MANUAL_HOLD, no CancelIfCreated for partial,
+   idempotency before GetIntent).
 2. **R0.3-R1c**: close `AC-50-FIX-01`, `AC-27-NOWB-01`, `AC-27-LIVE-01`;
    then implement AC-27A steps 5/6 and re-review.
-3. **T5/AC-39…68** evidence, `-race`/fault, real migrations; no AC-VERIFIED
-   except AC-14.
+3. **T5/AC-39…68** evidence; new AC-69…72 are DEFERRED and need ledger rows.
 4. Only after all of the above: P0 closure, then T2/T3/T4, then release
    decision. No P3/0012 in this thread.
 

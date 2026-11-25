@@ -363,6 +363,29 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 SPEC-0002 v1.11 / ADR 0.4: QC round 4 BLOCKED
+
+- PO v1.11 (`c2bca33`, in-review) adds `REVIEW_REQUIRED`
+  (`result=REVIEW_REQUIRED`, `state=PENDING_REMOTE`; application
+  `admission_result=REVIEW_REQUIRED`, `PENDING`; TCC batch `MANUAL_HOLD`) plus
+  S20/INV-51/52/AC-69…72 and an impact section.
+- Architect DRAFT 0.4 + impact analysis (`43bbe5a`): **no schema migration**
+  (15-char value fits `VARCHAR(32)`/`VARCHAR(24)`); TCC is the largest change
+  (`tcc_settlement.go`/`tcc_admission.go` must accept REVIEW and park the batch
+  in `MANUAL_HOLD`); partial amount never calls `CancelIfCreated` (three-way
+  classification from Order-owned facts); idempotent replay before
+  `Payment.GetIntent`; Tx2 needs a `state='PENDING_REMOTE'` CAS.
+- QC round 4 (`6401cba`) BLOCKED: R4-B1 normal after-sales has no
+  `refund_applications` row (conflicts with S20/AC-69); R4-B2 zero-amount
+  no-persist exception missing (conflicts with AC-67/69); R4-B3 AC-69/72
+  require retaining the original review record but ADR §8.3 keeps
+  `REVIEW-AUDIT-01` deferred. Majors: stale ADR 0.3 reference; AC-72 user/ops
+  entry separate; `tcc_*.go` PO authorization is not human implementation
+  approval.
+- Implementation **not approved**. Needs scope decision: fix the three
+  blockers + human `ADR_APPROVED`, or narrow the amendment / keep the PRE
+  deviation.
+
 ### 2026-11-26 human decision: PO authorized to upgrade SPEC-0002 (AC-50 outcome)
 
 - Director authorized the PO to issue a **SPEC-0002 v1.11** amendment adding a

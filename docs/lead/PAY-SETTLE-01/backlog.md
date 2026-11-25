@@ -16,9 +16,10 @@
 > **2026-11-26 状态**：R0.4 Addendum 已 ACCEPTED（人类 2026-11-26）；分支 A 修复
 > `aec9ac8` + `4549ccb`，Reviewer **R0.4e-R2 PASS（scoped）**（F-1/F-2 CLOSED）；
 > R0.3-R2 **PASS（scoped）**，AC-27 仍 **AC-REF**（AC-27A 第 5/6 条未实现）；
-> **AC-50-FIX-01 冻结**：QC 第三轮 BLOCKED（`result=CONFLICT` 非合法 TCC 结果、
-> 部分 `CONSUMED+CANCELLED` 先取消运单、route A 未授权持久化/不再探测），需
-> PO/SPEC-0002 裁决；`AC-27-NOWB-01`/`AC-27-LIVE-01` 同开。SPEC-0001 v1.5
+> **AC-50-FIX-01 已完成影响分析**：SPEC-0002 v1.11（`REVIEW_REQUIRED`）+
+> ADR DRAFT 0.4 + impact，但 QC 第四轮 BLOCKED（售后无 `refund_applications`
+> 行、零元例外、复核审计留存）。需关闭 3 blocker + 人类 `ADR_APPROVED` +
+> 独立 Plan/change_id；`AC-27-NOWB-01`/`AC-27-LIVE-01` 同开。SPEC-0001 v1.5
 > 已批准。**Phase 0-R 未闭合**，无 P0 closure/Release/merge。
 
 

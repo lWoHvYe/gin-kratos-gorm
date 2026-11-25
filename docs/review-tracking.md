@@ -321,12 +321,29 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 
 - **D-LC-1**: approved Batch A (L0), including A-2a's sole-running-ledger declaration.
 - **D-LC-4**: C-1.1 — the six ACs expiring 2026-12-15 are decided by 2026-12-08.
-- **D-LC-2 / D-LC-3**: Batch B uses the **light governance path** (Architect ->
-  QC -> human -> Reviewer; no Spec/ADR/Plan); **ADR-0007 (7 addenda) merges to
-  Rev 2.0 in this batch**.
+- **D-LC-2 / D-LC-3**: Batch B 的治理文本项（B-1/B-3/B-4/B-5）走**轻路径**
+  （Architect -> QC -> 人类 -> Reviewer；不建 Spec/ADR/Plan）；**B-2 的 ADR-0007
+  合并是独立 ADR 修订**（Rev 2.0 作为合并版批准，Rev 2.1 为其增量），不属轻路径。
 - **D-LC-5**: Phase 0 sign-off gap — Lead verified that `review-tracking` records
   the Phase 0 exit but no individual Developer/Reviewer sign-off; human decision
   pending (do not back-fill signatures).
+- **K-1 (C-1)**: C-04 RefundBatch is **accepted (2026-11-24)**; merge into
+  ADR-0007 Rev 2.1; fix the DRAFT wording in the c04 rulings/draft headers.
+- **K-2 (C-2)**: T1.6 payment-level cancel **supersedes A-08's absolute wording**;
+  A-08 governs only `order.refund_requested` observation.
+- **K-3**: constitution **v1.3.0** adds the governance-text L2 light path
+  (ADR revisions excluded).
+- **K-4**: ADR-0007 Rev 2.0 approved as the merged version; Rev 2.1 is its delta.
+- **K-5**: new deferral `thread` format = `review-tracking/<change_id>`.
+- **K-6**: retired `G-4` / deleted `--release --range` prerequisites in ADRs are
+  replaced by "SPEC §7 + five-party terminal states + Reviewer manual check +
+  review-tracking record（协作闸门已退役）".
+- **K-7**: pair README/threads/index archive edits are **L0 non-normative
+  companion cleanup**, not light-path L2; the light-path L2 scope for B-1 is the
+  `CONVENTIONS.md` rule change only. No allowlist expansion is needed.
+- **K-8**: Director chose a **PO amendment** (not a waiver) for SPEC-0002:
+  v1.10 replaces `G-4` / `--release --range` in AC-66/§5.9/D-27/§9/§12 with the
+  K-6 human gate; QC-32 READY 0/0/12; separate human approval + separate commit.
 
 ## 2026-11-24 SPEC/ADR approvals: SPEC-0002 v1.8 / SPEC-0001 v1.4 / ADR-0007 Amendment 1
 

@@ -81,6 +81,7 @@
     * **L0**：仅非规范性文本（文档/注释/格式）；免 Spec/ADR/QC/Plan，跑相关测试；仍须**人类合入**。规范性 Spec/ADR 修改走修订流程（EARS + QC + 人类批准），不是 L0。
     * **L1**：行为变更仅限单一服务（精确一个 `internal/services/<service>/` + `cmd/<service>/`），且不命中 L2 触发条（P0、跨服务含既有事件消费效应、资金、库存、权限含 gateway/BFF 鉴权、状态机拆分、契约/事件/迁移、`api/proto/**`、`migrations/**`、`internal/platform/**`、`frontend/**`、`deploy/**`、共享包）；引用既有 Spec 条款 + 测试日志 + Reviewer PASS，更新受影响既有 AC 行（台账由 Reviewer 更新），无新 Spec/ADR/QC/Plan，**人类合入**。
     * **L2**：命中上述任一触发条的变更；沿用既有完整阶梯，不减免任何批准点。
+    * **治理文本轻路径**：治理文本类 L2（仅改本文件、`CONVENTIONS.md`、MEMORY、`prompt/**`、台账格式；不改代码、契约、CI、`scripts/**`）MAY 走轻路径：Architect 起草 → QC → 人类批准 → Reviewer 复核，不建 Spec/ADR/Plan。其余 L2 仍走完整阶梯。
     * **防作弊**：治理/工具链变更（本文件、`CONVENTIONS.md`、宪法、CI、`scripts/**`、spec/ADR 结构）恒为 L2；Lead 提议级别并引用命中判据，Reviewer 在 verdict 中确认，Developer 不得设定或更改级别；误判即 stop-the-line，冻结 `change_id` 并按 L2 重做、记入 `docs/review-tracking.md` 的 human decisions/frozen 条目；合入后发现误判 MUST 记录并回退或取得追溯 L2 批准；分级表仅人类批准可改，任何级别保留人类 Release，L2 保留全部既有批准点。
     * **变更输入**：`change_id`、`Tier`、`Tier-Rationale`、`Spec-Ref`（须实际覆盖改动行为，否则 L2）、`allowed_paths`、base/head、`baseline_impact`/INV、测试证据、Reviewer verdict、人类合入批准人与日期；commit trailer 写 `Tier: L0|L1|L2`。
 8. **治理变更最小化与撤回**：治理/工具链变更 MUST 从最小可行增量开始，写明停止条件与可验证收益；安全/合规/数据完整性类变更 MAY 豁免“可测收益”，但 MUST 写明风险、范围与停止条件。MUST NOT 扩张超出首个可验证增量（同一增量内的多文件同步不受限）。若首增量未产生预期收益，MUST 撤回而非继续加层。撤回 MUST 由各产物 owner 执行清理：删除该变更新增的脚本/CI/入口/台账行；既有 AC、既有延期行、他人产物不得删除；仅保留决策记录，MUST NOT 留下死契约、死命令或死台账。收益与停止条件 MUST 记录在 `docs/review-tracking.md` 或变更输入。任何角色/分级变更 MUST 同步 `prompt/**` 并经 Reviewer 复核，不得只改 AGENTS 或 CONVENTIONS。

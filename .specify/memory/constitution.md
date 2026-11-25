@@ -6,6 +6,7 @@
 
 - v1.2.0 经人类指挥官于 2026-11-24 批准；G1–G4 同日完成，状态 **EFFECTIVE**。
 - v1.2.1（2026-11-25）：协作闸门工具退役；v1.2.2（2026-11-25）：L0/L1/L2 分级路由与 Workflow/Governance 对齐；v1.2.3（2026-11-25）：历史记录与人工清单口径澄清（PATCH，无语义变更）。
+- v1.3.0（2026-11-25）：新增治理文本 L2 轻路径（Architect→QC→人类→Reviewer，不建 Spec/ADR/Plan；ADR 修订除外），与 AGENTS §2.7 对齐。
 - 层级：**本宪法 > `AGENTS.md` > `docs/collab/CONVENTIONS.md`**；冲突时以本宪法为准。
 - G1：AGENTS/CONVENTIONS 已对齐；G2：G-1 已校验 `change_id`/`Actor`/`Reviewed-by`；
   G3：`ac-coverage.tsv` 已含 `test_type/evidence_path/status`；G4：人类裁决 B 已记录在
@@ -73,7 +74,7 @@
 
 本宪法只定义不可谈判的结果约束；执行细则（角色矩阵、产物所有权、线程协议）以 `AGENTS.md` 与 `docs/collab/CONVENTIONS.md` 为准。优先级 MUST 为 **本宪法 > `AGENTS.md` > `CONVENTIONS.md`**；二者不得与本宪法冲突。`AGENTS.md` §4/§5 为领域铁律，§1/§2/§6 为角色、SDD 与 DoD 执行细则，均与本宪法并行有效：本宪法未显式覆盖处仍受其约束，不得以"宪法未禁止"为由放行。
 
-1. **阶梯门禁**：业务想法 → PO 输出 Spec Draft → QC 审查 Spec → 人类批准 `SPEC_APPROVED` → Architect 输出 ADR Draft → QC 审查 ADR → 人类批准 `ADR_APPROVED` → Developer 实现 → Reviewer 按精确 base/head 审查 → integration owner 组织基线与组合验证 → 人类决定 `RELEASE_APPROVED`。L0/L1 的适用与减免以 `docs/collab/CONVENTIONS.md` §2.3 为准；L2 MUST 走本条完整阶梯。任何级别保留人类合入与 Release。
+1. **阶梯门禁**：业务想法 → PO 输出 Spec Draft → QC 审查 Spec → 人类批准 `SPEC_APPROVED` → Architect 输出 ADR Draft → QC 审查 ADR → 人类批准 `ADR_APPROVED` → Developer 实现 → Reviewer 按精确 base/head 审查 → integration owner 组织基线与组合验证 → 人类决定 `RELEASE_APPROVED`。L0/L1 的适用与减免以 `docs/collab/CONVENTIONS.md` §2.3 为准；L2 MUST 走本条完整阶梯；**治理文本类 L2（仅改 `AGENTS.md`/`CONVENTIONS.md`/MEMORY/`prompt/**`/台账格式，不改代码/契约/CI/`scripts/**`）MAY 走轻路径：Architect 起草 → QC → 人类批准 → Reviewer 复核，不建 Spec/ADR/Plan；ADR 修订不属于轻路径**。任何级别保留人类合入与 Release。
 2. **批准不得越级**：Spec 未批准 MUST NOT 开始 ADR；ADR 未批准 MUST NOT 开始实现。PO/Architect 的批准是业务与架构批准，不构成代码验收。
 3. **验收语义隔离**：线程 CLOSED、实现 PASS、代码合入、Release PASS 是四种不同状态，MUST NOT 互相替代；Reviewer 的 PASS 必须声明 `review_scope`。
 4. **反证义务**：Developer 若认为 ADR 存在架构缺陷，MUST 停止编码并附上至少一个会引发崩溃或资损的具体时序推演或伪代码，MUST NOT 只提问题不提供证据。
@@ -105,6 +106,6 @@
 6. **人类豁免**：人类指挥官可对本宪法条款给出有范围的 Trade-off 豁免。豁免 MUST 以书面形式记录于 `docs/` 并在受影响的 Spec/ADR/线程中引用，MUST 注明范围、期限与受影响不变量；豁免不修改本宪法文本，MUST NOT 由 AI 自行推断或扩大适用范围。无记录的豁免视为不存在。
 7. **过渡条款**：本宪法 1.2.0 生效前已存在于 `main` 的 WIP（含 PAY-SETTLE-01）按人类裁决 B 处理：**隔离 = 保留在 `main`、冻结、不合并到 release、不发布**；其 open 项（当前 P-01 安全网、P-04、P-05、P-06）在冻结清单中列明，不得据此新增半成品协议路径，也不得把"已存在"作为继续扩展的理由。B 裁决 MUST 记录在 `docs/review-tracking.md` 的 human decisions 区并被本章引用。
 
-**Version**: 1.2.3 | **Approved**: 2026-11-25 | **Effective**: 2026-11-25 | **Ratified**: 2026-11-24 | **Last Amended**: 2026-11-25
+**Version**: 1.3.0 | **Approved**: 2026-11-25 | **Effective**: 2026-11-25 | **Ratified**: 2026-11-24 | **Last Amended**: 2026-11-25
 
 **Status**: EFFECTIVE.

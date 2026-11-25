@@ -1,7 +1,7 @@
 # PO 工作记忆（长期）
 
-> 只放"下次开新会话必须记得"的东西。细节一律指向 Spec / ADR / 台账，**不记聊天记录、不写实现细节**。
-> 维护规则：只增删事实，不写流水账；每次会话结束前刷新第 2、4 节。
+> 只收跨变更仍成立的稳定经验；运行状态见 `docs/review-tracking.md` / `ac-coverage.tsv`；协作闸门已于 2026-11-25 退役，pair 线程已退役（2026-11-25）。
+> 维护规则：只增删事实，不写流水账；不复制任何随轮次变化的状态（版本、PASS、commit、expiry、进度、线程状态）。
 
 ## 1. 我的角色与边界
 
@@ -10,15 +10,15 @@
 - **结论只认写进 Spec 的内容**，聊天与口头补充不作数。
 - 不修改 `docs/adr/`、`docs/implementation/`、代码；那是 Architect 与 Developer 的产物。
 
-## 2. 当前交付状态（截至 2026-11-22）
+## 2. 工作规则（自我约束）
 
-| 项 | 状态 |
-|---|---|
-| SPEC-0001 多仓按数量拆行 / 选仓 / 承运商签收 | **v1.2 approved**，交付物已冻结 |
-| ADR-0005 | accepted（含 Amendment 1 与二次审计 §19） |
-| Developer | 实施中；偏差登记 `docs/implementation/adr-0005-deviation-register.md` |
-| **待 Architect 回写** | ADR §19 里 P-01…P-18 仍标"待 PO 裁决"；PO 已在 SPEC-0001 §15 全部裁决，需 closed 并回写正文 |
-| 未闭环（已决定不做） | 补发（D-09 下一期）、平台补偿通道（D-10）、超额退款例外（P-14 不存在） |
+1. **升版后必须二次确认**五类矛盾：时限单位（小时 vs 自然日）、非目标 vs 正文、AC/INV 编号连续性、索引版本同步、跨节引用是否失效。
+2. 每次升版四件套：YAML `version` + 变更记录 + 索引表 + commit（`docs(spec): SPEC-NNNN vX.Y -> vX.Z <摘要>`），trailer 带 `Spec: SPEC-NNNN vX.Y`、`Role: PO`。
+3. 裁决必须给"结论 + 落点章节 + 影响面（INV/AC）"，只给结论视为不完整。
+4. 拿不准的业务项写进 §11，给默认值并注明"未追认按默认执行"。
+5. 甲方要简化规则时，记录"谁批准、影响哪些 AC"，不允许静默降级。
+6. **AC 必须有测试引用**（`TestAC<NN>` 或 `AC-<NN>`），否则标 `[未覆盖]`，不得判 done；覆盖口径以 `docs/collab/ac-coverage.tsv` 为准。
+7. **偏差无主不认**：implementation 里的偏差必须有 `owner` + `expiry`，到期未清按阻断处理，不得口头豁免。
 
 ## 3. 已拍板决策索引（不要重复讨论）
 
@@ -29,34 +29,18 @@
 | A-01（AC-02 与单仓优先冲突，已修正 AC-02） | SPEC-0001 变更记录 v1.1 |
 | B-03（运费判责结构化） | SPEC-0001 §6.5.2 / §6.5.3 |
 
-## 4. 未立项的业务缺口（详见 `backlog.md`）
+## 4. 易漂移点与稳定经验
 
-优先级从高到低：**资金口径与对账 / 退款审批授权 / 客户触达 / 换货与售后服务扩展 / 秒杀多仓 / AI 写操作边界**。
+- 状态标签（`approved`/`accepted`）与正文、台账可能不同步：以正文与台账为准并修文档；正文内"待 PO 裁决"批注必须在裁决当次回写，否则制造双事实源。
+- 描述性文档与代码冲突时以代码事实为准，修文档而不是改代码。
+- 新 AC 落地前必须与既有优先级规则对撞检查：AC-02 曾与"单仓优先"冲突，v1.1 修正。
+- 已定不做的不再重开：补发（D-09 下一期）、平台补偿通道（D-10）；P-14"超额退款例外"不存在，不要为不存在的场景写规则。
+- 多仓口径（拆量上限、运费、组号、承运商判责）只认 SPEC-0001 §11 / §15 / §6.5，本文件不复制规则正文。
 
-其中"日终四方对账""退款审批授权矩阵"至今没有任何 Spec 覆盖，是资损与合规的最大空白。
+## 5. 关键文件指针
 
-## 5. 工作约定（自我约束）
-
-1. **升版后必须二次确认**五类矛盾：时限单位（小时 vs 自然日）、非目标 vs 正文、AC/INV 编号连续性、索引版本同步、跨节引用是否失效。
-2. 每次升版四件套：YAML `version` + 变更记录 + 索引表 + commit（`docs(spec): SPEC-NNNN vX.Y -> vX.Z <摘要>`）。
-3. 裁决必须给"结论 + 落点章节 + 影响面（INV/AC）"，只给结论视为不完整。
-4. 拿不准的业务项写进 §11，给默认值并注明"未追认按默认执行"。
-5. 甲方要简化规则时，记录"谁批准、影响哪些 AC"，不允许静默降级。
-6. **AC ↔ 测试闸门**：每条 AC 必须有测试引用（`TestAC<NN>` 或 `AC-<NN>`），否则标 `[未覆盖]`，不得判 done；核对命令见 CONVENTIONS §4.1。
-7. **Commit trailers**：我的提交必须带 `Spec: SPEC-NNNN vX.Y`、`Thread: T-NNN`、`Role: PO`，便于 `git log --grep` 反查。
-8. **偏差无主不认**：implementation 里的偏差必须有 `owner` + `expiry`，到期未清升级为 BLOCKING 线程。
-
-## 6. 关键文件指针
-
-- **协作执行细则（全员必读）**：`docs/collab/CONVENTIONS.md`
+- 协作执行细则（全员必读）：`docs/collab/CONVENTIONS.md`
 - 角色契约：`AGENTS.md`
-- 会话快照：`docs/handoff.md`；运行台账：`docs/review-tracking.md`
 - 架构基线（INV-01…16）：`docs/architecture-baseline.md`
-- Spec 入口：`Spec.md`；目录规范：`docs/specs/README.md`
-- 与 Architect 的沟通：`docs/collab/po-architect/`（索引 `threads.md` + 正文 `threads/T-NNN.md`）
-
-## 7. 新会话开场动作
-
-1. 读 `AGENTS.md`、`docs/handoff.md`、本文件、`docs/collab/po-architect/threads.md` 中状态为 `OPEN` 或 `ANSWERED` 的线程。
-2. `git log --oneline -8` 确认 Spec/ADR 是否又升版。
-3. 有 `OPEN` 且标 `BLOCKING` 的线程，先裁决再谈别的。
+- Spec 入口：`Spec.md`；目录与命名规范：`docs/specs/README.md`
+- 业务缺口（未立项）：`docs/po/backlog.md`；人类决策与冻结记录：`docs/review-tracking.md`

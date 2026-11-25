@@ -1,5 +1,7 @@
 # Developer ↔ Reviewer 协作通道
 
+> **【历史存档 · 已退役】** pair 线程已退役（2026-11-25）；角色交互经 Lead 路由；本目录仅作历史存档，不得新增线程。新增分歧或反证一律上报 Lead 路由至 owner/人类。
+>
 > 通用协议见 [`../CONVENTIONS.md`](../CONVENTIONS.md)（所有 Agent 必读）。
 > 本文件只写**这一对角色**的补充规定；冲突时以 CONVENTIONS / AGENTS.md 为准。
 
@@ -13,14 +15,16 @@ docs/collab/developer-reviewer/
     └── T-NNN.md    一文件一线程，正文 + YAML front-matter
 ```
 
-## 配对补充规则
+## 配对补充规则（历史存档 · 已被 2026-11-25 退役取代）
+
+> 以下为 pair 线程退役前的补充规定，仅作历史记录；pair 线程已退役（2026-11-25），交互经 Lead 路由，本目录不得新增线程。
 
 1. **谁写什么**：Reviewer 写审查结论、AC 逐条核对、红队问题、放行条件；Developer 写修复进展、commit、测试日志、自检清单回复。双方不改对方已写内容。
-2. **一次只推进一个阻塞审查**：`T-NNN` 为 `OPEN + BLOCKING` 时不开新审查线程；Developer 完成修复并回写证据后，Reviewer 复跑再改 `ANSWERED/CLOSED`。
+2. **一次只推进一个阻塞审查（已退役）**：退役前 `T-NNN` 为 `OPEN + BLOCKING` 时不开新审查线程，Developer 完成修复并回写证据后，Reviewer 复跑再改 `ANSWERED/CLOSED`；该流程已不再启用。
 3. **Reviewer 提问必须给证据**：契约编号（Spec/ADR/AGENTS/CONVENTIONS 章节）+ `文件:行号` + 复现路径；禁止“大概/应该/可能”。
 4. **Developer 回复必须给证据**：修复 commit（`fix(...)` / `feat(...)`）、测试命令与终端输出、`[测试范围]` / `[未覆盖范围]`、三问自检清单；仅口头“done”无效。
-5. **Reviewer 不改代码**：只提议；Developer 实施。Developer 对结论有异议时，开线程给反证或升级 Architect/人类裁决，**不得静默豁免**。
-6. **关闭由 Reviewer 执行**：所有 BLOCKING 项关闭、偏差有 `owner + expiry`、AC 覆盖缺口进台账或有测试、复跑绿后，改 `status: CLOSED`、填 `closed_by`、同步索引表。
+5. **Reviewer 不改代码**：只提议；Developer 实施。Developer 对结论有异议时，上报 Lead 路由至 owner/人类，**不得静默豁免**。
+6. **关闭由 Reviewer 执行（已退役）**：退役前由 Reviewer 在 BLOCKING 项关闭、偏差有 `owner + expiry`、AC 覆盖缺口进台账或有测试、复跑绿后改 `status: CLOSED`、填 `closed_by`、同步索引表；本目录现为历史存档，状态字段只保留原值。
 7. **审查结论的效力**：线程只是过程记录，验收以 `docs/specs/**` + `docs/adr/**` + 代码/测试实际结果为准；`[TODO]` 非阻断项不得反向升级为 PASS 理由。
 
 ## 与其他文档的关系

@@ -8,9 +8,9 @@
 
 ## 0. 原则
 
-1. **业务结论只活在 Spec，设计结论只活在 ADR**；线程只记录问题、裁决和指针，不得成为第二契约。
+1. **业务结论只活在 Spec，设计结论只活在 ADR**；任何交互通道只记录问题、裁决和指针，不得成为第二契约。
 2. **机器只检查客观事实，人判断语义**。正则阀门不能证明断言充分、架构正确或可以发布。
-3. **每次结论必须绑定范围**。线程 CLOSED、实现 PASS、代码合入和发布放行是四种不同状态。
+3. **每次结论必须绑定范围**。沟通闭环、实现 PASS、代码合入和发布放行是四种不同状态。
 4. **宁可少而可靠的门禁，不要多而虚假的安全感**。新增机器限制必须客观、稳定、低误判，并有明确维护者。
 
 ---
@@ -20,20 +20,20 @@
 | 角色/产物 | 路径 | 唯一作者 | 其他角色 |
 |---|---|---|---|
 | Lead 编排/计划/证据索引 | `docs/lead/**` | Lead | 只读；不拥有 Spec/ADR/代码/QC/Reviewer 产物 |
-| 业务规格 | `docs/specs/**` | Product Owner | 只读；要改就开线程 |
+| 业务规格 | `docs/specs/**` | Product Owner | 只读；提请 Lead 路由至 owner |
 | 质量审查报告 | `docs/collab/qc-reports/**` | Quality Checker | 只读；不代替 PO/Architect 改文档 |
-| 设计决策 | `docs/adr/**` | System Architect | 只读；要改就开线程 |
+| 设计决策 | `docs/adr/**` | System Architect | 只读；提请 Lead 路由至 owner |
 | 角色 prompt | `prompt/**` | System Architect | Reviewer 必须复核；角色边界变化需人类批准 |
 | 协作约定 | `docs/collab/CONVENTIONS.md` | System Architect | Reviewer 必须复核；流程原则变化需人类批准 |
-| 实现偏差 | `docs/implementation/**` | Developer | 只读；通过线程要求修改 |
+| 实现偏差 | `docs/implementation/**` | Developer | 只读；提请 Lead 路由至 owner |
 | 代码与测试 | `internal/**`、`cmd/**`、`api/**`、`migrations/**` 等 | Developer | Reviewer 只审查，不直接改 |
-| 协作线程 | `docs/collab/<pair>/threads/**` | 双方各自追加 | 不改对方已写内容 |
+| 协作线程 | `docs/collab/<pair>/threads/**` | 已退役 2026-11-25，只读存档 | 不得新开或删除；历史指针保留 |
 | AC 引用/延期台账 | `docs/collab/ac-baseline.txt`、`ac-coverage.tsv` | Reviewer | Developer 不得通过改台账规避阀门 |
 | 角色记忆 | `docs/<role>/MEMORY.md` | 对应角色 | 只保留稳定经验和 canonical 链接 |
 
-**禁止**直接编辑他人产物。需要修改时开线程，由所有者回写。
+**禁止**直接编辑他人产物。需要修改时提请 Lead 路由至 owner，由所有者回写。
 
-MEMORY 不复制当前线程状态、PASS、commit、expiry 或发布状态；这些动态事实只认 canonical 产物。
+MEMORY 不复制运行状态、PASS、commit、expiry 或发布状态；这些动态事实只认 canonical 产物。
 
 ---
 
@@ -59,7 +59,7 @@ MEMORY 不复制当前线程状态、PASS、commit、expiry 或发布状态；�
 - QC 只报告遗漏、矛盾和异常分支，不代写 Spec/ADR。
 - PO 和 Architect 的批准是业务与架构批准，不等于代码验收。
 - 文档错别字、链接修复等非行为变更可走轻量路径，不伪造 Spec/ADR 流程。
-- 阻塞线程只冻结其影响范围，不机械停止无关工作。
+- 阻塞项只冻结其影响范围，不机械停止无关工作。
 
 ### 2.1 规范性契约与描述性文档
 
@@ -83,7 +83,7 @@ MEMORY 不复制当前线程状态、PASS、commit、expiry 或发布状态；�
 | --- | --- | --- |
 | **L0** | 仅非规范性文本（文档/注释/格式）；不改变行为、契约、状态、权限或生成物语义 | 无 Spec/ADR/QC/Plan；运行相关测试；**人类合入** |
 | **L1** | 行为变更且仅限单一服务：精确一个 `internal/services/<service>/` + `cmd/<service>/`，且不命中任一 L2 触发条 | 引用既有 Spec 条款（`Spec-Ref`）+ 测试日志 + Reviewer PASS；更新受影响的既有 AC 行（台账由 Reviewer 更新）；无新 Spec/ADR/QC/Plan、无分级台账；**人类合入** |
-| **L2** | 命中任一 L2 触发条的变更 | 沿用既有完整阶梯，不减免任何既有批准点 |
+| **L2** | 命中任一 L2 触发条的变更 | 沿用既有完整阶梯，不减免任何既有批准点；治理文本类 L2 的轻路径见 `AGENTS.md` §2.7 |
 
 **L1 审批 = Reviewer PASS + 人类合入**，取代已撤回的 GOV-COST-01 D-CR-2（QC+Reviewer 联签，从未实施）；见 `docs/review-tracking.md` 2026-11-25 tiering decision。
 
@@ -135,21 +135,17 @@ L0/L1 的 `Tier`/`Tier-Rationale`/`Spec-Ref` 按 §2.3 记录；L2 另需 `spec_
 
 ---
 
-## 4. 线程协议
+## 4. 线程协议（已退役 2026-11-25，历史说明）
 
-**路径**：`docs/collab/<pair>/threads/T-NNN.md`；**引用**：始终写 `pair/T-NNN`，不使用可能跨目录撞名的裸 `T-NNN`。
+> **历史说明**：pair 线程协议已于 2026-11-25 退役（D-LC-2）；角色间交互改为经 Lead 路由（`AGENTS.md` §1.0），不再新开线程。原四项职能由 `docs/review-tracking.md`、Lead Plan/Tasks、REV 报告与 `ac-coverage.tsv` 承接。
+>
+> 三个 pair 目录 `docs/collab/{po-architect,architect-developer,developer-reviewer}/threads/` 保留为存档，**不得删除**；`ac-coverage.tsv` 历史 36 行的 `thread` 列仍指向它们、不回改，新延期行改为 `review-tracking/<change_id>`（见 §6.3）。
+>
+> 原协议摘要（只作历史参考，不具备现行效力）：路径 `docs/collab/<pair>/threads/T-NNN.md`；一问一线程、编号递增不复用；状态 `OPEN -> ANSWERED -> CLOSED`；文首 YAML 记 `id / title / opened_by / opened_at / blocking / status / spec / adr / closed_by`；结论必须回写 Spec/ADR。
 
-- 一问一线程；编号在所属 pair 内递增且永不复用。
-- 状态：`OPEN -> ANSWERED -> CLOSED`。
-- 文首 YAML 最少包含：`id / title / opened_by / opened_at / blocking / status / spec / adr / closed_by`。
-- 正文写清：现象、契约引用、影响、选项、裁决、canonical 回写位置。
-- 新业务规则必须回写 Spec，新设计规则必须回写 ADR；线程里的临时结论不是契约。
+### 4.1 Reviewer 审查附加元数据（仍适用；线程本身已存档）
 
-`CLOSED` 只表示本次沟通已回写且没有待回复事项，不代表代码通过或可以发布。
-
-### 4.1 Reviewer 审查附加元数据
-
-Developer⇄Reviewer 的审查线程还必须包含：
+Reviewer 的审查报告（含历史审查线程）必须包含：
 
 ```text
 change_id / Tier / base / head
@@ -172,7 +168,7 @@ Actor / Reviewed-by
 
 | 状态                       | 唯一含义                                      | 不能推出                     |
 | -------------------------- | --------------------------------------------- | ---------------------------- |
-| `thread_status=CLOSED`     | 沟通闭环                                      | 实现正确或发布通过           |
+| `thread_status=CLOSED`（历史通道） | 沟通闭环（线程 2026-11-25 退役，仅存档） | 实现正确或发布通过 |
 | `review_verdict=PASS/FAIL` | 对指定 base/head、review_scope 的实现审查结论 | Spec 全量验收或 Release PASS |
 | `merge_status=ALLOWED`     | 人类批准合入当前变更（分级不改变人类合入）    | 业务 AC 全部完成             |
 | `release_status=PASS`      | 精确 HEAD 满足发布证据要求                    | 后续提交自动继承通过         |
@@ -189,7 +185,7 @@ Actor / Reviewed-by
 
 - **AC-REF**：测试代码中存在 `TestAC<NN>` 或 `AC-<NN>` 引用。只证明可追溯。
 - **AC-VERIFIED**：在指定 HEAD 和环境中实际执行，结果通过，且 Reviewer 核对了断言与 AC 语义。
-- **唯一台账**：`docs/collab/ac-coverage.tsv`，Owner 固定为 Reviewer；列为 `ac / owner / expiry / reason / thread / test_type / evidence_path / status`。Lead 只维护 Plan/Tasks 与链接，不拥有 AC 状态。
+- **唯一台账**：`docs/collab/ac-coverage.tsv`，Owner 固定为 Reviewer；列为 `ac / owner / expiry / reason / thread / test_type / evidence_path / status`。Lead 只维护 Plan/Tasks 与链接，不拥有 AC 状态。新延期行的 `thread` 写 `review-tracking/<change_id>`；历史 36 行保留原 `pair/T-NNN` 指针，不回改。
 
 AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行结果；未运行、SKIP、FAIL 均不算 AC-VERIFIED。ADR 指定浏览、集群或故障注入的 AC，不能用一条 Go 注释替代。
 
@@ -201,7 +197,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 ### 6.3 延期
 
-每条延期必须有 `owner / expiry / reason / thread / status`。延期是显式债务，不是通过证书；到期未关闭必须阻断对应范围，不得删行或批量续期规避。
+每条延期必须有 `owner / expiry / reason / thread / status`；`thread` 写 `review-tracking/<change_id>`（历史行保留原 pair 指针）。延期是显式债务，不是通过证书；到期未关闭必须阻断对应范围，不得删行或批量续期规避。
 
 ---
 
@@ -247,7 +243,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 | 角色             | 开场必读                                 | 必须交付                                | 绝对不做                       |
 | ---------------- | ---------------------------------------- | --------------------------------------- | ------------------------------ |
-| Product Owner    | AGENTS、本文件、角色 prompt、相关线程    | 升级 Spec、EARS AC、State Ownership     | 写代码/ADR、在聊天里定规则     |
+| Product Owner    | AGENTS、本文件、角色 prompt、相关 canonical 产物 | 升级 Spec、EARS AC、State Ownership     | 写代码/ADR、在聊天里定规则     |
 | Quality Checker  | AGENTS、本文件、待审 Spec/ADR/Plan       | QC-Report：遗漏、矛盾、异常分支；L2 Plan 测试矩阵 | 代写契约、写业务代码 |
 | System Architect | AGENTS、本文件、已批准 Spec、QC 报告     | ADR/Amendment、状态机、恢复协议         | 写业务代码、擅自改 Spec        |
 | Developer        | AGENTS、本文件、Spec+ADR、变更输入包     | 代码、测试日志、偏差与影响声明          | 私自发明规则、用 TODO 掩盖冲突 |
@@ -258,8 +254,8 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 ```text
 先读 AGENTS.md、docs/collab/CONVENTIONS.md 和你的角色 prompt。
-只修改自己拥有的产物；需要他人修改就开线程。
-所有结论绑定精确 Spec/ADR 版本和代码范围，不把线程 CLOSED 或 AC-REF 当作发布通过。
+只修改自己拥有的产物；需要他人修改就提请 Lead 路由至 owner。
+所有结论绑定精确 Spec/ADR 版本和代码范围，不把历史线程 CLOSED 或 AC-REF 当作发布通过。
 ```
 
 ---
@@ -267,7 +263,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 ## 10. 反模式清单
 
 - QC 未审就批准 Spec/ADR，或人类批准后被静默改契约。
-- 在聊天/线程里定业务规则，不回写 Spec/ADR。
+- 在聊天/历史线程里定业务规则，不回写 Spec/ADR。
 - 用历史线程 PASS、AC 引用数或未绑定精确 base/head 的结论作为 Release PASS。
 - 删除/重编号 AC、删唯一测试、删 deferred 行、批量续期或修改阀门使其恒真。
 - 让不同 Agent 在移动 HEAD 上各读各的“当前版本”。

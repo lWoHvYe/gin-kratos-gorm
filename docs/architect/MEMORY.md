@@ -1,36 +1,23 @@
 # Architect 记忆区
 
 > 所有者：System Architect。其他角色只读。
-> 用途：跨会话保留**设计结论的索引、未完成项、易漂移点**，避免重新翻 1000 行 ADR。
-> 规则：这里不放业务规则；业务结论以 `docs/specs/**` 为准，设计结论以 `docs/adr/**` 为准。本文件只是指针 + 状态。
-> 只收跨变更仍成立的稳定经验；运行状态见 `docs/review-tracking.md` / `ac-coverage.tsv`；协作闸门已于 2026-11-25 退役。
+> 用途：跨会话保留**设计结论索引、工作守则、易漂移点**，避免重新翻 1000 行 ADR。
+> 规则：这里不放业务规则；业务结论以 `docs/specs/**` 为准，设计结论以 `docs/adr/**` 为准。本文件只是指针 + 稳定经验。
+> 只收跨变更仍成立的稳定经验；运行状态见 `docs/review-tracking.md` / `ac-coverage.tsv`。协作闸门与 pair 线程均已于 2026-11-25 退役。
 
-## 工作守则（每轮开场先做）
+## 角色边界
 
-1. 先看 `docs/collab/*/threads.md`：有 **OPEN** 线程先答（按“现象 / Spec 章节 / ADR 章节 / 影响 / 选项”五要素）。若 OPEN 是自己发出的实施交接，等对方，不自问自答。
-2. 已 **ANSWERED** 的线程：先回写 ADR（用 **Amendment**，不原地改写已接受结论），再按线程自身的关闭条件标 `CLOSED`、填 `closed_by`、同步索引。
-3. 若线程关闭条件还要求实现/验证（例如 T-002 的 A1…A5），**不得提前关闭**；保持 `ANSWERED`，在索引注明缺口，证据齐再关。
-4. ADR 变更只用 Amendment / supersede；**不编辑 `docs/specs/**`**（Spec 归 PO）。业务口径要改 → 开线程给 PO。
-5. 关闭前删除所有“待裁决 / 待确认”标记，核对线程索引与 `closed_by`；每轮结束更新本文件“当前基线 / 未完成项”。
+- **输入**：已批准 Spec、QC 报告、Lead 路由的跨角色问题、`docs/review-tracking.md` 中的裁决。
+- **输出**：ADR / Amendment（`docs/adr/**`）、领域模型、API 契约、状态机、异常恢复协议；跨服务变更必须明确 integration owner 与 baseline impact。
+- 不写业务代码、不编辑 `docs/specs/**`、不改他人产物；需要改由 owner 执行。对 Developer 保留技术一票否决权，架构缺陷不得让 Dev 在当前分支硬改。
 
-## 当前基线
+## 工作守则
 
-| 项 | 值 |
-|---|---|
-| Spec | SPEC-0001 **v1.2**（approved，`docs/specs/0001-fulfillment-quantity-split.md`） |
-| ADR | ADR-0005 **v1.2 / Amendment 2**（accepted，T-001 已回写） |
-| 线程（PO↔Arch） | T-001 **CLOSED**；T-002 **CLOSED**（A1…A5 PASS）；T-003 **CLOSED**（2026-11-25 随闸门退役关闭） |
-| 线程（Arch↔Dev） | T-001 **CLOSED**（实施交接）；T-002 **CLOSED**（scope 追认） |
-| Reviewer 门禁 | `docs/collab/developer-reviewer/T-001` **CLOSED / PASS**（`f162ecf`） |
-| 生产开关 | `QUANTITY_SPLIT_ENABLED` / `CARRIER_REGISTRY_ENABLED` / `DELIVERY_AUTO_CONFIRM_ENABLED` / `SHORTAGE_CASE_ENABLED` / `FREIGHT_RESPONSIBILITY_ENABLED` 默认 false |
-
-## 未完成项（不能判 done）
-
-- **B-01/B-05**：Developer 已交付，Reviewer **PASS**（P0-1…P0-7 关闭）；发布门禁已过。
-- **残余**：B-06a（change_reason/return_carrier_code）、C-01…C-03 shim、D-01/D-02（缺货 BFF、日终对账/故障注入），owner+expiry 见偏差登记；**到期未清升级 BLOCKING**。
-- AC-22/28/29/30/35/37 的浏览器/SLA 深度缺口仍在 `ac-coverage.tsv`，`expiry=2026-12-15`；不得静默续期。
-- **R 建议（非阻断 [TODO]）**：P0-7 多组金额序列断言；长期 REQUESTED/APPROVED hold 到期 WAIVED/排除；AC-22/28/29/30/35/37 到期跟踪。
-- 生产开关仍默认 false；灰度需单独决策。
+1. 先读 `docs/review-tracking.md` 与相关 ADR/Spec 的当前版本；裁决、冻结、PASS 以 review-tracking 为准，不依赖旧摘要。
+2. ADR 变更只用 Amendment / supersede，不原地改写已接受结论；新业务规则必须回写 Spec。
+3. 单个 ADR 的 addendum > 5 或 P0 收口时，MUST 合出 Rev 2.0 并 supersede 全部 addendum（首例 ADR-0007，addendum 已超 5 个）。
+4. 关闭/收口前删除所有“待裁决 / 待确认”标记并核对 canonical 指针；稳定经验回写本文件，不写运行状态。
+5. 业务口径要改 → 提请 Lead 路由至 PO；契约提问同样经 Lead 路由，不直连其他角色。
 
 ## 易漂移点（每次改 ADR 先看）
 
@@ -45,31 +32,34 @@
 9. **库存变化**：BFF 同响应返回完整 `next_preview`，不得只回 `retry_preview`（P-17）。
 10. **冻结**：支付确认事务内 `allocation_frozen_at`；冻结后行/组/仓只读（INV-22）。
 
-## 协作通道
+## 决策索引（指针，不复制正文）
 
-- PO↔Arch：`docs/collab/po-architect/`
-- Arch↔Dev：`docs/collab/architect-developer/`（实施交接/契约提问；trailer 用 `Thread: architect-developer/T-NNN`）
+- `docs/adr/0001`–`0004`：内部信任、跨仓拆单、C 阶段上线、P3.0 契约与生产范围。
+- `docs/adr/0005-fulfillment-quantity-split.md`：履约数量拆分与组级状态机（v1.2 / Amendment 2）。
+- `docs/adr/0006-collab-gates.md`：协作闸门设计；工具链 2026-11-25 退役，仅存档。
+- `docs/adr/0007-payment-settlement-admission*.md` 及其 addendum：支付/结算准入与合同裁决；合并 Rev 2.0 见工作守则 3。
+- 基线不变量：`docs/architecture-baseline.md`；事件/接口契约：`docs/contracts.md`。
 
-## 最近裁决（2026-11-23）
+## 协作通道（存档）
 
-- T-003：G-3 改 `AC-REF (references only)`；新增 G-4 到期闸门（`ac-coverage.tsv` + 偏差登记，`expiry<=today` 且非 closed 即失败；续期需 `Expiry-Renewal`，>3 条批量延后失败）；首行 `SCAN RANGE`；`--release` 必须显式 range；CONVENTIONS §4.4 能力边界。
+- pair 线程已退役（2026-11-25）：`docs/collab/{po-architect,architect-developer,developer-reviewer}/threads/` 只读存档，不得删除或新开；角色交互统一经 Lead 路由。
+- 新延期行的 `thread` 写 `review-tracking/<change_id>`；`ac-coverage.tsv` 历史 36 行保留原 `pair/T-NNN` 指针，不回改。
+- 协作闸门 G-1…G-4 已退役（2026-11-25），只作人工检查清单；不得要求运行已删命令。
 
-## 历史裁决（2026-11-22）
+## 历史裁决（存档，只留稳定结论）
 
-- Arch↔Dev T-002：scope 词表**追认（选项 B）**——`gates` 不含 `ac-baseline.txt`/`ac-coverage.tsv`（Reviewer 所有）；闸门自测用 `ci(gates)`，不用 `test(collab)`。
-- `be11508` 由 Developer 直改 CONVENTIONS 属越权；内容追认，历史不回改；后续改 CONVENTIONS 必须开 `architect-developer/T-NNN`。
-- B-07a：`docs/contracts.md` 已补 `shortage.reported` 时间字段与 `aftersale.completed.responsibility_party`。
+- 治理/协作文件变更由 owner 执行并经 Reviewer 复核；跨角色越权改动内容可追认，但历史不回改。
+- `docs/contracts.md` 以当前文件为准（历史补过 `shortage.reported` 时间字段与 `aftersale.completed.responsibility_party`）。
 
 ## 常用命令
 
 ```bash
 make verify
 make contract-check
-git log --grep 'Thread: T-00' --oneline
 ```
 
 ## 更新规则
 
-- 每次 ADR Amendment / 线程状态变化 / 新 Spec 版本：更新本文件“当前基线”和“未完成项”。
-- 不复制 ADR 正文；只写指针和一句话结论。
-- 业务口径不确定时，开 T-NNN 线程，不在这里定规则。
+- 只写稳定经验和 canonical 指针；PASS、冻结、commit、expiry 等运行状态不写本文件。
+- 不复制 ADR 正文；ADR 结构或协作流程变化时只同步指针。
+- 业务口径不确定时经 Lead 路由至 PO，不在本文件定规则。

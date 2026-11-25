@@ -2,7 +2,8 @@
 
 | 项 | 值 |
 |---|---|
-| 状态 | **handoff（契约输入清单）— 非 C-04/C-05 批准、非实现依据** |
+| 状态 | **handoff（契约输入清单）— 非 C-04/C-05 批准、非实现依据**；**未并入 ADR-0007 Rev 2.1 (2026-11-25)** |
+| Merge note | 本文件不是 ADR 规范文本；其 D-27/D-28/D-29 输入已在 Rev 2.1 正文实现（§4.4/§5.2.5/§6.2/§12），结论以 Rev 2.1 为准。 |
 | Base | **ADR-0007 Amendment 1（accepted 2026-11-24，Revision 1.0）**；ADR-0007 Rev 1.0 不被重写 |
 | Target Spec | **SPEC-0002 v1.8（approved 2026-11-24）**；已显式写“先持久化 `refund_applications(PENDING)` 再 Payment”，与本 ADR §4.5/§5.3 一致；SPEC-0001 v1.4（approved 2026-11-24，C-01） |
 | 评审 | QC-13（Payment/终态顺序）、QC-14（`READY FOR HUMAN SPEC+ADR APPROVAL`）；ADR 与 SPEC v1.8 均已批准，C-04/C-05 仍待各自流程 |
@@ -71,13 +72,13 @@
 - `order.refund_admitted`：现有字段不变；Order 的 admission 结果仍按 `refund_id` 幂等。
 - 配置：
   - `FULFILLMENT_SETTLE_CONSUMER_MODE=paid|shadow|settled`；**R1 默认 `paid`**；`settled` 需 release 门禁 + 人类批准。
-  - `SETTLE_RELEASE_APPROVAL_ID`：启动时校验 `settlement_switch_approvals`；无有效批准按 `paid` 运行并告警。
+  - `SETTLE_RELEASE_APPROVAL_ID`：启动时校验 `settlement_switch_approvals`；请求 `settled` 且无/过期/不匹配批准 → **启动失败（非零退出）**，不得按 `paid` 运行。**N5**：approval-id 非空但未请求 `settled` → 启动失败（config error），不得默认 `paid`。
   - 旧 `FULFILLMENT_CONSUME_ORDER_SETTLED`：`false`/未设置→`paid`；`true`→受门禁的 `settled` 请求，不得绕过。
   - **配置契约载体（QC-15 B-1 修订）**：`internal/platform/config/config.go` 属于 C-04 增量，必须随 C-04 评审：
     - `FulfillmentSettleConsumerMode` ← `FULFILLMENT_SETTLE_CONSUMER_MODE`（`paid|shadow|settled`，默认 `paid`；大小写/空值/未知值 fail-fast）。
-    - `SettleReleaseApprovalID` ← `SETTLE_RELEASE_APPROVAL_ID`；请求 `settled` 时必填，缺失启动 fail-fast。
+    - `SettleReleaseApprovalID` ← `SETTLE_RELEASE_APPROVAL_ID`；请求 `settled` 时必填，缺失启动 fail-fast；**N5：非空但未请求 `settled` 也是 config error → 启动失败（非零），不得默认 `paid`**。
     - 旧布尔只映射 `paid` 或受门禁的 `settled`，不得映射 `shadow`；新旧同时存在且冲突 → 启动 fail-fast，不静默择一。
-    - `shadow`/`settled` 的批准行内容（`target_mode/status/expires_at/release_range`）由 Fulfillment 启动校验；没有有效批准行时按 ADR §3.2 回退 `paid` 并告警，不由 config 包猜测。
+    - `shadow`/`settled` 的批准行内容（`target_mode/status/expires_at/release_range`）由 Fulfillment 启动校验；没有有效批准行时 **启动失败（非零退出，ADR §3.2 Rev 2.3）**，不得回退 `paid`，不由 config 包猜测。
 
 ---
 

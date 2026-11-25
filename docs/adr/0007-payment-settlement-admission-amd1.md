@@ -2,7 +2,8 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **accepted**（Director 2026-11-24 批准；Amendment 1） |
+| Status | **superseded by ADR-0007 Rev 2.3 (2026-11-25)**——原 accepted（Director 2026-11-24 批准；Amendment 1）；条款已逐条并入 Rev 2.3，本文件仅保留历史/审计证据，不再作为实现依据；§3.2 已按 Rev 2.2/2.3 启动 fail-closed/N5 修复同步 |
+| Superseded by | [ADR-0007 Rev 2.3](0007-payment-settlement-admission.md)（2026-11-25；merge map 见该文件 §Merge map；原 C-1/C-2 冲突已于 2026-11-25 关闭，见该文件 §18） |
 | Approved | **2026-11-24** |
 | Base | **ADR-0007 Rev 1.0**（accepted，2026-11-23）；本文件**不修改** Rev 1.0 正文 |
 | Revision | **1.0**（Amendment 1；原 r5 定稿；QC-13/QC-14 收口：Payment 成功后才终态） |
@@ -97,7 +98,7 @@
 | AC-63 | 事务外解析；CAS 写回；0/多候选队列；24h 先 `COMPENSATING`（离开 OPEN）→ 先撤 permit/取消 CREATED 运单/INV-44 释放 → 持久化退款意图 → `Payment.Refund`；**Payment 成功后才 `EXPIRED_REFUND`**；恢复命令；零元精确条件（v1.8） | `LEGACY_PAYMENT_UNRESOLVED` |
 | AC-64 | 行级三层额度；商品/运费组成；责任枚举；168h 挂起；同组补退 | `REFUND_ADMISSION_CONFLICT` / `PARTIAL_REFUND_REQUIRES_FULL_GROUP` / `REFUND_RESPONSIBILITY_INVALID` |
 | AC-65 | 事务外快照；Tx1 锁内复核；分状态 permit；batch 续跑；部分打款只补未完成 | `TCC_REFUND_SUM_MISMATCH` / `REFUND_ADMISSION_CONFLICT` |
-| AC-66 | 影子双消费、只记录；默认 paid；切换门禁；回滚 | 影子失败只告警；开关未批准 fail-closed |
+| AC-66 | 影子双消费、只记录；默认 paid；切换门禁；回滚 | 影子运行期失败只告警；请求 `shadow`/`settled` 缺/过期/不匹配批准 → 启动失败（非零），不回退 `paid`（Rev 2.2） |
 
 ---
 
@@ -134,25 +135,30 @@
 
 ```text
 FULFILLMENT_SETTLE_CONSUMER_MODE = paid | shadow | settled
-默认 = paid（R1 生产默认；等价于旧 false）
+默认 = paid（仅当未请求模式；R1 生产默认；等价于旧 false）
 ```
 
 | 模式 | 行为 | 允许条件 |
 |---|---|---|
-| `paid` | 只消费 `order.paid`（旧路径）；`order.settled` 仍双发但不消费 | R1 默认 |
-| `shadow` | 同时消费 `order.paid` 与 `order.settled`；**都只记录/比对，不建运单、不推进组、不放行** | Director 影子批准 + 影子就绪清单 |
-| `settled` | 以 `order.settled` 建单/推进；`order.paid` 只 BFF/旧消费者 | SHADOW→ON 全量 release 门禁 + 人类批准 |
+| `paid` | 只消费 `order.paid`（旧路径）；`order.settled` 仍双发但不消费 | 未请求模式时的默认（或显式 `paid`）；无需批准 |
+| `shadow` | 同时消费 `order.paid` 与 `order.settled`；**都只记录/比对，不建运单、不推进组、不放行** | Director 影子批准（`target_mode='shadow'`、`status='APPROVED'`；`expires_at` 非 NULL 时未过期）+ 影子就绪清单 |
+| `settled` | 以 `order.settled` 建单/推进；`order.paid` 只 BFF/旧消费者 | SHADOW→ON 全量 release 门禁 + Director 批准（`target_mode='settled'`、`status='APPROVED'`、`expires_at` 非空且未过期、`release_range` 匹配） |
 
 **启动校验（fail-closed）**：
 
-1. 未知/空/大小写不符 → **启动失败**（非零退出），不得默认 paid。
-2. 请求 `settled` 时，必须在同一次启动校验 `SETTLE_RELEASE_APPROVAL_ID`：
-   - 存在 `settlement_switch_approvals` 行，`target_mode='settled'`、`status='APPROVED'`、`expires_at` 未过期、`release_range` 与本部署 release range 一致；
-   - 否则**不进入 settled**，按 `paid` 运行并告警（fail-closed，保持当前状态）。
-3. `shadow` 必须存在 `target_mode='shadow'` 的有效批准行；否则按 `paid` 运行并告警。
-4. 批准行只能由人类运维/受控迁移写入；应用无写权限。表在 Fulfillment DB。
-5. 任何运行期修改 `FULFILLMENT_SETTLE_CONSUMER_MODE` 不热生效；必须重启并重新校验。脚本/自动任务无法绕过启动校验。
-6. **旧布尔开关兼容**：`FULFILLMENT_CONSUME_ORDER_SETTLED=false`/未设置 → `paid`；`true` → 视为请求 `settled`，同样必须通过 `SETTLE_RELEASE_APPROVAL_ID` 校验；无批准 → 按 `paid` 运行并告警，不得绕过门禁。新旧配置同时存在且冲突 → 启动失败（fail-fast），不静默择一。
+> **Rev 2.2/2.3 同步（2026-11-25）**：请求 `shadow`/`settled` 时批准行缺失/过期/非 `APPROVED`/`range` 不匹配 → **启动失败（非零退出）**，不得回退 `paid`；**N5**：`SETTLE_RELEASE_APPROVAL_ID` 非空但未请求 `settled` → 启动失败（config error），不得默认 `paid`；`settled→paid` 只经 §3.4 的 Director 批准回滚。
+
+1. 未设置 mode 且旧布尔未设置/`false`，**且 `SETTLE_RELEASE_APPROVAL_ID` 为空** → **`paid` 默认**（唯一允许的默认路径）。
+   - **N5**：`SETTLE_RELEASE_APPROVAL_ID` 非空但未请求 `settled`（mode 未设置/空/`paid`/`shadow`）→ **启动失败（非零退出）**；approval-id 不得单独生效。
+2. 未知/空/大小写不符 → **启动失败**（非零退出），不得默认 `paid`。
+3. 请求 `settled`：`SETTLE_RELEASE_APPROVAL_ID` 必须非空，且同一次启动校验必须存在 `settlement_switch_approvals` 行：
+   - `target_mode='settled'`、`status='APPROVED'`、`expires_at` **非空且未过期**、`release_range` 与本部署 release range 一致；
+   - 任一不满足 → **启动失败（非零退出）**；不得进入 `settled`、不得降级 `paid`、不得告警后继续。
+4. 请求 `shadow`：必须存在 `target_mode='shadow'`、`status='APPROVED'` 的批准行；`expires_at` 非 NULL 时不得过期。任一不满足 → **启动失败（非零退出）**，不得降级 `paid`。
+5. 批准行只能由人类运维/受控迁移写入；应用无写权限。表在 Fulfillment DB。
+6. 任何运行期修改 `FULFILLMENT_SETTLE_CONSUMER_MODE` 不热生效；必须重启并重新校验。脚本/自动任务无法绕过启动校验。
+7. **旧布尔开关兼容**：`FULFILLMENT_CONSUME_ORDER_SETTLED=false`/未设置 → 未请求模式（`paid` 默认）；`true` → 视为请求 `settled`，同样必须通过 `SETTLE_RELEASE_APPROVAL_ID` 校验；**无/过期/非 `APPROVED`/range 不匹配 → 启动失败（非零退出）**，不得按 `paid` 运行。新旧配置同时存在且冲突 → **启动失败**（fail-fast），不静默择一。
+8. **回退限制**：`settled→paid` 只能走 §3.4 的 Director 批准回滚 + 重启；不存在“批准行缺失/过期 → 自动回 `paid`”的路径。
 
 ### 3.3 影子比对口径
 

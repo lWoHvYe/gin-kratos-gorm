@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **accepted**（Director 2026-11-24 批准；C-04 RefundBatch） |
+| Status | **accepted**（Director 2026-11-24 批准；C-04 RefundBatch）——**superseded by ADR-0007 Rev 2.1 (2026-11-25)**：规范内容已并入 Rev 2.1 §0.7/§5.9/§12.5.8，C-1 已关闭；本文件仅保留历史/审计证据 |
 | Approved | **2026-11-24** |
 | Revision | **1.0**（C-04；原 r1 定稿；R-1…R-6 并入） |
 | Owner | System Architect |
@@ -118,7 +118,7 @@ Plan/C-05 更新：
 
 ## 5. 状态与声明
 
-- **Status: accepted**（Director 2026-11-24 批准；Revision 1.0）。
+- **Status: accepted**（Director 2026-11-24 批准；Revision 1.0）；**superseded by ADR-0007 Rev 2.1 (2026-11-25)**——规范内容已并入 §0.7/§5.9/§12.5.8，C-1 关闭。
 - `fc295e5` 是 Payment WIP，**不因 C-04 accepted 而成为实现 PASS**；由 Reviewer/Order 预检按本契约复审。
 - 本 C-04 只定契约，不含 Payment/Order 代码、迁移或测试。
 
@@ -128,3 +128,4 @@ Plan/C-05 更新：
 |---|---|---|---|
 | 0.1-draft（r1） | 2026-11-24 | 初始 C-04 RefundBatch：expected_total_cent、per-item results、C-05 batch ledger；并入 R-1…R-6 | 新建，DRAFT |
 | **1.0（accepted）** | 2026-11-24 | Director 批准 C-04：Status accepted、Approved 2026-11-24、Revision 1.0；Target Spec v1.9；保留 R-1…R-6；不批准 `fc295e5` 实现 | Reviewer/Order 预检仍需；不构成实现 PASS |
+| **merged 2.1** | 2026-11-25 | 并入 ADR-0007 Rev 2.1（§0.7/§5.9/§12.5.8）；本文件标记 superseded；C-1 关闭 | 历史/审计保留；实现以 Rev 2.1 为准 |

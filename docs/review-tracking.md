@@ -317,6 +317,18 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   **收益**：角色动作与分级对齐、防止再次无界扩张；**停止条件**：本轮为最后编辑，不再新增治理机制。
 - **2026-11-25 §2.8 收口**: 撤回清理由各产物 owner 执行、仅删本次新增行；多文件同步限于首个可验证增量；安全/合规/数据完整性可豁免可测收益；收益与停止条件记录于 review-tracking 或变更输入。
 
+### 2026-11-25 docs IA: handoff / development split
+
+- `docs/handoff.md` is now a session-boundary snapshot only; durable local
+  environment/test commands moved to `docs/development.md`.
+- `README.md` new-session entry points to `review-tracking` / `roadmap-status`
+  and `development.md`, with handoff explicitly marked snapshot.
+- References checked: `review-tracking` header still valid; the ADR
+  `...-c04-c05-handoff.md` is a different contract-input file and untouched.
+- Remaining pointer: `prompt/Developer.md` should link `development.md` and say
+  handoff is not a rule source; this is an L2 light-path prompt edit for
+  Architect → QC → human → Reviewer, not done in this L0 commit.
+
 ## 2026-11-25 legacy cleanup decisions (Batch A/B/C)
 
 - **D-LC-1**: approved Batch A (L0), including A-2a's sole-running-ledger declaration.

@@ -347,6 +347,39 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   pre-ship `REFUNDING` closure; R-5 is SPEC §7.5 drift for PO next version.
   Pending QC; no code until accepted.
 
+### 2026-11-26 R0.4e-R2 PASS (scoped): F-1/F-2 closed
+
+- Reviewer `49d030b` (base `da0cdd1`, head `4549ccb`): **R0.4e-R2 PASS
+  (scoped)**. F-1 closed with real MySQL 8.4 `ADD CHECK` evidence
+  (`INPLACE/LOCK=NONE` rejected, COPY + `SHARED_NO_WRITE` MDL 43.7s/16.0s,
+  write blocking, `DROP CHECK` online); F-2 closed with branch A
+  (0022 byte-identical `90b502c`, 0023 `_v2` add-then-drop, fresh
+  `0017→0022→0023`, ledger checksums, staging/prod unreachable -> branch A).
+- Exact HEAD tests: `TestR04Checks` PASS 4.452s, `-race` PASS 7.232s,
+  `verify-r01-migrations.sh` EXIT=0.
+- Residual MINOR (not blockers): F-1 raw log header is `da0cdd1`; 0022's
+  frozen header still contains the superseded "re-run safe" sentence;
+  Lead Plan/evidence matrix references were updated to 0021/0022/0023.
+- **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
+  blocked.
+
+### 2026-11-26 AC-50-FIX-01 BLOCKED (QC round 2)
+
+- Architect amendment `docs/adr/0007-amd1-addendum-ac50-nowaybill.md`
+  DRAFT 0.2 (`c9be297`) is **not accepted**. QC round 1 BLOCKED (Tx1 already
+  wrote admission/commitment/outbox; `GetIntent`; W6), round 2 BLOCKED
+  (`QC-PAY-SETTLE-01-AC50-NOWB.md`, `3366e9c`): R-2a `ListShipments` pre-read
+  conflicts with accepted ADR Rev 2.3 §5.2.2 ("CONSUMED does not depend on an
+  out-of-tx pre-read"); same-`refund_id` replay with persisted POST can return
+  PARTIAL/Unavailable on timeout (AC-50 `0002:227`); B-3 partial
+  (`order.paid` fallback can still create a placeholder).
+- No code was written. AC-27 remains **AC-REF**; AC-50-FIX-01 remains open.
+- Options for human/Architect: (a) amend ADR §5.2.2 via a versioned
+  ADR revision (bounded pre-read + deadline + persisted-result replay), then
+  re-QC; (b) keep the current PRE mapping as an explicit deviation with
+  expiry 2026-12-31; (c) redesign the admission protocol as a separate L2
+  change_id. No option may be chosen by Lead/Developer alone.
+
 ### 2026-11-26 human decisions: F-2 branch A, UAT as prod, AC-50-FIX-01 start
 
 - Director chose **branch A** for the 0022/0023 decision: restore

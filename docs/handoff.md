@@ -25,30 +25,37 @@
 ## State after this session
 
 - **R0.4 Addendum**: accepted by human 2026-11-26 (QC R3 READY; 9 MINOR TODO).
-- **R0.4 implementation**: `c38c54f` + selfcheck `9322e75` (branch B:
-  0022 edited after preflight; 24h equality; exit 3/4; compose/Helm/ops;
-  `verify-r01-migrations.sh` 0021/0022; real MySQL 8.4.13 EXIT=0).
-- **Reviewer R0.4e = FAIL (scoped)**: F-1 missing `ADD CHECK` lock/MDL/
-  maintenance-window evidence; F-2 preflight did not cover staging/prod, so
-  branch B is unsafe under §2.3.3 fail-closed. Gate behavior otherwise passes.
+- **R0.4 implementation**: branch A fix `aec9ac8` + selfcheck `4549ccb`:
+  `0022` restored byte-identically to `90b502c`; `0023_r04_checks_v2.sql`
+  installs `_v2` checks (24h equality, discriminator) then drops the old
+  names; F-1 real MySQL 8.4 evidence (`ADD CHECK` rejects
+  `INPLACE/LOCK=NONE`, COPY + MDL, maintenance window); fresh
+  `0017→…→0022→0023`, `verify-r01-migrations.sh` EXIT=0.
+- **Reviewer R0.4e-R2 = PASS (scoped)**: F-1/F-2 CLOSED (`49d030b`).
+  Residual MINOR: F-1 raw log header `da0cdd1`; 0022 frozen header keeps the
+  superseded "re-run safe" sentence. NOT RELEASE.
 - **Reviewer R0.3-R2 = PASS (scoped)**: AC-27 assertions real; **AC-27 stays
   AC-REF** (AC-27A steps 5/6 not implemented; `AC-50-FIX-01`,
-  `AC-27-NOWB-01`, `AC-27-LIVE-01` open). AC-14 now AC-VERIFIED; AC-21/25/27/
-  31/32 AC-REF; 12 orphan mapped to T5.x/T3.
-- **Phase 0-R is NOT closable**: R0.3-R1c, R0.4e F-1/F-2, T2/T3/T4.4 and the
-  ops alarm drill remain.
+  `AC-27-NOWB-01`, `AC-27-LIVE-01` open). AC-14 now AC-VERIFIED; other
+  regression ACs AC-REF; 12 orphan mapped to T5.x/T3.
+- **AC-50-FIX-01 BLOCKED**: amendment DRAFT 0.2 (`c9be297`) not accepted; QC
+  round 2 found R-2a `ListShipments` pre-read conflicts with ADR Rev 2.3
+  §5.2.2 and replay idempotency. Needs human/Architect decision (ADR revision
+  vs documented deviation vs separate redesign). No code written.
+- **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
+  alarm drill remain.
 
 ## Open — next session first
 
-1. **R0.4e F-2**: switch to branch A (add `order/0023`, do not edit 0022) or
-   obtain real staging/prod `schema_migrations` evidence; then F-1: capture
-   `ADD CHECK` MDL/lock/maintenance-window evidence; Reviewer re-review.
-2. **R0.3-R1c**: close `AC-50-FIX-01` (needs ADR §5.3 additive amendment:
-   `CancelIfCreatedReply` no-waybill result; Order maps to
-   `REFUND_ADMISSION_CONFLICT`, never PRE), `AC-27-NOWB-01`,
-   `AC-27-LIVE-01`; then implement AC-27A steps 5/6 and re-review.
-3. **T5/AC-39…68** evidence, `-race`/fault, real migrations; **no
-   AC-VERIFIED except AC-14**.
+1. **Decide AC-50-FIX-01**: amend ADR §5.2.2 via a versioned revision (bounded
+   pre-read + deadline + persisted-result replay), keep the PRE deviation with
+   expiry, or separate redesign change_id. Then re-QC and implement.
+2. **R0.3-R1c**: close `AC-50-FIX-01` (`CancelIfCreatedReply` no-waybill
+   result; Order maps to `REFUND_ADMISSION_CONFLICT`, never PRE),
+   `AC-27-NOWB-01`, `AC-27-LIVE-01`; then implement AC-27A steps 5/6 and
+   re-review.
+3. **T5/AC-39…68** evidence, `-race`/fault, real migrations; no AC-VERIFIED
+   except AC-14.
 4. Only after all of the above: P0 closure, then T2/T3/T4, then release
    decision. No P3/0012 in this thread.
 

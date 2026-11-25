@@ -32,7 +32,7 @@ Scope：只做 R0.3/R0.4/R0.5 收口，不进入 T2/T3/T4/P3；无 Reviewer 日�
 | R0.4a3 | 人类显式接受 Addendum（WIP waiver 下仍记录） | Human | `docs/review-tracking.md` 决策行 |
 | R0.4b/c | Reviewer 复审 `90b502c`（精确 base/head；C-04 release 只按 event/schema/consumer，不要求 RPC） | Reviewer | `docs/collab/qc-reports/REV-PAY-SETTLE-01-R0.4.md` |
 | R0.4d1 | `SETTLE_RELEASE_RANGE` 部署/运维接线（compose + Helm `values.yaml`/`deployments.yaml` + `docs/ops.md`）；不改变默认 `paid` | Developer | 渲染/`docker compose config` 日志；`deploy/**` L2 |
-| R0.4d2 | `scripts/verify-r01-migrations.sh` 增 `order/0022` entry + 真实 MySQL 8.4 运行（含 replay/脏行 fail-closed） | Developer | 脚本日志绑定 HEAD；0022 未改 0017/0018/0019 |
+| R0.4d2 | `scripts/verify-r01-migrations.sh` 增 `order/0021` + `0022`（分支 A 为 `0023`）entry + 真实 MySQL 8.4 运行（含 replay/脏行 fail-closed、0022/0023 顺序、CHECK_CLAUSE） | Developer | 脚本日志绑定 HEAD；0017–0021 不改；分支 A 下 0022 逐字节冻结 |
 | R0.4e | Reviewer R0.4 verdict（R0.4a–d 全范围，日期化；release_status=NOT RELEASE） | Reviewer | `REV-...-R0.4.md`；不替代人类 merge |
 | R0.3-R1 | AC-27 补 `refund_state=REFUNDED`+permit `REVOKED`、`CANCELLED` 组、§7.5 全退款未发、post-ship `REFUNDING/REFUNDED` 反向断言（unit + 真实行回读） | Developer | `fe1600b` 已交付；证据见 `docs/implementation/PAY-SETTLE-01-R0.3-selfcheck.md` |
 | R0.3-R1b | 裁决 3 支读模型 BLOCKED：①运单 `CANCELLED` 未进 Order 读模型（`CONSUMED`+`CancelIfCreated` 后组仍 `ALLOCATED`）；②退款释放不回写 `reservation_state`；③pre-ship `REFUNDING` 是否算关闭。含 SPEC-0001 §7.5:405 与 AC-27 EARS-1 描述不一致 | Architect + PO | 新 ADR Addendum（不写代码）；QC 复核；§7.5 交 PO 下一版修正 |
@@ -49,7 +49,7 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 ### Phase 0-R 当前状态（2026-11-26，Plan 视图；运行状态以 review-tracking 为准）
 
 - **R0.4a1/a2/a3 DONE**：QC 三轮（`362b9e2` BLOCKED → `e3998d3` R2 BLOCKED → `bd7c239` R3 READY，0 BLOCKER/9 MINOR）；Addendum ACCEPTED `c432ed6`；人类 2026-11-26 接受（9 MINOR 作 TODO）。
-- **R0.4b/c-impl + d1/d2 DONE（WIP）**：Developer `c38c54f` + selfcheck `9322e75`；0022 分支 B（preflight：所有可达环境无 apply）；真实 MySQL 8.4.13 + `mall/migrate:dev` EXIT=0。Reviewer R0.4e 审查中。
+- **R0.4b/c-impl + d1/d2 DONE（WIP）**：分支 A 修复 `aec9ac8` + selfcheck `4549ccb`（0022 逐字节恢复为 `90b502c`；新增 `0023_r04_checks_v2.sql`；F-1 实测 `ADD CHECK` 拒绝 `INPLACE/LOCK=NONE`、维护窗/WRITE 阻塞证据；真实 MySQL 8.4.13 + `mall/migrate:dev` EXIT=0）。**Reviewer R0.4e-R2 PASS（scoped，`49d030b`）**：F-1/F-2 CLOSED；仍 open：INV-44/46、9 MINOR、`AC-50-FIX-01`/`AC-27-NOWB-01`/`AC-27-LIVE-01`。
 - **R0.3-R1/R2 DONE**：AC-27 分支测试 `fe1600b`；回归 AC-14/21/25/27/31/32 真实 MySQL PASS（`34d0466`）。
 - **R0.3-R1b DONE（契约）**：Architect 裁决 `111516f` + PO **SPEC-0001 v1.5** `4215b3c`（AC-27/AC-27A、§7.5、AC-50 偏差）；QC V15 BLOCKED → R2 READY + N-1..N-4 CONFIRMED。
 - **R0.3-R1c BLOCKED（contract prerequisites）**：`AC-50-FIX-01`（`CONSUMED+无运单` 写路径/零元/ADR §5.3 amendment）、`AC-27-NOWB-01`（人工终态）、`AC-27-LIVE-01`（DLQ/重放）未关闭前，AC-27 不得 AC-VERIFIED（SPEC-0001 v1.5 §16.2，owner/expiry 2026-12-31）。**本轮不得实现 AC-27A 谓词后自称收敛**。

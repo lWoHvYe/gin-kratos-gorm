@@ -2,11 +2,11 @@
 id: SPEC-0001
 title: 多仓按数量拆行、选仓优先级与承运商签收
 status: approved          # draft | in-review | approved | superseded
-version: 1.4
-updated_at: 2026-11-24
+version: 1.5
+updated_at: 2026-11-26
 owner: Product Owner
-approved_by: 甲方
-approved_at: 2026-11-24
+approved_by: Director
+approved_at: 2026-11-26
 domain: fulfillment
 supersedes: []
 superseded_by: null
@@ -17,13 +17,13 @@ adr: [0005]               # Architect 出稿后回填
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.4（已冻结） |
-| 日期 | 2026-11-24（v1.4 仅 AC-27 EARS 基线迁移） |
-| 状态 | **已批准**：甲方 2026-11-22 批准 v1.0；v1.1、v1.2、v1.3 为回写裁决；v1.4 于 2026-11-24 独立批准，见第 13、14 节 |
+| 版本 | v1.5（已批准；QC delta 复核整改中，未 commit） |
+| 日期 | 2026-11-26（v1.5：AC-27 读模型口径 + AC-27A 关闭谓词 + AC-50 `CONSUMED+无运单` 裁决） |
+| 状态 | **已批准**：甲方 2026-11-22 批准 v1.0；v1.1、v1.2、v1.3、v1.4 为回写裁决；v1.5 于 2026-11-26 经 Director 授权 PO 升版，QC delta 复核后实现（见第 13、14、16 节） |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件，不接收口头补充） |
-| 冻结规则 | v1.4 后任何业务口径变更必须升版为 v1.5 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
-| 依据 | `AGENTS.md`、ADR [0002](../adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../architecture-baseline.md)（INV-01…INV-16） |
+| 冻结规则 | v1.5 后任何业务口径变更必须升版为 v1.6 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
+| 依据 | `AGENTS.md`、ADR [0002](../adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../architecture-baseline.md)（INV-01…INV-16）、[SPEC-0002](0002-payment-settlement-admission.md) v1.10（AC-50/INV-45）、[QC-PAY-SETTLE-01-R0.3-AC27](../collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15](../collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15-R2](../collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15-R2.md) |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准。任何实现方式、数据结构、接口形态、算法选择均不在本文件范围内，Architect 需要自行设计并接受本文件的验收。
 
@@ -109,9 +109,9 @@ adr: [0005]               # Architect 出稿后回填
 
 | # | 业务事实 | 唯一所有者 | 允许的取值 | 谁可以改变 | 严禁 |
 |---|---|---|---|---|---|
-| S1 | 订单生命周期 | Order | `PENDING_PAYMENT / PAID / ALLOCATED / SHIPPED / COMPLETED / CANCELLED` | 支付确认、发货/收货投影、取消 | 写入退款态；用"部分完成"等组合值 |
+| S1 | 订单生命周期 | Order | `PENDING_PAYMENT / PAID / ALLOCATED / SHIPPED / COMPLETED / CANCELLED` | 支付确认、首组运单创建（发货授权）/发货/收货投影、取消 | 写入退款态；用"部分完成"等组合值 |
 | S2 | 订单履约投影 `shipment_status` | Order | `UNSHIPPED / PARTIALLY_SHIPPED / SHIPPED / PARTIALLY_RECEIVED / RECEIVED` | 由组状态聚合 | 前端/客服自行推导 |
-| S3 | 履约组履约状态 | Order（组的唯一所有者） | `PENDING / ALLOCATED / SHIPPED / RECEIVED / CANCELLED` | 收款、发货、收货、退款撤许可 | 由运单状态反推订单生命周期 |
+| S3 | 履约组履约状态 | Order（组的唯一所有者） | `PENDING / ALLOCATED / SHIPPED / RECEIVED / CANCELLED` | 收款、运单创建/发货、收货、整单取消（持久化 `CANCELLED` 仅由整单取消写入）；退款撤许可只改 S5，不写 S3 | 由运单状态反推订单生命周期；退款写组 `CANCELLED` |
 | S4 | 履约组退款态 | Order | `NONE / REFUNDING / REFUNDED` | 收款/售后事件投影 | 与 S1 合并；一个字段同时表达"已收货/已回库/可退款" |
 | S5 | 发货许可 | Order | `NONE / CONSUMED / REVOKED` | 发货授权、退款拦截 | 由 Fulfillment 自行判断可发 |
 | S6 | 运单状态 | Fulfillment | `CREATED / SHIPPED / RECEIVED / CANCELLED` | 发货、签收、组退款作废 | 改写订单生命周期 |
@@ -131,6 +131,7 @@ adr: [0005]               # Architect 出稿后回填
 3. **S7 不接受"估算"**：任何"已签收"的展示必须有签收事件或用户确认作为证据；无证据时只能展示"运输中/待确认"。
 4. **S14 只有一份**：售后退了多少件、退了多少钱，只能有售后侧的台账；订单侧任何展示值都是只读投影。
 5. **拆量不引入第五套状态**：行只有 `(SKU, 仓库, 数量, 组)` 四个属性，**行不设独立状态机**；行的取消/退款由组与售后表达。
+6. **“组关闭”不是新状态字段**：它是由 S3 组状态、S5 许可与 Order 的组退款准入结果（RefundAdmission，owner=Order）派生的只读结论（AC-27A）；不得为它新增持久化字段，也不得用它替代 S5/S4（组退款态 `refund_state`；SPEC-0002 编号为 S9）或反推运单事实。
 
 ---
 
@@ -290,14 +291,17 @@ adr: [0005]               # Architect 出稿后回填
 
 - 组退款来源包括：普通售后退款、TCC 补偿退款、SYSTEM 缺货退款；三者共用同一组级退款准入。
 - 未离仓组（无运单 / 运单 `CREATED` / `CANCELLED`）：由 Inventory 释放该组预留；`HELD` 直接释放，`CONFIRMED` 走基线 `CancelConfirm` 的补偿释放。
+- 上述“无运单”不含“许可 `CONSUMED` 且无运单”的异常状态；后者由 AC-50 写路径返回 `REFUND_ADMISSION_CONFLICT` 并告警（不属于 AC-27A 读模型谓词），不得按本条释放或关闭，须按 §16.2 `AC-27-NOWB-01` 人工核对。
 - 已离仓组（运单 `SHIPPED/RECEIVED` 或带离仓时间的 `EXCEPTION`）：不得释放预留来“冲销”已发事实；退货回库仍按 INV-03，回库成功后再退款。
 - 释放/回库失败必须重试并告警；释放后 `available <= on_hand`，且行数量守恒（INV-17），不得超卖或重复退款。
 - 组退款不改变订单生命周期；退款进度只写 `refund_state`，不得写回 `orders.status`（INV-01/AC-25）。
+- 上述限制只约束持久化 `orders.status` 与退款态写入；S2 读模型履约投影 `shipment_status` 按 §7.5/AC-27A 聚合已关闭组，不属于“写回 `orders.status`”。不得把 `shipment_status=SHIPPED` 误读为持久化生命周期已推进。
 
 ### 6.7 取消与退款边界
 
 - 未支付：整单取消，所有组释放。
-- 已支付未发货：**不提供"取消"语义**，只能按组退款；退款完成后该组呈现"已关闭"，但不写订单生命周期。
+- 已支付未发货：**不提供"取消"语义**，只能按组退款；退款完成或 AC-27A 关闭谓词满足后，该组呈现"已关闭"，但不写订单生命周期。
+- 组关闭按 AC-27A 判定（含 pre-ship `REFUNDING` 的许可/运单终态）；关闭后该组不计入 S2 履约投影的“剩余组”，关闭本身不写 `orders.status`，退款进度仍只由 `refund_state` 表达。
 - 部分发货：已发组只能走售后；未发组走退款；订单**不得整体取消**。
 - 全部组均已退款且未发货：订单对外展示"已关闭（全部退款）"，由 S1+S4 推导，不落生命周期值（INV 铁律 1）。
 - 拆除/退款不得回滚已消耗的优惠额度；优惠额度按实际退款比例释放，释放值不得大于已占用值。
@@ -364,19 +368,24 @@ CREATED → SHIPPED(已揽收) → IN_TRANSIT(运输中) → OUT_FOR_DELIVERY(�
 ### 7.1 订单生命周期（不变）
 
 ```text
-PENDING_PAYMENT --支付确认--> PAID --首组发货--> ALLOCATED --全部发货--> SHIPPED --全部收货--> COMPLETED
+PENDING_PAYMENT --支付确认--> PAID --首组运单创建（发货授权）--> ALLOCATED --全部发货--> SHIPPED --全部收货--> COMPLETED
        │
        └──取消/超时/结算失败退款──> CANCELLED
 （仅 PENDING_PAYMENT 可取消；PAID 后不提供用户取消；TCC 补偿/结算失败可进入 CANCELLED，见 §6.7）
 ```
 
+> 本图描述持久化 `orders.status`（S1）：`PAID→ALLOCATED` 由首组运单创建（发货授权）触发；`ALLOCATED→SHIPPED`/`COMPLETED` 由真实发货/收货事实触发；取消由整单取消/结算失败事实触发。组关闭/退款完成不写入本图；S2 读模型 `shipment_status` 按 §7.5/AC-27A 单独表达。已关闭组不参与“剩余组”聚合，但本图的 `全部发货` 仍由真实发货事件触发，不得由退款完成触发。
+
 ### 7.2 履约组
 
 ```text
-PENDING --支付--> ALLOCATED --发货--> SHIPPED --签收/确认--> RECEIVED
+PENDING --支付--> ALLOCATED --运单创建/发货--> SHIPPED --签收/确认--> RECEIVED
    │                  │
-   └──取消/退款撤许可──┴──> CANCELLED（读模型）
+   └──整单取消────────┴──> CANCELLED（持久化 S3，仅整单取消写入）
+                         └──退款撤许可/AC-27A 关闭谓词──> CANCELLED（读模型派生；不改 S3）
 ```
+
+> 持久化 `CANCELLED` 只由整单取消写入；退款撤许可只改 S5（许可），不改 S3。读模型可把 AC-27A 关闭组展示为 `CANCELLED`（派生值），但不得回写持久化 S3。
 
 ### 7.3 组退款态（正交，不得并入 7.1/7.2）
 
@@ -395,22 +404,34 @@ CREATED --发货--> SHIPPED --签收--> RECEIVED
 
 ### 7.5 拆量订单的组合投影（只读结论，不新增状态）
 
-| 场景 | 生命周期 | 履约投影 | 组 | 退款态 |
+| 场景 | 生命周期（`orders.status`，持久化 S1） | 履约投影（`shipment_status`，读模型 S2） | 组 | 退款态 |
 |---|---|---|---|---|
-| 2 组均未发 | ALLOCATED | UNSHIPPED | ALLOCATED×2 | NONE |
-| G1 已发 | ALLOCATED | PARTIALLY_SHIPPED | G1 SHIPPED / G2 ALLOCATED | NONE |
+| 2 组均未发、未创建运单 | PAID | UNSHIPPED | ALLOCATED×2 | NONE |
+| 2 组均未发、已创建运单 | ALLOCATED | UNSHIPPED | ALLOCATED×2 | NONE |
+| G1 已发、G2 未发（未关闭，仍计划履约） | ALLOCATED | PARTIALLY_SHIPPED | G1 SHIPPED / G2 ALLOCATED | NONE |
 | 全发 | SHIPPED | SHIPPED | SHIPPED×2 | NONE |
 | G1 收货 | SHIPPED | PARTIALLY_RECEIVED | G1 RECEIVED | NONE |
 | 全收 | COMPLETED | RECEIVED | RECEIVED×2 | NONE |
-| G2 退款（未发） | ALLOCATED | PARTIALLY_SHIPPED | G1 SHIPPED / G2 CANCELLED | G2 REFUNDED |
-| 全部退款（未发） | ALLOCATED | UNSHIPPED | CANCELLED×2 | REFUNDED×2 |
+| G2 退款中（未发，已关闭） | ALLOCATED | SHIPPED | G1 SHIPPED / G2 CANCELLED | G2 REFUNDING |
+| G2 退款完成（未发，已关闭） | ALLOCATED | SHIPPED | G1 SHIPPED / G2 CANCELLED | G2 REFUNDED |
+| G2 退款完成、G1 未发且未关闭 | PAID/ALLOCATED（取决于 G1 是否已创建运单） | UNSHIPPED | G1 ALLOCATED / G2 CANCELLED | G2 REFUNDED |
+| 全部退款（未发，未创建运单） | PAID | UNSHIPPED | CANCELLED×2 | REFUNDED×2 |
+| 全部退款（未发，已创建运单） | ALLOCATED | UNSHIPPED | CANCELLED×2 | REFUNDED×2 |
 | 全部退款（未发）对外展示 | — | — | — | **"已关闭（全部退款）"，不写 status** |
 
-> 注：G2 退款（未发）行的 `G2 REFUNDED` 表示其预留已由退款准入释放（§6.6.1），该释放合法，不构成 §6.6 禁止组合；订单生命周期仍为 ALLOCATED/PAID，G2 的退款态由 `refund_state` 表达。
+> 注 1（读模型口径，v1.5）：生命周期列是持久化 S1；`PAID→ALLOCATED` 由首组运单创建（发货授权）触发，`SHIPPED`/`COMPLETED` 由真实发货/收货事实触发；G2 的关闭/退款完成不写入 `orders.status`（§6.6.1/AC-25/INV-01）。未创建运单的“未发”行为 `PAID`，已创建运单为 `ALLOCATED`。本表以 2 组为例；3 组按剩余组聚合，不得把仍有未关闭组的订单期望为 `SHIPPED`。AC-27 的 G2 退款行按“G1 先发货、G2 后关闭”的时序；若 G1 的发货事件在 G2 关闭之后才到达，`orders.status` 可由该真实发货事件按 §7.1 推进，不属于退款写入。
+>
+> 注 2：`G2 CANCELLED` 是读模型派生值（由组状态/许可/组退款准入结果派生），不是持久化组 `status`；持久化组 `status` 可以仍为 `ALLOCATED`，持久化 `CANCELLED` 只由整单取消写入。`G2 REFUNDING` 只表示退款仍在途，不等于退款完成；组退款态 `refund_state` 是 S4（SPEC-0002 编号 S9），不参与关闭谓词（AC-27A）。
+>
+> 注 3：G2 的预留是否已 `RELEASED` 由 Inventory 事实决定，不影响本表投影；`reservation_state=HELD` 不阻止关闭，不得由 Order 回写 `RELEASED`。多组订单当前不产生释放请求（P1/manual 已知缺口，台账登记）；AC-27/27A 不以 INV-44 完成为前提，释放证据归 Inventory 对账/台账，不得用 Order fixture 的 `RELEASED` 冒充；AC-27/27A PASS 不得反推 INV-44 已完成。G2 已关闭/已退款的组合按 §6.6/§6.6.1 合法，不构成 §6.6 的禁止组合。若出现组持久化 `CANCELLED` 与运单 `SHIPPED/RECEIVED` 并存，属数据异常，必须告警并人工核对，不得据此回滚履约（S6/S7）。
+>
+> 注 4：AC-26 适用于“G2 未发且未关闭（仍计划履约）”；AC-27/AC-27A 适用于“G2 已关闭”。同一组数据如 G2 已关闭，按 AC-27 判定，不得再套用 AC-26 的 `G2 ALLOCATED` 期望。
 
 ---
 
 ## 8. 异常分支穷举（每条都是验收项）
+
+> 状态/退款准入异常（`CONSUMED+无运单` 写路径、组退款准入结果不可核验、`PENDING_REMOTE` 永久悬挂、PRE 后真实/迟到 shipment 事件）见 §9 AC-27A 与 §16.2；本表不重复列入。
 
 | # | 场景 | 期望行为 | 严禁 |
 |---|---|---|---|
@@ -568,14 +589,60 @@ Then 订单生命周期只会是 7.1 的 6 个值；"全部退款"只能作为�
 Given 2 组订单，G1 发货、G2 未发
 Then 生命周期 ALLOCATED、履约投影 PARTIALLY_SHIPPED、G1 SHIPPED、G2 ALLOCATED
 
-**AC-27** 已退款未发组不卡住订单
-- WHEN 拆量订单的 G2 已退款完成且 G1 正常发货，THE SYSTEM SHALL 按 G1 的履约进度推进订单投影；
-  G2 不得使订单停留在 `ALLOCATED`，也不得阻塞 G1 发货。
-- WHILE G2 已退款完成（`refund_state=REFUNDED` 且许可 `REVOKED` 或运单 `CANCELLED`），
-  THE SYSTEM SHALL 保持订单生命周期为 `PAID/ALLOCATED/SHIPPED` 之一，并只通过 `refund_state`
-  表达 G2 的退款进度；不得把退款进度写入 `orders.status`。
-- WHEN G2 的预留已释放或运单已取消，THE SYSTEM SHALL 按 SPEC-0001 §6.6/§6.6.1 判定该组合合法，
-  不构成 §6.6 的禁止组合。
+**AC-27** 已退款/已关闭未发组不卡住订单（v1.5 读模型口径）
+- WHEN 拆量订单的 G2 已关闭（按 AC-27A；`refund_state` 可为 `NONE`/`REFUNDING`/`REFUNDED`）且 G1 正常发货，
+  THE SYSTEM SHALL 使 S2 读模型履约投影 `shipment_status` 按剩余组（排除已关闭组）的实际发货/收货进度聚合；
+  仅当除 G1 外其余组均已关闭（无其他未关闭组；例如 2 组订单）时，仅剩 G1 且 G1 已发货、尚未收货时，
+  `shipment_status` SHALL 为 `SHIPPED`，不得停留在 `PARTIALLY_SHIPPED`/`UNSHIPPED`；G1 已收货时 SHALL 为 `RECEIVED`；
+  G2 不得阻塞 G1 发货。IF 仍有其他未关闭组（如 3 组订单的 G3），THEN SHALL 按实际剩余组聚合
+  （例如 `PARTIALLY_SHIPPED`），不得错误期望 `SHIPPED`。
+- WHILE G2 已关闭（按 AC-27A），THE SYSTEM SHALL 保持持久化 `orders.status` 为其既有合法生命周期值
+  （`PAID`/`ALLOCATED`/`SHIPPED`/`COMPLETED`/`CANCELLED` 中其既有值；`PENDING_PAYMENT` 不适用——
+  AC-51/AC-65 在组准入前已 CAS 到 `CANCELLED`；后续由运单创建/发货/收货/取消事实推进不受本条限制），
+  并只通过 `refund_state`（S4；SPEC-0002 编号 S9）表达 G2 的退款进度；THE SYSTEM SHALL NOT 因 G2 的关闭或退款完成写入
+  `orders.status`，也不得写入 `REFUNDING`/`REFUNDED`/`CLOSED` 等退款态（§6.6.1/AC-25/INV-01）。
+- WHEN 未支付取消或 AC-51/AC-65 的 TCC 已捕获路径先把订单 CAS 为 `CANCELLED` 后再发生组关闭，
+  THE SYSTEM SHALL 允许 `orders.status=CANCELLED` 与组关闭共存，并保持 `CANCELLED`；不得因组关闭把
+  `CANCELLED` 改写为其他生命周期值，也不得写入退款态。
+- WHEN Inventory 已确认 G2 的预留释放，或 Fulfillment 已确认 G2 的运单取消（本 Spec 不要求 Order 观测/断言这些事实），
+  THE SYSTEM SHALL 按 §6.6/§6.6.1 判定该组合合法，不构成 §6.6 的禁止组合；该判定是规范层面的合法性结论，
+  不是 Order 读模型的可观察性要求；释放证据归 Inventory，运单证据归 Fulfillment。AC-27A 的关闭谓词不使用
+  `reservation_state` 或运单事实作为输入。
+- WHEN 同一测试数据中的 G2 仍为 `ALLOCATED` 且未关闭（仍计划履约），THE SYSTEM SHALL 按 AC-26 处理
+  （生命周期 `ALLOCATED`、履约投影 `PARTIALLY_SHIPPED`、G2 `ALLOCATED`）；AC-26 与 AC-27 的
+  适用边界是“G2 是否已关闭”，不是“G2 是否未发”。
+
+**AC-27A** 未离仓组的关闭谓词（pre-ship，EARS；新增子编号，不重编号既有 AC）
+- WHEN 订单读模型判定某履约组是否“已关闭”（该组不会再产生包裹），THE SYSTEM SHALL 按以下固定顺序判定，
+  且只使用 Order 自有持久事实（组投影状态、许可、组退款准入结果（RefundAdmission，owner=Order））：
+  1. 组不存在 → 未关闭；
+  2. 组持久化状态 = `CANCELLED` → 已关闭（持久化 `CANCELLED` 只由整单取消写入；退款撤许可只改 S5，不写 S3）；
+  3. 组持久化状态 ∈ {`SHIPPED`,`RECEIVED`} → 未关闭（离仓守卫；先于任何许可/退款事实）；
+  4. 许可 = `REVOKED` → 已关闭（AC-50 `NONE→REVOKED` 终态，INV-45；`refund_state`（S4；SPEC-0002 S9）不参与，`NONE/REFUNDING/REFUNDED` 均不改变此结论）；
+  5. 许可 = `CONSUMED` 且组退款准入结果 = `PRE_SHIP_REVOKED` → 已关闭（`refund_state` 不参与）；组退款准入结果是唯一持久载体（见本节末“证据载体与前置缺陷”），不得以运单事实或 `state` 代替；
+  6. 其他（含许可 `NONE`、组退款准入尚未收敛（`state=PENDING_REMOTE`）、`POST_SHIP_ALLOWED`、准入结果缺失/不可核验）→ 未关闭。
+- IF 许可 = `CONSUMED` 且组退款准入结果不是 `PRE_SHIP_REVOKED`（含缺失、`state=PENDING_REMOTE`、取消/探测结果未知），
+  THEN THE SYSTEM SHALL 保持该组未关闭并告警；不得要求 Order 读取/反推运单事实，不得在 AC-27A 读模型路径输出 AC-50 的写路径错误码。
+- IF 已关闭组随后出现 `SHIPPED/RECEIVED` 事实（含迟到/重复事件），THEN THE SYSTEM SHALL 先按第 3 条离仓守卫处理：
+  仅当该事实由 Order 的 S3 组投影收到 `shipment.shipped`/`shipment.received` 事件确认真实离仓时，
+  才允许读模型转为未关闭并告警（owner=Developer（Order 数据核对）/Fulfillment（S6 证据）；本 Spec 不要求 Order 直读运单表）；
+  该处理 SHALL NOT 改写已持久化的 `PRE_SHIP_REVOKED` 准入结果或许可终态：已打款按已离仓售后/对账处理，
+  未打款按新 `refund_id` 重新准入 `POST_SHIP_ALLOWED` 并保留原 PRE 审计；重复事件幂等；
+  无法判定（含重复/乱序/无事件证据）时转 §16.2 `AC-27-NOWB-01` 人工队列，不得把已关闭组重新打开，不得回滚收货事实。
+- IF 触发组退款完成的事件在 DLQ、发起方 AfterSales durable task 租约丢失或 AC-61 人工重放后仍无法收敛，
+  THEN THE SYSTEM SHALL 告警并提供 AC-61 的人工重放入口；owner=ops（重放）/Developer（AfterSales durable task 重试）；
+  人工处置前保持该组未关闭，不得写 PRE、不得关闭、不得打款。
+- WHILE `refund_state`（S4；SPEC-0002 S9）为 `NONE`/`REFUNDING`/`REFUNDED`，THE SYSTEM SHALL 只用它表达退款进度；
+  它不参与关闭谓词，三者均不改变第 4/5 条的关闭结论；pre-ship `REFUNDING` 不阻止已满足第 4/5 条的组关闭，
+  但不得把 `REFUNDING` 展示为“退款完成”。
+- WHEN 判定关闭，THE SYSTEM SHALL NOT 以 `reservation_state` 作为关闭依据；`reservation_state=RELEASED`
+  不是关闭的充分或必要条件，`HELD` 不阻止关闭；释放事实归 Inventory（INV-44），Order 不得写 `RELEASED`。
+- WHEN 判定关闭，THE SYSTEM SHALL 只使用 Order 自有的许可/组退款准入/组投影事实；运单/签收事实归 Fulfillment（S6），
+  Order 不得制造、回写或据以反推运单状态；运单 `CANCELLED` 只通过组退款准入结果代理进入。
+- WHEN 组已关闭，THE SYSTEM SHALL 只把它从 S2 履约投影的“剩余组”中排除，并保留 `orders.status`
+  的既有生命周期值；不得因关闭写入退款态。
+
+> **证据载体与前置缺陷（AC-27A 注，不是新 AC）**：组退款准入结果的唯一持久载体见 §16 V15-2（`order_refund_admissions.result`）；AC-27A 正文只使用业务事实。`result` 只允许 `PRE_SHIP_REVOKED`/`POST_SHIP_ALLOWED`，`state=PENDING_REMOTE` 是中间态、不等同于 PRE。`CONSUMED+无运单` 的写路径规则与修复前置见 §16.2 `AC-50-FIX-01`；未修前 AC-27 不得 AC-VERIFIED；存量无法证明由 AC-50 合法分支写入的 PRE 按 §16.2 `AC-27-NOWB-01` 一次性审计，审计结论未出前台账不得把该组标为已关闭/AC-VERIFIED，读模型告警。
 
 ### 知情与展示
 
@@ -694,6 +761,7 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | **v1.2（冻结）** | 2026-11-22 | 裁决 Architect P-01…P-18（逐条见第 15 节）：行优惠改为最大余数法、运费券只减运费、部分组运费按 `freight_share` 退、时限统一按小时并写明起点、申诉优先于自动确认、补发本期关闭、组号按 `warehouse_id`。新增 6.5.3 原因码/证据最小集、D-09/D-10、AC-34…38。影响：AC-03/04/14、6.4/6.5/6.6/6.8 |
 | **v1.3（冻结）** | 2026-11-23 | 限定 §6.6“已支付订单不得预留已释放”的适用对象为仍计划履约的组；新增 §6.6.1 组退款库存处置；AC-27 追加解释；修正 §7.1“已支付未发货可取消”的既有漂移；§7.5 增加 G2 退款备注。影响：INV-06 适用口径、INV-26/AC-27 组退款边界、§7.1/§7.5 状态投影；不删除/重编号任何 AC |
 | **v1.4（冻结）** | 2026-11-24 | 基线迁移：AC-27 由行首 Gherkin 步骤改为 EARS，业务语义不变；只覆盖 `refund_state=REFUNDED`（不把 `REFUNDING` 写进“已完成”）；不新增/删除/重编号 AC；登记 AC-27 台账复核。影响：仅 AC-27 语法；不改变 INV-01/06/26/38 与 §6.6/§6.6.1 |
+| **v1.5（已批准；QC delta 整改中）** | 2026-11-26 | 按 Director 2026-11-26 授权，澄清 AC-27 与 §6.6.1/AC-25 的冲突并裁决 AC-50 偏差：① AC-27 EARS-1 的“订单投影/推进/不得停留”限定为 S2 读模型 `shipment_status`，持久化 `orders.status` 不因组退款完成写入；② 新增 AC-27A 关闭谓词（`CANCELLED` / `permit=REVOKED` / `CONSUMED+组退款准入 PRE_SHIP_REVOKED`；post-ship 守卫优先；`refund_state`/`reservation_state`/运单事实不参与；pre-ship `REFUNDING` 可关闭但≠退款完成）；③ AC-50 `CONSUMED+无运单` 保持 `REFUND_ADMISSION_CONFLICT`+告警，写路径前置缺陷 `AC-50-FIX-01` 见 §16.2；④ 修正 §7.5:405/:409（v1.4 行号）与 §4.2/§6.6.1/§6.7/§7.1 读模型口径、§9 AC-27/AC-27A。影响：AC-27/§7.5 读模型口径；不改变 INV-01/AC-25/AC-26；不删除/重编号 AC；AC-50 仍按 SPEC-0002 v1.10。QC-PAY-SETTLE-01-SPEC-0001-V15 与 R2 复核后按 B-1/B-2/B-3、M-1…M-9、N-1…N-4 整改，见 §16.1；工作树 v1.5，不 commit |
 
 ---
 
@@ -711,10 +779,13 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | 甲方（业务） | 独立批准 SPEC-0001 v1.4：AC-27 EARS 基线迁移，业务语义不变 | 2026-11-24 |
 | Quality Checker | QC-14 `READY FOR HUMAN SPEC APPROVAL`；AC-27 仅语法迁移，无语义阻塞 | 2026-11-24 |
 | Product Owner | 原地升版 v1.4：仅替换 AC-27 为 EARS，更新 YAML/变更记录/批准记录；不修改其他正文 | 2026-11-24 |
+| 甲方（Director） | Director 2026-11-26 授权 PO 升版，QC delta 复核后实现：v1.5 仅澄清 AC-27/§7.5 读模型口径、新增 AC-27A 关闭谓词、裁决 AC-50 `CONSUMED+无运单` 偏差；不改变 INV-01/AC-25/AC-26，不删除/重编号 AC | 2026-11-26 |
+| Product Owner | 原地升版 v1.5：按上述授权改写 AC-27、新增 AC-27A、修正 §4.2/§6.6.1/§6.7/§7.1/§7.5、更新 YAML/变更记录/批准记录/裁决记录；未改 SPEC-0002/ADR/代码/台账 | 2026-11-26 |
+| Product Owner | 按 QC-PAY-SETTLE-01-SPEC-0001-V15 与 R2 修订 v1.5：关闭 B-1 读写路径拆分、B-2 `CANCELLED`、B-3 证据载体/前置缺陷、M-1…M-9、N-1…N-4；未改 SPEC-0002/ADR/代码/台账；未 commit；待 QC delta 复审 | 2026-11-26 |
 | System Architect | 已接收，产出 ADR-0005（accepted） | 2026-11-22 |
 | Developer | 实施中；偏差与待回写项见 [adr-0005-deviation-register.md](../implementation/adr-0005-deviation-register.md) | 2026-11-22 |
 
-交接顺序不可颠倒：`Spec.md`（本文件，已冻结）→ `ADR.md`（Architect）→ 代码与测试（Developer）→ 对照本文件第 4/5/8/9 节审查（Reviewer）。
+交接顺序不可颠倒：`Spec.md`（本文件，v1.5 已批准；QC delta 复核后实现）→ `ADR.md`（Architect）→ 代码与测试（Developer）→ 对照本文件第 4/5/8/9 节审查（Reviewer）。
 
 ---
 
@@ -742,3 +813,69 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | P-15 | 组号按业务优先级还是纯 ID | **`warehouse_id` 升序**，与优先级无关；生成后不可变 | 6.3、AC-38 |
 | P-16 | AUTO_T7 展示 | 统一"已自动确认收货（无物流轨迹）"，**绝不显示"已签收"** | 6.8、6.9、AC-37 |
 | P-17 | 库存变化后的新预览 | **同一响应返回完整重算方案**（结构+金额+运费），不允许只回 `retry_preview` | 6.6 |
+
+---
+
+## 16. v1.5 裁决记录（AC-27 投影口径 / 关闭谓词 / AC-50 `CONSUMED+无运单`）
+
+> 本节记录 v1.5 的业务裁决与依据；规范性条款以 §6.6/§6.6.1/§6.7/§7.5 与 §9 AC-27/AC-27A 为准。本节不定义实现；实现由 Architect 在 ADR 中设计并接受 AC 验收。本节可引代码/表列作为证据，不构成实现指令。
+
+| ID | 问题 | 裁决 | 依据 / 影响 |
+|---|---|---|---|
+| V15-1 | AC-27 EARS-1 的“订单投影”是持久化 `orders.status` 还是读模型？ | **S2 读模型 `shipment_status`**。持久化 `orders.status` 不因“组退款完成/组关闭”写入，仍只由运单创建（发货授权）/发货/收货/取消事实迁移；AC-27 的“推进/不得停留”限定为读模型；§6.6.1/AC-25/INV-01 不变。 | §6.6.1、§6.7、AC-25；[PAY-SETTLE-01-R0.3-selfcheck](../implementation/PAY-SETTLE-01-R0.3-selfcheck.md) §2.2；[QC-PAY-SETTLE-01-R0.3-AC27](../collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md) B-1。**未采纳**“允许持久化推进”：那将修改 §6.6.1/AC-25，属契约变更，不在 2026-11-26“澄清”授权内。 |
+| V15-2 | 未离仓组的关闭谓词是什么？ | 按 AC-27A 固定顺序：持久化 `CANCELLED`（仅整单取消）→ 已关闭；`SHIPPED/RECEIVED` → 未关闭（优先）；`permit=REVOKED` → 已关闭；`permit=CONSUMED` 且组退款准入结果 `PRE_SHIP_REVOKED` → 已关闭；其他 → 未关闭。`refund_state`（S4；SPEC-0002 S9）不参与；pre-ship `REFUNDING` 可关闭但≠退款完成；`reservation_state` 不参与；运单事实只通过组退款准入结果代理。唯一证据载体是 Order 自有的 `order_refund_admissions.result`；`result` 仅 `PRE_SHIP_REVOKED`/`POST_SHIP_ALLOWED`，`state=PENDING_REMOTE` 是中间态、不等同于 PRE。AC-27A 不包含 `CONSUMED+无运单` 的写路径错误码/告警字段。 | SPEC-0002 §4.5 AC-50、AC-48；INV-45；AC-62；QC B-2/M-5/M-7；ADR-0007 Rev 2.3 §5.2.3/§5.7。 |
+| V15-3 | AC-50 `CONSUMED` 且无运单：CONFLICT 还是 PRE？ | **保持 `REFUND_ADMISSION_CONFLICT` + 告警**（AC-50 现行口径），且仅在“未离仓、本次金额 = 整组退款金额”分支；部分金额先按 AC-50 返回 `PARTIAL_REFUND_REQUIRES_FULL_GROUP`。该分支是异常状态，不得写 `PRE_SHIP_REVOKED`、不得据此关闭组。写路径修复必须覆盖正金额/TCC/`system_zero`/legacy 全部来源；当前实现把“无运单行”映射为 PRE 属偏差。修复前需 Architect 对 ADR Rev 2.3 §5.3 `CancelIfCreatedReply` 做 additive amendment（新增可区分的“无运单”结果或等价字段），再由 Developer 修复；登记 `AC-50-FIX-01`（owner Developer，expiry 2026-12-31；未修前 AC-27 不得 AC-VERIFIED）。AC-27A 读模型不输出该错误码、不要求 Order 观测运单。 | SPEC-0002 AC-50/AC-48；ADR Rev 2.3 §5.3；`cancel_if_created.go:51-55`；`refund_admission.go:370-390,576-597`；QC B-1/B-2/B-3/M-4。 |
+| V15-4 | §7.5:405/:409（v1.4 行号）与 AC-27 冲突；与 AC-26 谁优先？ | §7.5 示例按 AC-27/AC-27A 修正：G2 已关闭且 G1 已发 → 生命周期 `ALLOCATED`（持久化，不因退款推进）、履约投影 `SHIPPED`、G2 `CANCELLED`/`REFUNDED`（或 `REFUNDING`）；未创建运单的“未发”行为 `PAID`，已创建运单为 `ALLOCATED`；本表以 2 组为例，3 组按剩余组聚合。AC-26 适用于 G2 未发且未关闭（仍计划履约）；AC-27 适用于 G2 已关闭；两者不冲突，按组是否关闭选择。 | AC-26、AC-27、§7.5；QC M-3/M-6/R-5。 |
+| V15-5 | 持久化 `orders.status` 的 `PAID→ALLOCATED` 到底由什么触发？ | **首组运单创建（发货授权）触发 `ALLOCATED`；真实发货（离仓）触发 `SHIPPED`**。运单建单（`shipment.created`）只是创建运单，不等于离仓；§7.1 图/注与 §7.5 的“未发”行按此口径修正。 | §7.1/§7.4/§7.5；代码事实 `consumer.go:58`、`fulfillment/service.go:155-200`；QC M-3。 |
+| V15-6 | 组持久化 `CANCELLED` 的写者是谁？ | **持久化 `CANCELLED` 只由整单取消写入；退款撤许可只改 S5（许可），不写 S3。** 读模型可把 AC-27A 关闭组派生展示为 `CANCELLED`，但不得回写持久化 S3；`effectiveGroupStatus` 类函数名只作 §16 证据，不进入规范性 AC。 | §4.1 S3、§7.2、AC-27A；代码事实 `fulfillment_groups.go:71-80`、`service.go:453-464,547-557`；QC M-2/M-7。 |
+
+### 16.1 QC delta 整改矩阵（QC-PAY-SETTLE-01-SPEC-0001-V15 / R2）
+
+| ID | 问题 | 处置 | 落点 / owner / expiry |
+|---|---|---|---|
+| B-1 | AC-27A “无运单事实”IF 把写路径错误码/告警写进读模型谓词，要求 Order 观测 S6，并覆盖 AC-50 PARTIAL 前置分支 | **关闭**：AC-27A 只读 Order 自有持久事实；删除读模型中的 `CONSUMED+无运单→CONFLICT`/告警字段；“无运单”归 AC-50 写路径（含 PARTIAL 前置），见 V15-3/§16.2 | AC-27A/§16 V15-3 |
+| B-2 | AC-27 EARS-2 生命周期枚举漏 `CANCELLED` | **关闭**：枚举补 `CANCELLED`，并新增“未支付取消/TCC 已捕获 → `CANCELLED` + 组关闭共存”EARS 与验收用例 | AC-27 |
+| B-3 | `CONSUMED+PRE` 无证据载体；`CONSUMED+无运单` 人工核对无终态/owner/期限 | **关闭（契约）/登记前置缺陷**：`order_refund_admissions.result` 为唯一载体；`AC-50-FIX-01` 与 `AC-27-NOWB-01` 见 §16.2（owner/expiry/未修前不得 AC-VERIFIED） | AC-27A 注/§16.2 |
+| M-1 | §4.2 用错 S9；`refund_state` 在 SPEC-0001 是 S4 | **关闭**：改为 `S5/S4（组退款态；SPEC-0002 S9）`；AC-27A/§16 统一 S4 | §4.2/AC-27A/§16 |
+| M-2 | 组持久化 `CANCELLED` 写者/读模型口径未统一 | **关闭**：S3 写者限定整单取消；退款只改 S5；读模型派生 `CANCELLED` 不回写 S3；迟到真实 `SHIPPED/RECEIVED` 按离仓守卫处理并告警 | §4.1/§7.2/AC-27A |
+| M-3 | §7.1 S1 迁移集合与 `shipment.created` 不符；全部退款行生命周期不确定 | **关闭**：`PAID→ALLOCATED` 改为首组运单创建（发货授权）；§7.5 拆分“未创建/已创建运单”的 `PAID`/`ALLOCATED` 行 | §7.1/§7.5/V15-5 |
+| M-4 | AC-50 修复漏 `system_zero`；ADR §5.3 枚举缺“无运单” | **关闭（登记前置）**：修复范围覆盖正金额/TCC/`system_zero`/legacy；ADR Rev 2.3 §5.3 additive amendment 先行；`AC-50-FIX-01` owner Developer，expiry 2026-12-31 | §16.2/V15-3 |
+| M-5 | EARS-3/§7.5 注 3 把释放/运单事实写成 Order 可判定义务；多组 INV-44 缺口 | **关闭（规范判定）**：EARS-3 改为 Inventory/Fulfillment 已确认事实的合法性判定，不要求 Order 观测；多组 INV-44 登记 `[DEFERRED]`，owner Lead/Reviewer，expiry 2026-12-31 | AC-27/§7.5 注 3/§16.2 |
+| M-6 | AC-27 EARS-1 未限定 2 组/仅剩一个剩余组，3 组误判 | **关闭**：WHEN 加“其余组均已关闭（无其他未关闭组）”；仍有未关闭组按剩余组聚合；§7.5 注 1 声明以 2 组为例 | AC-27/§7.5 注 1 |
+| M-7 | 术语越权：表列/函数名进入规范性 AC；`result`/`state` 混用 | **关闭**：AC 用“组退款准入结果（RefundAdmission）”；表列/函数名移到 §16/AC-27A 注；`PENDING_REMOTE` 明确为 `state` 中间态 | AC-27A/§16 |
+| M-8 | 准入永久不收敛无 owner/期限；AC-61 未引用 | **关闭（AC 规则）/登记残余**：AC-27A 增 DLQ/租约丢失/AC-61 重放 IF，owner=ops+AfterSales；`AC-27-LIVE-01` expiry 2026-12-31，未收口前 AC-27 不得 AC-VERIFIED | AC-27A/§16.2 |
+| M-9 | v1.5 未 commit，HEAD 前进，base/字节不可靠 head 定位 | **`[DEFERRED]`（交付绑定）**：Lead 单独 commit SPEC v1.5 或记录 blob；不得与 ADR r0.4 r3 混同一 change_id；Reviewer 记录 base/head/blob；owner Lead/PO，expiry 2026-12-31 | §16.3 |
+| T-1 | §16 行号引用陈旧 | **关闭**：改用章节/AC 引用，不再依赖 v1.4 行号 | §16 |
+| T-2 | SPEC-0002 的 v1.4 引用未列全 | **关闭**：§16.3 写明“全部 v1.4 引用” | §16.3 |
+| T-3 | AC-25/AC-26 仍为行首 Gherkin | **`[DEFERRED]`**：本轮未修订 AC-25/26；登记 EARS 迁移债，owner PO，expiry 2026-12-31 | §16.2 |
+| T-4 | §8 未新增本轮异常分支 | **关闭**：§8 首行指引 §9 AC-27A/§16.2 | §8 |
+| T-5 | §6.7 第 2 条暗示关闭以退款完成为前提 | **关闭**：改为“退款完成或 AC-27A 关闭谓词满足” | §6.7 |
+| N-1 | AC-27A 迟到 `SHIPPED/RECEIVED` 未定义与已持久化 PRE/许可/新 `refund_id` 的关系 | **关闭**：不得改写已持久化 PRE/许可；已打款按已离仓售后/对账；未打款按新 `refund_id` 重新准入 `POST_SHIP_ALLOWED` 并保留原 PRE 审计；“证实”仅指 S3 收到 `shipment.shipped/received`，重复幂等，无法判定转 `AC-27-NOWB-01` | AC-27A |
+| N-2 | AC-27 EARS-1“其余组均已关闭/已收货”对 3 组给出错误期望 | **关闭**：改为“除 G1 外其余组均已关闭（无其他未关闭组）”；3 组示例保留 `PARTIALLY_SHIPPED` | AC-27 |
+| N-3 | `AC-27-NOWB-01` 终态 ①/② 的 S6 owner 与 `FAILED_PERMANENT` 对齐 | **关闭**：①Fulfillment 提供/修复 S6 证据，ops 凭 Fulfillment 授权核对（Order 不写运单）；②申请保持可重试并由人工队列持有，仅人工放弃时按 AC-62 记 `FAILED_PERMANENT` 并取得 SPEC-0002 owner 书面口径 | §16.2 |
+| N-4 | owner 名称非 canonical；expiry 与 WIP waiver 同日 | **关闭**：owner 改为 `Developer（Order 数据核对）/ops（重放、跨服务数据）/Fulfillment（S6 证据）`；§16.2 注“2026-12-31 与 WIP waiver 同日，延期需重新裁决” | §16.2 |
+
+### 16.2 前置缺陷、人工处置与残余风险（owner / expiry）
+
+| ID | 事实/风险 | 阻断与终态 | owner | expiry |
+|---|---|---|---|---|
+| **AC-50-FIX-01** | `CONSUMED+无运单` 写路径把“无运单行”映射为 `CANCELLED`/PRE；零元路径 `decideZeroRefundResult` 同样；ADR §5.3 `CancelIfCreatedReply` 无“无运单”结果。**不变量**：`PRE_SHIP_REVOKED` 只能由 AC-50 合法未离仓分支写入；`CONSUMED+无运单` 必须返回 `REFUND_ADMISSION_CONFLICT`、不得写 PRE。 | **阻断**：不得写 PRE、不得据此关闭；AC-27 不得 AC-VERIFIED。**修复**：覆盖正金额/TCC/`system_zero`/legacy；ADR §5.3 先做 additive amendment；修复后按 AC-50 合法分支重放。 | Developer（Architect 先 amendment） | 2026-12-31 |
+| **AC-27-NOWB-01** | `CONSUMED+无运单` 人工核对无终态/owner | **阻断**：组保持未关闭；退款申请 `REFUND_ADMISSION_CONFLICT`；不写 PRE/不打款/不释放；其他组不受影响。**终态**：①由 Fulfillment 提供/修复 S6 运单取消证据，ops 凭 Fulfillment 授权核对（Order 不写运单），补齐后按 AC-50 合法分支重放→PRE→组关闭；②无法补齐→退款申请保持可重试并由人工队列持有，仅在人工放弃时按 AC-62 记 `FAILED_PERMANENT` 并取得 SPEC-0002 owner 书面口径；组保持未关闭并由人工队列持有（不新增状态字段）并告警，不得自动关闭/自动退款/恢复 permit。 | Developer（Order 数据核对）/ops（重放、跨服务数据）/Fulfillment（S6 证据） | 2026-12-31 |
+| **AC-27-LIVE-01** | `aftersale.completed` DLQ / AfterSales durable task 租约丢失导致 `PENDING_REMOTE` 永久不收敛 | **阻断**：保持未关闭并告警；提供 AC-61 人工重放入口。**终态**：重放收敛→PRE/关闭；重放仍冲突→转 `AC-27-NOWB-01` 人工队列，不得写 PRE/关闭/打款。 | ops（重放）/Developer（AfterSales durable task 重试） | 2026-12-31 |
+| **INV-44-MULTI-01** | 2 组订单当前不产生组级释放请求（`refund_release.go:182-186`）；Order 不可观测释放 | `[DEFERRED]` P1/manual 已知缺口；AC-27/27A PASS 不蕴含 INV-44 完成，不得用 Order fixture `RELEASED` 冒充；释放证据归 Inventory | Lead/Reviewer（台账） | 2026-12-31 |
+| **EARS-25/26-01** | AC-25/AC-26 仍为行首 Gherkin；本轮未修订 | `[DEFERRED]` EARS 迁移债；不影响 v1.5 的 AC-27/27A 判定 | PO | 2026-12-31 |
+
+> 注：以上前置缺陷/残余风险的 expiry `2026-12-31` 与 WIP waiver 到期同日；任何延期需重新裁决，Lead 在台账注明，不得默认续期。
+
+### 16.3 交付绑定与 SPEC-0002 同步
+
+- **v1.5 字节绑定**：v1.5 为工作树改动；Lead 必须在实现前单独 commit SPEC v1.5（`change_id`/`Actor`/`Reviewed-by`/`Tier` trailer）或在工作树/tasks 记录被审 blob；Reviewer 必须记录精确 base/head/blob。不得把 SPEC v1.5 与 ADR r0.4 r3 或其他 actor 的文档混在同一 change_id（M-9）。
+- **SPEC-0002 同步**：本 Spec 不改 SPEC-0002；其**全部** `v1.4` 引用（含 §依据、§11、§13/§14 等）需由 SPEC-0002 owner 在下次升版同步为 v1.5。AC-50 仍按 SPEC-0002 v1.10 执行。
+- **AC-27 收口前提**：`AC-50-FIX-01`、`AC-27-NOWB-01`、`AC-27-LIVE-01` 未关闭前，不得声称 AC-27 EARS-1/EARS-2 收敛，不得标 AC-VERIFIED；本 Spec 不声称 Release PASS/merge。
+
+### 16.4 下游影响（声明，不代写）
+
+- Architect：ADR-0007 Amd1 Addendum R0.3 的 R-2（在退款完成投影中写 `orders.status`）与 v1.5 的读模型口径冲突，必须撤销/改写；R-1 的关闭谓词必须按 AC-27A 对齐（含 `CONSUMED+无运单` 写路径拆分）；R-4 的“pre-ship `REFUNDING` 关闭”由 AC-27A 正式授权，但不得把 `REFUNDING` 展示为退款完成；ADR Rev 2.3 §5.3 `CancelIfCreatedReply` 需先做 additive amendment，ADR r03 的 `Spec-Ref` 在 v1.5 生效后改为 v1.5。
+- Developer：在 `AC-50-FIX-01`、`AC-27-NOWB-01`、`AC-27-LIVE-01` 未关闭前，不得声称 AC-27 EARS-1/EARS-2 收敛；AC-50 修正覆盖正金额/TCC/`system_zero`/legacy，且需 Lead 拆独立 `change_id` 走 L2（跨 Fulfillment/Order，超 R0.3-R1c `allowed_paths`）。
+- Reviewer：AC-27/AC-27A 必须分别登记 `ac-coverage.tsv` 行与证据；AC-REF ≠ AC-VERIFIED；记录精确 base/head/blob。
+- SPEC-0002 owner：全部 `v1.4` 引用同步为 v1.5；AC-50 仍按 v1.10 执行。

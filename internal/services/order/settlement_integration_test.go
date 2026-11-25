@@ -198,6 +198,11 @@ func orderTestDB(t *testing.T) *sql.DB {
 // applyOrderTestMigration executes a real migrations/order/*.sql file against
 // the test database. The C-05 files are plain statements (no DELIMITER blocks);
 // splitting on ";" lets database/sql run them without multiStatements=true.
+// Every statement runs on one dedicated connection because a migration may use
+// session state: order/0018 prepares a conditional ALTER (PREPARE/EXECUTE), and
+// database/sql would otherwise be free to route those statements to different
+// pooled sessions. The real runner reads the whole file with one mysql client,
+// so this keeps the test execution model equal to production.
 func applyOrderTestMigration(t *testing.T, db *sql.DB, name string) {
 	t.Helper()
 	path := filepath.Join("..", "..", "..", "migrations", "order", name)
@@ -215,12 +220,18 @@ func applyOrderTestMigration(t *testing.T, db *sql.DB, name string) {
 		cleaned.WriteString(line)
 		cleaned.WriteString("\n")
 	}
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("open migration connection: %v", err)
+	}
+	defer conn.Close()
 	for _, statement := range strings.Split(cleaned.String(), ";") {
 		statement = strings.TrimSpace(statement)
 		if statement == "" {
 			continue
 		}
-		if _, err := db.Exec(statement); err != nil {
+		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			t.Fatalf("apply migration %s: %v\n%s", name, err, statement)
 		}
 	}

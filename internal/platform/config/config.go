@@ -63,13 +63,15 @@ type Config struct {
 	FulfillmentSettleConsumerMode string
 	// SettleReleaseApprovalID names the settlement_switch_approvals row that
 	// authorizes a settled request. Required when the requested mode is
-	// settled; Fulfillment verifies the row's target/status/expiry/range at
-	// startup (C-05/service), not in this package.
+	// settled; it must be empty for paid/shadow (N5). Fulfillment verifies the
+	// row's target/status/expiry/range at startup (C-05/service), not in this
+	// package.
 	SettleReleaseApprovalID string
-	// FulfillmentConsumeOrderSettled is the legacy boolean projection of
-	// FulfillmentSettleConsumerMode (true only for settled). It remains for
-	// the current fulfillment wiring until that wiring reads the mode enum.
-	FulfillmentConsumeOrderSettled bool
+	// SettleReleaseRange is this deployment's release range label
+	// (SETTLE_RELEASE_RANGE). It must be non-empty for shadow/settled and must
+	// exactly match the approval row's release_range; an empty default must
+	// never be accepted as a wildcard.
+	SettleReleaseRange string
 	// WarehouseAllocationShadow enables the checkout allocator dual-read. It
 	// never changes the quote or order; phase 2b wires warehouse quote lines.
 	WarehouseAllocationShadow bool
@@ -726,6 +728,9 @@ func applySettlementConsumerEnv(c *Config) error {
 	if v, ok := os.LookupEnv("SETTLE_RELEASE_APPROVAL_ID"); ok {
 		c.SettleReleaseApprovalID = strings.TrimSpace(v)
 	}
+	if v, ok := os.LookupEnv("SETTLE_RELEASE_RANGE"); ok {
+		c.SettleReleaseRange = strings.TrimSpace(v)
+	}
 	legacySet := false
 	legacySettled := false
 	if v, ok := os.LookupEnv("FULFILLMENT_CONSUME_ORDER_SETTLED"); ok && strings.TrimSpace(v) != "" {
@@ -755,13 +760,21 @@ func applySettlementConsumerEnv(c *Config) error {
 			return fmt.Errorf("FULFILLMENT_SETTLE_CONSUMER_MODE=%q conflicts with FULFILLMENT_CONSUME_ORDER_SETTLED=%t; unset the legacy switch", mode, legacySettled)
 		}
 	}
+	// N5: the approval id is meaningful only for an explicit settled request.
+	// It must never be used as a standalone switch for paid/shadow.
+	if mode != FulfillmentSettleConsumerSettled && c.SettleReleaseApprovalID != "" {
+		return fmt.Errorf("SETTLE_RELEASE_APPROVAL_ID must be empty when FULFILLMENT_SETTLE_CONSUMER_MODE=%s (N5)", mode)
+	}
 	if mode == FulfillmentSettleConsumerSettled && c.SettleReleaseApprovalID == "" {
 		return fmt.Errorf("SETTLE_RELEASE_APPROVAL_ID is required when FULFILLMENT_SETTLE_CONSUMER_MODE=%s", FulfillmentSettleConsumerSettled)
 	}
+	// shadow/settled are release-gated. An empty deployment range would make
+	// every approval row match by accident, so it is a startup error rather
+	// than a wildcard.
+	if (mode == FulfillmentSettleConsumerShadow || mode == FulfillmentSettleConsumerSettled) && c.SettleReleaseRange == "" {
+		return fmt.Errorf("SETTLE_RELEASE_RANGE is required when FULFILLMENT_SETTLE_CONSUMER_MODE=%s", mode)
+	}
 	c.FulfillmentSettleConsumerMode = mode
-	// The legacy field stays for the current wiring; shadow support belongs to
-	// the consumer switch and is not represented by this boolean.
-	c.FulfillmentConsumeOrderSettled = mode == FulfillmentSettleConsumerSettled
 	return nil
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -37,6 +38,36 @@ func main() {
 		os.Exit(1)
 	}
 	defer database.Close()
+	// R0.4b: validate the settlement switch before any worker/consumer is
+	// registered. Failure is fatal and must never fall back to paid.
+	approval, err := fulfillment.VerifySettlementSwitch(startupCtx, database, fulfillment.SettlementSwitchConfig{
+		Mode:         cfg.FulfillmentSettleConsumerMode,
+		ApprovalID:   cfg.SettleReleaseApprovalID,
+		ReleaseRange: cfg.SettleReleaseRange,
+	})
+	if err != nil {
+		var switchErr *fulfillment.SettlementSwitchError
+		if errors.As(err, &switchErr) {
+			logger.Error("settlement switch verification failed",
+				"mode", switchErr.Mode, "approval_id", switchErr.ApprovalID,
+				"reason", switchErr.Reason, "error", switchErr.Err)
+		} else {
+			logger.Error("settlement switch verification failed", "error", err)
+		}
+		os.Exit(1)
+	}
+	logger.Info("settlement switch verified",
+		"mode", cfg.FulfillmentSettleConsumerMode,
+		"approval_id", approval.ApprovalID,
+		"release_range", approval.ReleaseRange)
+	if cfg.FulfillmentSettleConsumerMode == config.FulfillmentSettleConsumerShadow {
+		// T4.4 (dual-consume, record/compare only) is not delivered yet. Running
+		// the paid consumer here would create shipments in shadow mode, so the
+		// only fail-closed choice is to refuse startup.
+		logger.Error("shadow settlement consumer is not implemented (T4.4); refusing to start instead of falling back to the paid path",
+			"mode", cfg.FulfillmentSettleConsumerMode)
+		os.Exit(1)
+	}
 	client, err := mq.Connect(cfg.NATSURL)
 	if err != nil {
 		logger.Error("connect nats", "error", err)
@@ -61,9 +92,10 @@ func main() {
 		CarrierRegistryEnabled:     cfg.CarrierRegistryEnabled,
 		DeliveryAutoConfirmEnabled: cfg.DeliveryAutoConfirmEnabled,
 	})
-	if cfg.FulfillmentConsumeOrderSettled {
+	switch cfg.FulfillmentSettleConsumerMode {
+	case config.FulfillmentSettleConsumerSettled:
 		workers.Go(func(ctx context.Context) { fulfillment.RunOrderSettledConsumer(ctx, client, svc, logger) })
-	} else {
+	default:
 		workers.Go(func(ctx context.Context) { fulfillment.RunOrderPaidConsumer(ctx, client, svc, logger) })
 	}
 	workers.Go(func(ctx context.Context) { fulfillment.RunAfterSaleRefundConsumer(ctx, client, svc, logger) })

@@ -70,3 +70,65 @@
 ## 5. 不声称
 
 不声称 OPS-P4 PASS / merge / Release PASS / AC-VERIFIED；AC-27/AC-61/62 的验收由 Reviewer 按 C+A waiver 与本 drill 证据决定；AC-27A 仍 AC-REF；工具路线（`cmd/ops`/`0024`/授权表/新 RPC）仍 WITHDRAWN，不得复活。
+
+---
+
+## 6. OPS-P5b test-only 收敛验证（code head `7b7beb5bf349865097f03813a34bafb15f034bc8`，base `5ef1b35`）
+
+Reviewer 未升级 AC-27 的两个原因（D1 合成 DLQ wrapper、D5 仅 CAS）由本节的真实 consumer/worker 用例收敛；只新增 `internal/services/order/ops_replay_convergence_test.go`，未改生产代码/迁移/deploy/frontend/specs/adr/台账。
+
+### 6.1 D1：真实 `aftersale.completed` consumer（真实 MySQL + JetStream）
+
+`TestOpsReplayAfterSaleCompletedConsumerConvergence`：
+
+- 真实 `RunAfterSaleConsumer`（`shop.aftersale.completed.v1` durable）在真实 MySQL 8.4.13 + NATS 2.10 JetStream 上消费真实 `events.AfterSaleCompleted` payload（不是手工 SQL 投影）。
+- 断言：组投影 `order_fulfillment_groups.refund_state` 从 `REFUNDING` **收敛到 `REFUNDED`**；`order_refund_admissions` 仍 `REVIEW_REQUIRED/PENDING_REMOTE`（事件不产生 PRE、不改变准入）；`orders.refunded_cent` 不变；无 `inventory.refund_release_requested` outbox。
+- 重复投递同 payload：组 `version` 不再递增（幂等），准入/金额/释放均不变。
+- 非法 JSON：consumer `Permanent` → `shop.aftersale.completed.v1.dlq`（脚本订阅计数 >0），组投影与准入不受影响（DLQ/乱序幂等）。
+- 使用每次运行唯一 `order_no/refund_id`，避免 JetStream 历史重放污染。
+
+### 6.2 D5：re-arm 后既有 TCC re-drive 到 PRE/POST
+
+`TestOpsReplayTCCRearmReDriveConvergence` / `TestOpsReplayTCCRearmPostConvergence`：
+
+- 先经既有 TCC 路径产生 `MANUAL_HOLD`，按 runbook 执行 audited re-arm（admission `REVIEW_REQUIRED→PENDING_REMOTE`、batch `MANUAL_HOLD→ADMITTING`，canonical `last_error` 保留）。
+- 再调用**既有** `TccCancelMarkPaid`（不新增入口）：
+  - 真实 `CANCELLED` → admission `PRE_SHIP_REVOKED/PRE_SHIP_REVOKED`，`RefundBatch` 恰好 1 次；再次调用不重复打款（batchCalls 仍 1）。
+  - 真实 `SHIPPED` 投影 → admission `POST_SHIP_ALLOWED/POST_SHIP_ALLOWED`（不是 PRE），`RefundBatch` 恰好 1 次。
+- 断言使用真实 order schema + 测试 Payment/Fulfillment port（既有 test doubles，非生产服务），无 release/无重复退款。
+
+### 6.3 命令与结果（HEAD `7b7beb5`）
+
+```bash
+TEST_MYSQL_DSN='.../mall_integration_p5b_order...' TEST_NATS_URL='nats://127.0.0.1:14225' \
+  go test ./internal/services/order -run 'TestOpsReplay' -count=1 -v      # 3 PASS, ok 3.539s
+TEST_MYSQL_DSN='.../mall_integration_p5b_order...' TEST_NATS_URL='nats://127.0.0.1:14225' \
+  go test -race ./internal/services/order -run 'TestOpsReplay' -count=1   # ok 4.642s
+```
+
+- 连续重跑 3 次稳定（唯一订单隔离 + 串行 consumer）；日志 `.tmp/evidence-ops-p5b/{HEAD.txt,tests.log,race.log}`。
+- 只跑 OPS-P5b 用例与 `-race`；未重跑 order 全包（无生产代码变化）。
+
+### 6.4 【测试范围】/【未覆盖范围】
+
+【测试范围】真实 order `aftersale.completed` consumer 的组投影收敛/重复/DLQ；真实 TCC `TccCancelMarkPaid` re-drive 的 PRE/POST 终态与单次打款；幂等与 `-race`。
+
+【未覆盖范围】
+
+- D1 的 admission 终态仍由 Order 准入决定；本测试证明事件**不会**自动把 REVIEW 转成 PRE（正确语义），不是“事件驱动 PRE”。
+- Trading 服务（AfterSales/Order/Payment）未作为独立进程运行：consumer 在 test 进程内、Payment/Fulfillment 为既有 test double；生产 gRPC/NATS 网络时序未覆盖。
+- UAT/prod/CI 未执行；真实 DLQ 由非法 payload 触发，未从既有 DLQ backlog 抽取历史 wrapper（OPS-P4 drill 已覆盖 wrapper 字节提取）。
+- 没有重放历史 `order.paid` placeholder 的跨服务路径（归 F7b `[BLOCKED]`，见 AC-50 selfcheck §14.1）。
+
+### 6.5 反妥协自检 / 影响声明
+
+- 并发/重复：重复事件/重复 TCC 调用均幂等；DLQ 非法事件不改状态；`-race` 通过。
+- 是否绕过架构：无生产代码改动；D1/D5 均调用现有 consumer/`TccCancelMarkPaid`，未新造收敛路径；未伪造 SQL 投影冒充 consumer。
+- 妥协（高亮）：① consumer 在 test 进程内、外部服务为既有 port double；② 未跑全包/CI；③ D1 验证“事件→组投影”与“不自动 PRE”，准入终态仍由准入路径负责。
+- `[修改点]`：新增 `internal/services/order/ops_replay_convergence_test.go`；本文档。
+- `[架构侵入性]`：无。
+- `[副作用评估]`：仅测试；不影响 OPS-P4 runbook/drill 与 AC-50 测试。
+
+### 6.6 不声称
+
+不声称 OPS-P5 PASS / AC-27 AC-VERIFIED / Release PASS；AC-27 的升级仍由 Reviewer 按 C+A waiver + 本收敛证据决定；AC-27A 仍 AC-REF。

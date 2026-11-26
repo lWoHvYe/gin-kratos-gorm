@@ -937,3 +937,253 @@ Alert rules and the 5-minute delivery are owned by `REVIEW-REQUIRED-ALERTS-01`
 (ops, expiry 2026-12-31); this runbook only provides the queries and the
 backend gauge values (`mall_refund_review_backlog`,
 `mall_refund_review_oldest_seconds`) that the alerts consume.
+
+## Manual ops runbook (PAY-OPS-REPLAY-01: DLQ replay + NOWB re-arm/abandon)
+
+> **Human residual signing (2026-11-27 C+A waiver, expiry 2026-12-31).**
+> This procedure has **no cryptographic non-repudiation and no ops tool**:
+> `cmd/ops`, `0024`, an authorization table and new admin RPCs are withdrawn.
+> Compensating controls are personal named DBA accounts, dual control, a
+> change ticket, DB audit logs and independent Reviewer verification. Do not
+> claim AC-62 “technical closure”, “the tool exists” or non-repudiation.
+> Waiver scope is `AC-27-NOWB-01` / `AC-27-LIVE-01` only; **AC-27A stays
+> AC-REF**, and AC-61/62 are not fully verified by this runbook. AC-27 may be
+> marked AC-VERIFIED only after the D1–D11 drill in
+> `scripts/drill-ops-replay.sh` plus the Reviewer's evidence.
+>
+> Nothing here authorizes automatic re-arm, automatic release, automatic
+> group closure, permit restore or a second refund.
+
+### Roles and change authorization
+
+| Field | Rule |
+|---|---|
+| `authorization_id` | Change-ticket id. **Not** `ticket=RVW:<id>`; ticket alone is never authorization. |
+| `action` | `REPLAY`, `NOWB_REARM`, `NOWB_ABANDON`. |
+| identifiers | `refund_id` / `after_sale_no` / `order_no` / `group_no` / `batch_id` where applicable; all must match the located rows. |
+| `amount_cent` | Positive integer. `>= 100000` (¥1000) requires a second reviewer. |
+| `operator` | Named DBA/ops admin user id (never a shared account). |
+| `authorizer` | Business admin; **different person from operator**. |
+| `reviewer` | Second reviewer for `>= 100000`; **different from authorizer** (and operator). |
+| `reason_code` | Structured reason (e.g. `CONSUMED_WITHOUT_SHIPMENT`). |
+| `evidence_ref` | S6 evidence (see re-arm); required for `NOWB_REARM`. |
+| `authorized_at` / `expires_at` | `expires_at` is **≤ 24h** after `authorized_at`; expired → reject. |
+| `ticket` | Must equal `RVW:<refund_id>`. |
+| `owner_approval_ref` | Required for `NOWB_ABANDON` (SPEC-0002 owner AC-62/D-24 written approval). |
+| `op_id` | Unique manual operation id; one change ticket, one executor. |
+
+Any missing/expired/unauthorized/same-person field → **stop, zero writes**. The
+Reviewer verifies the original ticket/approval source and the identity admin
+role snapshot; the ticket-reported fields are only auditable, not technically
+verified.
+
+### D1/D2 — locate and replay `aftersale.completed` (AC-61 / AC-27-LIVE-01)
+
+Replay only re-drives an unfinished projection; it never redoes a refund.
+
+1. Locate with at least one key (`after_sale_no`, `stream_seq`, `refund_id`,
+   `batch_id`/`payment_no`); if the key is not unique, stop.
+   ```bash
+   nats stream info MALL                      # 7-day retention
+   nats consumer info MALL fulfillment-refund-admitted
+   ```
+   DLQ subject: `shop.aftersale.completed.v1.dlq`; wrapper is
+   `{subject,data,error,attempts,failed_at}`.
+2. Read-only precheck: DLQ `stream_seq/subject/attempts/error`; Order
+   `order_refund_admissions.result/state/version`; AfterSales
+   `after_sale_refund_tasks.status/attempts/lease_*`; newest
+   `after_sale_logs.action`. `FAILED_PERMANENT` →
+   **`PERMANENT_REQUIRES_NEW_REFUND`**, never replay. `PENDING/PROCESSING`
+   with an expired lease → lease recovery (D3), not event replay. No DLQ
+   message / older than 7 days → stop; do not reconstruct from memory.
+   ```sql
+   SELECT refund_id, order_no, group_no, result, state, version
+     FROM order_refund_admissions WHERE refund_id = '<refund_id>';
+   SELECT after_sale_no, status, attempts, lease_owner, lease_until, last_error
+     FROM after_sale_refund_tasks WHERE after_sale_no = '<after_sale_no>';
+   ```
+3. Publish the original `data` bytes unchanged (never to `.dlq`):
+   ```bash
+   nats pub shop.aftersale.completed.v1 \
+     --header "Nats-Msg-Id: manual:<authorization_id>:<stream_seq>" \
+     --file <original-data.json>
+   ```
+4. The same `Nats-Msg-Id` is deduped by JetStream; re-publishing the same
+   `op_id` is safe and `applyAfterSaleCompleted` is idempotent. Observe the
+   Order projection; never write PRE/close/pay from this step.
+5. Audit: change ticket + structured ops log with
+   `op_id/authorization_id/stream_seq/subject/ticket`; if a task log row is
+   writable, `after_sale_logs('OPS_REPLAY', remark≤512)`. Reviewer compares
+   before/after snapshots.
+6. Failure: missing message → stop; publish failure → retry the same `op_id`
+   (no DB edits); still not converged → escalate to NOWB, do not fake closure.
+
+### D3 — lease lost / unfinished task (AC-61)
+
+The normal recovery is the worker tick (it re-claims `PENDING`/expired
+`PROCESSING`); prefer restarting/confirming the worker. Manual fallback only
+under the same authorization: lock the task, require
+`status IN ('PENDING','PROCESSING')` and a free/expired lease, then
+
+```sql
+START TRANSACTION;
+SELECT status, attempts, lease_owner, lease_until
+  FROM after_sale_refund_tasks WHERE after_sale_no = '<after_sale_no>' FOR UPDATE;
+UPDATE after_sale_refund_tasks
+   SET status = 'PENDING', attempts = 0, lease_owner = '', lease_until = NULL
+ WHERE after_sale_no = '<after_sale_no>'
+   AND status IN ('PENDING','PROCESSING')
+   AND (lease_until IS NULL OR lease_until < NOW(3));
+COMMIT;
+```
+
+Do not touch the admission/amount; keep `last_error` for audit (the worker
+clears it on success). `FAILED_PERMANENT` tasks are never replayed; use a new
+`refund_id` under AC-62. REVIEW tasks take the NOWB path below.
+
+### D5/D5b/D6/D10 — NOWB re-arm (AC-27-NOWB-01 terminal ①)
+
+**S6 evidence first.** Accept only Fulfillment-owned records for the exact
+`order_no` **and** `group_no`: a `shipments` row with `status='CANCELLED'`, a
+`shipment_events` CANCELLED row whose shipment belongs to the order, or an
+archived `shipment.cancelled`/carrier cancellation receipt. The Fulfillment
+authorizer signs the `order_no+group_no` evidence on the ticket and archives
+its id/query output; `evidence_ref` must name it. A `shipments` row alone is
+not group proof, and “it existed but was lost” is accepted only from those
+archives/events/receipts. No record → **stop and go to abandon**; never create
+a shipment row/event to manufacture evidence. A group mismatch (D5b/D10b) or
+a forged `authorization_id` → reject, zero writes.
+
+**Audit first, then two/three CAS.** Log the structured `review_rearm` event
+(authorization/op/ticket/refund/order/group/version/evidence/operator/
+authorizer/reviewer) before executing. Then, in one Order transaction:
+
+```sql
+SELECT result, state, version FROM order_refund_admissions
+ WHERE refund_id = '<refund_id>' FOR UPDATE;   -- must be REVIEW_REQUIRED/PENDING_REMOTE
+UPDATE order_refund_admissions
+   SET result = 'PENDING_REMOTE', version = version + 1, updated_at = NOW(3)
+ WHERE refund_id = '<refund_id>'
+   AND result = 'REVIEW_REQUIRED' AND state = 'PENDING_REMOTE'
+   AND version = <version_before>;               -- RowsAffected must be 1
+
+SELECT state, version, last_error FROM refund_batches
+ WHERE batch_id = '<batch_id>' FOR UPDATE;      -- must be MANUAL_HOLD
+UPDATE refund_batches
+   SET state = 'ADMITTING', version = version + 1, updated_at = NOW(3)
+ WHERE batch_id = '<batch_id>' AND state = 'MANUAL_HOLD'
+   AND version = <batch_version_before>;         -- RowsAffected must be 1
+```
+
+Keep `refund_batches.last_error` canonical; keep
+`refund_applications.admission_result='REVIEW_REQUIRED'` (waiting for
+re-evaluation) and do not create rows. With an AfterSales task, in one
+AfterSales transaction lock the task (must be `PENDING`/`PROCESSING` with a
+free/expired lease; `FAILED_PERMANENT` → reject), then
+`status='PENDING', attempts=0, lease_owner='', lease_until=NULL` while
+**keeping** the canonical `last_error`, and insert
+`after_sale_logs('OPS_NOWB_REARM', remark≤512)`. The task table has **no
+`version` column**; its third dimension is the row lock on
+`status+lease_owner+lease_until+attempts` — never invent a version.
+
+Drive the review again only through the existing entry: a task wakes the
+worker (5s tick), a TCC batch uses the existing `TccCancelMarkPaid`/DTM retry
+(no new RPC). No task and no application → `NO_REPLAY_DRIVER`; stop, never
+guess the source (`order_refund_admissions` has no source column). Still no
+waybill → `REVIEW_REQUIRED` again (`MANUAL_HOLD` batch, canonical task
+`last_error`); never write PRE/pay. Real `CANCELLED` converges to
+`PRE_SHIP_REVOKED`; real `SHIPPED` converges to `POST_SHIP_ALLOWED` (D6):
+a re-armed shipped group is never “PRE”.
+Crash recovery: if Order committed but the task was not reset, re-run and
+only do the task; if the task was reset but the worker did not run, wait or
+restart it; if TCC is `ADMITTING` but not driven, re-run the existing TCC
+entry; never repeat a CAS.
+
+### D7/D7b/D11 — NOWB abandon (AC-27-NOWB-01 terminal ②)
+
+This is **not** an AC-62 release: it stops automatic retries and leaves the
+liability, releases nothing, restores no permit, closes no group, writes no
+`DONE` and pays nothing.
+
+Ordinary after-sale (has task), one AfterSales transaction:
+
+```sql
+SELECT status, attempts, lease_owner, lease_until, last_error
+  FROM after_sale_refund_tasks WHERE after_sale_no = '<after_sale_no>' FOR UPDATE;
+UPDATE after_sale_refund_tasks
+   SET status = 'FAILED_PERMANENT', lease_owner = '', lease_until = NULL
+ WHERE after_sale_no = '<after_sale_no>'
+   AND status IN ('PENDING','PROCESSING')
+   AND (lease_until IS NULL OR lease_until < NOW(3));
+-- last_error stays canonical: REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>
+INSERT INTO after_sale_logs (after_sale_id, action, from_status, to_status, remark)
+SELECT id, 'OPS_NOWB_ABANDON', 'PENDING', 'FAILED_PERMANENT',
+       'authorization=<id> owner=<owner_approval_ref> ticket=RVW:<refund_id>'
+  FROM after_sales WHERE after_sale_no = '<after_sale_no>' LIMIT 1;
+COMMIT;
+```
+
+Never call the automatic permanent-failure path (it releases pending
+amount/quota), never edit `after_sale_amount_ledger`/`amount_state`.
+
+TCC (has `refund_applications`), one Order transaction:
+
+```sql
+UPDATE refund_applications
+   SET state = 'FAILED_PERMANENT', version = version + 1, updated_at = NOW(3)
+ WHERE refund_id = '<refund_id>' AND state = 'PENDING' AND version = <version_before>;
+```
+
+The batch stays `MANUAL_HOLD` with `last_error`; admission stays
+`REVIEW_REQUIRED/PENDING_REMOTE`; commitment stays `RESERVED`; permit keeps
+its value; the group is not closed. A normal TCC retry is rejected by
+`ensureTccApplicationTx` (`TCC_APP_ABANDONED`).
+Legacy with no task/application → `NO_TERMINAL_CARRIER`; do not create rows.
+
+**User initiates Refund again (D7b/D11).** There is no code guard: an explicit
+user `Refund` is a **new request** and may reopen a task. Ops must intercept it
+via the ticket/named-account procedure and route it through a **new** §5/§6
+review with a new/again-authorized change ticket; never auto-retry or
+auto-close, and never treat the abandon as “refunded/closed”. Abandon leaves
+the admission in REVIEW, so it still counts in the AC-72 backlog (the
+liability is real).
+
+### D8 — authorization and evidence rejections
+
+Reject with zero writes when: `authorization_id`/`op_id` missing; operator ==
+authorizer; `amount_cent >= 100000` without a reviewer or reviewer ==
+authorizer; `expires_at` in the past or >24h after `authorized_at`;
+`ticket != RVW:<refund_id>`; abandon without `owner_approval_ref`; re-arm
+without an S6 `evidence_ref` for the exact `order_no+group_no`; S6 not
+`CANCELLED` (or `SHIPPED` for the D6 POST mapping); forged/unverifiable
+authorization id. Record the rejection reason in the ticket; run the SQL
+snapshot before/after and show no row changed. The Reviewer must inspect the
+original authorization/owner document — ticket-reported ids are audit-only.
+
+### Audit, failure, rollback, forbidden
+
+- Audit: change ticket + structured ops log + `after_sale_logs` (when a task
+  exists) + Order admission/batch `version`/timestamps + DBA session log. The
+  admission row is never deleted; `created_at`/`version` are the trace.
+- Failure in production: stop, keep the current state and alert. Do not
+  auto-reverse a committed CAS, do not clear `last_error`, do not delete
+  admissions, and never restore a permit or release quota to “undo”. Forward
+  fix under a new ticket / new `refund_id`, or abandon under this runbook.
+- Concurrency/crash: one ticket, one executor; duplicate replay uses the same
+  `op_id`/`Nats-Msg-Id`; CAS losers read back and stop; after a crash re-run
+  only the missing step.
+- Forbidden: `cmd/ops`, `0024`, an authorization table, new admin RPCs, new
+  migrations/workers/automation; automatic re-arm/release/closure; treating
+  abandon as release; restoring permits; writing PRE/POST for a rejected
+  review; forging S6 records; using `ticket=RVW` as authorization; shared DBA
+  accounts; marking AC-VERIFIED without the drill + Reviewer evidence.
+
+### D1–D11 drill acceptance
+
+Run `./scripts/drill-ops-replay.sh` (disposable MySQL 8.4 + NATS 2.10
+JetStream + real migrations; never CI/production). It asserts D1–D11,
+including D5b/D10b wrong-group evidence, D7/D11 re-Refund non-reopen, D8
+forged/expired/same-person authorization, D9 concurrent CAS and the final
+invariants (0 duplicate refund rows, 0 release events, permit unchanged,
+`refunded_cent` unchanged). Exit 0 = all checks passed; any non-zero exit
+means stop and do not use this runbook in production until re-reviewed.

@@ -78,8 +78,8 @@ draft --提交--> in-review --甲方批准--> approved --被新版取代--> supe
 
 | 编号 | 标题 | 状态 | 版本 | 关联 ADR |
 |---|---|---|---|---|
-| [SPEC-0001](0001-fulfillment-quantity-split.md) | 多仓按数量拆行、选仓优先级与承运商签收 | approved | 1.4 | [ADR-0005](../adr/0005-fulfillment-quantity-split.md) |
-| [SPEC-0002](0002-payment-settlement-admission.md) | 支付结算与履约准入 | approved | 1.10 | [ADR-0007](../adr/0007-payment-settlement-admission.md) / [Amendment 1](../adr/0007-payment-settlement-admission-amd1.md) / [Zero after-sale addendum](../adr/0007-amd1-addendum-zero-after-sale.md) |
+| [SPEC-0001](0001-fulfillment-quantity-split.md) | 多仓按数量拆行、选仓优先级与承运商签收 | approved | 1.5 | [ADR-0005](../adr/0005-fulfillment-quantity-split.md) |
+| [SPEC-0002](0002-payment-settlement-admission.md) | 支付结算与履约准入 | approved | 1.11 | [ADR-0007](../adr/0007-payment-settlement-admission.md) / [Amendment 1](../adr/0007-payment-settlement-admission-amd1.md) / [Zero after-sale addendum](../adr/0007-amd1-addendum-zero-after-sale.md) |
 
 ---
 

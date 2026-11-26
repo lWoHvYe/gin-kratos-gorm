@@ -6,8 +6,8 @@
 
 | 编号 | 标题 | 状态 | 版本 | 文件 |
 |---|---|---|---|---|
-| SPEC-0001 | 多仓按数量拆行、选仓优先级与承运商签收 | approved | 1.4 | [0001-fulfillment-quantity-split.md](docs/specs/0001-fulfillment-quantity-split.md) |
-| SPEC-0002 | 支付结算与履约准入 | approved | 1.9 | [0002-payment-settlement-admission.md](docs/specs/0002-payment-settlement-admission.md) |
+| SPEC-0001 | 多仓按数量拆行、选仓优先级与承运商签收 | approved | 1.5 | [0001-fulfillment-quantity-split.md](docs/specs/0001-fulfillment-quantity-split.md) |
+| SPEC-0002 | 支付结算与履约准入 | approved | 1.11 | [0002-payment-settlement-admission.md](docs/specs/0002-payment-settlement-admission.md) |
 
 ## 新增 Spec 的命名规则
 
@@ -33,5 +33,5 @@ Developer 在 ADR 获批前不得开工。
 
 - 长期记忆与项目状态：[docs/po/MEMORY.md](docs/po/MEMORY.md)
 - 未立项需求池：[docs/po/backlog.md](docs/po/backlog.md)
-- 与 Architect 的线程台账：[docs/collab/po-architect/threads.md](docs/collab/po-architect/threads.md)
+- 跨角色裁决与冻结记录（唯一运行状态台账）：[docs/review-tracking.md](docs/review-tracking.md)
 - **协作执行细则（全员必读）**：[docs/collab/CONVENTIONS.md](docs/collab/CONVENTIONS.md)

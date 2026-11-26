@@ -17,7 +17,7 @@ adr: [0005]               # Architect 出稿后回填
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.5（已批准；QC delta 复核整改中，未 commit） |
+| 版本 | v1.5（已批准；QC delta 复核整改中） |
 | 日期 | 2026-11-26（v1.5：AC-27 读模型口径 + AC-27A 关闭谓词 + AC-50 `CONSUMED+无运单` 裁决） |
 | 状态 | **已批准**：甲方 2026-11-22 批准 v1.0；v1.1、v1.2、v1.3、v1.4 为回写裁决；v1.5 于 2026-11-26 经 Director 授权 PO 升版，QC delta 复核后实现（见第 13、14、16 节） |
 | 作者 | Product Owner |
@@ -761,7 +761,7 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | **v1.2（冻结）** | 2026-11-22 | 裁决 Architect P-01…P-18（逐条见第 15 节）：行优惠改为最大余数法、运费券只减运费、部分组运费按 `freight_share` 退、时限统一按小时并写明起点、申诉优先于自动确认、补发本期关闭、组号按 `warehouse_id`。新增 6.5.3 原因码/证据最小集、D-09/D-10、AC-34…38。影响：AC-03/04/14、6.4/6.5/6.6/6.8 |
 | **v1.3（冻结）** | 2026-11-23 | 限定 §6.6“已支付订单不得预留已释放”的适用对象为仍计划履约的组；新增 §6.6.1 组退款库存处置；AC-27 追加解释；修正 §7.1“已支付未发货可取消”的既有漂移；§7.5 增加 G2 退款备注。影响：INV-06 适用口径、INV-26/AC-27 组退款边界、§7.1/§7.5 状态投影；不删除/重编号任何 AC |
 | **v1.4（冻结）** | 2026-11-24 | 基线迁移：AC-27 由行首 Gherkin 步骤改为 EARS，业务语义不变；只覆盖 `refund_state=REFUNDED`（不把 `REFUNDING` 写进“已完成”）；不新增/删除/重编号 AC；登记 AC-27 台账复核。影响：仅 AC-27 语法；不改变 INV-01/06/26/38 与 §6.6/§6.6.1 |
-| **v1.5（已批准；QC delta 整改中）** | 2026-11-26 | 按 Director 2026-11-26 授权，澄清 AC-27 与 §6.6.1/AC-25 的冲突并裁决 AC-50 偏差：① AC-27 EARS-1 的“订单投影/推进/不得停留”限定为 S2 读模型 `shipment_status`，持久化 `orders.status` 不因组退款完成写入；② 新增 AC-27A 关闭谓词（`CANCELLED` / `permit=REVOKED` / `CONSUMED+组退款准入 PRE_SHIP_REVOKED`；post-ship 守卫优先；`refund_state`/`reservation_state`/运单事实不参与；pre-ship `REFUNDING` 可关闭但≠退款完成）；③ AC-50 `CONSUMED+无运单` 保持 `REFUND_ADMISSION_CONFLICT`+告警，写路径前置缺陷 `AC-50-FIX-01` 见 §16.2；④ 修正 §7.5:405/:409（v1.4 行号）与 §4.2/§6.6.1/§6.7/§7.1 读模型口径、§9 AC-27/AC-27A。影响：AC-27/§7.5 读模型口径；不改变 INV-01/AC-25/AC-26；不删除/重编号 AC；AC-50 仍按 SPEC-0002 v1.10。QC-PAY-SETTLE-01-SPEC-0001-V15 与 R2 复核后按 B-1/B-2/B-3、M-1…M-9、N-1…N-4 整改，见 §16.1；工作树 v1.5，不 commit |
+| **v1.5（已批准；QC delta 整改中）** | 2026-11-26 | 按 Director 2026-11-26 授权，澄清 AC-27 与 §6.6.1/AC-25 的冲突并裁决 AC-50 偏差：① AC-27 EARS-1 的“订单投影/推进/不得停留”限定为 S2 读模型 `shipment_status`，持久化 `orders.status` 不因组退款完成写入；② 新增 AC-27A 关闭谓词（`CANCELLED` / `permit=REVOKED` / `CONSUMED+组退款准入 PRE_SHIP_REVOKED`；post-ship 守卫优先；`refund_state`/`reservation_state`/运单事实不参与；pre-ship `REFUNDING` 可关闭但≠退款完成）；③ AC-50 `CONSUMED+无运单` 保持 `REFUND_ADMISSION_CONFLICT`+告警，写路径前置缺陷 `AC-50-FIX-01` 见 §16.2；④ 修正 §7.5:405/:409（v1.4 行号）与 §4.2/§6.6.1/§6.7/§7.1 读模型口径、§9 AC-27/AC-27A。影响：AC-27/§7.5 读模型口径；不改变 INV-01/AC-25/AC-26；不删除/重编号 AC；AC-50 仍按 SPEC-0002 v1.10。QC-PAY-SETTLE-01-SPEC-0001-V15 与 R2 复核后按 B-1/B-2/B-3、M-1…M-9、N-1…N-4 整改，见 §16.1 |
 
 ---
 

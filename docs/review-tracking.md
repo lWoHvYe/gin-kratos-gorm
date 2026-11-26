@@ -455,6 +455,19 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 T5.0 audit verified; 4 P0 blockers
+
+- Reviewer `528fe5d`: audit acceptable baseline with corrections; `NOT RELEASE`.
+- Evidence-ready: AC-50/67/68. TEST-GAP 17. FEATURE-GAP corrected:
+  T2 = AC-40/60/63; T3 = AC-62/64; AC-61 = T5.3/ops.
+- **P0 blockers**: AC-39 (callback amount mismatch -> no full refund,
+  `payment/service.go:297-300`/`order/service.go:1341`); AC-41 (MarkPaid
+  Conflict, no non-effective refund, `order/service.go:604-612`); AC-57
+  (`ConfirmReceipt` does not reject `CREATED`, `fulfillment/delivery.go:386`);
+  AC-59 (no `EVENT_OUT_OF_ORDER`; audit citation too broad).
+- These must be fixed/tested before T5/P0 closure. T5.0 is not AC-VERIFIED.
+- Decision needed: fix blockers under parent + T5 test gaps vs T2/T3/T4 first.
+
 ### 2026-11-27 T5 start: evidence audit
 
 - Human: continue after Phase 0-R closure.

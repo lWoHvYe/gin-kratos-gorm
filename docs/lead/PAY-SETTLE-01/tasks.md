@@ -107,7 +107,12 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 
 ## Phase 5 — Evidence & Review
 
-- [ ] **T5.0** AC-39…68 证据审计：逐 AC 分类 EVIDENCE-READY / TEST-GAP / FEATURE-GAP（含 `文件:行号`、可跑命令），输出 `docs/implementation/PAY-SETTLE-01-T5-audit.md`（Owner: Developer + Reviewer；只读，不写码）（Owner: Reviewer + Developer；依赖: Phase 1–4）
+- [ ] **T5-B1** AC-39：回调金额≠pay_cent 必须全额退款/支付级处理（Owner: Developer）
+- [ ] **T5-B2** AC-41：非生效捕获必须退款/逐笔登记（Owner: Developer）
+- [ ] **T5-B3** AC-57：`ConfirmReceipt` 拒绝 `CREATED`（Owner: Developer）
+- [ ] **T5-B4** AC-59：`EVENT_OUT_OF_ORDER` 乱序拒绝（Owner: Developer）
+
+- [x] **T5.0** AC-39…68 证据审计：逐 AC 分类 EVIDENCE-READY / TEST-GAP / FEATURE-GAP（含 `文件:行号`、可跑命令），输出 `docs/implementation/PAY-SETTLE-01-T5-audit.md`（Owner: Developer + Reviewer；只读，不写码）（Owner: Reviewer + Developer；依赖: Phase 1–4）
 
 - [ ] **T5.1** 矩阵补 `evidence_path`；统一 `ac-coverage.tsv`（Reviewer Owner）；12 orphan 处置见 `evidence-matrix.md` §4（10 条进 T5、AC-62/64 为 T3 依赖）
 - [ ] **T5.2** `-race`：AC-41/45/46/50/51/54/56 + 退款准入 vs Ship

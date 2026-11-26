@@ -363,6 +363,20 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 PAY-AC50-REVIEW-01 Plan review: four roles READY
+
+- Plan/Tasks rewritten after the first review round: atomic tasks
+  (T0/T0b/T0c/T1a-e/T2a-c/T3/T4a-b/T5a-c/T6a-d/T7/T8), ADR §10 F/O/W
+  binding (incl. W13/O11d), per-task test file/command/expected/HEAD,
+  AC-72 three-part ledger, T5c ops runbook.
+- **Architect P1b READY** (R-1..R-6 closed; ADR 0.6 allows the selfcheck file,
+  `api/gen` only via `make proto`).
+- **QC P2c READY** (0 BLOCKER; 1 non-blocking TODO).
+- **Developer P3d READY** (commands/env/ops runbook closed).
+- **Reviewer P4b READY** (evidence paths/AC-72/tsv boundary; C-5 pending).
+- **ADR 0.6 errata: QC R9 READY (0 BLOCKER)**; needs human errata
+  `ADR_APPROVED` (C-5). Plan needs human **P5** approval. No code.
+
 ### 2026-11-26 human approval C-4: SPEC-0002 v1.11 + ADR AC-50 0.5
 
 - Director **approved** SPEC-0002 v1.11 (`SPEC_APPROVED`) and ADR-0007 AC-50

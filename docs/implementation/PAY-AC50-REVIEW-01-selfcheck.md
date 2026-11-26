@@ -360,3 +360,61 @@ TEST_MYSQL_DSN='.../mall_integration_t1_order...' \
 ### 12.5 不声称
 
 不声称实现 PASS / 重审 PASS / merge / Release PASS / AC-VERIFIED；T3/T4 BLOCKER 的修复待 Reviewer 重审绑定 HEAD `c097e98`；AC-50/69/70/71/72 仍 AC-REF；`PAY-SETTLE-01` 仍冻结。
+
+---
+
+## 13. T8 回归 + T7 证据输入（code head `3ce0d7d1cdc8bd36eb65db7cbe36e11736fedd62`）
+
+> 真实 MySQL **8.4.13**（disposable `mysql:8.4` @127.0.0.1:13336；每包独立 schema：`mall_integration_t8_{order,ff,as}`）。无 SKIP/FAIL；`ac-coverage.tsv` 仍由 Reviewer 更新，Developer 不写台账。
+
+### 13.1 T8 命令、范围与结果（HEAD `3ce0d7d`）
+
+| # | 包 / 命令 | 覆盖 | 结果 |
+|---|---|---|---|
+| 1 | `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestAC25\|TestAC27\|TestT17\|TestTCCReview\|TestAC50Review' -count=1 -v` | AC-25/27、T17、TCC review、AC-50/69/70/71/72 主链 | **38 PASS / 0 FAIL / 0 SKIP**，`ok 33.780s` |
+| 2 | `TEST_MYSQL_DSN=$ORDER_DSN go test -race ./internal/services/order -run 'TestAC25\|TestAC27\|TestT17\|TestTCCReview\|TestAC50Review' -count=1 -v` | 同 1，`-race` | **38 PASS**，`ok 27.585s` |
+| 3 | `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestAdmitRefund\|TestZeroApplicationCheckConstraint\|TestRefundRelease' -count=1 -v` | INV-44/45/50 回归（release/零元/准入）+ TCC 关键 | **20 PASS**，`ok 21.367s` |
+| 4 | `TEST_MYSQL_DSN=$AS_DSN go test ./internal/services/aftersales -run 'TestAC14\|TestAC31\|TestAC32\|TestZero\|TestReview' -count=1 -v` | AC-14/31/32、零元、售后复核镜像 | **16 PASS**，`ok 15.067s` |
+| 5 | `TEST_MYSQL_DSN=$AS_DSN go test -race ./internal/services/aftersales -run 'TestAC14\|TestAC31\|TestAC32\|TestZero\|TestReview' -count=1` | 同 4，`-race` | **16 PASS**，`ok 9.759s` |
+| 6 | `TEST_MYSQL_DSN=$FF_DSN go test ./internal/services/fulfillment -run 'TestAC21\|TestCancelIfCreated' -count=1 -v` | AC-21、CancelIfCreated F1/F1b/F2–F6/F8 | **4 PASS**，`ok 2.899s` |
+| 7 | `go test ./internal/platform/metrics -count=1 -v` | AC-72 gauge 注册 | **1 PASS**，`ok 0.086s` |
+
+- 原始日志：`.tmp/evidence-ac50-t8/{HEAD.txt,order-regression.log,order-race.log,order-inv.log,aftersales-regression.log,aftersales-race.log,fulfillment-regression.log,metrics.log}`；`HEAD.txt` = `3ce0d7d...`。
+- 关键 PASS 名单：AC-27 六个投影用例、AC-25、T17 六个（Σ/并发/崩溃/部分失败/legacy/shipped）、TCC review 三个（含 T3-R1 fresh gate）、AC-50 partial/zero/legacy/audit/race 全套；售后 4 个 Review + 12 个 AC-14/31/32/Zero；Fulfillment 3 个 CancelIfCreated + AC-21。
+
+### 13.2 T7 证据映射（建议值；Reviewer 定 status；Developer 不写 tsv）
+
+| AC/INV | test_type | evidence_path:line | test name | 建议 status（HEAD `3ce0d7d`） |
+|---|---|---|---|---|
+| AC-14 | MySQL | `internal/services/aftersales/settlement_integration_test.go:875` | `TestAC14FreightRefundSixScenarios` | AC-VERIFIED（维持；Reviewer 复核） |
+| AC-21 | MySQL | `internal/services/fulfillment/delivery_integration_test.go:397` | `TestAC21AutoConfirmT7` | AC-REF（“至少一次通知”仍未断言） |
+| AC-25 | MySQL+race | `internal/services/order/settlement_integration_test.go:355` | `TestAC25RefundProjectionKeepsLifecycle` | AC-REF（范围有限，非“任意退款场景”） |
+| AC-27 | unit+MySQL | `internal/services/order/warehouse_quote_test.go:125`；`ac27_projection_integration_test.go:16`；`ac27_projection_cancelled_test.go:10,36`；`ac27_projection_negative_test.go:9,42` | `TestAC27*` 6 个 | AC-REF（AC-27A 5/6、NOWB/LIVE 仍开） |
+| AC-31 | MySQL | `internal/services/aftersales/settlement_integration_test.go:1101` | `TestAC31FreightHoldTimeout` | AC-REF（168h/用户可见未断言） |
+| AC-32 | MySQL | `internal/services/aftersales/settlement_integration_test.go:1102` | `TestAC32FreightHoldTimeoutDefaultsToMerchant` | AC-REF（用户可见补退未断言） |
+| AC-50 | MySQL+race | `internal/services/order/ac50_review_integration_test.go:102,347,405,438,537,567`；`ac50_review_audit_fault_test.go:117` | `TestAC50Review*`、`TestAC50ReviewCrashReplayConverges` | AC-VERIFIED（本 L2 分支范围；Reviewer 定） |
+| AC-69 | MySQL+race | `ac50_review_integration_test.go:102,159,261`；`ac50_review_audit_fault_test.go:18`；`ac50_review_race_test.go:179`；`aftersales/review_task_integration_test.go:33,64` | `TestAC50ReviewMapping/ZeroNotPersisted/Replay`、`TestAC50ReviewAuditAndRearmRetention`、`TestAC50ReviewLateCancelDoesNotWash`、`TestReviewTask*` | AC-VERIFIED（后端；审计为 D-32 四载体，非行级历史） |
+| AC-70 | MySQL+race | `ac50_review_integration_test.go:203,347,374,405,438,469,510,537` | `TestAC50ReviewPartial*`/`Legacy*`/`WholeGroupProjectionShipped` | AC-VERIFIED（O4a–e/O5c/O10/O10b） |
+| AC-71 | MySQL+race | `order/tcc_review_integration_test.go:34,137,228`；`ac50_review_integration_test.go:640` | `TestTCCReviewManualHold/RearmResumes/FreshSourceGate`、`TestTCCReviewTx2BatchGateRollsBack` | AC-VERIFIED（O1b/W12/O16 + T3-R1 gate） |
+| AC-72 | MySQL+unit | `order/worker_test.go:14`；`platform/metrics/metrics_test.go:11`；`docs/ops.md`（Refund review queue） | `TestRefundReviewGauges`、`TestRefundReviewGaugesRegistered`、runbook | **部分**：后端段（metrics/SLA/对账）建议 AC-VERIFIED；告警/入口 DEFERRED（ALERTS-01/ENTRY-01），不得整体 VERIFIED |
+| INV-44 | MySQL+fault | `internal/services/order/refund_release_integration_test.go:142,244,279,303,341,374,395`；`migrations/order/0023_r04_checks_v2.sql`（R0.4 真实迁移） | `TestRefundReleaseSourceMapping`、`TestAdmitRefund*Release*` | AC-REF（多组释放 + missing-reservation metric DEFERRED） |
+| INV-45 | MySQL | `ac50_review_integration_test.go:102`（REVIEW 后 commitment RESERVED、无 release）；`refund_release_integration_test.go:279` | `TestAC50ReviewMapping`、`TestAdmitRefundPostDoesNotWriteReleaseOutbox` | AC-REF（T3 release writer 仍 DEFERRED） |
+| INV-46 | MySQL | `migrations/order/0022`（冻结）/`0023_r04_checks_v2.sql`；`order/r04_checks_integration_test.go` | `TestR04Checks*`（R0.4 证据） | DEFERRED（T2 writer/worker；CHECK 只是兜底） |
+| INV-47 | MySQL+race | `aftersales/settlement_integration_test.go:875,1101,1102`；`order/settlement_integration_test.go:355` | AC-14/31/32/25 | AC-REF（行级责任/补退 DEFERRED T3） |
+| INV-48 | MySQL+race+fault | `internal/services/order/t17_evidence_integration_test.go:26,83,204,306,371,442` | `TestT17SigmaMismatchWritesAuditAndNeverCallsPayment` 等 6 个 | AC-REF（未 AC-VERIFIED） |
+| INV-49 | — | ADR Rev 2.3 §12.3 / T4.4（未交付） | — | DEFERRED（T4.4，shadow 硬拒绝已证） |
+| INV-50 | MySQL | `aftersales/zero_refund_integration_test.go:497,182,562`；`order/refund_admission_integration_test.go:661`；`ac50_review_integration_test.go:159,567,597` | `TestZeroAfterSale*`、`TestAdmitRefundZero*`、`TestAC50ReviewZero*` | AC-REF（零元不调 Payment/DONE 已测；AC-72 零元单列待 T5 告警段） |
+
+- TCC/零元/legacy 回归：TCC review 3 个 + T1 既有 TCC 用例（T17）全绿；零元 aftersales/order 全绿；legacy T17 + AC-50 legacy（O10/O10b）全绿。
+- **建议 status 仅为 Developer 证据输入**；AC-VERIFIED、延期行、`ac-coverage.tsv` 由 Reviewer 按精确 HEAD 核对后写入。
+
+### 13.3 未覆盖/边界（T7 输入）
+
+- AC-72 的告警规则/5 分钟部署与用户入口/文案未交付（ALERTS-01/ENTRY-01），不得整体 AC-VERIFIED。
+- F7b 迟到 `order.paid` 真实 placeholder 未构造（见 §12.2）；W8 永久悬挂归 AC-27-LIVE-01。
+- AC-21/31/32/25 的既有限制（通知/用户可见/全场景）维持原 tsv reason，不因本次回归升级。
+- 本次只跑指定回归与 `-race` 子集；未重跑全仓 `make verify`，未跑 UAT/prod。
+
+### 13.4 结论
+
+T8 回归在真实 MySQL 8.4.13、独立 schema、精确 HEAD `3ce0d7d` 上 **0 FAIL / 0 SKIP**（order 38/38、order-inv 20/20、aftersales 16/16、fulfillment 4/4、metrics 1/1；`-race` order 38/38、aftersales 16/16）。T7 证据输入如上；不声称实现/Release PASS，`ac-coverage.tsv` 由 Reviewer 更新。

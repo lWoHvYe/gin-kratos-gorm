@@ -310,3 +310,53 @@ TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test -race ./internal/servi
 ### 11.9 不声称
 
 不声称实现 PASS / merge / Release PASS / AC-VERIFIED；AC-50/51/61/62/65/67/69/70/71/72 待 Reviewer 绑定证据；ALERTS-01/ENTRY-01/T5 完整公告与 T6 之外的 T2–T4 收口仍待 Reviewer；`PAY-SETTLE-01` 仍冻结。
+
+---
+
+## 12. Reviewer T3–T6 FAIL 修复（T3-R1/T3-R2；code head `c097e981d0fa45f166e5efc95b2fd783cfc5f8b7`，base `849cf78`）
+
+### 12.1 T3-R1 BLOCKER：fresh Tx1 REVIEW 绕过 T1c 持批门禁
+
+- **根因**：T1c 门禁只内联在 `writeAdmissionTx2`（Tx2）。fresh Tx1 的 REVIEW 路径（`refund_admission.go` 的 `result == refundReviewRequired` 分支）只写 admission + commitment 就 commit；`source=tcc` 的 partial-unclassifiable / legacy-unclassifiable 因此留下 batch `ADMITTING`、app 未镜像、无 `refund_batches.last_error`，`admitTccBatch` 只能返回泛化 `Unavailable`（违 AC-71/W12）。
+- **修法**：抽出唯一入口 `persistTCCReviewTx(ctx, tx, refundID, batchID, reason)`，Tx1 与 Tx2 **共用**：
+  - `refund_batches` → `MANUAL_HOLD` + canonical `last_error`（`REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`，1024 列 D-35 截断）；
+  - `refund_applications`（已存在行）→ `admission_result=REVIEW_REQUIRED`，state 保持 `PENDING`；
+  - 两条 UPDATE 均要求 `RowsAffected==1`；任一 0 行即报错并回滚整个事务（fresh Tx1 的 admission/commitment 一并回滚），**不得提交无人工持有的 REVIEW**；`source=tcc` 且 `batch_id` 为空同样 fail-closed。
+- **测试**（`TestTCCReviewFreshSourceGate`，真实 MySQL 8.4.13）：
+  - fresh `source=tcc` partial-unclassifiable：MANUAL_HOLD、canonical last_error（PARTIAL）、app PENDING/REVIEW、0 probe/0 payment；`admitTccBatch` 返回 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`，0 状态变化（W12）。
+  - fresh `source=tcc` legacy-unclassifiable：同上，reason=`LEGACY_SHIPMENT_UNKNOWN`。
+  - 0 行 batch 镜像（batch 预置 `PAYING`）：报 “batch state changed while persisting review”，admission/commitment 均未提交。
+  - preseed/Tx2 侧既有 O1b、T1c gate、O4d、O10 用例保持绿色（见 §9/§10）。
+
+### 12.2 T3-R2 证据/位置更正
+
+- **T6b 实际位置**：真实 NATS 用例是 `internal/services/fulfillment/review_consumer_integration_test.go::TestRefundAdmittedConsumerReviewAndDuplicate`（消费实现归属 Fulfillment），**不在** `internal/services/order/review_consumer_integration_test.go`；Plan 的文件路径按实际所有者落位，selfcheck §11.5 的说明以此为准。Order 侧无 auto-PRE 的 DB/NATS 无关断言在 `order/ac50_review_audit_fault_test.go::TestAC50ReviewConsumerNoAutoPre`。
+- **F7b 迟到 `order.paid` 真实 placeholder**：**[未覆盖]**。构造它需要 Fulfillment 的 `order.paid` settlement consumer 与 Order 双库/NATS 时序，本 L2 未改该生产 consumer；且 REVIEW 不产生终态 outbox 事件、Order 无 scanner，逻辑上不会自动转 PRE（由 `TestAC50ReviewConsumerNoAutoPre` 的 3 次 replay + 迟到 CANCELLED 断言覆盖）。W8 `PENDING_REMOTE` 永久悬挂归 `AC-27-LIVE-01`，不在本 L2。
+- **T5/T6 已 PASS 语义未改**：本次只改 `refund_admission.go` 的 review 持久化入口与新增 TCC 测试；metrics/worker/ops runbook/NATS 用例未改。
+
+### 12.3 命令与结果（HEAD `c097e98`）
+
+```bash
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' \
+  go test ./internal/services/order -run 'TestTCCReview|TestAC50Review' -count=1   # ok 34.369s
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' \
+  go test -race ./internal/services/order -run 'TestTCCReview' -count=1           # ok 6.606s
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' \
+  go test ./internal/services/order -count=1                                      # ok 202.838s
+```
+
+- 日志：`.tmp/evidence-ac50-t1t2/{HEAD-t3r.txt,t3r-targeted.log,t3r-race.log,t3r-order-full.log,t3r1-fresh.log}`。
+- 【测试范围】fresh/preseed TCC REVIEW 的 batch/app/admission 同事务门禁、canonical reason 两种、自动续跑 token、0 行回滚；order 全包与 `-race`。
+- 【未覆盖范围】见 §12.2；T5/T6 的 W8、告警/入口、gauge 多副本聚合维持 §11.7 的登记。
+
+### 12.4 反妥协自检 / 影响声明
+
+- 并发/部分成功：Tx1/Tx2 同门禁；0 行 fail-closed 回滚；batch_id 缺失 fail-closed；不写 outbox/release、不探针、不支付。
+- 是否绕过架构：未新增分支/状态；只抽公共函数，消除 Tx1/Tx2 两套实现（防止再次漂移）。
+- `[修改点]`：`refund_admission.go`（`persistTCCReviewTx` + Tx1/Tx2 调用）、`tcc_review_integration_test.go`（fresh gate 用例）。
+- `[架构侵入性]`：无新字段/表/迁移/RPC；复用 `MANUAL_HOLD` 与既有 `last_error`。
+- `[副作用评估]`：TCC fresh REVIEW 现在原子持批；若 batch/app 行缺失或状态不符，REVIEW 不落库（fail-closed），调用方得到可诊断错误而非泛化 `Unavailable`；非 TCC 的 aftersale/legacy REVIEW 路径不受影响。
+
+### 12.5 不声称
+
+不声称实现 PASS / 重审 PASS / merge / Release PASS / AC-VERIFIED；T3/T4 BLOCKER 的修复待 Reviewer 重审绑定 HEAD `c097e98`；AC-50/69/70/71/72 仍 AC-REF；`PAY-SETTLE-01` 仍冻结。

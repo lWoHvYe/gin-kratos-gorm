@@ -82,3 +82,67 @@ TEST_MYSQL_DSN='...' go test ./internal/services/order -count=1                 
 ## 6. 不声称
 
 不声称 T2 完成 / AC-60/63 AC-VERIFIED / Release PASS；T2.4/T2.5/T2.6、告警/入口、Payment 重复捕获登记仍待后续；`ac-coverage.tsv` 由 Reviewer 更新。
+
+---
+
+## 7. T2.4 + 零元 gate（code head `e6d8bf9a90117711351f26818ab4cd9c6836f8dc`，base `1e57c15`）
+
+| 项 | 值 |
+|---|---|
+| 状态 | **零元 gate 已修；T2.4 非 COMPENSATING 分支已实现；COMPENSATING→EXPIRED_REFUND `[BLOCKED]`** |
+| 改动 | `refund_admission.go`（零元 gate）、`legacy_resolution.go`（state）、`legacy_resolution_worker.go`（新）、`legacy_resolution_worker_test.go`（新）、`cmd/order/main.go`（wire worker）、`refund_admission_integration_test.go`（旧断言随 gate 修正） |
+| 未改 | 0019 字节/字段/迁移、T3/T4、T2.5/T2.6、台账 |
+
+### 7.1 零元 gate（MAJOR）
+
+`source=system_zero` 现在在 `admitZeroRefund` 之前检查 `settlement_payment_no`：
+- 历史零元（`pay_cent=0`、无任何 captured）→ 先 `ensureLegacyResolution` 写 `zero:<order_no>`，再走零元短路；
+- 零元有 captured → 队列/fail-closed `LEGACY_PAYMENT_UNRESOLVED`，**不写 zero、不写 REVIEW、不返回 `REFUND_ADMISSION_CONFLICT`**；
+- 已 `zero:` 的订单不重复调用 Payment list。
+测试：`TestLegacyZeroGateHistoricalOrder`、`TestLegacyZeroGateCapturedIntentIsNotZero`、`TestLegacyZeroGateDoesNotCallPaymentRefund`；旧 `TestAdmitRefundSystemZeroRejectsMismatchedFacts` 的 Payment 断言按新 gate 改为“不 get/不 refund”。
+
+### 7.2 T2.4 worker / RPC
+
+- `RunLegacyResolutionWorker`（`cmd/order/main.go` 已 wire，1 分钟）扫描 `OPEN/RESOLVING` 且 `expires_at<=NOW(3)`，先 30s lease claim（不改 state），再按 Payment intents/组投影：
+  - 无 captured + `pay_cent=0` → `EXPIRED_ZERO`（CAS 写 zero settlement）；
+  - 无 captured + `pay_cent>0` → `EXPIRED_FINANCE`（`FINANCE_HOLD`）；
+  - 有 captured + 任一 SHIPPED/RECEIVED/EXCEPTION+shipped_at → `EXPIRED_FINANCE`；
+  - 有 captured + 无离仓 → `COMPENSATING`（撤 `NONE` permit、对 `CONSUMED` + CREATED 调 `CancelIfCreated`）。
+- 终止 CAS 带 version/state 条件，终态不重开；`ResolveLegacyResolution` 实现现有 proto 的 manual `OPEN/RESOLVING→RESOLVED` + `settlement_payment_no` CAS + `resolution_id=lpr:<order>`；`Get/Resume` 返回视图；无新 RPC。
+- 测试：`TestLegacyExpiryBranches`（EXPIRED_ZERO/EXPIRED_FINANCE×2/COMPENSATING prefix/取消失败保持 COMPENSATING）、`TestLegacyManualResolveCASAndTerminalLock`、`TestLegacyTimerVsManualResolveCAS`。
+
+### 7.3 `[BLOCKED]` COMPENSATING→EXPIRED_REFUND
+
+ADR §4.4.3 第 4 步要求先完成 INV-44 释放，再 `Payment.Refund`，全部成功才 `EXPIRED_REFUND`。现有释放生产者的 source 是封闭枚举，仅接受 `tcc/system_zero/system_shortage/aftersale`：
+
+- `internal/services/order/refund_release.go:32-48`（`refundReleaseSource`）拒绝 `legacy_expired`（`REFUND_RELEASE_SOURCE_UNSUPPORTED`）；
+- `internal/platform/events/events.go:49-57` + `registry.go:200-205` 无 `legacy_expired` source/reason；
+- 不能改 T3（release/commitment）或 0019/新增字段；用其它 source 伪造或跳过释放均违反 INV-44 与审计。
+- **具体依赖**：Lead/Architect 裁决是否为 `legacy_expired` 增加 INV-44 source/reason（或另立 T3 释放流程）。在裁决前，worker 只完成补偿前缀并**保持 COMPENSATING**（不写 release、不调 Payment、不置 EXPIRED_REFUND），`processExpiredLegacyResolution` 返回 `errLegacyCompensationBlocked`；测试断言该行仍 COMPENSATING、permit 已 REVOKED、0 refund。
+- 因此 T2.4 **不能声称完成**；`EXPIRED_REFUND`、补偿成功、7 天 finance close、`REJECTED` 生产入口仍未交付（见 §7.4）。
+
+### 7.4 命令与结果（HEAD `e6d8bf9`）
+
+```bash
+TEST_MYSQL_DSN='.../mall_integration_t2_order...' \
+  go test ./internal/services/order -run 'TestLegacy|TestAdmitRefundSystemZero|TestZero' -count=1  # ok 27.419s
+TEST_MYSQL_DSN='...' go test -race ./internal/services/order -run 'TestLegacy' -count=1             # ok 20.396s
+TEST_MYSQL_DSN='...' go test ./internal/services/order -count=1                                     # ok 237.051s
+```
+- 日志 `.tmp/evidence-t2/{HEAD.txt,t24-all.log,t24-race.log,t24-order-full.log}`；无 SKIP/FAIL。
+
+### 7.5 【测试范围】/【未覆盖范围】
+
+【测试范围】零元历史 gate 两向；24h 的 EXPIRED_ZERO/EXPIRED_FINANCE（无捕获正/有捕获已离仓）；COMPENSATING 入口的 permit 撤销/CancelIfCreated；取消失败保持 COMPENSATING；manual Resolve CAS/终态不重开；timer vs manual 并发；`-race` + order 全包。
+
+【未覆盖范围】
+
+- **COMPENSATING 成功**（INV-44 释放 + Payment.Refund + `EXPIRED_REFUND`）因 source 契约 `[BLOCKED]`。
+- `EXPIRED_FINANCE` 7 天财务关闭、`REJECTED` 生产入口（无 RPC/命令，未实现）。
+- 真实 ticker 的 1 分钟调度未在测试中等待；直接调用 `processExpiredLegacyResolution`，lease/CAS 单测覆盖。
+- 队列 0023 等值 24h CHECK 仍由 R0.4 证据覆盖；T2.4 表由 0019 建。
+- T2.5 回填、T2.6 seq、Payment `payment_duplicate_captures` 实际登记仍未交付。
+
+### 7.6 不声称
+
+不声称 T2.4 完成 / AC-63 AC-VERIFIED / Release PASS；零元 gate MAJOR 已修，COMPENSATING 成功与 EXPIRED_REFUND 待 release source 契约裁决；`ac-coverage.tsv` 仍由 Reviewer 更新。

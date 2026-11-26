@@ -455,6 +455,21 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 human waiver: manual residual risks accepted
+
+- Scope: `PAY-OPS-REPLAY-01` / `AC-27-NOWB-01` / `AC-27-LIVE-01`; expiry
+  2026-12-31.
+- Director explicitly accepts the manual-procedure residuals:
+  1. S6 group proof relies on the Fulfillment authorizer signing/archiving
+     `order_no+group_no` evidence (shipments alone has no group_no).
+  2. No code guard against a user `Refund` reopening an abandoned task; ops
+     ticket/named-account procedure must intercept.
+  3. `authorization_id`/`owner_approval_ref` may be ticket-reported.
+  4. No technical non-repudiation; named accounts, dual control, tickets and
+     DBA audit compensate.
+- This waiver does not waive Release/merge or any other AC; runbook + drill +
+  Reviewer may mark AC-27 AC-VERIFIED per C+A.
+
 ### 2026-11-27 human waiver: manual ops procedure replaces tool entry
 
 - Scope: `PAY-OPS-REPLAY-01` / `AC-27-NOWB-01` / `AC-27-LIVE-01`.

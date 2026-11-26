@@ -75,9 +75,9 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
   - `TEST_MYSQL_DSN=$FF_DSN TEST_NATS_URL=nats://127.0.0.1:4222 go test ./internal/services/fulfillment -run 'TestRefundAdmittedConsumerReviewAndDuplicate' -count=1`
 - [ ] **T6d** re-arm 审计先于清（O16/O20/**W11/W13**）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestAC50ReviewRearm' -count=1`
-- [ ] **T7** 证据矩阵：修订 AC + AC-69…72（AC-72 三段）+ INV-51/52；Reviewer 写 tsv；`NOT RELEASE`；绑定 `<HEAD>`（Owner: Developer + Reviewer）
+- [x] **T7** 证据矩阵：修订 AC + AC-69…72（AC-72 三段）+ INV-51/52；Reviewer 写 tsv；`NOT RELEASE`；绑定 `<HEAD>`（Owner: Developer + Reviewer）
   - 证据：`docs/collab/ac-coverage.tsv` + `docs/implementation/PAY-AC50-REVIEW-01-selfcheck.md`；`git rev-parse HEAD`
-- [ ] **T8** 回归：AC-14/21/25/27/31/32、INV-44…50、TCC/零元/legacy；不改父状态（Owner: Developer + Reviewer）
+- [x] **T8** 回归：AC-14/21/25/27/31/32、INV-44…50、TCC/零元/legacy；不改父状态（Owner: Developer + Reviewer）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestAC25|TestAC27|TestT17' -count=1`
   - `TEST_MYSQL_DSN=$AS_DSN go test ./internal/services/aftersales -run 'TestAC14|TestAC31|TestAC32|TestZero' -count=1`
   - `TEST_MYSQL_DSN=$FF_DSN go test ./internal/services/fulfillment -run 'TestAC21' -count=1`
@@ -85,9 +85,9 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
 - [x] **T3-R1** fresh Tx1 与 Tx2 共用**唯一** REVIEW 持久化入口，应用 T1c 门禁（batch/app `RowsAffected`）；不得提交无人工持有的 REVIEW（Owner: Developer；证据: `source=tcc` partial/legacy + O4d/O10 + batch MANUAL_HOLD/app 镜像/last_error/token）
 - [ ] **T3-R2** 补 `source=tcc` partial/legacy 用例（O4d/O10、W12）；F7b/W8 残余在 T7 明示（Owner: Developer + Reviewer）
 
-- [ ] **T7-R1** F7b 迟到 `order.paid` 真实 placeholder（test-only；若不可构造，标 `[BLOCKED]` + 依赖证据）（Owner: Developer + Reviewer）
-- [ ] **T7-R2** TCC 1024 truncation + app 0 行/空 `batch_id` 独立 fail-closed 测试（Owner: Developer + Reviewer）
-- [ ] **T7-R3** unknown probe status 默认 `Unavailable`；O19 `refund_applications` 0 行、O1b 其他批隔离断言（Owner: Developer + Reviewer）
+- [x] **T7-R1** F7b 迟到 `order.paid` 真实 placeholder（test-only；若不可构造，标 `[BLOCKED]` + 依赖证据）（Owner: Developer + Reviewer）
+- [x] **T7-R2** TCC 1024 truncation + app 0 行/空 `batch_id` 独立 fail-closed 测试（Owner: Developer + Reviewer）
+- [x] **T7-R3** unknown probe status 默认 `Unavailable`；O19 `refund_applications` 0 行、O1b 其他批隔离断言（Owner: Developer + Reviewer）
 
 ## Phase 3 — 复审/交回
 

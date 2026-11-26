@@ -51,8 +51,10 @@
   `NOT RELEASE`. AC-50/69/70/71/72-backend AC-VERIFIED; AC-51/61/62/65/67
   AC-REF; AC-72 ALERTS/ENTRY DEFERRED. Residual: F7b late placeholder,
   W8=AC-27-LIVE-01, AC-21/25/31/32 limits.
-- **Handback**: `PAY-SETTLE-01` may resume R0.3-R1c (AC-27A 5/6) and the rest
-  of Phase 0-R; AC-27 remains AC-REF; no release/merge.
+- **L2 residuals complete**: T7-R1..R3 PASS (`91b7310`); F7b full-chain
+  `[BLOCKED]` accepted (no cross-service harness). **PAY-AC50-REVIEW-01 is
+  complete (scoped)**. `PAY-SETTLE-01` resumes R0.3-R1c (AC-27A 5/6) and the
+  rest of Phase 0-R; AC-27 remains AC-REF; no release/merge.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 

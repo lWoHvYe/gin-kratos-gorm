@@ -455,6 +455,18 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 L2 residual PASS; PAY-AC50-REVIEW-01 complete (scoped)
+
+- Reviewer `91b7310` (base `b731a9f`, head `d119894`, code `d90daf0`):
+  T7-R residual PASS; T0–T8 scoped PASS maintained; `NOT RELEASE`.
+  T7-R2/R3 PASS; F7b full-chain `[BLOCKED]` accepted (no cross-service
+  harness; static guard forbids single-test cross-service imports; no fixture
+  substitution), residual owner Lead/QA expiry 2026-12-31.
+- Ledger unchanged: AC-50/69/70/71/72-backend AC-VERIFIED; AC-51/61/62/65/67
+  AC-REF; AC-72 ALERTS/ENTRY DEFERRED; AC-27 AC-REF; AC-21/25/31/32 AC-REF.
+- **PAY-AC50-REVIEW-01 is complete (scoped)**: T0–T8 + T7-R; no deploy/merge/
+  Release. Parent `PAY-SETTLE-01` resumes R0.3-R1c (AC-27A 5/6) next.
+
 ### 2026-11-27 human direction: continue L2 residual hardening
 
 - Director: keep advancing `PAY-AC50-REVIEW-01`; return to paused

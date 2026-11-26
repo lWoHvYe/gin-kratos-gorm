@@ -38,24 +38,22 @@
   AC-REF** (AC-27A steps 5/6 not implemented; `AC-50-FIX-01`,
   `AC-27-NOWB-01`, `AC-27-LIVE-01` open). AC-14 now AC-VERIFIED; other
   regression ACs AC-REF; 12 orphan mapped to T5.x/T3.
-- **AC-50-FIX-01 impact analysis done; implementation still blocked**: PO
-  SPEC-0002 v1.11 (`REVIEW_REQUIRED`, `c2bca33`) + Architect DRAFT 0.4 +
-  impact analysis (`43bbe5a`). QC round 4 BLOCKED: after-sales has no
-  `refund_applications` row, zero-amount no-persist exception missing, review
-  audit retention conflicts with ADR §8.3. No code.
+- **AC-50-FIX-01 moved to a new L2**: `PAY-AC50-REVIEW-01`
+  (`docs/lead/PAY-AC50-REVIEW-01/plan.md`, `tasks.md`). **PAY-SETTLE-01 is
+  frozen**; AC-27 stays AC-REF. The new L2 starts with contract closure
+  (QC R4-B1/B2/B3 + majors -> QC round 5 -> human approvals), then the
+  five-party Plan review, and only then code.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 
 ## Open — next session first
 
-1. **Decide AC-50 scope**: close the three R4 blockers (after-sales row,
-   zero exception, audit retention) and get human `ADR_APPROVED` + a separate
-   Plan/change_id; or narrow to the PRE deviation to 2026-12-31. Then
-   implement (TCC legal result/MANUAL_HOLD, no CancelIfCreated for partial,
-   idempotency before GetIntent).
-2. **R0.3-R1c**: close `AC-50-FIX-01`, `AC-27-NOWB-01`, `AC-27-LIVE-01`;
-   then implement AC-27A steps 5/6 and re-review.
-3. **T5/AC-39…68** evidence; new AC-69…72 are DEFERRED and need ledger rows.
+1. **PAY-AC50-REVIEW-01 Phase 0**: close R4-B1/B2/B3 + 3 majors (PO/Architect),
+   QC round 5 READY, human SPEC/ADR approval; then Plan review (Architect/QC/
+   Developer/Reviewer) and human Plan approval. No code before that.
+2. **After L2 handback**: resume `PAY-SETTLE-01` R0.3-R1c (AC-27A steps 5/6)
+   and the rest of Phase 0-R (T2/T3/T4.4/T5).
+3. **T5/AC-39…68** evidence; AC-69…72 are DEFERRED and need ledger rows.
 4. Only after all of the above: P0 closure, then T2/T3/T4, then release
    decision. No P3/0012 in this thread.
 

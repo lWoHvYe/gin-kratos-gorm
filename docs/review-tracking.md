@@ -363,6 +363,19 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 change freeze: PAY-SETTLE-01 paused; PAY-AC50-REVIEW-01 opens
+
+- Director chose option (a): the AC-50 `CONSUMED+无运单` fix becomes an
+  **independent L2 change**, `change_id=PAY-AC50-REVIEW-01`
+  (Plan/Tasks: `docs/lead/PAY-AC50-REVIEW-01/`).
+- **PAY-SETTLE-01 remains frozen** (D-LC-5): no further managed code or
+  ledger state under the parent; AC-27 stays **AC-REF**; Phase 0-R stays open.
+- New L2 starts at **contract closure**: QC R4-B1/B2/B3 + 3 MAJOR (PO/Architect
+  -> QC round 5 -> human `SPEC_APPROVED`/`ADR_APPROVED`), then the five-party
+  Plan review and human Plan approval; **no code before that**.
+- One `change_id` at a time: PAY-SETTLE-01 resumes only after the L2 handback
+  (`L2-R3`, AC-27A steps 5/6). No merge/Release/P0 closure.
+
 ### 2026-11-26 SPEC-0002 v1.11 / ADR 0.4: QC round 4 BLOCKED
 
 - PO v1.11 (`c2bca33`, in-review) adds `REVIEW_REQUIRED`

@@ -11200,7 +11200,16 @@ func (x *CancelIfCreatedRequest) GetRefundId() string {
 
 type CancelIfCreatedReply struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// CANCELLED | ALREADY_SHIPPED | RECEIVED | TRANSIENT_ERROR
+	// CANCELLED | NO_WAYBILL | ALREADY_SHIPPED | RECEIVED | TRANSIENT_ERROR
+	// CANCELLED       = a real shipment row was CREATED->CANCELLED, or was already CANCELLED.
+	// NO_WAYBILL      = this (order_no, group_no[, shipment_no]) has no shipment row at all;
+	//                   nothing was cancelled and nothing was rolled back. A CONSUMED permit
+	//                   with a whole-group request maps to REVIEW_REQUIRED (manual review).
+	// ALREADY_SHIPPED = the parcel left the warehouse (SHIPPED, or EXCEPTION with shipped_at);
+	//                   never cancelled.
+	// RECEIVED        = the parcel was received; never cancelled.
+	// TRANSIENT_ERROR = ambiguous/unknown (incl. EXCEPTION without shipped_at); retry/manual,
+	//                   never treated as cancelled.
 	Status        string `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

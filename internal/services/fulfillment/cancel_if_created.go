@@ -10,6 +10,14 @@ import (
 	"gin-kratos-gorm/internal/platform/apperr"
 )
 
+// statusNoWaybill is the additive CancelIfCreated result for "this probe scope
+// (order_no, group_no[, shipment_no]) has no shipment row at all". It is not
+// CANCELLED: nothing was cancelled and nothing was rolled back, and it carries
+// no admission decision. The Order caller maps a CONSUMED permit with a
+// whole-group request to REVIEW_REQUIRED (SPEC-0002 v1.11 AC-50/AC-69/AC-70;
+// ADR-0007 Amd1 AC-50 Addendum 0.6 §2.1).
+const statusNoWaybill = "NO_WAYBILL"
+
 // CancelIfCreated is the refund-admission probe. It only cancels a CREATED
 // shipment; a shipment that already left the warehouse is reported back to the
 // caller and is never rolled back.
@@ -49,9 +57,11 @@ func (s *Service) CancelIfCreated(ctx context.Context, req *pb.CancelIfCreatedRe
 	query += ` FOR UPDATE`
 	err = tx.QueryRowContext(ctx, query, args...).Scan(&status, &exceptionState, &shippedAtUnix)
 	if errors.Is(err, sql.ErrNoRows) {
-		// No parcel exists: nothing to cancel. This is the "no shipment"
-		// branch of refund admission and is safe for the caller.
-		return &pb.CancelIfCreatedReply{Status: statusCancelled}, nil
+		// No parcel exists: nothing to cancel and no row may be created. The
+		// answer must stay distinguishable from a real CANCELLED row, because
+		// the caller's admission decision depends on it (CONSUMED + no waybill
+		// is not "pre-ship revoked"; it requires manual review).
+		return &pb.CancelIfCreatedReply{Status: statusNoWaybill}, nil
 	}
 	if err != nil {
 		return nil, apperr.Internal("load shipment for cancel", err)

@@ -17,6 +17,19 @@ const (
 	refundPending    = "PENDING_REMOTE"
 	topicRefundAdmit = "shop.order.refund_admitted.v1"
 
+	// refundReviewRequired is the bounded review decision (SPEC-0002 v1.11
+	// AC-69/AC-70; ADR-0007 Amd1 AC-50 Addendum 0.6 §3.1). It is NOT an
+	// admission result and NOT a terminal state: result=REVIEW_REQUIRED keeps
+	// state=PENDING_REMOTE.
+	refundReviewRequired = "REVIEW_REQUIRED"
+	// probeStatusNoWaybill mirrors the Fulfillment CancelIfCreated value. The
+	// Order caller must distinguish "no waybill row" from a real CANCELLED row;
+	// it never imports the fulfillment package (cross-service boundary).
+	probeStatusNoWaybill = "NO_WAYBILL"
+	// refundReasonConsumedWithoutShipment is one of the fixed AC-72 reasons.
+	refundReasonConsumedWithoutShipment = "CONSUMED_WITHOUT_SHIPMENT"
+	manualQueueNowb                     = "AC-27-NOWB-01"
+
 	// refundSourceSystemZero is the AC-67/AC-68 zero-amount after-sale source.
 	// It is the only source that takes the zero short-circuit; a zero-amount
 	// request from any other source keeps the pre-existing positive path.
@@ -122,6 +135,55 @@ func admissionReply(row *refundAdmissionRow) *pb.AdmitRefundReply {
 	}
 }
 
+// existingAdmissionClass is the single classifier for an already persisted
+// admission row (ADR R-4): terminal / review / pending / unknown. Every
+// existing-row decision goes through it so no caller role invents its own
+// if/else ladder.
+type existingAdmissionClass int
+
+const (
+	existingAdmissionNone existingAdmissionClass = iota
+	existingAdmissionTerminal
+	existingAdmissionReview
+	existingAdmissionPending
+	existingAdmissionUnknown
+)
+
+func classifyExistingAdmission(row *refundAdmissionRow) existingAdmissionClass {
+	if row == nil {
+		return existingAdmissionNone
+	}
+	if row.Result == refundReviewRequired {
+		if row.State == refundPending {
+			return existingAdmissionReview
+		}
+		return existingAdmissionUnknown
+	}
+	if row.State == row.Result && (row.Result == refundResultPre || row.Result == refundResultPost) {
+		return existingAdmissionTerminal
+	}
+	if row.State == refundPending {
+		return existingAdmissionPending
+	}
+	return existingAdmissionUnknown
+}
+
+func refundReviewTicket(refundID string) string { return "RVW:" + refundID }
+
+// refundReviewConflict is the stable REFUND_ADMISSION_CONFLICT for a
+// REVIEW_REQUIRED decision with structured (typed) details; callers must not
+// parse the message. The error code table is unchanged (AC-69/AC-72).
+func refundReviewConflict(row *refundAdmissionRow, reason string) *apperr.Error {
+	return apperr.Failed("REFUND_ADMISSION_CONFLICT: consumed permit without shipment; manual review required").
+		WithDetails(map[string]any{
+			"refund_id": row.RefundID, "order_no": row.OrderNo, "group_no": row.GroupNo,
+			"permit_state": permitConsumed, "probe_status": probeStatusNoWaybill,
+			"result": refundReviewRequired, "state": refundPending,
+			"reason": reason, "ticket": refundReviewTicket(row.RefundID),
+			"manual_queue": manualQueueNowb,
+		})
+}
+
 // AdmitRefund is the group-level refund admission described by ADR-0007. It
 // serializes admissions on the order row and the permit row, never moves money,
 // and is idempotent by refund_id. CONSUMED permits take the two-phase
@@ -154,6 +216,27 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	if strings.TrimSpace(req.GetSource()) == refundSourceSystemZero {
 		return s.admitZeroRefund(ctx, req, record, refundID, orderNo, groupNo)
 	}
+	// AC-69 boundedness: the persisted decision is read before any Payment read
+	// and before any remote probe. A REVIEW_REQUIRED row returns the same
+	// conflict; a terminal row returns its result without consulting Payment.
+	if existing, err := findRefundAdmission(ctx, s.db, refundID); err != nil {
+		return nil, apperr.Internal("load refund admission", err)
+	} else {
+		switch classifyExistingAdmission(existing) {
+		case existingAdmissionReview:
+			return nil, refundReviewConflict(existing, refundReasonConsumedWithoutShipment)
+		case existingAdmissionTerminal:
+			return admissionReply(existing), nil
+		case existingAdmissionPending:
+			return s.finishRemoteAdmission(ctx, existing, req.GetSource())
+		case existingAdmissionUnknown:
+			return nil, apperr.Conflict("refund admission has an illegal result/state combination").
+				WithDetails(map[string]any{
+					"refund_id": refundID, "result": existing.Result, "state": existing.State,
+				})
+		}
+	}
+
 	var captured, refunded int64
 	if strings.HasPrefix(record.SettlementPaymentNo, "zero:") {
 		// Zero-amount orders have no Payment intent; their captured amount is
@@ -173,15 +256,6 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 			return nil, apperr.Failed("effective payment has no captured amount")
 		}
 		captured, refunded = intent.GetCapturedCent(), intent.GetRefundedCent()
-	}
-
-	// Resume a two-phase admission after a crash before touching the permit.
-	if existing, err := findRefundAdmission(ctx, s.db, refundID); err != nil {
-		return nil, apperr.Internal("load refund admission", err)
-	} else if existing != nil && existing.State == refundPending {
-		return s.finishRemoteAdmission(ctx, existing, req.GetSource())
-	} else if existing != nil {
-		return admissionReply(existing), nil
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -204,10 +278,19 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		return nil, apperr.Internal("load refund admission under lock", err)
 	} else if existing != nil {
 		_ = tx.Rollback()
-		if existing.State == refundPending {
+		switch classifyExistingAdmission(existing) {
+		case existingAdmissionReview:
+			return nil, refundReviewConflict(existing, refundReasonConsumedWithoutShipment)
+		case existingAdmissionTerminal:
+			return admissionReply(existing), nil
+		case existingAdmissionPending:
 			return s.finishRemoteAdmission(ctx, existing, req.GetSource())
+		default:
+			return nil, apperr.Conflict("refund admission has an illegal result/state combination").
+				WithDetails(map[string]any{
+					"refund_id": refundID, "result": existing.Result, "state": existing.State,
+				})
 		}
-		return admissionReply(existing), nil
 	}
 	if err := ensureGroupExistsTx(ctx, tx, orderNo, groupNo); err != nil {
 		return nil, err
@@ -386,6 +469,19 @@ func (s *Service) decideZeroRefundResult(ctx context.Context, refundID, orderNo,
 			return refundResultPre, true, nil
 		case "ALREADY_SHIPPED", "RECEIVED":
 			return refundResultPost, true, nil
+		case probeStatusNoWaybill:
+			// AC-67/AC-69: a zero-amount conflict is never persisted. No Tx1,
+			// no admission/S19/DONE, no REVIEW_REQUIRED marker and no AC-72
+			// review back log entry. The caller returns this conflict before
+			// opening the single write transaction.
+			return "", false, apperr.Failed("REFUND_ADMISSION_CONFLICT: consumed permit without shipment; manual review required").
+				WithDetails(map[string]any{
+					"refund_id": refundID, "order_no": orderNo, "group_no": groupNo,
+					"permit_state": permitConsumed, "probe_status": probeStatusNoWaybill,
+					"review_persisted": false, "manual_queue": manualQueueNowb,
+					"reason": refundReasonConsumedWithoutShipment,
+					"ticket": refundReviewTicket(refundID),
+				})
 		default:
 			return "", false, apperr.Unavailable("shipment state is unknown; retry zero refund admission", nil)
 		}
@@ -573,38 +669,105 @@ func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissio
 	if err != nil {
 		return nil, apperr.Unavailable("cancel created shipment", err)
 	}
-	result := refundResultPre
 	switch reply.GetStatus() {
 	case "CANCELLED":
-		result = refundResultPre
+		// A real CANCELLED row is the only probe answer that may write PRE.
+		return s.writeAdmissionTx2(ctx, row, refundResultPre, refundResultPre, source)
 	case "ALREADY_SHIPPED", "RECEIVED":
-		result = refundResultPost
+		return s.writeAdmissionTx2(ctx, row, refundResultPost, refundResultPost, source)
+	case probeStatusNoWaybill:
+		// CONSUMED permit + no waybill row is not a legal AC-50 branch: persist
+		// the bounded review decision instead of guessing PRE/POST. state stays
+		// PENDING_REMOTE; no release, no terminal outbox, no Payment command.
+		return s.writeAdmissionTx2(ctx, row, refundReviewRequired, refundPending, source)
 	default:
+		// Unknown/future values stay retryable and can never become PRE.
 		return nil, apperr.Unavailable("shipment state is unknown; retry refund admission", nil)
 	}
+}
+
+// writeAdmissionTx2 applies one decided admission result with the mandatory
+// double-predicate CAS. The predicate makes a REVIEW_REQUIRED row immutable to
+// any automatic path (late probe / concurrent Tx2 / replay): such a row never
+// matches, so a late CANCELLED cannot wash the review into PRE. A losing Tx2
+// re-reads the persisted decision instead of writing its own outbox/release.
+// REVIEW_REQUIRED writes no outbox and no release; PRE/POST keep the existing
+// event/release behaviour.
+func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow, result, state, source string) (*pb.AdmitRefundReply, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, apperr.Internal("begin refund admission tx2", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `UPDATE order_refund_admissions
+	res, err := tx.ExecContext(ctx, `UPDATE order_refund_admissions
 		SET result = ?, state = ?, version = version + 1, updated_at = NOW(3)
-		WHERE refund_id = ?`, result, result, row.RefundID); err != nil {
+		WHERE refund_id = ? AND state = ? AND result <> ?`,
+		result, state, row.RefundID, refundPending, refundReviewRequired)
+	if err != nil {
 		return nil, apperr.Internal("update refund admission", err)
 	}
-	if err := appendRefundAdmitted(ctx, tx, row.RefundID, row.OrderNo, row.GroupNo, result, row.AmountCent, row.Version+1, result); err != nil {
-		return nil, err
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return nil, apperr.Internal("read refund admission rows affected", err)
+	}
+	if affected == 0 {
+		_ = tx.Rollback()
+		return s.readBackAdmissionTx2(ctx, row)
+	}
+	if result == refundResultPre || result == refundResultPost {
+		if err := appendRefundAdmitted(ctx, tx, row.RefundID, row.OrderNo, row.GroupNo, result, row.AmountCent, row.Version+1, state); err != nil {
+			return nil, err
+		}
 	}
 	if result == refundResultPre {
 		if err := s.appendRefundReleaseTx(ctx, tx, row.RefundID, row.OrderNo, row.GroupNo, source); err != nil {
 			return nil, err
 		}
 	}
+	if result == refundReviewRequired && s.log != nil {
+		s.log.Error("refund admission review required: consumed permit without shipment",
+			"refund_id", row.RefundID, "order_no", row.OrderNo, "group_no", row.GroupNo,
+			"source", source, "result", refundReviewRequired, "state", refundPending,
+			"reason", refundReasonConsumedWithoutShipment,
+			"ticket", refundReviewTicket(row.RefundID), "manual_queue", manualQueueNowb)
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, apperr.Internal("commit refund admission tx2", err)
 	}
-	row.Result, row.State, row.Version = result, result, row.Version+1
+	row.Result, row.State, row.Version = result, state, row.Version+1
+	if result == refundReviewRequired {
+		return nil, refundReviewConflict(row, refundReasonConsumedWithoutShipment)
+	}
 	return admissionReply(row), nil
+}
+
+// readBackAdmissionTx2 converges a Tx2 whose CAS matched no row. All zero-row
+// paths are read-only: no outbox and no release may be written (ADR §6 A8).
+func (s *Service) readBackAdmissionTx2(ctx context.Context, row *refundAdmissionRow) (*pb.AdmitRefundReply, error) {
+	persisted, err := findRefundAdmission(ctx, s.db, row.RefundID)
+	if err != nil {
+		return nil, apperr.Internal("reload refund admission after tx2", err)
+	}
+	switch classifyExistingAdmission(persisted) {
+	case existingAdmissionNone:
+		return nil, apperr.Conflict("admission disappeared during Tx2").
+			WithDetails(map[string]any{
+				"refund_id": row.RefundID, "order_no": row.OrderNo, "group_no": row.GroupNo,
+				"manual_queue": manualQueueNowb,
+			})
+	case existingAdmissionReview:
+		return nil, refundReviewConflict(persisted, refundReasonConsumedWithoutShipment)
+	case existingAdmissionTerminal:
+		return admissionReply(persisted), nil
+	case existingAdmissionPending:
+		return nil, apperr.Conflict("refund admission changed during Tx2; retry").
+			WithDetails(map[string]any{"refund_id": row.RefundID})
+	default:
+		return nil, apperr.Conflict("refund admission has an illegal result/state combination").
+			WithDetails(map[string]any{
+				"refund_id": row.RefundID, "result": persisted.Result, "state": persisted.State,
+			})
+	}
 }
 
 func appendRefundAdmitted(ctx context.Context, tx *sql.Tx, refundID, orderNo, groupNo, result string, amount, version int64, state string) error {

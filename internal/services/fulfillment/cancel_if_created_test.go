@@ -126,3 +126,75 @@ func TestCancelIfCreatedRefusesExceptionAfterShipment(t *testing.T) {
 		t.Fatalf("received status = %q, want RECEIVED", reply.GetStatus())
 	}
 }
+
+// AC-50 Addendum 0.6 R-1 (§2.1/§2.2): "no shipment row in this probe scope" is
+// a distinct answer, not CANCELLED. A real CANCELLED row keeps answering
+// CANCELLED, and the probe must never create a row for the missing case.
+func TestCancelIfCreatedNoWaybill(t *testing.T) {
+	db := fulfillmentTestDB(t)
+	svc := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	ctx := context.Background()
+
+	// F6: G2 has a real CREATED row; the G1 probe must not touch it.
+	if _, err := db.Exec(`INSERT INTO shipments (shipment_no, order_no, fulfillment_group_no, status)
+		VALUES ('SHIP-N1', 'ORD-N1', 'G2', 'CREATED')`); err != nil {
+		t.Fatal(err)
+	}
+
+	// F1: no row in the whole-group scope.
+	reply, err := svc.CancelIfCreated(ctx, &pb.CancelIfCreatedRequest{
+		OrderNo: "ORD-N1", GroupNo: "G1", RefundId: "R-N1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply.GetStatus() != statusNoWaybill {
+		t.Fatalf("no-row status = %q, want %q", reply.GetStatus(), statusNoWaybill)
+	}
+	var g1 int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM shipments WHERE order_no = 'ORD-N1' AND fulfillment_group_no = 'G1'`).Scan(&g1); err != nil {
+		t.Fatal(err)
+	}
+	if g1 != 0 {
+		t.Fatalf("no-row probe created %d shipment rows", g1)
+	}
+	var g2 string
+	if err := db.QueryRow(`SELECT status FROM shipments WHERE shipment_no = 'SHIP-N1'`).Scan(&g2); err != nil {
+		t.Fatal(err)
+	}
+	if g2 != statusCreated {
+		t.Fatalf("G1 probe mutated G2: %q", g2)
+	}
+
+	// F1b: shipment_no narrows the scope; a missing row is still NO_WAYBILL and
+	// must not cancel the sibling row of the same group.
+	reply, err = svc.CancelIfCreated(ctx, &pb.CancelIfCreatedRequest{
+		OrderNo: "ORD-N1", GroupNo: "G2", ShipmentNo: "SHIP-MISSING", RefundId: "R-N1b",
+	})
+	if err != nil || reply.GetStatus() != statusNoWaybill {
+		t.Fatalf("missing shipment_no = (%v, %v), want NO_WAYBILL", reply, err)
+	}
+	if err := db.QueryRow(`SELECT status FROM shipments WHERE shipment_no = 'SHIP-N1'`).Scan(&g2); err != nil {
+		t.Fatal(err)
+	}
+	if g2 != statusCreated {
+		t.Fatalf("narrow-scope probe mutated the sibling row: %q", g2)
+	}
+
+	// F2: the same row probed exactly is still CANCELLED (real fact).
+	reply, err = svc.CancelIfCreated(ctx, &pb.CancelIfCreatedRequest{
+		OrderNo: "ORD-N1", GroupNo: "G2", RefundId: "R-N1c",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply.GetStatus() != statusCancelled {
+		t.Fatalf("created row status = %q, want %q", reply.GetStatus(), statusCancelled)
+	}
+	if err := db.QueryRow(`SELECT status FROM shipments WHERE shipment_no = 'SHIP-N1'`).Scan(&g2); err != nil {
+		t.Fatal(err)
+	}
+	if g2 != statusCancelled {
+		t.Fatalf("created row not cancelled: %q", g2)
+	}
+}

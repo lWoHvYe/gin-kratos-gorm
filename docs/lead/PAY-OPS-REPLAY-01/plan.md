@@ -10,7 +10,7 @@
 | Spec-Ref | SPEC-0001 v1.5 §16.2 `AC-27-NOWB-01`/`AC-27-LIVE-01`；SPEC-0002 v1.11 AC-61/62；INV-45 |
 | 人类豁免 | 2026-11-27：工具入口豁免；人工 runbook + 双人复核 + 审计；disposable MySQL 8.4 演练 + Reviewer 后可标 AC-27 AC-VERIFIED；expiry 2026-12-31 |
 | 路线 | 撤回 `cmd/ops`/`ops_action_authorizations`/`0024`/新 RPC；只交付 runbook + drill 脚本/证据 |
-| allowed_paths | `docs/ops.md`（仅在既有 ops 文档内新增规程）、`scripts/drill-ops-replay.sh`（一次性演练，不接 CI/生产）、`docs/implementation/PAY-OPS-REPLAY-01-selfcheck.md`（证据） |
+| allowed_paths | `docs/ops.md`、`scripts/drill-ops-replay.sh`、`docs/implementation/PAY-OPS-REPLAY-01-selfcheck.md`；**test-only** `internal/services/{order,aftersales}/**_test.go`（仅用于 OPS-5 收敛验证，不改生产代码） |
 | forbidden_paths | `migrations/**`、`deploy/**`、`frontend/**`、`docs/specs/**`、`docs/adr/**`（实现阶段）、`docs/collab/**`、`docs/lead/**`、`internal/**`（不写业务代码）、`api/**`、accepted ADR 正文 |
 | baseline_impact | AC-27/27A、AC-61/62、INV-45；不改变任何成功路径/代码；不涉及 T2/T3/T4.4/T5 |
 | 回归 | L2 `PAY-AC50-REVIEW-01` T0–T8；AC-27/27A；AC-14/21/25/27/31/32 |

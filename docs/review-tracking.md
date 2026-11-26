@@ -455,6 +455,19 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 OPS-P4 PASS scoped; AC-27 AC-REF (convergence gap)
+
+- Reviewer `b1e8409`: OPS-P4 runbook/drill PASS scoped, `NOT RELEASE`.
+  Drill `5ef1b35` at HEAD `e3c68a2`: MySQL 8.4.13 + NATS 2.10.29,
+  EXIT=0 / 60 OK; D1–D11, wrong-group, re-Refund, forged/expired/same-person,
+  concurrency, zero duplicate/release/permit change PASS.
+- **AC-27 not upgraded**: D1 uses a synthetic DLQ wrapper (no real Order
+  `aftersale.completed` consumer); D5 only verifies re-arm CAS, not
+  worker/TCC re-drive to PRE/POST. Terminal ② abandon covered; ① and LIVE
+  convergence lack real assertions.
+- Minimal remaining: test-only convergence with existing consumer/worker
+  (no production code); owner Developer/ops/AfterSales, expiry 2026-12-31.
+
 ### 2026-11-27 human waiver: manual residual risks accepted
 
 - Scope: `PAY-OPS-REPLAY-01` / `AC-27-NOWB-01` / `AC-27-LIVE-01`; expiry

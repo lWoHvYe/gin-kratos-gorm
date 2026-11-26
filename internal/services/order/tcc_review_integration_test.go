@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -218,4 +219,107 @@ func tccVersionOfAdmission(t *testing.T, db *sql.DB, refundID string) int64 {
 		t.Fatal(err)
 	}
 	return version
+}
+
+// T3-R1 (Reviewer BLOCKER): a fresh Tx1 REVIEW reached from a TCC source must
+// apply the same T1c human-hold gate as Tx2. The batch goes MANUAL_HOLD, the
+// application is mirrored and the automatic resume returns the stable token;
+// if the mirror matches 0 rows the whole Tx1 rolls back.
+func TestTCCReviewFreshSourceGate(t *testing.T) {
+	ctx := context.Background()
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	ff := &fakeFulfillmentPort{status: "CANCELLED"}
+	svc := tccTestServiceWithFulfillment(t, db, payments, ff)
+
+	seed := func(orderNo, paymentNo, refundID, batchID string, amount int64, shipped, hasPermit bool) {
+		status := statusPaid
+		if shipped {
+			status = statusShipped
+		}
+		ac50SeedOrderStatus(t, db, orderNo, 10000, status)
+		if hasPermit {
+			ac50SeedPermit(t, db, orderNo, permitConsumed)
+		}
+		seedTccBatchRow(t, db, batchID, orderNo, paymentNo, refundBatchAdmitting)
+		seedTccApplicationRow(t, db, refundID, batchID, orderNo, "G1", refundApplicationPending, refundPending, amount, amount, 0)
+		if _, err := db.Exec(`UPDATE orders SET refund_state = ? WHERE order_no = ?`, refundStateRefunding, orderNo); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// source=tcc partial + unclassifiable projection (OD4/W10 through TCC).
+	refundID := tccGroupRefundID("PAY-TCC-FP", "G1")
+	seed("ORD-TCC-FP", "PAY-TCC-FP", refundID, "B-TCC-FP", 5000, true, true)
+	_, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: refundID, OrderNo: "ORD-TCC-FP", GroupNo: "G1",
+		AmountCent: 5000, Source: refundApplicationSourceTCC, BatchId: "B-TCC-FP",
+	})
+	ae := requireReviewDetails(t, err, refundID, refundReasonPartialUnclassifiable)
+	if got, _ := ae.Details["state"].(string); got != refundPending {
+		t.Fatalf("state = %q", got)
+	}
+	var batchState, lastError string
+	if err := db.QueryRow(`SELECT state, last_error FROM refund_batches WHERE batch_id = 'B-TCC-FP'`).
+		Scan(&batchState, &lastError); err != nil {
+		t.Fatal(err)
+	}
+	if batchState != refundBatchManualHold {
+		t.Fatalf("fresh partial TCC batch = %s, want MANUAL_HOLD", batchState)
+	}
+	if want := refundReviewCanonical(refundID, refundReasonPartialUnclassifiable, refundBatchLastErrorWidth); lastError != want {
+		t.Fatalf("batch last_error = %q, want %q", lastError, want)
+	}
+	appState, appResult, _, _, _ := loadTccApplication(t, ctx, db, refundID)
+	if appState != refundApplicationPending || appResult != refundReviewRequired {
+		t.Fatalf("application = %s/%s, want PENDING/REVIEW", appState, appResult)
+	}
+	if err := svc.admitTccBatch(ctx, "ORD-TCC-FP", "PAY-TCC-FP"); err == nil {
+		t.Fatal("automatic resume: expected TCC_BATCH_REQUIRES_MANUAL_HANDLING")
+	} else if got, _ := apperr.From(err).Details["tcc_error"].(string); got != tccErrBatchManual {
+		t.Fatalf("resume token = %q, want %q", got, tccErrBatchManual)
+	}
+	if ff.cancelCalls.Load() != 0 || len(payments.batchCalls) != 0 {
+		t.Fatalf("fresh partial TCC called probe/payment: cancel=%d batch=%d", ff.cancelCalls.Load(), len(payments.batchCalls))
+	}
+
+	// source=tcc legacy unclassifiable (no permit, no group row, order SHIPPED).
+	legacyID := tccGroupRefundID("PAY-TCC-FL", "G1")
+	seed("ORD-TCC-FL", "PAY-TCC-FL", legacyID, "B-TCC-FL", 10000, true, false)
+	_, err = svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: legacyID, OrderNo: "ORD-TCC-FL", GroupNo: "G1",
+		AmountCent: 10000, Source: refundApplicationSourceTCC, BatchId: "B-TCC-FL",
+	})
+	requireReviewDetails(t, err, legacyID, refundReasonLegacyShipmentUnknown)
+	if err := db.QueryRow(`SELECT state FROM refund_batches WHERE batch_id = 'B-TCC-FL'`).Scan(&batchState); err != nil {
+		t.Fatal(err)
+	}
+	if batchState != refundBatchManualHold {
+		t.Fatalf("fresh legacy TCC batch = %s, want MANUAL_HOLD", batchState)
+	}
+
+	// 0-row mirror gate: batch not ADMITTING -> no REVIEW admission committed.
+	gateID := tccGroupRefundID("PAY-TCC-GATE", "G1")
+	seed("ORD-TCC-GATE", "PAY-TCC-GATE", gateID, "B-TCC-GATE", 5000, true, true)
+	if _, err := db.Exec(`UPDATE refund_batches SET state = ? WHERE batch_id = 'B-TCC-GATE'`, refundBatchPaying); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: gateID, OrderNo: "ORD-TCC-GATE", GroupNo: "G1",
+		AmountCent: 5000, Source: refundApplicationSourceTCC, BatchId: "B-TCC-GATE",
+	}); err == nil {
+		t.Fatal("0-row batch mirror: expected fail-closed")
+	} else if !strings.Contains(err.Error(), "batch state changed while persisting review") {
+		t.Fatalf("gate error = %v", err)
+	}
+	var admissions, commitments int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM order_refund_admissions WHERE refund_id = ?`, gateID).Scan(&admissions); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM order_refund_commitments WHERE refund_id = ?`, gateID).Scan(&commitments); err != nil {
+		t.Fatal(err)
+	}
+	if admissions != 0 || commitments != 0 {
+		t.Fatalf("0-row gate committed admission=%d commitments=%d", admissions, commitments)
+	}
 }

@@ -534,6 +534,14 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 			return nil, err
 		}
 	}
+	if result == refundReviewRequired && req.GetSource() == refundApplicationSourceTCC {
+		// T1c gate: a fresh Tx1 REVIEW must apply the same human-hold writes as
+		// Tx2. If the batch/application mirror matches 0 rows the whole Tx1
+		// rolls back (no admission/commitment without MANUAL_HOLD).
+		if err := persistTCCReviewTx(ctx, tx, refundID, req.GetBatchId(), reviewReason); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, apperr.Internal("commit refund admission", err)
 	}
@@ -897,6 +905,42 @@ func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissio
 	}
 }
 
+// persistTCCReviewTx is the single AC-71 human-hold entry shared by the fresh
+// Tx1 path and the Tx2 path. It writes the batch MANUAL_HOLD + canonical
+// last_error and mirrors the already-existing application row; both mirror
+// updates must match exactly one row. Any 0-row path aborts the surrounding
+// transaction, so a REVIEW admission is never committed without the hold.
+func persistTCCReviewTx(ctx context.Context, tx *sql.Tx, refundID, batchID, reason string) error {
+	if batchID == "" {
+		return apperr.Failed("tcc refund review requires batch_id; no review committed").
+			WithDetails(map[string]any{"refund_id": refundID})
+	}
+	lastError := refundReviewCanonical(refundID, reason, refundBatchLastErrorWidth)
+	res, err := tx.ExecContext(ctx, `UPDATE refund_batches
+		SET state = ?, last_error = ?, version = version + 1, updated_at = NOW(3)
+		WHERE batch_id = ? AND state IN (?, ?)`,
+		refundBatchManualHold, lastError, batchID, refundBatchFrozen, refundBatchAdmitting)
+	if err != nil {
+		return apperr.Internal("hold tcc refund batch for review", err)
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return apperr.Failed("tcc refund batch state changed while persisting review; no review committed").
+			WithDetails(map[string]any{"batch_id": batchID, "refund_id": refundID})
+	}
+	res, err = tx.ExecContext(ctx, `UPDATE refund_applications
+		SET admission_result = ?, version = version + 1, updated_at = NOW(3)
+		WHERE refund_id = ? AND state = ?`,
+		refundReviewRequired, refundID, refundApplicationPending)
+	if err != nil {
+		return apperr.Internal("mirror tcc review result on refund application", err)
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return apperr.Failed("tcc refund application is not PENDING while persisting review; no review committed").
+			WithDetails(map[string]any{"batch_id": batchID, "refund_id": refundID})
+	}
+	return nil
+}
+
 // writeAdmissionTx2 applies one decided admission result with the mandatory
 // double-predicate CAS. The predicate makes a REVIEW_REQUIRED row immutable to
 // any automatic path (late probe / concurrent Tx2 / replay): such a row never
@@ -935,34 +979,9 @@ func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow
 			return nil, err
 		}
 	}
-	if result == refundReviewRequired && source == refundApplicationSourceTCC && batchID != "" {
-		// AC-71/T1c: the review decision, the batch hold and the (existing)
-		// application mirror are one transaction. A missing application row is
-		// normal for ordinary after-sales and must not be created here; only an
-		// already existing TCC application is mirrored.
-		lastError := refundReviewCanonical(row.RefundID, reason, refundBatchLastErrorWidth)
-		res, err := tx.ExecContext(ctx, `UPDATE refund_batches
-			SET state = ?, last_error = ?, version = version + 1, updated_at = NOW(3)
-			WHERE batch_id = ? AND state IN (?, ?)`,
-			refundBatchManualHold, lastError, batchID, refundBatchFrozen, refundBatchAdmitting)
-		if err != nil {
-			return nil, apperr.Internal("hold tcc refund batch for review", err)
-		}
-		if n, _ := res.RowsAffected(); n != 1 {
-			// T1c gate: never commit a REVIEW admission without the human hold.
-			return nil, apperr.Failed("tcc refund batch state changed while persisting review; no review committed").
-				WithDetails(map[string]any{"batch_id": batchID, "refund_id": row.RefundID})
-		}
-		res, err = tx.ExecContext(ctx, `UPDATE refund_applications
-			SET admission_result = ?, version = version + 1, updated_at = NOW(3)
-			WHERE refund_id = ? AND state = ?`,
-			refundReviewRequired, row.RefundID, refundApplicationPending)
-		if err != nil {
-			return nil, apperr.Internal("mirror tcc review result on refund application", err)
-		}
-		if n, _ := res.RowsAffected(); n != 1 {
-			return nil, apperr.Failed("tcc refund application is not PENDING while persisting review; no review committed").
-				WithDetails(map[string]any{"batch_id": batchID, "refund_id": row.RefundID})
+	if result == refundReviewRequired && source == refundApplicationSourceTCC {
+		if err := persistTCCReviewTx(ctx, tx, row.RefundID, batchID, reason); err != nil {
+			return nil, err
 		}
 	}
 	if result == refundReviewRequired && s.log != nil {

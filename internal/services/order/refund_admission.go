@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
@@ -29,6 +30,9 @@ const (
 	// refundReasonConsumedWithoutShipment is one of the fixed AC-72 reasons.
 	refundReasonConsumedWithoutShipment = "CONSUMED_WITHOUT_SHIPMENT"
 	manualQueueNowb                     = "AC-27-NOWB-01"
+	// refundBatchLastErrorWidth is the TCC refund_batches.last_error column
+	// width (characters); the after-sales task column is 512.
+	refundBatchLastErrorWidth = 1024
 
 	// refundSourceSystemZero is the AC-67/AC-68 zero-amount after-sale source.
 	// It is the only source that takes the zero short-circuit; a zero-amount
@@ -170,6 +174,26 @@ func classifyExistingAdmission(row *refundAdmissionRow) existingAdmissionClass {
 
 func refundReviewTicket(refundID string) string { return "RVW:" + refundID }
 
+// refundReviewCanonical builds the AC-72/D-35 canonical mirror text
+// `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`; if it does not fit
+// the column it keeps the prefix and truncates <refund_id>, appending
+// ` truncated=1`. The reason/ticket keys are never truncated.
+func refundReviewCanonical(refundID, code string, width int) string {
+	prefix := "REVIEW_REQUIRED reason=" + code + " ticket=RVW:"
+	if utf8.RuneCountInString(prefix+refundID) <= width {
+		return prefix + refundID
+	}
+	limit := width - utf8.RuneCountInString(prefix) - utf8.RuneCountInString(" truncated=1")
+	if limit < 1 {
+		limit = 1
+	}
+	runes := []rune(refundID)
+	if limit < len(runes) {
+		runes = runes[:limit]
+	}
+	return prefix + string(runes) + " truncated=1"
+}
+
 // refundReviewConflict is the stable REFUND_ADMISSION_CONFLICT for a
 // REVIEW_REQUIRED decision with structured (typed) details; callers must not
 // parse the message. The error code table is unchanged (AC-69/AC-72).
@@ -228,7 +252,7 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		case existingAdmissionTerminal:
 			return admissionReply(existing), nil
 		case existingAdmissionPending:
-			return s.finishRemoteAdmission(ctx, existing, req.GetSource())
+			return s.finishRemoteAdmission(ctx, existing, req.GetSource(), req.GetBatchId())
 		case existingAdmissionUnknown:
 			return nil, apperr.Conflict("refund admission has an illegal result/state combination").
 				WithDetails(map[string]any{
@@ -284,7 +308,7 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		case existingAdmissionTerminal:
 			return admissionReply(existing), nil
 		case existingAdmissionPending:
-			return s.finishRemoteAdmission(ctx, existing, req.GetSource())
+			return s.finishRemoteAdmission(ctx, existing, req.GetSource(), req.GetBatchId())
 		default:
 			return nil, apperr.Conflict("refund admission has an illegal result/state combination").
 				WithDetails(map[string]any{
@@ -377,7 +401,7 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		State: state, AmountCent: req.GetAmountCent(), Version: 1,
 	}
 	if state == refundPending {
-		return s.finishRemoteAdmission(ctx, row, req.GetSource())
+		return s.finishRemoteAdmission(ctx, row, req.GetSource(), req.GetBatchId())
 	}
 	return admissionReply(row), nil
 }
@@ -659,7 +683,7 @@ func zeroRefundableStatus(status string) bool {
 	}
 }
 
-func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissionRow, source string) (*pb.AdmitRefundReply, error) {
+func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissionRow, source, batchID string) (*pb.AdmitRefundReply, error) {
 	if s.fulfillment == nil {
 		return nil, apperr.Unavailable("fulfillment client is required for consumed permits", nil)
 	}
@@ -672,14 +696,14 @@ func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissio
 	switch reply.GetStatus() {
 	case "CANCELLED":
 		// A real CANCELLED row is the only probe answer that may write PRE.
-		return s.writeAdmissionTx2(ctx, row, refundResultPre, refundResultPre, source)
+		return s.writeAdmissionTx2(ctx, row, refundResultPre, refundResultPre, source, batchID)
 	case "ALREADY_SHIPPED", "RECEIVED":
-		return s.writeAdmissionTx2(ctx, row, refundResultPost, refundResultPost, source)
+		return s.writeAdmissionTx2(ctx, row, refundResultPost, refundResultPost, source, batchID)
 	case probeStatusNoWaybill:
 		// CONSUMED permit + no waybill row is not a legal AC-50 branch: persist
 		// the bounded review decision instead of guessing PRE/POST. state stays
 		// PENDING_REMOTE; no release, no terminal outbox, no Payment command.
-		return s.writeAdmissionTx2(ctx, row, refundReviewRequired, refundPending, source)
+		return s.writeAdmissionTx2(ctx, row, refundReviewRequired, refundPending, source, batchID)
 	default:
 		// Unknown/future values stay retryable and can never become PRE.
 		return nil, apperr.Unavailable("shipment state is unknown; retry refund admission", nil)
@@ -693,7 +717,7 @@ func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissio
 // re-reads the persisted decision instead of writing its own outbox/release.
 // REVIEW_REQUIRED writes no outbox and no release; PRE/POST keep the existing
 // event/release behaviour.
-func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow, result, state, source string) (*pb.AdmitRefundReply, error) {
+func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow, result, state, source, batchID string) (*pb.AdmitRefundReply, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, apperr.Internal("begin refund admission tx2", err)
@@ -722,6 +746,25 @@ func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow
 	if result == refundResultPre {
 		if err := s.appendRefundReleaseTx(ctx, tx, row.RefundID, row.OrderNo, row.GroupNo, source); err != nil {
 			return nil, err
+		}
+	}
+	if result == refundReviewRequired && source == refundApplicationSourceTCC && batchID != "" {
+		// AC-71/T1c: the review decision, the batch hold and the (existing)
+		// application mirror are one transaction. A missing application row is
+		// normal for ordinary after-sales and must not be created here; only an
+		// already existing TCC application is mirrored.
+		lastError := refundReviewCanonical(row.RefundID, refundReasonConsumedWithoutShipment, refundBatchLastErrorWidth)
+		if _, err := tx.ExecContext(ctx, `UPDATE refund_batches
+			SET state = ?, last_error = ?, version = version + 1, updated_at = NOW(3)
+			WHERE batch_id = ? AND state IN (?, ?)`,
+			refundBatchManualHold, lastError, batchID, refundBatchFrozen, refundBatchAdmitting); err != nil {
+			return nil, apperr.Internal("hold tcc refund batch for review", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE refund_applications
+			SET admission_result = ?, version = version + 1, updated_at = NOW(3)
+			WHERE refund_id = ? AND state = ?`,
+			refundReviewRequired, row.RefundID, refundApplicationPending); err != nil {
+			return nil, apperr.Internal("mirror tcc review result on refund application", err)
 		}
 	}
 	if result == refundReviewRequired && s.log != nil {

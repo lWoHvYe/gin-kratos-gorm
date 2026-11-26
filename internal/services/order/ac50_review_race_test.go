@@ -191,7 +191,7 @@ func TestAC50ReviewLateCancelDoesNotWash(t *testing.T) {
 	if err != nil || row == nil {
 		t.Fatalf("load review row: %v", err)
 	}
-	if _, err := svc.finishRemoteAdmission(ctx, row, "aftersale"); err == nil {
+	if _, err := svc.finishRemoteAdmission(ctx, row, "aftersale", ""); err == nil {
 		t.Fatal("late CANCELLED: expected the persisted REVIEW conflict")
 	} else {
 		ac50RequireReviewConflict(t, err, "R-RC53")

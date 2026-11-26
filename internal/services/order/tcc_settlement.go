@@ -635,6 +635,11 @@ func insertTccBatchTx(ctx context.Context, tx *sql.Tx, orderNo string, snapshot 
 //
 // CONSUMED never writes REVOKED (ADR §4.1.3).
 func (s *Service) writeTccBatchGroupsTx(ctx context.Context, tx *sql.Tx, batch *tccRefundBatch, snapshot *tccPaymentSnapshot, shipments *tccShipmentFacts, groups []tccGroupCap, excludeRefundPrefix string) error {
+	if batch.State == refundBatchManualHold {
+		// AC-71/W12: a human-held batch is never pushed by an automatic retry.
+		// Return before any write so the resume changes zero rows.
+		return tccBatchManualError(batch)
+	}
 	composition, err := loadTccGroupComposition(ctx, tx, batch.OrderNo, excludeRefundPrefix)
 	if err != nil {
 		return err
@@ -831,7 +836,9 @@ func ensureTccApplicationTx(ctx context.Context, tx *sql.Tx, batch *tccRefundBat
 	}
 	// admission_result is monotonic: a later resume may observe the resolved
 	// PRE/POST result written by the admission phase; it must never go back.
-	if existingResult != "" && existingResult != admissionResult && existingResult != refundResultPre && existingResult != refundResultPost {
+	if existingResult != "" && existingResult != admissionResult &&
+		existingResult != refundResultPre && existingResult != refundResultPost &&
+		existingResult != refundReviewRequired {
 		return false, apperr.Failed("tcc refund application admission result conflicts with the permit decision").
 			WithDetails(map[string]any{
 				"order_no": batch.OrderNo, "group_no": group.GroupNo, "refund_id": refundID,
@@ -867,7 +874,9 @@ func ensureTccRemoteAdmissionTx(ctx context.Context, tx *sql.Tx, orderNo, groupN
 			})
 	}
 	switch result {
-	case refundPending, refundResultPre, refundResultPost:
+	case refundPending, refundResultPre, refundResultPost, refundReviewRequired:
+		// REVIEW_REQUIRED is a legal persisted decision (AC-71): it must not be
+		// judged illegal or fail before the admission phase can read it back.
 		return nil
 	default:
 		return apperr.Failed("tcc refund admission result is not a legal value").

@@ -108,6 +108,14 @@ func (s *Service) admitTccBatch(ctx context.Context, orderNo, paymentNo string) 
 		}
 	}
 	if len(failures) > 0 {
+		// AC-71: the Tx2 that persisted the review holds the batch in the same
+		// transaction. Re-read it so the caller gets the stable
+		// TCC_BATCH_REQUIRES_MANUAL_HANDLING instead of a generic retry error.
+		var state string
+		if err := s.db.QueryRowContext(ctx, `SELECT state FROM refund_batches WHERE batch_id = ?`, batch.BatchID).Scan(&state); err == nil && state == refundBatchManualHold {
+			batch.State = state
+			return tccBatchManualError(batch)
+		}
 		return apperr.Unavailable("tcc refund admission is incomplete; retry the compensation", nil).
 			WithDetails(map[string]any{
 				"order_no": batch.OrderNo, "payment_no": batch.PaymentNo,
@@ -123,6 +131,24 @@ func (s *Service) admitTccBatch(ctx context.Context, orderNo, paymentNo string) 
 
 // admitTccApplication resolves one active group application.
 func (s *Service) admitTccApplication(ctx context.Context, batch *tccRefundBatch, application *tccApplicationRef) error {
+	if application.AdmissionResult == refundReviewRequired && application.State != refundApplicationDone {
+		// AC-71: a persisted review on the application means the automatic path
+		// is already terminated; do not call AdmitRefund/CancelIfCreated again.
+		// The manual re-arm resets only the authoritative admission row, so a
+		// re-armed decision must fall through and be re-evaluated.
+		admission, err := findRefundAdmission(ctx, s.db, application.RefundID)
+		if err != nil {
+			return apperr.Internal("load refund admission for tcc application", err)
+		}
+		if classifyExistingAdmission(admission) == existingAdmissionReview {
+			row := &refundAdmissionRow{
+				RefundID: application.RefundID, OrderNo: batch.OrderNo,
+				GroupNo: application.GroupNo, AmountCent: application.AmountCent,
+				Result: refundReviewRequired, State: refundPending,
+			}
+			return refundReviewConflict(row, refundReasonConsumedWithoutShipment)
+		}
+	}
 	switch application.State {
 	case refundApplicationDone:
 		// Already executed (T1.4b); never refund it twice.

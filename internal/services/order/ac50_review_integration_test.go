@@ -144,6 +144,11 @@ func TestAC50ReviewMapping(t *testing.T) {
 	if got := len(payments.refundCalls); got != 0 {
 		t.Fatalf("Payment.Refund calls = %d, want 0", got)
 	}
+	// AC-69/O19: ordinary after-sales has no refund_applications row and the
+	// review must never create one (the mirror is the AfterSales task).
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications WHERE refund_id = 'R-R50'`); got != 0 {
+		t.Fatalf("after-sales review created %d refund_applications rows", got)
+	}
 	if ff.cancelCalls.Load() != 1 {
 		t.Fatalf("cancel probe calls = %d, want 1", ff.cancelCalls.Load())
 	}

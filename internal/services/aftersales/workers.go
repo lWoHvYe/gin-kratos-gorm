@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"time"
+	"unicode/utf8"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
@@ -15,6 +17,9 @@ import (
 	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/outbox"
+
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc/status"
 )
 
 // taskLease bounds a worker's claim. A crashed worker's task becomes claimable
@@ -28,7 +33,15 @@ const taskLease = time.Minute
 const (
 	zeroAfterSaleSource        = "system_zero"
 	zeroSettlementPaymentNoPre = "zero:"
-	zeroRefundApplicationDone  = "DONE"
+	// refundReviewRequired mirrors the Order decision value; AfterSales only
+	// mirrors it onto its own task row and never re-interprets settlement.
+	refundReviewRequired = "REVIEW_REQUIRED"
+	// refundReviewReasonNoShipment is the fixed AC-72 reason for the AC-50
+	// consumed-permit-without-waybill review.
+	refundReviewReasonNoShipment = "CONSUMED_WITHOUT_SHIPMENT"
+	// refundTaskLastErrorWidth is after_sale_refund_tasks.last_error (characters).
+	refundTaskLastErrorWidth  = 512
+	zeroRefundApplicationDone = "DONE"
 	// zeroCaptureSource is only an audit label for a zero-settled order; the
 	// zero path never writes the after_sale_amount_ledger or a refund
 	// commitment, so no amount is ever reserved.
@@ -308,7 +321,8 @@ func runRefundBatch(ctx context.Context, database *sql.DB, svc *Service, logger 
 	rows, err := database.QueryContext(ctx, `SELECT after_sale_no FROM after_sale_refund_tasks
 		WHERE status IN ('PENDING', 'PROCESSING')
 		  AND (status = 'PENDING' OR lease_until IS NULL OR lease_until < NOW(3))
-		ORDER BY updated_at LIMIT 50`)
+		  AND NOT (status = 'PENDING' AND attempts >= ? AND last_error LIKE 'REVIEW_REQUIRED reason=%')
+		ORDER BY updated_at LIMIT 50`, maxTaskAttempts)
 	if err != nil {
 		logger.Warn("scan refund tasks", "error", err)
 		return
@@ -336,6 +350,89 @@ func refundAdmissionSource(row *afterSaleRow) string {
 		return "system_shortage"
 	}
 	return "aftersale"
+}
+
+// refundReviewSignal marks a REVIEW_REQUIRED admission inside AfterSales. It is
+// deliberately a typed signal: the worker must never decide the review from the
+// error text.
+type refundReviewSignal struct{ reason string }
+
+func (e *refundReviewSignal) Error() string {
+	return "REFUND_ADMISSION_CONFLICT: REFUND_REQUIRED reason=" + e.reason
+}
+
+// refundReviewReason extracts the typed REVIEW decision from either an
+// in-process apperr.Error (tests/fakes) or a gRPC status ErrorInfo (production
+// client). Message parsing is forbidden.
+func refundReviewReason(err error) (string, bool) {
+	if err == nil {
+		return "", false
+	}
+	var signal *refundReviewSignal
+	if errors.As(err, &signal) {
+		return signal.reason, true
+	}
+	var ae *apperr.Error
+	if errors.As(err, &ae) && ae.Code == apperr.CodeFailedPrecondition {
+		if result, _ := ae.Details["result"].(string); result == refundReviewRequired {
+			reason, _ := ae.Details["reason"].(string)
+			if reason == "" {
+				reason = refundReviewReasonNoShipment
+			}
+			return reason, true
+		}
+	}
+	if st, ok := status.FromError(err); ok {
+		for _, detail := range st.Details() {
+			info, ok := detail.(*errdetails.ErrorInfo)
+			if !ok {
+				continue
+			}
+			if info.GetMetadata()["result"] != refundReviewRequired {
+				continue
+			}
+			reason := info.GetMetadata()["reason"]
+			if reason == "" {
+				reason = refundReviewReasonNoShipment
+			}
+			return reason, true
+		}
+	}
+	return "", false
+}
+
+// refundReviewCanonical builds the AC-72/D-35 mirror text
+// `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>` with deterministic
+// truncation of <refund_id> only.
+func refundReviewCanonical(refundID, code string, width int) string {
+	prefix := "REVIEW_REQUIRED reason=" + code + " ticket=RVW:"
+	if utf8.RuneCountInString(prefix+refundID) <= width {
+		return prefix + refundID
+	}
+	limit := width - utf8.RuneCountInString(prefix) - utf8.RuneCountInString(" truncated=1")
+	if limit < 1 {
+		limit = 1
+	}
+	runes := []rune(refundID)
+	if limit < len(runes) {
+		runes = runes[:limit]
+	}
+	return prefix + string(runes) + " truncated=1"
+}
+
+// refundReviewLastErrorRe is the single canonical parser (AC-72/O23). It
+// accepts the exact untruncated form and the deterministic truncated form, and
+// rejects unknown keys, a missing/empty ticket, `arm=`, colons and trailing
+// spaces.
+var refundReviewLastErrorRe = regexp.MustCompile(
+	`^REVIEW_REQUIRED reason=(CONSUMED_WITHOUT_SHIPMENT|PARTIAL_AMOUNT_UNCLASSIFIABLE|LEGACY_SHIPMENT_UNKNOWN) ticket=RVW:([^ ]+?)( truncated=1)?$`)
+
+func parseRefundReviewLastError(text string) (reason, ticket string, truncated, ok bool) {
+	m := refundReviewLastErrorRe.FindStringSubmatch(text)
+	if m == nil {
+		return "", "", false, false
+	}
+	return m[1], "RVW:" + m[2], m[3] != "", true
 }
 
 func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) error {
@@ -400,6 +497,14 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 			RefundId: afterSaleNo, OrderNo: row.orderNo, GroupNo: groupNo,
 			AmountCent: amount, Source: refundAdmissionSource(row),
 		}); err != nil {
+			if reason, review := refundReviewReason(err); review {
+				// AC-69/AC-72: mirror the review on the task and keep it PENDING;
+				// releaseRefundTask stops the FAILED_PERMANENT promotion for this
+				// branch and writes the canonical last_error.
+				signal := &refundReviewSignal{reason: reason}
+				s.releaseRefundTask(ctx, afterSaleNo, owner, signal)
+				return signal
+			}
 			s.releaseRefundTask(ctx, afterSaleNo, owner, err)
 			return apperr.Unavailable("refund admission", err)
 		}
@@ -734,6 +839,19 @@ func (s *Service) releaseRefundTask(ctx context.Context, afterSaleNo, owner stri
 		return
 	}
 	if status != taskProcessing || currentOwner != owner {
+		return
+	}
+	if reason, review := refundReviewReason(cause); review {
+		// AC-69/AC-72: a REVIEW task stays PENDING forever (only a human
+		// abandon may mark FAILED_PERMANENT); the canonical mirror replaces the
+		// transient error text, and nothing is released/refunded here.
+		lastError := refundReviewCanonical(afterSaleNo, reason, refundTaskLastErrorWidth)
+		if _, err := tx.ExecContext(ctx, `UPDATE after_sale_refund_tasks
+			SET status = ?, last_error = ?, lease_owner = '', lease_until = NULL, updated_at = NOW(3)
+			WHERE after_sale_no = ?`, taskPending, lastError, afterSaleNo); err != nil {
+			return
+		}
+		_ = tx.Commit()
 		return
 	}
 	next := taskPending

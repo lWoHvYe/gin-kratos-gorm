@@ -455,6 +455,17 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 T2.4 legacy-release ruling QC READY
+
+- QC: no `legacy_expired` release source; T3 owns release completion/receipt;
+  T2.4 stays COMPENSATING prefix (0 release/0 Payment/0 EXPIRED_REFUND);
+  AC-63/INV-46 remain AC-REF.
+- MAJOR: COMPENSATING long-stay needs owner/SLA/manual queue/expiry and a
+  concrete alert key; 7-day EXPIRED_FINANCE and REJECTED can be done
+  independently (must not impersonate AC-63).
+- Next: monitoring/queue + 7-day/REJECTED, then T2.4 scoped review; no
+  release/Payment before T3.
+
 ### 2026-11-27 T2.4 BLOCKED: legacy_expired release source
 
 - Zero gate MAJOR fixed (system_zero resolves historical zero before the

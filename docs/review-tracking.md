@@ -363,6 +363,24 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 PAY-AC50-REVIEW-01 contract closure: QC R8 READY
+
+- SPEC-0002 **v1.11** (`d159300`, in-review), ADR-0007 AC-50 Addendum
+  **DRAFT 0.5** (`b2491cb`), impact analysis DRAFT 0.3 (`3ae8e79`), Plan
+  (`e725a5c`) : QC round 8 **READY, 0 BLOCKER** (`QC-PAY-SETTLE-01-AC50-NOWB.md`).
+  - `REVIEW_REQUIRED` (15 chars) fits existing columns; **no migration**.
+  - Single authority `order_refund_admissions`; normal after-sales mirrors
+    `after_sale_refund_tasks.last_error`, task stays `PENDING` (no auto
+    `FAILED_PERMANENT`); TCC parks the batch in `MANUAL_HOLD`; partial amount
+    never calls `CancelIfCreated`; replay returns the persisted decision before
+    any Payment read; audit reuses the admission row (no new table).
+  - Canonical: `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`; no
+    `arm`; overflow appends ` truncated=1`.
+- 2 non-blocking TODOs: R8-T1 version stamps; R8-T2 AC-72 three-part ledger
+  rows.
+- **Next**: human `SPEC_APPROVED`/`ADR_APPROVED`, then Plan review
+  (L2-P1..P4) and human Plan approval. **No code**; PAY-SETTLE-01 stays frozen.
+
 ### 2026-11-26 change freeze: PAY-SETTLE-01 paused; PAY-AC50-REVIEW-01 opens
 
 - Director chose option (a): the AC-50 `CONSUMED+无运单` fix becomes an

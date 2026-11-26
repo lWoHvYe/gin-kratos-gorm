@@ -363,6 +363,13 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 human approval C-5 + P5
+
+- Director approved **ADR 0.6 errata** (`ADR_APPROVED`, C-5) and the
+  `PAY-AC50-REVIEW-01` **Plan/Tasks** (`P5`) on 2026-11-26.
+- Implementation authorized: T0+T0b+T0c release unit first, then T1–T8.
+- No merge/Release/AC-VERIFIED implied; PAY-SETTLE-01 remains frozen.
+
 ### 2026-11-26 PAY-AC50-REVIEW-01 Plan review: four roles READY
 
 - Plan/Tasks rewritten after the first review round: atomic tasks

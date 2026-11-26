@@ -2,13 +2,13 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT — pending L2-P2/P3/P4 re-review + human P5**；ADR 0.6（errata）QC READY，待人类 errata `ADR_APPROVED`；**P5 前不写业务代码** |
+| Status | **APPROVED（2026-11-26，human P5）**；ADR 0.6 errata ACCEPTED（C-5）；实现进行中（T0+T0b+T0c 发布单元） |
 | change_id | `PAY-AC50-REVIEW-01` |
 | Parent | `PAY-SETTLE-01`（**保持冻结**；本 L2 交付前不推进其受管代码/台账） |
 | Tier | **L2**；命中 P0、资金、跨服务、状态机、既有 RPC 响应语义、共享 metrics |
 | Base | `a1cc809`（C-4 + 四角色 Plan 评审落库） |
 | Spec-Ref | SPEC-0002 **v1.11 approved（2026-11-26）**：AC-50/51/61/62/65/67 修订、AC-69…72、S20、INV-45/46/51/52、§5.10、D-30…D-35；SPEC-0001 v1.5 AC-27A（只读依赖） |
-| ADR | ADR-0007 Rev 2.3 + AC-50 Addendum **0.5 ACCEPTED** + **0.6 errata（QC R9 READY；待人类 errata 批准）**；impact 0.4 |
+| ADR | ADR-0007 Rev 2.3 + AC-50 Addendum **0.5 ACCEPTED** + **0.6 errata ACCEPTED（2026-11-26，QC R9 READY + human）**；impact 0.4 |
 | integration_owner | System Architect（契约/跨服务）；Order Owner（实现）；ops（runbook/人工队列） |
 | 发布单元 | **T0+T0b+T0c 必须同一发布单元**（Fulfillment `<NO_WAYBILL>`、Order 映射、Tx2 双谓词 CAS；否则 T0b 先上的窗口仍可把 REVIEW 洗成 PRE）；若分批，先 Fulfillment，再 T0c，最后 T0b。旧 Order 对未知 status **fail-closed**（`Unavailable`，不得当 PRE）。无迁移 |
 | allowed_paths | `internal/services/fulfillment/cancel_if_created.go`；`internal/services/order/refund_admission.go`、`tcc_settlement.go`、`tcc_admission.go`、`worker.go`（仅 gauge）；`internal/services/aftersales/workers.go`（仅 `after_sale_refund_tasks.last_error`/PENDING/REVIEW 8 次例外）；`internal/platform/metrics/metrics.go`；`api/proto/mall/v1/mall.proto`（仅 status 注释/既有 string）；**`api/gen/**` 仅由 `make proto` 生成、同提交、禁手改**；`cmd/*`（仅 wiring，Brief 列明）；`docs/ops.md`（仅 runbook）；`docs/implementation/PAY-AC50-REVIEW-01-selfcheck.md`（证据产物；ADR 0.6 需同步允许）；对应 `_test.go` |
@@ -30,7 +30,7 @@
 | C-2 | Architect Addendum 0.5 | **CLOSED**（ACCEPTED） |
 | C-3 | QC round 8 终审 0 BLOCKER | **CLOSED**（READY） |
 | C-4 | 人类 `SPEC_APPROVED`/`ADR_APPROVED` | **CLOSED**（2026-11-26） |
-| **C-5** | **ADR errata 0.6**：Tx2 CAS `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`、`docs/ops.md` runbook、proto 生成、gateway 删除、发布顺序 | **QC R9 READY；人类 errata 批准待办** |
+| **C-5** | **ADR errata 0.6**：Tx2 CAS `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`、`docs/ops.md` runbook、proto 生成、gateway 删除、发布顺序 | **CLOSED**（QC R9 READY + human 2026-11-26） |
 
 ## 2. 任务（原子；每任务独占一个不变量；依赖 C-5 + P5）
 

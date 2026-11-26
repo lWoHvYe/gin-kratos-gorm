@@ -10,7 +10,7 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
 - [x] **C-2** Architect Addendum 0.5（ACCEPTED）
 - [x] **C-3** QC round 8 READY（0 BLOCKER）
 - [x] **C-4** 人类 `SPEC_APPROVED`/`ADR_APPROVED`（2026-11-26）
-- [ ] **C-5** ADR errata 0.6（CAS `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`、`docs/ops.md`、proto 生成、gateway 删除、发布顺序）；QC R9 READY，待人类 errata 批准（Owner: Architect + QC + Human）
+- [x] **C-5** ADR errata 0.6（CAS `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`、`docs/ops.md`、proto 生成、gateway 删除、发布顺序）；QC R9 READY，待人类 errata 批准（Owner: Architect + QC + Human）
 
 ## Phase 1 — Plan 复审
 
@@ -18,7 +18,7 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
 - [ ] **P2** QC re-review（P2b：W4–W10 绑定/T7-T8 证据）
 - [ ] **P3** Developer re-review（P3b：命令/环境/ops 任务）
 - [ ] **P4** Reviewer re-review（P4b：evidence/HEAD/tsv）
-- [ ] **P5** 人类批准 Plan
+- [x] **P5** 人类批准 Plan（2026-11-26）
 
 ## Phase 2 — 实现（原子）
 

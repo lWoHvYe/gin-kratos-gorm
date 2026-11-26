@@ -146,3 +146,63 @@ TEST_MYSQL_DSN='...' go test ./internal/services/order -count=1                 
 ### 7.6 不声称
 
 不声称 T2.4 完成 / AC-63 AC-VERIFIED / Release PASS；零元 gate MAJOR 已修，COMPENSATING 成功与 EXPIRED_REFUND 待 release source 契约裁决；`ac-coverage.tsv` 仍由 Reviewer 更新。
+
+---
+
+## 8. T2.4 收口（COMPENSATING 可运维 + finance close/REJECTED；code head `4016c150d72c5ec9f7c0f82c00cd1317011693b4`）
+
+| 项 | 值 |
+|---|---|
+| 范围 | 仅 T2.4 可运维/7 天 finance/REJECTED；不碰 T3 release、Payment、`EXPIRED_REFUND` |
+| 改动 | `internal/platform/metrics/metrics.go`、`internal/services/order/legacy_resolution_worker.go`、`legacy_resolution_worker_test.go`、`docs/ops.md` |
+| 未改 | 0019/SPEC/ADR/T3/T4/台账/release source |
+
+### 8.1 COMPENSATING 可运维
+
+- **Owner/SLA**：`COMPENSATING` = ops + finance；`OPEN/RESOLVING` 24h；`EXPIRED_FINANCE` 财务/授权 7 天；`REJECTED` 终态。写入 `docs/ops.md`（查询、认领 SQL、升级、禁止 release/Payment、7 天口径）。
+- **指标**（既有 worker tick 刷新，无新 worker/scanner）：
+  - `mall_legacy_payment_resolution_backlog{state}`；
+  - `mall_legacy_payment_resolution_oldest_seconds{state}`。
+- **稳定告警键（具体字符串）**：
+  - `LEGACY_PAYMENT_RESOLUTION_BACKLOG`
+  - `LEGACY_PAYMENT_RESOLUTION_OLDEST`
+  - `LEGACY_PAYMENT_RESOLUTION_COMPENSATING_OLDEST`
+  - `LEGACY_PAYMENT_RESOLUTION_FINANCE_OVERDUE`
+- 人工认领使用 `legacy_payment_resolution.lease_owner/lease_until`，不改 state；worker 仍只处理 OPEN/RESOLVING 到期，COMPENSATING 不自动完成。
+
+### 8.2 7 天 `EXPIRED_FINANCE` 关闭 + `REJECTED`
+
+均复用既有 `ResolveLegacyResolution`（proto 已存在，无新 RPC、无新字段）：
+
+- `OPEN/RESOLVING` + `payment_no=""` → `REJECTED`（`resolution_kind=REJECTED`、`blocked_scope=REJECTED_HOLD`、`closed_at`），不写订单 settlement/permit/release/Payment；终态不可重开。
+- `EXPIRED_FINANCE` + `payment_no=""` → 财务/授权关闭：`resolved_at` 为进入终态时间，7 天内写 `closed_at`，state 保持 `EXPIRED_FINANCE`；终态不可重开。
+- 超过 7 天 → 返回 `LEGACY_FINANCE_ESCALATION_REQUIRED`，不关闭、保持终态；由更高授权角色线下升级（未新增角色字段/RPC）。
+- 两者均不触发 release/Payment/`EXPIRED_REFUND`，不冒充 AC-63。
+
+### 8.3 测试与结果（HEAD `4016c15`，MySQL 8.4.13）
+
+```bash
+TEST_MYSQL_DSN='.../mall_integration_t2_order...' \
+  go test ./internal/services/order -run 'TestLegacy' -count=1   # ok 25.516s
+TEST_MYSQL_DSN='...' go test -race ./internal/services/order -run 'TestLegacy' -count=1  # ok 19.867s
+TEST_MYSQL_DSN='...' go test ./internal/services/order -count=1                          # ok 234.703s
+go test ./internal/platform/metrics -count=1                                              # ok 0.114s
+```
+
+- 新增覆盖：COMPENSATING/OPEN/EXPIRED_FINANCE backlog+oldest+稳定键（`TestLegacyResolutionMetricsAlertKeysAndAge`）；REJECTED + 不可重开；finance 7 天内关闭 + 不可重开；逾期 escalation 不关闭；所有相关测试断言 0 release/0 Payment/0 `EXPIRED_REFUND`。
+- 日志 `.tmp/evidence-t2/{HEAD.txt,t24b-tests.log,t24b-race.log,t24b-full.log,metrics.log}`；无 SKIP/FAIL。
+
+### 8.4 【测试范围】/【未覆盖范围】
+
+【测试范围】指标/稳定告警键/年龄；REJECTED；finance 7 天关闭/逾期升级/不可重开；worker COMPENSATING 前缀与取消失败保持；timer vs manual；`-race` + order 全包。
+
+【未覆盖范围】
+
+- **COMPENSATING→`EXPIRED_REFUND`** 仍需 T3/INV-44 release source 裁决（上节 §7.3 的 `[BLOCKED]` 未变），本步按指示不碰 release/Payment。
+- 逾期后“更高授权角色关闭”无角色字段/RPC，当前只返回升级要求、不自动关闭。
+- 告警规则部署、真实 ticker 1 分钟等待、UAT/prod 未执行。
+- `EXPIRED_FINANCE` 自动关闭/重开禁止依赖 DB 字段 `closed_at`，无新字段。
+
+### 8.5 不声称
+
+不声称 T2.4 全量完成 / AC-63 AC-VERIFIED / Release PASS；COMPENSATING 成功与 EXPIRED_REFUND 仍归 T3/release 裁决；`ac-coverage.tsv` 由 Reviewer 更新。

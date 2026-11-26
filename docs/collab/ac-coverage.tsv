@@ -16,8 +16,8 @@ AC-46	Developer	2026-12-31	WP-E2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-47	Developer	2026-12-31	T5.3 fault injection: inventory shortage/technical retry; shortage hands to AC-56 (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-48	Developer	2026-12-31	T5.2 -race: permit NONE/CONSUMED/REVOKED, line confirm, Ship reads state (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-49	Developer	2026-12-31	T5.1 contract/handler: four facts emitted separately (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-50	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-51	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-50	Developer	2026-12-31	SPEC v1.11 AC-50 branches: NO_WAYBILL/partial/legacy/zero + REVIEW paths; real MySQL 8.4.13 at HEAD 3ce0d7d (T8 order 38/38)	review-tracking/PAY-AC50-REVIEW-01	MySQL+race	internal/services/order/ac50_review_integration_test.go:102,347,405,438,537,567; internal/services/order/ac50_review_audit_fault_test.go:117	AC-VERIFIED
+AC-51	Developer	2026-12-31	TCC Sigma/group admission + REVIEW manual hold tests PASS at HEAD 3ce0d7d; full AC-51 branch matrix/T3 release not exhausted	review-tracking/PAY-AC50-REVIEW-01	MySQL+race	internal/services/order/t17_evidence_integration_test.go:26,83,204,306,371,442; internal/services/order/tcc_review_integration_test.go:34,137,228	AC-REF
 AC-52	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-53	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-54	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
@@ -27,13 +27,13 @@ AC-57	Developer	2026-12-31	T5.5 baseline ADR-0005 receipt tests: cite/rerun then
 AC-58	Developer	2026-12-31	T5.5 baseline ADR-0005 dispute tests: cite/rerun then AC-REF (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-59	Developer	2026-12-31	T5.3 fault injection: refund/receipt/stock-failure/shortage out-of-order rejection (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-60	Developer	2026-12-31	WP-B2	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-61	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-62	Developer	2026-12-31	T3 dependency: P1-T3 commitment release; not Phase 0-R/T5 (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-61	Developer	2026-12-31	AC-61 alert/manual replay/AC-72 5-min rule deferred; runbook/query only; no alert deployment evidence	review-tracking/PAY-AC50-REVIEW-01	runbook	docs/ops.md; internal/services/order/ac50_review_audit_fault_test.go:18	AC-REF
+AC-62	Developer	2026-12-31	REVIEW keeps commitment RESERVED; D-24 manual release/T3 not implemented; no release writer	review-tracking/PAY-AC50-REVIEW-01	MySQL	internal/services/order/ac50_review_integration_test.go:102; internal/services/order/refund_release_integration_test.go:279	AC-REF
 AC-63	Developer	2026-12-31	WP-B2	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-64	Developer	2026-12-31	T3 dependency: P1-T3 line/freight ledger; not Phase 0-R/T5 (was orphan)	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-65	Developer	2026-12-31	WP-R2	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-65	Developer	2026-12-31	TCC Sigma/MANUAL_HOLD/Tx2 tests PASS; full AC-65 terminal/payment branch matrix not exhaustive	review-tracking/PAY-AC50-REVIEW-01	MySQL+race	internal/services/order/t17_evidence_integration_test.go:26,83,204,306,371,442; internal/services/order/tcc_review_integration_test.go:34,137,228	AC-REF
 AC-66	Developer	2026-12-31	WP-E4	developer-reviewer/T-002	deferred	-	DEFERRED
-AC-67	Developer	2026-12-31	WP-R3	developer-reviewer/T-002	deferred	-	DEFERRED
+AC-67	Developer	2026-12-31	Zero NO_WAYBILL no persist; CANCELLED->PRE+DONE tests PASS; AC-72 zero count/alerts deferred	review-tracking/PAY-AC50-REVIEW-01	MySQL+race	internal/services/order/ac50_review_integration_test.go:159,567,597; internal/services/aftersales/zero_refund_integration_test.go:497	AC-REF
 AC-68	Developer	2026-12-31	WP-R3	developer-reviewer/T-002	deferred	-	DEFERRED
 AC-14	Developer	2026-12-31	Real MySQL 8.4.13 at HEAD 9322e75: six 6.5.1 scenarios + cumulative cap PASS (34d0466 evidence; reviewer rerun)	review-tracking/PAY-SETTLE-01	MySQL	internal/services/aftersales/settlement_integration_test.go:875 TestAC14FreightRefundSixScenarios	AC-VERIFIED
 AC-21	Developer	2026-12-31	Real MySQL 8.4.13 at HEAD 9322e75 PASS: auto-confirm T7 covered; "at least one notice" clause not asserted	review-tracking/PAY-SETTLE-01	MySQL	internal/services/fulfillment/delivery_integration_test.go:397 TestAC21AutoConfirmT7	AC-REF
@@ -41,3 +41,9 @@ AC-25	Developer	2026-12-31	Real MySQL 8.4.13 -race at HEAD 9322e75 PASS: partial
 AC-27	Developer	2026-12-31	SPEC v1.5 AC-27/27A: EARS-2/CANCELLED/7.5/post-ship asserted (fe1600b; rerun PASS at HEAD); AC-27A steps 5/6 (CONSUMED+PRE, PENDING_REMOTE) not covered and AC-50-FIX-01/AC-27-NOWB-01/AC-27-LIVE-01 open; not AC-VERIFIED	review-tracking/PAY-SETTLE-01	unit+MySQL	internal/services/order/warehouse_quote_test.go:125 TestAC27RevokedGroupIsClosedInProjection; ac27_projection_{integration,cancelled,negative}_test.go	AC-REF
 AC-31	Developer	2026-12-31	Real MySQL 8.4.13 at HEAD 9322e75 PASS: goods refund + freight hold; 168h bound and user-visible hold not asserted	review-tracking/PAY-SETTLE-01	MySQL	internal/services/aftersales/settlement_integration_test.go:1101 TestAC31FreightHoldTimeout	AC-REF
 AC-32	Developer	2026-12-31	Real MySQL 8.4.13 at HEAD 9322e75 PASS: timeout -> MERCHANT_WAREHOUSE freight refund; user-visible supplement not asserted	review-tracking/PAY-SETTLE-01	MySQL	internal/services/aftersales/settlement_integration_test.go:1102 TestAC32FreightHoldTimeoutDefaultsToMerchant	AC-REF
+AC-69	Developer	2026-12-31	REVIEW decision persistence/idempotency/audit/re-arm; T0-T6 tests at HEAD 3ce0d7d; TCC/AfterSales mirrors	review-tracking/PAY-AC50-REVIEW-01	MySQL+race	internal/services/order/ac50_review_integration_test.go:102,159,261; internal/services/order/ac50_review_audit_fault_test.go:18; internal/services/order/ac50_review_race_test.go:179; internal/services/aftersales/review_task_integration_test.go:33,64	AC-VERIFIED
+AC-70	Developer	2026-12-31	AC-70 partial/legacy branches O4a-e/O5c/O10/O10b PASS at HEAD 3ce0d7d	review-tracking/PAY-AC50-REVIEW-01	MySQL+race	internal/services/order/ac50_review_integration_test.go:203,347,374,405,438,469,510,537	AC-VERIFIED
+AC-71	Developer	2026-12-31	TCC MANUAL_HOLD/W12/O16 + fresh TCC gate PASS at HEAD 3ce0d7d	review-tracking/PAY-AC50-REVIEW-01	MySQL+race	internal/services/order/tcc_review_integration_test.go:34,137,228; internal/services/order/ac50_review_integration_test.go:640	AC-VERIFIED
+AC-72	Developer	2026-12-31	AC-72 backend segment only: metrics/7d/zero-exclusion/runbook PASS; ALERTS/ENTRY deferred; AC-72 not overall verified	review-tracking/PAY-AC50-REVIEW-01	MySQL+unit	internal/services/order/worker_test.go:14; internal/platform/metrics/metrics_test.go:11; docs/ops.md (Refund review queue)	AC-VERIFIED
+REVIEW-REQUIRED-ALERTS-01	ops	2026-12-31	5-minute alert rule/on-call deployment not delivered (deploy/** excluded)	review-tracking/PAY-AC50-REVIEW-01	deferred	-	DEFERRED
+REVIEW-REQUIRED-ENTRY-01	Lead/BFF/ops	2026-12-31	User-visible text/manual entry not delivered (frontend/** excluded)	review-tracking/PAY-AC50-REVIEW-01	deferred	-	DEFERRED

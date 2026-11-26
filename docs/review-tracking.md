@@ -424,6 +424,16 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-26 T1/T2 PASS (scoped)
+
+- Reviewer `30c6f16` (base `ff0d912`, head `7b28024`, code `ff7a847`):
+  T1/T2 PASS scoped, NOT RELEASE. MySQL 8.4.13 order/aftersales tests +
+  `-race` PASS; T0 regression PASS; no forbidden TCC files/migrations/RPC.
+- Residuals (not FAIL): T1c batch/app mirror `RowsAffected` unchecked;
+  O19 0-row / O1b other-batch / TCC 1024 truncation not asserted; O16 audit
+  simulated. T3–T6 not landed -> no standalone deploy.
+- Next: T3/T4 (partial, zero, legacy) + T1c hardening.
+
 ### 2026-11-26 T0 release unit PASS (scoped)
 
 - Reviewer `84f5acd` (base `a34c845`, head `c796580`, code `e374384`):

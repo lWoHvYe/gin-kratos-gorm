@@ -33,24 +33,24 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
 - [x] **T0c** Tx2 CAS 双谓词（O11/O11b/O11c/O11d、**W5/W13**）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test -race ./internal/services/order -run 'TestAC50ReviewConcurrent' -count=1`
   - expected：`WHERE refund_id=? AND state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`；REVIEW 不被洗；0 行→Conflict
-- [ ] **T1a** TCC 准入读 REVIEW（O1b/O2b/O13b）
+- [x] **T1a** TCC 准入读 REVIEW（O1b/O2b/O13b）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestTCCReviewAdmission' -count=1`
-- [ ] **T1b** TCC 申请单调（O1b）
+- [x] **T1b** TCC 申请单调（O1b）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestTCCReviewApplication' -count=1`
-- [ ] **T1c** TCC `MANUAL_HOLD`+0 打款+只阻塞本批；**Tx2 同事务写 batch/app/admission**（O1b/W12）
+- [x] **T1c** TCC `MANUAL_HOLD`+0 打款+只阻塞本批；**Tx2 同事务写 batch/app/admission**（O1b/W12）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestTCCReviewManualHold' -count=1`
   - expected：`MANUAL_HOLD`；`refundCalls==0`；其他批不受阻；同事务失败整体回滚
-- [ ] **T1d** TCC 自动续跑 token（W12）
+- [x] **T1d** TCC 自动续跑 token（W12）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestTCCReviewResumeToken' -count=1`
-- [ ] **T1e** TCC re-arm（O16）
+- [x] **T1e** TCC re-arm（O16）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestTCCReviewRearm' -count=1`
-- [ ] **T2a** existing-first 幂等 + typed details（O2/O2b/O2c/**W6**）
+- [x] **T2a** existing-first 幂等 + typed details（O2/O2b/O2c/**W6**）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestAC50ReviewReplay' -count=1`
   - expected：同错；`cancelCalls/getCalls` 不增；`refundCalls==0`；details 带结构化 `result/reason/ticket`
-- [ ] **T2b** 售后镜像 canonical + typed details（O19/O23）
+- [x] **T2b** 售后镜像 canonical + typed details（O19/O23）
   - `TEST_MYSQL_DSN=$AS_DSN go test ./internal/services/aftersales -run 'TestReviewTaskMirror' -count=1`
   - expected：`after_sale_refund_tasks.last_error` 恰为 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；`refund_applications` 0 行；无字符串嗅探
-- [ ] **T2c** 售后任务态（O22/O22b）
+- [x] **T2c** 售后任务态（O22/O22b）
   - `TEST_MYSQL_DSN=$AS_DSN go test ./internal/services/aftersales -run 'TestReviewTaskRetry' -count=1`
   - expected：REVIEW 保持 PENDING；非 REVIEW 8 次 FAILED_PERMANENT；无自动 DONE/释放
 - [ ] **T3** 部分金额三分类（O4a–O4e/O5c/O10b/**W10**）

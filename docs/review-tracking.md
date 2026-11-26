@@ -455,6 +455,13 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 human decision: resume PAY-SETTLE-01 Phase 0-R
+
+- Director: resume the parent and continue **Phase 0-R closeout** first:
+  `AC-27-NOWB-01` / `AC-27-LIVE-01`, then T5 evidence. T2/T3/T4/P3/Release
+  remain gated behind P0 closure (original constraint).
+- No merge/Release; WIP only.
+
 ### 2026-11-27 R0.3-R1c PASS (scoped); AC-27 still AC-REF
 
 - Reviewer `ce10714` (base `ce0f6b4`, head `36b747a`, code `9a57d01`):

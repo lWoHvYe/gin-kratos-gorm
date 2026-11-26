@@ -58,8 +58,11 @@
   Order-owned `PRE_SHIP_REVOKED`, no `orders.status` write. **AC-27 remains
   AC-REF** because `AC-27-NOWB-01`/`AC-27-LIVE-01` are open. Architect DRAFT
   AC-27 R-2 conflicts with SPEC v1.5 and must be withdrawn/errata.
-- **Next**: close `AC-27-NOWB-01`/`AC-27-LIVE-01`, then Phase 0-R T2/T3/T4.4/
-  T5; no release/merge.
+- **Phase 0-R closeout FAIL** (`e02677d`): NOWB OPEN, LIVE BLOCKED -- no real
+  ops replay entry / AC-62 manual abandon; T6c is test-only. AC-27 stays
+  AC-REF. Needs a bounded ops-replay L2 or explicit deferral to T3.
+- **Next**: human decision on ops replay/AC-62, then T5 evidence; no
+  release/merge.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 

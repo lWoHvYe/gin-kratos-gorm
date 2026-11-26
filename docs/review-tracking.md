@@ -455,6 +455,18 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 Phase 0-R closeout FAIL: NOWB open, LIVE blocked
+
+- Reviewer `e02677d`: `AC-27-NOWB-01` **OPEN**, `AC-27-LIVE-01` **BLOCKED**;
+  AC-27 remains **AC-REF**; Phase 0-R not closable, `NOT RELEASE`.
+- NOWB: O19/O22/O20 + runbook only prove retain/audit/re-arm simulation; no
+  real S6 evidence registration or ops replay entry; no AC-62 manual-abandon
+  entry (AC-62 still AC-REF).
+- LIVE: T6c is a NATS consumer test, not an AC-61 manual replay entry; proto
+  has only internal `AdmitRefund`; `ReplayDLQ` is seckill-only; runbook is text.
+- Decision needed: new bounded L2 for ops replay/AC-62 manual abandon, or
+  defer NOWB/LIVE to T3 and accept AC-27 AC-REF, or redefine Phase 0-R.
+
 ### 2026-11-27 human decision: resume PAY-SETTLE-01 Phase 0-R
 
 - Director: resume the parent and continue **Phase 0-R closeout** first:

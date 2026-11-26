@@ -97,3 +97,69 @@ make proto-guard                                                            # OK
 ## 8. 不声称
 
 不声称实现 PASS / R0.4e / merge / Release PASS / AC-VERIFIED；AC-50/AC-69/AC-70 仍待 Reviewer 绑定证据；AC-72 后端段待 T5；不关闭 AC-27/Phase 0-R；`PAY-SETTLE-01` 保持冻结。
+
+---
+
+## 9. T1+T2 自检（追加；code head `ff7a847abf07b0e81f7e1bb9d5c0c3f11043c464`，base `ff0d912`）
+
+| 项 | 值 |
+|---|---|
+| 范围 | T1a–T1e（TCC）、T2b/T2c（AfterSales）、T2a（existing-first 复核，T0 已实现） |
+| Code head | **`ff7a847`**（8 files，+606/−13） |
+| 证据 | `.tmp/evidence-ac50-t1t2/`（HEAD 文件、targeted/full/race 日志），真实 MySQL 8.4.13 |
+
+### 9.1 T1（TCC）
+
+- **T1a** `ensureTccRemoteAdmissionTx`：`REVIEW_REQUIRED` 进入合法持久值集合（不再 “not a legal value” 早失败，不覆盖行/回滚）。
+- **T1b** `ensureTccApplicationTx`：单调检查接受 `REVIEW_REQUIRED`，已复核 application 不因重算 `PENDING_REMOTE` 判冲突。
+- **T1c** `refund_admission.go` 的 REVIEW Tx2 同事务写：`refund_batches.state=MANUAL_HOLD` + canonical `last_error`（`REVIEW_REQUIRED reason=CONSUMED_WITHOUT_SHIPMENT ticket=RVW:<refund_id>`，1024 列宽 D-35 截断）；**仅当 `refund_applications` 行已存在**时镜像 `admission_result=REVIEW_REQUIRED`（state 保持 PENDING）。`writeTccBatchGroupsTx` 对 `MANUAL_HOLD` 在**任何写入前**短路返回 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`；`admitTccApplication` 对已持久化 REVIEW 视为自动终止（re-arm 感知：以权威 admission 行为准，admission 被 re-arm 为 PENDING 时继续重评）；`admitTccBatch` 失败后重读 batch，返回稳定 token。
+- **T1d/W12**：MANUAL_HOLD 重试零状态变化（batch/application/admission `version` 不变、0 打款）。
+- **T1e/O16**：ops 审计 re-arm（`result→PENDING_REMOTE` + `batch MANUAL_HOLD→ADMITTING` 的 version CAS）后同 `batch_id`/`refund_id` 续跑：探测 `CANCELLED→PRE`、admission PRE、application PROCESSING/PRE、恰好 1 次 `RefundBatch`、canonical `last_error` 保留。
+- 未改 `tcc.go`/`tcc_payment.go`/`tcc_precheck.go`/`tcc_reconcile.go`；无新状态值/表/迁移/RPC。
+
+### 9.2 T2（AfterSales）
+
+- **T2b/O19/O23**：`workers.go` 从 **typed details** 识别 REVIEW（`apperr.Error` 与 gRPC `ErrorInfo` 两路；禁止 message 解析）；写 `after_sale_refund_tasks.last_error` = canonical `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（512 列，D-35 截断 + 单一 parser；未知 key/空 ticket/`arm=`/冒号/尾随空格判不可解析）；测试用 `apperr.GRPC(...)` 证明生产 gRPC 路径。
+- **T2c/O22/O22b**：REVIEW 任务始终保持 `PENDING`；8 次后**不自动 `FAILED_PERMANENT`**，扫描器在 `attempts>=8` 且 canonical REVIEW 时不再自动 claim（任务转人工队列）；**非 REVIEW** 8 次仍 `FAILED_PERMANENT`（回归用例通过）。
+- **T2a**：existing-first 幂等为 T0 的 `AdmitRefund` 前置裁决读取（Payment 前），O2/O2b/O2c 在 T0 证据与本次 TCC 重放用例中再次覆盖（`cancelCalls/getCalls` 不增、`refundCalls==0`）。
+
+### 9.3 命令与结果（HEAD `ff7a847`）
+
+```bash
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test ./internal/services/order \
+  -run 'TestTCCReview|TestAC50Review' -count=1 -v      # 10 PASS, ok 8.622s
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test -race ./internal/services/order \
+  -run 'TestTCCReview' -count=1                        # ok 3.122s
+TEST_MYSQL_DSN='.../mall_integration_t1_as...' go test ./internal/services/aftersales \
+  -run 'TestReview' -count=1 -v                        # 4 PASS, ok 2.977s
+TEST_MYSQL_DSN='.../mall_integration_t1_as...' go test -race ./internal/services/aftersales \
+  -run 'TestReview' -count=1                           # ok 3.476s
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test ./internal/services/order -count=1    # ok 160.306s
+TEST_MYSQL_DSN='.../mall_integration_t1_as...' go test ./internal/services/aftersales -count=1  # ok 26.002s
+```
+
+- 日志：`.tmp/evidence-ac50-t1t2/{HEAD.txt,order-targeted.log,tcc-race.log,aftersales.log,aftersales-race.log,order-full.log,aftersales-full.log}`。
+
+### 9.4 【测试范围】/【未覆盖范围】
+
+【测试范围】TCC REVIEW 合法读回/持批/0 打款/只阻塞本批/自动续跑 token/re-arm 续跑/重放 typed O2b/O2c；AfterSales typed gRPC+apperr 识别、canonical/截断/parser、PENDING@8、scanner 停止、非 REVIEW 8 次不变；全包回归与 `-race`。
+
+【未覆盖范围】
+
+- T3（部分金额）、T4（零元人工队列终态/legacy 完整矩阵）、T5（审计/metrics/ops runbook）、T6（NATS 消费/崩溃/DLQ）按 Plan 另派。
+- re-arm 仅 ops 审计 SQL（无 RPC/CLI；`REVIEW-REQUIRED-ENTRY-01` 另立）；无自动 re-arm。
+- TCC `last_error` 的 1024 列宽截断分支未在 DB 超限场景触发（`refund_id ≤128` 正常不触发；同一 builder 已在 512 列宽单测覆盖截断规则）。
+- 零元 REVIEW 不持久化已由 T0 覆盖；本次未扩展零元人工队列。
+
+### 9.5 反妥协自检 / 返工影响声明
+
+- 并发/超时/部分成功：REVIEW Tx2 与 batch/app 同事务（失败整体回滚）；MANUAL_HOLD 短路在写入前；0 行 CAS 只读回读；重试幂等；re-arm 感知避免“复核洗白/永久 conflict”；非 REVIEW 路径行为不变。
+- 是否加 if-else 绕过：未新增放行分支；REVIEW 判定收口于既有 `classifyExistingAdmission`/`admitTccApplication` 单一入口；AfterSales 只做 typed 检测 + 镜像，不解释结算语义。
+- 妥协（高亮）：① re-arm 仍是 ops SQL（Plan/ENTRY-01 边界）；② TCC 1024 截断未做 DB 级触发测试（见上）；③ T4/T5/T6 未交付。
+- `[修改点]`：`tcc_settlement.go`（合法值/单调/短路）、`tcc_admission.go`（REVIEW 自动终止+重读 batch）、`refund_admission.go`（T1c 同事务 batch/app + canonical）、`aftersales/workers.go`（typed 识别/canonical/parser/PENDING/扫描过滤）、`ac50_review_race_test.go`（签名）、新增 `tcc_review_integration_test.go`、`review_task_integration_test.go`、`ac50_review_integration_test.go` 的 O19 断言。
+- `[架构侵入性]`：无新状态/字段/表/迁移/RPC；复用 `MANUAL_HOLD` 与既有 `last_error`；批/申请/裁决同事务。
+- `[副作用评估]`：REVIEW 路径不再 8 次自动 FAILED；非 REVIEW 不变；TCC 自动续跑返回稳定 token；`refund_batches.last_error` 保留 canonical（reconcile 不清）。
+
+### 9.6 不声称
+
+不声称实现 PASS / R0.4e / merge / Release PASS / AC-VERIFIED；AC-50/51/69/70/71/72 待 Reviewer 绑定证据；T3–T6、ENTRY-01、ALERTS-01 未交付；`PAY-SETTLE-01` 仍冻结。

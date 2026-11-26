@@ -1,27 +1,23 @@
-# PAY-OPS-REPLAY-01 Tasks (L2)
+# PAY-OPS-REPLAY-01 Tasks (L2, manual runbook + drill)
 
-Status: **DRAFT — pending OPS-C1..C3**；change_id `PAY-OPS-REPLAY-01`；Parent `PAY-SETTLE-01` paused；Base `160a45d`。
+Status: **DRAFT — pending OPS-P1..P3**；change_id `PAY-OPS-REPLAY-01`；Parent `PAY-SETTLE-01` paused；Base `d2ae89b`。
+人类 waiver C+A：人工入口；disposable MySQL 8.4 演练 + Reviewer 后可 AC-27 AC-VERIFIED。
 
-## Phase 0 — 设计与批准
+## Phase 0 — 规程与批准
 
-- [ ] **OPS-C1** Architect design/impact：运维入口（优先无新 RPC）、幂等键、lease/CAS、授权/审计、DLQ 定位、恢复 owner、崩溃窗口；输出 ADR addendum/impact（Owner: Architect）
-- [ ] **OPS-C2** QC 设计审查：异常分支/测试矩阵/越权；0 BLOCKER（Owner: QC）
-- [ ] **OPS-C3** 人类批准设计/Plan（Owner: Human）
-- [ ] **OPS-C3b** Lead 收窄 allowed_paths（设计定稿后）
+- [ ] **OPS-P1** Architect 人工规程（`docs/ops.md`）：DLQ/租约定位、重放、NOWB re-arm/abandon、双人授权、审计、失败/回滚、禁止项（Owner: Architect）
+- [ ] **OPS-P2** QC 规程审查：授权/双人/审计/幂等/重复/越权/AC-62/INV-45（Owner: QC）
+- [ ] **OPS-P3** 人类批准 runbook/Plan（Owner: Human）
+- [ ] **OPS-P3b** Lead 收窄 allowed_paths（规程定稿后）
 
-## Phase 1 — 实现
+## Phase 1 — 演练
 
-- [ ] **OPS-2** NOWB 人工处置：S6 证据登记 + re-arm；无法补齐→人工放弃（AC-62 授权/审计），不释放/不恢复 permit/不关闭组（Owner: Developer）
-- [ ] **OPS-3** AC-61 重放：`aftersale.completed` DLQ/租约丢失，仅重驱动未完成 task；幂等/并发/崩溃（Owner: Developer）
-- [ ] **OPS-4** 测试/证据：真实 MySQL + NATS；授权拒绝/审计/重复重放/崩溃（Owner: Developer + Reviewer）
-
-## Phase 2 — 复审/交回
-
-- [ ] **OPS-5** Reviewer scoped verdict（NOT RELEASE）
-- [ ] **OPS-6** 交回 PAY-SETTLE-01，复审 AC-27/NOWB/LIVE（Owner: Lead/Reviewer）
+- [ ] **OPS-P4** Developer `scripts/drill-ops-replay.sh` + 证据：DLQ 重放、租约丢失重放、NOWB re-arm、NOWB abandon、重复/越权/失败；真实 MySQL 8.4 + NATS；绑定 HEAD（Owner: Developer）
+- [ ] **OPS-P5** Reviewer 核对规程/drill；按 waiver 决定 AC-27 是否 AC-VERIFIED（Owner: Reviewer）
+- [ ] **OPS-P6** 交回 PAY-SETTLE-01（Owner: Lead）
 
 ## Stop
 
-- 新 RPC/迁移/新状态字段未批准 → stop。
+- 需新工具/迁移/RPC → 回人类。
 - 重复退款/释放/permit 恢复 → stop。
-- 未授权人工放弃/无审计 → stop。
+- 未授权/无双人/无审计 → stop。

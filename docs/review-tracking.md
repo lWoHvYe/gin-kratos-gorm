@@ -455,6 +455,19 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 human waiver: manual ops procedure replaces tool entry
+
+- Scope: `PAY-OPS-REPLAY-01` / `AC-27-NOWB-01` / `AC-27-LIVE-01`.
+- Decision (C+A): no `cmd/ops`, no `ops_action_authorizations`, no `0024`, no
+  new RPC. A **manual ops runbook** (DBA/ops SQL + dual control + audit log)
+  is the entry; a **disposable MySQL 8.4 drill** of DLQ replay and NOWB
+  re-arm/abandon, bound to HEAD and verified by Reviewer, may mark **AC-27
+  AC-VERIFIED** (acceptance-semantics waiver).
+- Expiry 2026-12-31; does not waive Release/merge or any other AC; the
+  withdrawn `cmd/ops`/0024 design is not a contract.
+- Affected invariants: INV-45 (no release/permit restore), AC-61/62;
+  manual procedure must preserve canonical `last_error` and audit.
+
 ### 2026-11-27 change freeze: PAY-OPS-REPLAY-01 opened
 
 - Human chose option A: new bounded L2 `PAY-OPS-REPLAY-01` for real AC-61

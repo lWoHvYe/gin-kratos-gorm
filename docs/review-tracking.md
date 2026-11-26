@@ -455,6 +455,18 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 T2.4 BLOCKED: legacy_expired release source
+
+- Zero gate MAJOR fixed (system_zero resolves historical zero before the
+  short-circuit; no direct CONFLICT).
+- T2.4 worker/queue implemented (`e6d8bf9`), but `legacy_expired` is not a
+  legal INV-44 release source (`refund_release.go:32-48` closed enum; events
+  lack source/reason). Worker stops at `COMPENSATING` with permit REVOKED,
+  0 release/0 refund; `EXPIRED_REFUND`/7-day close/`REJECTED` not delivered.
+- Needs Architect ruling: add `legacy_expired` release source/reason
+  (additive event value, no RPC/migration) or explicit deferral to T3.
+- No AC-60/63 VERIFIED.
+
 ### 2026-11-27 T2a PASS scoped; zero gate MAJOR
 
 - Reviewer `b907d26` (base `106e5ac`, head `b73ac51`, code `1e57c15`):

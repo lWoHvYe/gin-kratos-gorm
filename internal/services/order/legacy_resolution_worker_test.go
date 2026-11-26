@@ -10,6 +10,9 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/metrics"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func seedTccItemZero(t *testing.T, db *sql.DB, orderNo string) {
@@ -302,5 +305,152 @@ func TestLegacyTimerVsManualResolveCAS(t *testing.T) {
 		// The manual command may lose to the timer; both are acceptable as long
 		// as the terminal row is single and not reopened.
 		t.Logf("manual lost to timer: %v", errs[1])
+	}
+}
+
+func TestLegacyResolutionMetricsAlertKeysAndAge(t *testing.T) {
+	db := legacyTestDB(t)
+	svc := legacyService(db)
+	for _, row := range []struct{ order, state string }{
+		{"ORD-LR-MOPEN", legacyResolutionStateOpen},
+		{"ORD-LR-MCOMP", legacyResolutionStateCompensating},
+		{"ORD-LR-MFIN", legacyResolutionStateExpiredFinance},
+	} {
+		seedTccOrder(t, db, row.order, 10000, 10000, 0, 0, "")
+		seedLegacyQueue(t, db, row.order, row.state)
+		if _, err := db.Exec(`UPDATE legacy_payment_resolution
+			SET updated_at = DATE_SUB(NOW(3), INTERVAL 2 HOUR) WHERE order_no = ?`, row.order); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := svc.refreshLegacyResolutionGauges(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := legacyGauge(t, "mall_legacy_payment_resolution_backlog", legacyResolutionStateOpen); got != 1 {
+		t.Fatalf("OPEN backlog = %v", got)
+	}
+	if got := legacyGauge(t, "mall_legacy_payment_resolution_backlog", legacyResolutionStateCompensating); got != 1 {
+		t.Fatalf("COMPENSATING backlog = %v", got)
+	}
+	if got := legacyGauge(t, "mall_legacy_payment_resolution_oldest_seconds", legacyResolutionStateCompensating); got < 7000 {
+		t.Fatalf("COMPENSATING oldest = %v", got)
+	}
+	if metrics.LegacyResolutionAlertBacklog != "LEGACY_PAYMENT_RESOLUTION_BACKLOG" ||
+		metrics.LegacyResolutionAlertOldest != "LEGACY_PAYMENT_RESOLUTION_OLDEST" ||
+		metrics.LegacyResolutionAlertCompensatingOldest != "LEGACY_PAYMENT_RESOLUTION_COMPENSATING_OLDEST" ||
+		metrics.LegacyResolutionAlertFinanceOverdue != "LEGACY_PAYMENT_RESOLUTION_FINANCE_OVERDUE" {
+		t.Fatal("stable alert keys changed")
+	}
+}
+
+func legacyGauge(t *testing.T, name, state string) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if family.GetName() != name {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "state" && label.GetValue() == state {
+					return metric.GetGauge().GetValue()
+				}
+			}
+		}
+	}
+	t.Fatalf("gauge %s{state=%s} not found", name, state)
+	return 0
+}
+
+func TestLegacyRejectedViaResolveCannotReopen(t *testing.T) {
+	db := legacyTestDB(t)
+	svc := legacyService(db)
+	seedTccOrder(t, db, "ORD-LR-REJ", 10000, 10000, 0, 0, "")
+	seedLegacyQueue(t, db, "ORD-LR-REJ", legacyResolutionStateOpen)
+	ctx := context.Background()
+	res, err := svc.ResolveLegacyResolution(ctx, &pb.ResolveLegacyResolutionRequest{
+		OrderNo: "ORD-LR-REJ", ResolutionId: "lpr:ORD-LR-REJ", PaymentNo: "",
+		Operator: "ops-1", AuthorizedBy: "admin-1", EvidenceRef: "EVID-DIRTY",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.GetState() != "REJECTED" || res.GetResolutionKind() != "REJECTED" || res.GetBlockedScope() != "REJECTED_HOLD" {
+		t.Fatalf("rejected view = %+v", res)
+	}
+	if got := orderSettlementNo(t, db, "ORD-LR-REJ"); got != "" {
+		t.Fatalf("REJECTED wrote settlement %q", got)
+	}
+	if _, err := svc.ResolveLegacyResolution(ctx, &pb.ResolveLegacyResolutionRequest{
+		OrderNo: "ORD-LR-REJ", ResolutionId: "lpr:ORD-LR-REJ", PaymentNo: "PAY-LR-REJ",
+		Operator: "ops-2", AuthorizedBy: "admin-2", EvidenceRef: "EVID-2",
+	}); err == nil {
+		t.Fatal("REJECTED was reopened")
+	}
+}
+
+func TestLegacyExpiredFinanceSevenDayClose(t *testing.T) {
+	db := legacyTestDB(t)
+	svc := legacyService(db)
+	seedTccOrder(t, db, "ORD-LR-FIN", 10000, 10000, 0, 0, "")
+	seedLegacyQueue(t, db, "ORD-LR-FIN", legacyResolutionStateExpiredFinance)
+	if _, err := db.Exec(`UPDATE legacy_payment_resolution
+		SET resolution_kind='EXPIRED_FINANCE', blocked_scope='FINANCE_HOLD',
+		    resolution_id='lpr:ORD-LR-FIN', resolved_at=DATE_SUB(NOW(3), INTERVAL 1 DAY)
+		WHERE order_no='ORD-LR-FIN'`); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := svc.ResolveLegacyResolution(ctx, &pb.ResolveLegacyResolutionRequest{
+		OrderNo: "ORD-LR-FIN", ResolutionId: "lpr:ORD-LR-FIN", PaymentNo: "",
+		Operator: "finance-1", AuthorizedBy: "cfo-1", EvidenceRef: "FIN-EVID-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var closed sql.NullTime
+	if err := db.QueryRow(`SELECT closed_at FROM legacy_payment_resolution WHERE order_no='ORD-LR-FIN'`).Scan(&closed); err != nil {
+		t.Fatal(err)
+	}
+	if !closed.Valid {
+		t.Fatal("EXPIRED_FINANCE was not closed")
+	}
+	if _, err := svc.ResolveLegacyResolution(ctx, &pb.ResolveLegacyResolutionRequest{
+		OrderNo: "ORD-LR-FIN", ResolutionId: "lpr:ORD-LR-FIN", PaymentNo: "",
+		Operator: "finance-2", AuthorizedBy: "cfo-2", EvidenceRef: "FIN-EVID-2",
+	}); err == nil {
+		t.Fatal("closed EXPIRED_FINANCE was reopened")
+	}
+}
+
+func TestLegacyExpiredFinanceOverdueEscalatesWithoutClose(t *testing.T) {
+	db := legacyTestDB(t)
+	svc := legacyService(db)
+	seedTccOrder(t, db, "ORD-LR-OVER", 10000, 10000, 0, 0, "")
+	seedLegacyQueue(t, db, "ORD-LR-OVER", legacyResolutionStateExpiredFinance)
+	if _, err := db.Exec(`UPDATE legacy_payment_resolution
+		SET resolution_kind='EXPIRED_FINANCE', blocked_scope='FINANCE_HOLD',
+		    resolution_id='lpr:ORD-LR-OVER', resolved_at=DATE_SUB(NOW(3), INTERVAL 8 DAY)
+		WHERE order_no='ORD-LR-OVER'`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.ResolveLegacyResolution(context.Background(), &pb.ResolveLegacyResolutionRequest{
+		OrderNo: "ORD-LR-OVER", ResolutionId: "lpr:ORD-LR-OVER", PaymentNo: "",
+		Operator: "finance-1", AuthorizedBy: "cfo-1", EvidenceRef: "FIN-EVID-1",
+	})
+	if err == nil {
+		t.Fatal("overdue EXPIRED_FINANCE was closed without escalation")
+	}
+	if got := apperr.From(err).Details["reason"]; got != "LEGACY_FINANCE_ESCALATION_REQUIRED" {
+		t.Fatalf("overdue reason = %v", got)
+	}
+	var closed sql.NullTime
+	if err := db.QueryRow(`SELECT closed_at FROM legacy_payment_resolution WHERE order_no='ORD-LR-OVER'`).Scan(&closed); err != nil {
+		t.Fatal(err)
+	}
+	if closed.Valid {
+		t.Fatal("overdue EXPIRED_FINANCE was closed")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/db"
+	"gin-kratos-gorm/internal/platform/metrics"
 )
 
 // RunLegacyResolutionWorker drives the T2.4 SLA state machine. It is safe on
@@ -35,6 +36,9 @@ func RunLegacyResolutionWorker(ctx context.Context, svc *Service, logger *slog.L
 }
 
 func (s *Service) expireLegacyResolutions(ctx context.Context) error {
+	if err := s.refreshLegacyResolutionGauges(ctx); err != nil {
+		s.log.Warn("refresh legacy resolution gauges", "error", err)
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT order_no FROM legacy_payment_resolution
 		WHERE state IN (?, ?) AND expires_at <= NOW(3)
 		ORDER BY expires_at LIMIT 100`, legacyResolutionStateOpen, legacyResolutionStateResolving)
@@ -74,6 +78,36 @@ func (s *Service) claimLegacyResolution(ctx context.Context, orderNo string) boo
 	}
 	n, _ := res.RowsAffected()
 	return n == 1
+}
+
+// refreshLegacyResolutionGauges runs inside the existing worker tick; it adds
+// no worker/scanner. Stable alert keys are documented in docs/ops.md.
+func (s *Service) refreshLegacyResolutionGauges(ctx context.Context) error {
+	states := []string{legacyResolutionStateOpen, legacyResolutionStateResolving,
+		legacyResolutionStateCompensating, legacyResolutionStateExpiredFinance}
+	for _, state := range states {
+		metrics.LegacyPaymentResolutionBacklog.WithLabelValues(state).Set(0)
+		metrics.LegacyPaymentResolutionOldestSeconds.WithLabelValues(state).Set(0)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT state, COUNT(*),
+		COALESCE(TIMESTAMPDIFF(SECOND, MIN(updated_at), NOW(3)), 0)
+		FROM legacy_payment_resolution
+		WHERE state IN (?, ?, ?, ?)
+		GROUP BY state`, states[0], states[1], states[2], states[3])
+	if err != nil {
+		return apperr.Internal("refresh legacy resolution gauges", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var state string
+		var backlog, oldest int64
+		if err := rows.Scan(&state, &backlog, &oldest); err != nil {
+			return apperr.Internal("scan legacy resolution gauges", err)
+		}
+		metrics.LegacyPaymentResolutionBacklog.WithLabelValues(state).Set(float64(backlog))
+		metrics.LegacyPaymentResolutionOldestSeconds.WithLabelValues(state).Set(float64(oldest))
+	}
+	return rows.Err()
 }
 
 var errLegacyCompensationBlocked = errors.New("legacy compensation release source unsupported")
@@ -267,7 +301,7 @@ func (s *Service) terminalLegacyResolution(ctx context.Context, orderNo, state, 
 		}
 		_, err := tx.ExecContext(ctx, `UPDATE legacy_payment_resolution
 			SET state = ?, resolution_kind = ?, resolution_id = ?, blocked_scope = ?,
-			    resolved_payment_no = ?, resolved_at = IF(? IN ('RESOLVED','EXPIRED_ZERO','EXPIRED_REFUND'), NOW(3), resolved_at),
+			    resolved_payment_no = ?, resolved_at = IF(? IN ('RESOLVED','EXPIRED_ZERO','EXPIRED_REFUND','EXPIRED_FINANCE'), NOW(3), resolved_at),
 			    closed_at = IF(? IN ('EXPIRED_FINANCE','REJECTED'), NOW(3), closed_at),
 			    lease_owner = '', lease_until = NULL, version = version + 1, updated_at = NOW(3)
 			WHERE order_no = ? AND state IN (?, ?, ?) AND version = ?`,
@@ -298,8 +332,8 @@ func (s *Service) ResolveLegacyResolution(ctx context.Context, req *pb.ResolveLe
 	authorizedBy := strings.TrimSpace(req.GetAuthorizedBy())
 	evidence := strings.TrimSpace(req.GetEvidenceRef())
 	resolutionID := strings.TrimSpace(req.GetResolutionId())
-	if orderNo == "" || paymentNo == "" || operator == "" || authorizedBy == "" || evidence == "" || resolutionID == "" {
-		return nil, apperr.Invalid("order_no, resolution_id, payment_no, operator, authorized_by and evidence_ref are required")
+	if orderNo == "" || operator == "" || authorizedBy == "" || evidence == "" || resolutionID == "" {
+		return nil, apperr.Invalid("order_no, resolution_id, operator, authorized_by and evidence_ref are required")
 	}
 	if resolutionID != "lpr:"+orderNo {
 		return nil, apperr.Failed("resolution_id does not match the order").
@@ -307,43 +341,81 @@ func (s *Service) ResolveLegacyResolution(ctx context.Context, req *pb.ResolveLe
 	}
 	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
 		var state string
-		if err := tx.QueryRowContext(ctx, `SELECT state FROM legacy_payment_resolution
-			WHERE order_no = ? FOR UPDATE`, orderNo).Scan(&state); err != nil {
+		var resolvedAt, closedAt sql.NullTime
+		if err := tx.QueryRowContext(ctx, `SELECT state, resolved_at, closed_at
+			FROM legacy_payment_resolution WHERE order_no = ? FOR UPDATE`, orderNo).
+			Scan(&state, &resolvedAt, &closedAt); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return apperr.NotFound("legacy resolution not found")
 			}
 			return apperr.Internal("load legacy resolution for resolve", err)
 		}
-		if state != legacyResolutionStateOpen && state != legacyResolutionStateResolving {
-			return apperr.Failed("legacy resolution is not OPEN/RESOLVING").
+		switch state {
+		case legacyResolutionStateOpen, legacyResolutionStateResolving:
+			if paymentNo == "" {
+				// REJECTED is the existing Resolve command's terminal for dirty
+				// data; it never touches orders/permits/release/Payment.
+				_, err := tx.ExecContext(ctx, `UPDATE legacy_payment_resolution
+					SET state = 'REJECTED', resolution_kind = 'REJECTED', resolution_id = ?,
+					    blocked_scope = 'REJECTED_HOLD', operator = ?, authorized_by = ?, evidence_ref = ?,
+					    closed_at = NOW(3), lease_owner = '', lease_until = NULL,
+					    version = version + 1, updated_at = NOW(3)
+					WHERE order_no = ? AND state IN (?, ?)`,
+					resolutionID, operator, authorizedBy, evidence, orderNo,
+					legacyResolutionStateOpen, legacyResolutionStateResolving)
+				if err != nil {
+					return apperr.Internal("write legacy REJECTED", err)
+				}
+				return nil
+			}
+			var current string
+			if err := tx.QueryRowContext(ctx, `SELECT settlement_payment_no FROM orders
+				WHERE order_no = ? FOR UPDATE`, orderNo).Scan(&current); err != nil {
+				return apperr.Internal("lock order for legacy resolve", err)
+			}
+			if strings.TrimSpace(current) != "" {
+				return apperr.Conflict("order already has an effective payment")
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE orders
+				SET settlement_payment_no = ?, version = version + 1, updated_at = NOW(3)
+				WHERE order_no = ? AND status = ? AND settlement_payment_no = ''`,
+				paymentNo, orderNo, statusPaid); err != nil {
+				return apperr.Internal("write resolved legacy payment", err)
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE legacy_payment_resolution
+				SET state = ?, resolution_kind = 'MANUAL', resolution_id = ?, blocked_scope = 'NONE',
+				    resolved_payment_no = ?, operator = ?, authorized_by = ?, evidence_ref = ?,
+				    resolved_at = NOW(3), lease_owner = '', lease_until = NULL,
+				    version = version + 1, updated_at = NOW(3)
+				WHERE order_no = ? AND state IN (?, ?)`,
+				legacyResolutionStateResolved, resolutionID, paymentNo, operator, authorizedBy, evidence,
+				orderNo, legacyResolutionStateOpen, legacyResolutionStateResolving)
+			if err != nil {
+				return apperr.Internal("write legacy RESOLVED", err)
+			}
+			return nil
+		case legacyResolutionStateExpiredFinance:
+			if closedAt.Valid {
+				return apperr.Failed("EXPIRED_FINANCE is already closed; terminal rows cannot be reopened").
+					WithDetails(map[string]any{"order_no": orderNo, "state": state})
+			}
+			if resolvedAt.Valid && resolvedAt.Time.Add(7*24*time.Hour).Before(time.Now()) {
+				return apperr.Failed("EXPIRED_FINANCE is older than 7 days; escalate to a higher authorization role").
+					WithDetails(map[string]any{"order_no": orderNo, "state": state, "reason": "LEGACY_FINANCE_ESCALATION_REQUIRED"})
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE legacy_payment_resolution
+				SET closed_at = NOW(3), operator = ?, authorized_by = ?, evidence_ref = ?,
+				    version = version + 1, updated_at = NOW(3)
+				WHERE order_no = ? AND state = 'EXPIRED_FINANCE' AND closed_at IS NULL`,
+				operator, authorizedBy, evidence, orderNo)
+			if err != nil {
+				return apperr.Internal("close legacy EXPIRED_FINANCE", err)
+			}
+			return nil
+		default:
+			return apperr.Failed("legacy resolution is terminal and cannot be reopened").
 				WithDetails(map[string]any{"order_no": orderNo, "state": state})
 		}
-		var current string
-		if err := tx.QueryRowContext(ctx, `SELECT settlement_payment_no FROM orders
-			WHERE order_no = ? FOR UPDATE`, orderNo).Scan(&current); err != nil {
-			return apperr.Internal("lock order for legacy resolve", err)
-		}
-		if strings.TrimSpace(current) != "" {
-			return apperr.Conflict("order already has an effective payment")
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE orders
-			SET settlement_payment_no = ?, version = version + 1, updated_at = NOW(3)
-			WHERE order_no = ? AND status = ? AND settlement_payment_no = ''`,
-			paymentNo, orderNo, statusPaid); err != nil {
-			return apperr.Internal("write resolved legacy payment", err)
-		}
-		_, err := tx.ExecContext(ctx, `UPDATE legacy_payment_resolution
-			SET state = ?, resolution_kind = 'MANUAL', resolution_id = ?, blocked_scope = 'NONE',
-			    resolved_payment_no = ?, operator = ?, authorized_by = ?, evidence_ref = ?,
-			    resolved_at = NOW(3), lease_owner = '', lease_until = NULL,
-			    version = version + 1, updated_at = NOW(3)
-			WHERE order_no = ? AND state IN (?, ?)`,
-			legacyResolutionStateResolved, resolutionID, paymentNo, operator, authorizedBy, evidence,
-			orderNo, legacyResolutionStateOpen, legacyResolutionStateResolving)
-		if err != nil {
-			return apperr.Internal("write legacy RESOLVED", err)
-		}
-		return nil
 	})
 	if err != nil {
 		return nil, err

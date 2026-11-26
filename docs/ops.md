@@ -1187,3 +1187,94 @@ forged/expired/same-person authorization, D9 concurrent CAS and the final
 invariants (0 duplicate refund rows, 0 release events, permit unchanged,
 `refunded_cent` unchanged). Exit 0 = all checks passed; any non-zero exit
 means stop and do not use this runbook in production until re-reviewed.
+
+## Legacy PAID resolution queue (T2.4, PAY-SETTLE-01)
+
+> **Owner: ops-first, finance-second.** This queue is not AC-63 closure: it
+> never releases reservations, never calls Payment for `COMPENSATING` and never
+> writes `EXPIRED_REFUND` until the INV-44 release contract is ruled. Every
+> row is one `legacy_payment_resolution` record keyed by `order_no`.
+
+### SLA, ownership and alert keys
+
+| State | Owner | SLA / action |
+|---|---|---|
+| `OPEN` / `RESOLVING` | ops (DBA/CS) | Resolve within **24h** (DB time). Use `ResolveLegacyResolution` with candidate evidence or reject dirty data. |
+| `COMPENSATING` | **ops + finance** | Claim and reconcile the permit/CancelIfCreated prefix; do **not** call Payment or write a release. Escalate to Lead/Architect for the release source ruling. No automatic expiry. |
+| `EXPIRED_FINANCE` | **finance/authorized role only** | Close with `ResolveLegacyResolution` within **7 days** of entering the state; after 7 days the command fails with `LEGACY_FINANCE_ESCALATION_REQUIRED` — escalate to a higher authorizer; state stays `EXPIRED_FINANCE` (never reopened). |
+| `REJECTED` | ops + Reviewer | Entered via `ResolveLegacyResolution` with empty `payment_no`; terminal, no ship/refund/release. |
+
+Stable alert keys (names are fixed strings; alert rules must use them):
+
+- `LEGACY_PAYMENT_RESOLUTION_BACKLOG` — `mall_legacy_payment_resolution_backlog{state=...} > 0` for 10m.
+- `LEGACY_PAYMENT_RESOLUTION_OLDEST` — `mall_legacy_payment_resolution_oldest_seconds{state="OPEN"|"RESOLVING"} > 86400`.
+- `LEGACY_PAYMENT_RESOLUTION_COMPENSATING_OLDEST` — `mall_legacy_payment_resolution_oldest_seconds{state="COMPENSATING"} > 86400`.
+- `LEGACY_PAYMENT_RESOLUTION_FINANCE_OVERDUE` — `mall_legacy_payment_resolution_oldest_seconds{state="EXPIRED_FINANCE"} > 604800` (7d).
+
+The gauges are refreshed by the existing `RunLegacyResolutionWorker` tick
+(1 minute); there is no new worker/scanner. The worker only claims
+`OPEN/RESOLVING` expiry rows and enters `COMPENSATING`; it cannot complete
+`COMPENSATING` while the release source is unresolved.
+
+### Queries and manual claim
+
+```sql
+-- backlog / oldest by state
+SELECT state, COUNT(*) AS backlog,
+       TIMESTAMPDIFF(SECOND, MIN(updated_at), NOW(3)) AS oldest_seconds
+  FROM legacy_payment_resolution
+ WHERE state IN ('OPEN','RESOLVING','COMPENSATING','EXPIRED_FINANCE')
+ GROUP BY state ORDER BY state;
+
+-- one queue item, with the order facts
+SELECT r.order_no, r.state, r.candidate_count, r.pay_cent, r.blocked_scope,
+       r.resolution_id, r.resolved_at, r.closed_at, r.lease_owner, r.lease_until,
+       o.status, o.pay_cent, o.paid_cent, o.settlement_payment_no
+  FROM legacy_payment_resolution r
+  JOIN orders o ON o.order_no = r.order_no
+ WHERE r.order_no = '<order_no>';
+
+-- claim a COMPENSATING item for manual reconciliation (no state change)
+UPDATE legacy_payment_resolution
+   SET lease_owner = '<named-operator>', lease_until = DATE_ADD(NOW(3), INTERVAL 30 MINUTE),
+       version = version + 1, updated_at = NOW(3)
+ WHERE order_no = '<order_no>' AND state = 'COMPENSATING'
+   AND (lease_until IS NULL OR lease_until < NOW(3));
+```
+
+For `COMPENSATING`, verify the worker prefix: `NONE` permit is `REVOKED`,
+`CONSUMED+CREATED` shipment was `CancelIfCreated` (`shipment_events` CANCELLED),
+and no `inventory.refund_release_requested` / Payment refund exists. Then stop:
+record `LEGACY_PAYMENT_RESOLUTION_COMPENSATING_OLDEST`, the order/refund ids and
+the ruling request in the ticket; **do not** run a release or `Payment.Refund`
+manually.
+
+### Resolve / reject / finance close (existing RPC, no new RPC)
+
+```bash
+# OPEN/RESOLVING with a verified unique candidate
+grpcurl ... mall.v1.OrderService/ResolveLegacyResolution \
+  -d '{"order_no":"<order_no>","resolution_id":"lpr:<order_no>",
+       "payment_no":"<candidate>","operator":"<named>","authorized_by":"<admin>",
+       "evidence_ref":"<ticket/evidence>"}'
+
+# dirty data -> REJECTED (empty payment_no)
+grpcurl ... .../ResolveLegacyResolution \
+  -d '{"order_no":"<order_no>","resolution_id":"lpr:<order_no>","payment_no":"",
+       "operator":"<named>","authorized_by":"<admin>","evidence_ref":"<ticket>"}'
+
+# EXPIRED_FINANCE close within 7 days (state stays EXPIRED_FINANCE)
+grpcurl ... .../ResolveLegacyResolution \
+  -d '{"order_no":"<order_no>","resolution_id":"lpr:<order_no>","payment_no":"",
+       "operator":"<finance>","authorized_by":"<finance-authorizer>","evidence_ref":"<ticket>"}'
+```
+
+- `Resolved` writes the unique `settlement_payment_no` CAS and queue `RESOLVED`,
+  then `AdmitRefund`/`AuthorizeShipment` resume automatically; do not call a
+  resume command.
+- Reject/close never write order settlement, permits, release, Payment or
+  `EXPIRED_REFUND`; terminal rows cannot be reopened.
+- After 7 days the close returns `LEGACY_FINANCE_ESCALATION_REQUIRED`; escalate
+  to the higher authorizer and keep the row `EXPIRED_FINANCE` (no auto-close).
+- Every action: ticket + named operator/authorizer + evidence ref; Reviewer
+  verifies the original evidence. No technical non-repudiation is claimed.

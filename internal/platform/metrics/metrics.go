@@ -101,6 +101,32 @@ var (
 		Help: "Age of the oldest pending after-sale refund task in seconds.",
 	})
 
+	// LegacyPaymentResolution* expose the T2.4 manual queue. Stable alert keys:
+	// LEGACY_PAYMENT_RESOLUTION_BACKLOG (backlog > 0),
+	// LEGACY_PAYMENT_RESOLUTION_OLDEST (oldest OPEN/RESOLVING > 24h),
+	// LEGACY_PAYMENT_RESOLUTION_COMPENSATING_OLDEST (COMPENSATING age),
+	// LEGACY_PAYMENT_RESOLUTION_FINANCE_OVERDUE (EXPIRED_FINANCE > 7d).
+	LegacyPaymentResolutionBacklog = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "mall_legacy_payment_resolution_backlog",
+		Help: "Rows in legacy_payment_resolution by state (OPEN/RESOLVING/COMPENSATING/EXPIRED_FINANCE).",
+	}, []string{"state"})
+	LegacyPaymentResolutionOldestSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "mall_legacy_payment_resolution_oldest_seconds",
+		Help: "Age of the oldest row in legacy_payment_resolution by state.",
+	}, []string{"state"})
+)
+
+const (
+	// Alert keys are stable strings consumed by the ops alert rules; do not
+	// rename without a docs/ops.md + alert change.
+	LegacyResolutionAlertBacklog            = "LEGACY_PAYMENT_RESOLUTION_BACKLOG"
+	LegacyResolutionAlertOldest             = "LEGACY_PAYMENT_RESOLUTION_OLDEST"
+	LegacyResolutionAlertCompensatingOldest = "LEGACY_PAYMENT_RESOLUTION_COMPENSATING_OLDEST"
+	LegacyResolutionAlertFinanceOverdue     = "LEGACY_PAYMENT_RESOLUTION_FINANCE_OVERDUE"
+)
+
+var (
+
 	// PaymentRefundEvents tracks compensation events consumed by payment.
 	PaymentRefundEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "mall_payment_refund_events_total",
@@ -269,5 +295,6 @@ func init() {
 		InventoryLedgerRows, InventoryLedgerOldestSeconds, InventoryLedgerArchived, AIFeedback,
 		AfterSaleRestockBacklog, AfterSaleRestockOldestSeconds,
 		AfterSaleRefundBacklog, AfterSaleRefundOldestSeconds,
-		RefundReviewBacklog, RefundReviewOldestSeconds)
+		RefundReviewBacklog, RefundReviewOldestSeconds,
+		LegacyPaymentResolutionBacklog, LegacyPaymentResolutionOldestSeconds)
 }

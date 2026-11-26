@@ -7,6 +7,7 @@ import (
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+	"gin-kratos-gorm/internal/platform/metrics"
 )
 
 // RunExpiry cancels unpaid orders whose payment window has elapsed. It is safe
@@ -23,6 +24,9 @@ func RunExpiry(ctx context.Context, db *sql.DB, svc *Service, logger *slog.Logge
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			if err := refreshRefundReviewGauges(ctx, db); err != nil {
+				logger.Warn("refresh refund review gauges", "error", err)
+			}
 			rows, err := db.QueryContext(ctx, `SELECT order_no FROM orders
 				WHERE status = ? AND expire_at <= NOW(3) ORDER BY expire_at LIMIT 100`, statusPendingPayment)
 			if err != nil {
@@ -47,4 +51,22 @@ func RunExpiry(ctx context.Context, db *sql.DB, svc *Service, logger *slog.Logge
 			}
 		}
 	}
+}
+
+// refreshRefundReviewGauges refreshes the AC-72 backend gauges from the
+// authoritative admission rows. It is read-only and deliberately has no worker
+// of its own: it rides the existing expiry tick. Zero-amount conflicts never
+// write these rows, so they are excluded by construction.
+func refreshRefundReviewGauges(ctx context.Context, db *sql.DB) error {
+	var backlog, oldest int64
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*),
+		COALESCE(TIMESTAMPDIFF(SECOND, MIN(updated_at), NOW(3)), 0)
+		FROM order_refund_admissions
+		WHERE result = ? AND state = ?`, "REVIEW_REQUIRED", "PENDING_REMOTE").
+		Scan(&backlog, &oldest); err != nil {
+		return err
+	}
+	metrics.RefundReviewBacklog.Set(float64(backlog))
+	metrics.RefundReviewOldestSeconds.Set(float64(oldest))
+	return nil
 }

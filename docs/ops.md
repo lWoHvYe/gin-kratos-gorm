@@ -820,3 +820,120 @@ post-upgrade Job. Trigger a build manually with:
 ```bash
 kubectl -n mall create job --from=cronjob/ai-rag-build-scheduled ai-rag-build-manual
 ```
+
+## Refund review queue (AC-72 backend segment)
+
+> Owner: ops (queue/SLA) + Developer (Order data checks) + AfterSales (task
+> mirror) + Fulfillment (S6 evidence). Expiry 2026-12-31. The 5-minute alert
+> rule and the end-user entry are **not** part of this runbook:
+> `REVIEW-REQUIRED-ALERTS-01` (deploy) and `REVIEW-REQUIRED-ENTRY-01`
+> (frontend/BFF) own them; until they land, keep the existing "退款处理中" copy.
+
+A persisted refund review is `order_refund_admissions.result='REVIEW_REQUIRED'`
+with `state='PENDING_REMOTE'`. It is **not** an admission result and **not** a
+terminal state: the permit stays `CONSUMED`, the commitment stays `RESERVED`,
+no Payment command ran, and the group is not closed. Zero-amount conflicts are
+**not** persisted and never appear in these queries.
+
+### Discovery and SLA
+
+```sql
+-- backlog + oldest (the two AC-72 gauges; per source/reason via logs)
+SELECT COUNT(*) AS backlog,
+       COALESCE(TIMESTAMPDIFF(SECOND, MIN(updated_at), NOW(3)), 0) AS oldest_seconds
+  FROM order_refund_admissions
+ WHERE result = 'REVIEW_REQUIRED' AND state = 'PENDING_REMOTE';
+
+-- 7-day overdue rows (must be zero; non-zero is an ops blocker for the daily report)
+SELECT refund_id, order_no, group_no, updated_at
+  FROM order_refund_admissions
+ WHERE result = 'REVIEW_REQUIRED' AND state = 'PENDING_REMOTE'
+   AND updated_at < DATE_SUB(NOW(3), INTERVAL 7 DAY);
+
+-- per-item detail for the manual queue
+SELECT refund_id, order_no, group_no, amount_cent, version, created_at, updated_at
+  FROM order_refund_admissions
+ WHERE result = 'REVIEW_REQUIRED' AND state = 'PENDING_REMOTE'
+ ORDER BY updated_at;
+
+-- TCC batches held for review (reason is the canonical last_error)
+SELECT batch_id, order_no, payment_no, state, last_error, updated_at
+  FROM refund_batches WHERE state = 'MANUAL_HOLD' ORDER BY updated_at;
+
+-- after-sales mirror (ordinary after-sale / legacy; no refund_applications row)
+SELECT after_sale_no, status, attempts, last_error, updated_at
+  FROM after_sale_refund_tasks
+ WHERE last_error LIKE 'REVIEW_REQUIRED reason=%' ORDER BY updated_at;
+```
+
+SLA: first response within **24 hours**, disposition within **7 calendar
+days**; overdue items escalate to finance/ops leads and stay open. Never
+auto-close, auto-refund, auto-release or auto-promote to `FAILED_PERMANENT`.
+
+### Re-arm (AC-27-NOWB-01 terminal ① / AC-69)
+
+Only ops, only with a real S6 cancellation evidence (existing or previously
+existed, recovered by Fulfillment), an authorization, and an ops ticket
+(`ticket=RVW:<refund_id>`). **Audit first, clear last** — never clear before the
+mirror/log/ticket exist, and never clear `last_error` as the disposition:
+
+1. Open the ops ticket with the actor, authorizer, evidence, time, amount and
+   `RVW:<refund_id>`; confirm the mirror `last_error` is the canonical
+   `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>` (or the D-35
+   truncated form). Do not edit/rewrite `last_error`.
+2. Write the structured log `review_rearm` (refund_id/order_no/group_no/
+   from/to/reason/ticket/version).
+3. Versioned CAS on the authoritative row only (keep `state`):
+   ```sql
+   UPDATE order_refund_admissions
+      SET result = 'PENDING_REMOTE', version = version + 1, updated_at = NOW(3)
+    WHERE refund_id = ? AND result = 'REVIEW_REQUIRED'
+      AND state = 'PENDING_REMOTE' AND version = ?;   -- require RowsAffected=1
+   ```
+   TCC: also move the held batch, **keeping** the canonical `last_error`:
+   ```sql
+   UPDATE refund_batches
+      SET state = 'ADMITTING', version = version + 1, updated_at = NOW(3)
+    WHERE batch_id = ? AND state = 'MANUAL_HOLD' AND version = ?; -- RowsAffected=1
+   ```
+4. Replay the original `refund_id` (Order admission) and observe: real
+   `CANCELLED` → `PRE_SHIP_REVOKED`, `SHIPPED` → `POST_SHIP_ALLOWED`, still no
+   waybill → review again (the row stays). The admission row is never deleted;
+   `created_at` is the first-review time, `version` is monotonic.
+5. A user who changes to a whole-group refund closes the old review only through
+   the AC-62/D-24 authorized release and a **new** `refund_id`; never reuse or
+   edit the old decision.
+
+### Legacy PRE audit (before claiming AC-27A closure)
+
+```sql
+SELECT a.refund_id, a.order_no, a.group_no, a.result, a.state,
+       p.state AS permit_state, g.status AS group_status
+  FROM order_refund_admissions a
+  LEFT JOIN order_shipping_permits p
+         ON p.order_no = a.order_no AND p.fulfillment_group_no = a.group_no
+  LEFT JOIN order_fulfillment_groups g
+         ON g.order_no = a.order_no AND g.group_no = a.group_no
+ WHERE a.result = 'PRE_SHIP_REVOKED'
+   AND (a.state = 'PRE_SHIP_REVOKED' OR a.state = 'PENDING_REMOTE');
+```
+
+List the rows with `g.group_no IS NULL`, `g.status IN ('SHIPPED','RECEIVED')`,
+`a.state='PENDING_REMOTE'` (unverifiable) and `p.state IN ('REVOKED','CONSUMED')`.
+**0 rows does not prove safety**; the audit result must be recorded before any
+AC-27A close/AC-VERIFIED claim for the affected groups (owner ops + Developer).
+
+### Reconciliation (daily)
+
+```sql
+-- review rows vs the manual queue / reason distribution (zero-amount excluded)
+SELECT COUNT(*) FROM order_refund_admissions
+ WHERE result = 'REVIEW_REQUIRED' AND state = 'PENDING_REMOTE';
+SELECT batch_id, last_error FROM refund_batches WHERE state = 'MANUAL_HOLD';
+```
+
+`REVIEW_REQUIRED` must never be counted as refunded/closed/released/completed.
+Alert rules and the 5-minute delivery are owned by `REVIEW-REQUIRED-ALERTS-01`
+(ops, expiry 2026-12-31); this runbook only provides the queries and the
+backend gauge values (`mall_refund_review_backlog`,
+`mall_refund_review_oldest_seconds`) that the alerts consume.

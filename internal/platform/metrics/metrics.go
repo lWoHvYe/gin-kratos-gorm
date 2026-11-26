@@ -79,6 +79,18 @@ var (
 		Help: "Age of the oldest pending after-sale restock task in seconds.",
 	})
 
+	// RefundReviewBacklog/OldestSeconds expose the AC-72 refund review queue
+	// (order_refund_admissions result=REVIEW_REQUIRED, state=PENDING_REMOTE).
+	// Zero-amount conflicts never write that row and are therefore not counted.
+	RefundReviewBacklog = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_refund_review_backlog",
+		Help: "Persisted refund admission reviews awaiting manual handling.",
+	})
+	RefundReviewOldestSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "mall_refund_review_oldest_seconds",
+		Help: "Age of the oldest persisted refund admission review in seconds.",
+	})
+
 	// AfterSaleRefundBacklog/Oldest expose durable refund work.
 	AfterSaleRefundBacklog = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "mall_aftersale_refund_backlog",
@@ -256,5 +268,6 @@ func init() {
 		AIRAGTruncated, AIRAGRebuildFailures, QuotesCleaned,
 		InventoryLedgerRows, InventoryLedgerOldestSeconds, InventoryLedgerArchived, AIFeedback,
 		AfterSaleRestockBacklog, AfterSaleRestockOldestSeconds,
-		AfterSaleRefundBacklog, AfterSaleRefundOldestSeconds)
+		AfterSaleRefundBacklog, AfterSaleRefundOldestSeconds,
+		RefundReviewBacklog, RefundReviewOldestSeconds)
 }

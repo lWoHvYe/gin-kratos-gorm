@@ -363,6 +363,15 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 human approval C-4: SPEC-0002 v1.11 + ADR AC-50 0.5
+
+- Director **approved** SPEC-0002 v1.11 (`SPEC_APPROVED`) and ADR-0007 AC-50
+  Addendum 0.5 (`ADR_APPROVED`) on 2026-11-26, and authorized the four-role
+  Plan review (`PAY-AC50-REVIEW-01`, L2-P1..P4).
+- This is **contract approval only**: no implementation/merge/Release/
+  AC-VERIFIED. Plan P5 (human Plan approval) is still required before code.
+- QC basis: `QC-PAY-SETTLE-01-AC50-NOWB.md` R8 READY (0 BLOCKER; 2 TODO).
+
 ### 2026-11-26 PAY-AC50-REVIEW-01 contract closure: QC R8 READY
 
 - SPEC-0002 **v1.11** (`d159300`, in-review), ADR-0007 AC-50 Addendum

@@ -5,10 +5,12 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/mq"
 
 	"github.com/nats-io/nats.go"
@@ -127,4 +129,114 @@ func TestRefundAdmittedConsumerReviewAndDuplicate(t *testing.T) {
 	if got := shipmentStatus("SHIP-REV2"); got != statusCreated {
 		t.Fatalf("DLQ replay mutated the placeholder: %s", got)
 	}
+}
+
+// T7-R1 (F7b) partial evidence: build a REAL placeholder through the normal
+// order.paid consumer path (not a fixture INSERT), then prove that a persisted
+// REVIEW decision (and a non-PRE event) never cancels/recreates it. The Order
+// side re-probe (PENDING_REMOTE -> CANCELLED -> PRE) needs the Order service and
+// its own DB, so the cross-service half is recorded as [BLOCKED] in the
+// selfcheck rather than faked here.
+func TestOrderPaidCreatesRealPlaceholderThenReviewNoop(t *testing.T) {
+	if os.Getenv("TEST_MYSQL_DSN") == "" || os.Getenv("TEST_NATS_URL") == "" {
+		t.Skip("set TEST_MYSQL_DSN and TEST_NATS_URL")
+	}
+	db := fulfillmentTestDB(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	// Unique order per run: the JetStream history is replayed when a durable is
+	// recreated, so a reused id would see an older PRE/POST and taint this case.
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	orderNo := "ORD-LATE-" + suffix
+	refundID := "R-LATE-" + suffix
+	orderClient := &fakePermitOrder{order: &pb.Order{
+		OrderNo: orderNo, UserId: 1, Status: "PAID", PaidCent: 1000,
+		Items:             []*pb.OrderItem{{SkuId: 1, Quantity: 1, GroupNo: "G1"}},
+		FulfillmentGroups: []*pb.OrderFulfillmentGroup{{GroupNo: "G1", WarehouseId: 1}},
+		GroupActions:      []*pb.OrderGroupAction{{GroupNo: "G1", Action: "ship"}},
+	}}
+	svc := New(db, nil, logger, orderClient)
+	client, err := mq.Connect(os.Getenv("TEST_NATS_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	_ = client.JS.DeleteConsumer("MALL", "fulfillment-order-paid")
+	_ = client.JS.DeleteConsumer("MALL", "fulfillment-refund-admitted")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	orderCtx, orderCancel := context.WithCancel(ctx)
+	defer orderCancel()
+	go RunOrderPaidConsumer(orderCtx, client, svc, logger)
+	time.Sleep(500 * time.Millisecond)
+
+	publish := func(subject, payload string) {
+		t.Helper()
+		if err := client.Publish(ctx, subject, []byte(payload)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shipmentStatus := func() (string, bool) {
+		t.Helper()
+		var status string
+		err := db.QueryRow(`SELECT status FROM shipments WHERE order_no = ?`, orderNo).Scan(&status)
+		if err != nil {
+			return "", false
+		}
+		return status, true
+	}
+
+	// Publish repeatedly: JetStream durable creation can race the first publish
+	// on a cold broker; duplicate order.paid events are idempotent (CreateShipment
+	// returns the existing CREATED row).
+	deadline := time.Now().Add(10 * time.Second)
+	created := false
+	for time.Now().Before(deadline) {
+		publish("shop.order.paid.v1", `{"order_no":"`+orderNo+`","items":[{"sku_id":1,"quantity":1}]}`)
+		for i := 0; i < 10; i++ {
+			if status, ok := shipmentStatus(); ok && status == statusCreated {
+				created = true
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if created {
+			break
+		}
+	}
+	if !created {
+		t.Fatal("order.paid consumer did not create the real CREATED placeholder")
+	}
+	// Stop the order.paid consumer before starting the refund consumer: the two
+	// subscriptions are independent in production, but keeping one broker
+	// subscription active at a time makes this test deterministic.
+	orderCancel()
+	_ = client.JS.DeleteConsumer("MALL", "fulfillment-order-paid")
+	time.Sleep(200 * time.Millisecond)
+	_ = client.JS.DeleteConsumer("MALL", "fulfillment-refund-admitted")
+	go RunRefundAdmittedConsumer(ctx, client, svc, logger)
+	time.Sleep(500 * time.Millisecond)
+
+	// REVIEW_REQUIRED is not an event Order emits for a review, and even a
+	// hand-crafted one must not cancel the real placeholder.
+	publish("shop.order.refund_admitted.v1",
+		`{"refund_id":"`+refundID+`","order_no":"`+orderNo+`","group_no":"G1","result":"REVIEW_REQUIRED","state":"PENDING_REMOTE"}`)
+	time.Sleep(500 * time.Millisecond)
+	if status, _ := shipmentStatus(); status != statusCreated {
+		t.Fatalf("REVIEW event mutated the real placeholder: %s", status)
+	}
+
+	// A real terminal PRE (what an audited re-arm can later produce) cancels
+	// exactly this real CREATED row.
+	publish("shop.order.refund_admitted.v1",
+		`{"refund_id":"`+refundID+`","order_no":"`+orderNo+`","group_no":"G1","result":"PRE_SHIP_REVOKED","state":"PRE_SHIP_REVOKED"}`)
+	deadline = time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if status, _ := shipmentStatus(); status == statusCancelled {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	status, _ := shipmentStatus()
+	t.Fatalf("real placeholder was not cancelled by PRE: %s", status)
 }

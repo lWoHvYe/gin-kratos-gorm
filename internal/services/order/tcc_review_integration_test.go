@@ -323,3 +323,133 @@ func TestTCCReviewFreshSourceGate(t *testing.T) {
 		t.Fatalf("0-row gate committed admission=%d commitments=%d", admissions, commitments)
 	}
 }
+
+// T7-R2: the TCC batch last_error column is 1024 characters; a synthetic
+// over-long refund_id must be truncated exactly per D-35 (prefix + truncated
+// refund_id + ` truncated=1`) without cutting the reason/ticket keys.
+func TestTCCReviewLastErrorTruncation1024(t *testing.T) {
+	longID := strings.Repeat("r", 2000)
+	text := refundReviewCanonical(longID, refundReasonPartialUnclassifiable, refundBatchLastErrorWidth)
+	if len([]rune(text)) > refundBatchLastErrorWidth {
+		t.Fatalf("canonical length = %d, want <= %d", len([]rune(text)), refundBatchLastErrorWidth)
+	}
+	if !strings.HasSuffix(text, " truncated=1") {
+		t.Fatalf("truncated text = %q, want trailing ' truncated=1'", text)
+	}
+	prefix := "REVIEW_REQUIRED reason=" + refundReasonPartialUnclassifiable + " ticket=RVW:"
+	if !strings.HasPrefix(text, prefix) {
+		t.Fatalf("truncated text lost the prefix: %q", text)
+	}
+	if strings.Count(text, "reason=") != 1 || strings.Count(text, "ticket=") != 1 {
+		t.Fatalf("truncation duplicated a key: %q", text)
+	}
+}
+
+// T7-R2: the Tx2 gate must fail closed when the application mirror matches 0
+// rows; the batch mirror update is rolled back with the admission decision.
+func TestTCCReviewGateApplicationMirrorZeroRows(t *testing.T) {
+	ctx := context.Background()
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	ff := &fakeFulfillmentPort{status: probeStatusNoWaybill}
+	svc := tccTestServiceWithFulfillment(t, db, payments, ff)
+	refundID := tccGroupRefundID("PAY-TCC-APP0", "G1")
+	ac50SeedOrder(t, db, "ORD-TCC-APP0", 10000)
+	ac50SeedPermit(t, db, "ORD-TCC-APP0", permitConsumed)
+	seedTccBatchRow(t, db, "B-TCC-APP0", "ORD-TCC-APP0", "PAY-TCC-APP0", refundBatchAdmitting)
+	// Admission placeholder exists (Tx1), application row deliberately missing.
+	if _, err := db.Exec(`INSERT INTO order_refund_admissions
+		(refund_id, order_no, group_no, result, state, amount_cent, version)
+		VALUES (?, 'ORD-TCC-APP0', 'G1', ?, ?, 10000, 1)`, refundID, refundResultPost, refundPending); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: refundID, OrderNo: "ORD-TCC-APP0", GroupNo: "G1",
+		AmountCent: 10000, Source: refundApplicationSourceTCC, BatchId: "B-TCC-APP0",
+	})
+	if err == nil {
+		t.Fatal("0-row application mirror: expected fail-closed")
+	}
+	if !strings.Contains(err.Error(), "tcc refund application is not PENDING while persisting review") {
+		t.Fatalf("error = %v, want the application mirror gate", err)
+	}
+	result, state, version := ac50Admission(t, db, refundID)
+	if result != refundResultPost || state != refundPending || version != 1 {
+		t.Fatalf("Tx2 committed without the application mirror: %s/%s v%d", result, state, version)
+	}
+	var batchState string
+	var batchVersion int64
+	if err := db.QueryRow(`SELECT state, version FROM refund_batches WHERE batch_id = 'B-TCC-APP0'`).
+		Scan(&batchState, &batchVersion); err != nil {
+		t.Fatal(err)
+	}
+	if batchState != refundBatchAdmitting || batchVersion != 1 {
+		t.Fatalf("batch mirror was committed without the app mirror: %s v%d", batchState, batchVersion)
+	}
+}
+
+// T7-R2: an empty batch_id on a TCC review fails closed before any Tx1 write.
+func TestTCCReviewEmptyBatchIDFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	db := orderTestDB(t)
+	svc := tccTestServiceWithFulfillment(t, db, &fakePaymentPort{captured: 10000}, &fakeFulfillmentPort{status: "CANCELLED"})
+	ac50SeedOrderStatus(t, db, "ORD-TCC-NOB", 10000, statusShipped)
+	if _, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "R-TCC-NOB", OrderNo: "ORD-TCC-NOB", GroupNo: "G1",
+		AmountCent: 10000, Source: refundApplicationSourceTCC, BatchId: "",
+	}); err == nil {
+		t.Fatal("empty batch_id: expected fail-closed")
+	} else if !strings.Contains(err.Error(), "requires batch_id") {
+		t.Fatalf("error = %v, want batch_id gate", err)
+	}
+	for _, table := range []string{"order_refund_admissions", "order_refund_commitments"} {
+		if got := countRows(t, db, `SELECT COUNT(*) FROM `+table+` WHERE refund_id = 'R-TCC-NOB'`); got != 0 {
+			t.Fatalf("empty batch_id wrote %s: %d", table, got)
+		}
+	}
+}
+
+// T7-R3/O1b: two TCC batches; one REVIEW parks in MANUAL_HOLD, the other
+// continues independently (no cross-batch blocking).
+func TestTCCReviewOtherBatchUnaffected(t *testing.T) {
+	ctx := context.Background()
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	ff := &fakeFulfillmentPort{status: probeStatusNoWaybill}
+	svc := tccTestServiceWithFulfillment(t, db, payments, ff)
+	for _, order := range []struct{ no, pay string }{
+		{"ORD-TCC-ISO-A", "PAY-TCC-ISO-A"},
+		{"ORD-TCC-ISO-B", "PAY-TCC-ISO-B"},
+	} {
+		seedTccOrder(t, db, order.no, 10000, 10000, 0, 0, order.pay)
+		seedTccGroup(t, db, order.no, "G1", 1, 0)
+		seedTccLine(t, db, order.no, 1, "G1", 10000)
+		seedTccPermit(t, db, order.no, "G1", permitConsumed, "SHIP-"+order.no)
+	}
+	// Batch A: REVIEW -> MANUAL_HOLD.
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-ISO-A", PaymentNo: "PAY-TCC-ISO-A", PaidCent: 10000,
+	}); err == nil {
+		t.Fatal("batch A: expected MANUAL_HOLD token")
+	} else if got, _ := apperr.From(err).Details["tcc_error"].(string); got != tccErrBatchManual {
+		t.Fatalf("batch A token = %q (err=%v details=%v)", got, err, apperr.From(err).Details)
+	}
+	// Batch B: real CANCELLED continues to admission/payment.
+	ff.setStatus("CANCELLED")
+	if _, err := svc.TccCancelMarkPaid(ctx, &pb.TccPaymentRequest{
+		OrderNo: "ORD-TCC-ISO-B", PaymentNo: "PAY-TCC-ISO-B", PaidCent: 10000,
+	}); err != nil {
+		t.Fatalf("batch B was blocked by batch A: %v", err)
+	}
+	batchA := loadTccBatchRow(t, db, "ORD-TCC-ISO-A", "PAY-TCC-ISO-A")
+	batchB := loadTccBatchRow(t, db, "ORD-TCC-ISO-B", "PAY-TCC-ISO-B")
+	if batchA.State != refundBatchManualHold {
+		t.Fatalf("batch A = %s, want MANUAL_HOLD", batchA.State)
+	}
+	if batchB.State != refundBatchPaying && batchB.State != refundBatchDone {
+		t.Fatalf("batch B = %s, want PAYING/DONE", batchB.State)
+	}
+	if got := len(payments.batchCalls); got != 1 {
+		t.Fatalf("payment batches = %d, want 1 (batch A must pay nothing)", got)
+	}
+}

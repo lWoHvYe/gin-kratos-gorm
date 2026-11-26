@@ -147,6 +147,14 @@ func TestReviewCanonicalParseAndTruncate(t *testing.T) {
 	if !ok || reason != refundReviewReasonNoShipment || !truncated || !strings.HasPrefix(ticket, "RVW:") {
 		t.Fatalf("parse(truncated) = %q/%q/%v/%v", reason, ticket, truncated, ok)
 	}
+	// The parser is width-agnostic: a 1024-column (TCC batch) truncated text is
+	// parsed with the same rules.
+	tccText := "REVIEW_REQUIRED reason=CONSUMED_WITHOUT_SHIPMENT ticket=RVW:" +
+		strings.Repeat("r", 800) + " truncated=1"
+	if reason, ticket, truncated, ok := parseRefundReviewLastError(tccText); !ok ||
+		reason != refundReviewReasonNoShipment || !truncated || !strings.HasPrefix(ticket, "RVW:") {
+		t.Fatalf("parse(1024-width truncated) = %q/%q/%v/%v", reason, ticket, truncated, ok)
+	}
 	for _, invalid := range []string{
 		"",
 		"REVIEW_REQUIRED reason=CONSUMED_WITHOUT_SHIPMENT ticket=RVW:", // empty ticket

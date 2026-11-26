@@ -708,3 +708,58 @@ func requireReviewDetails(t *testing.T, err error, refundID, reason string) *app
 	}
 	return ae
 }
+
+// T7-R3: an unknown/future CancelIfCreated status is fail-closed with
+// Unavailable; it writes neither PRE/POST/REVIEW nor any outbox/release.
+func TestAC50ReviewUnknownProbeStatus(t *testing.T) {
+	db := orderTestDB(t)
+	ff := &fakeFulfillmentPort{status: "FUTURE_STATUS"}
+	svc := ac50Service(db, &fakePaymentPort{captured: 10000}, ff)
+	ctx := context.Background()
+	ac50SeedOrder(t, db, "ORD-UNK", 10000)
+	ac50SeedPermit(t, db, "ORD-UNK", permitConsumed)
+	if _, err := db.Exec(`INSERT INTO order_refund_admissions
+		(refund_id, order_no, group_no, result, state, amount_cent, version)
+		VALUES ('R-UNK','ORD-UNK','G1',?,?,10000,1)`, refundResultPost, refundPending); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO order_refund_commitments
+		(order_no,group_no,refund_id,amount_cent,state,version) VALUES ('ORD-UNK','G1','R-UNK',10000,'RESERVED',1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "R-UNK", OrderNo: "ORD-UNK", GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
+	}); err == nil {
+		t.Fatal("unknown probe status: expected Unavailable")
+	} else if !apperr.IsCode(err, apperr.CodeUnavailable) {
+		t.Fatalf("error = %v, want UNAVAILABLE", err)
+	}
+	result, state, version := ac50Admission(t, db, "R-UNK")
+	if result != refundResultPost || state != refundPending || version != 1 {
+		t.Fatalf("unknown probe changed the admission: %s/%s v%d", result, state, version)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = 'ORD-UNK'`); got != 0 {
+		t.Fatalf("unknown probe wrote %d outbox events", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM outbox_events WHERE aggregate_id = 'ORD-UNK' AND event_type = ?`, events.RefundReleaseEventType); got != 0 {
+		t.Fatalf("unknown probe wrote %d release events", got)
+	}
+}
+
+// T7-R3/O19: an ordinary after-sale REVIEW creates no refund_applications row
+// (the AfterSales task is the mirror; Order must not double-write the fact).
+func TestAC50ReviewOrdinaryAfterSaleNoApplicationRow(t *testing.T) {
+	db := orderTestDB(t)
+	ff := &fakeFulfillmentPort{status: probeStatusNoWaybill}
+	svc := ac50Service(db, &fakePaymentPort{captured: 10000}, ff)
+	ctx := context.Background()
+	ac50SeedOrder(t, db, "ORD-NOAPP", 10000)
+	ac50SeedPermit(t, db, "ORD-NOAPP", permitConsumed)
+	_, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: "R-NOAPP", OrderNo: "ORD-NOAPP", GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
+	})
+	ac50RequireReviewConflict(t, err, "R-NOAPP")
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications WHERE refund_id = 'R-NOAPP'`); got != 0 {
+		t.Fatalf("ordinary after-sale REVIEW wrote %d refund_applications rows", got)
+	}
+}

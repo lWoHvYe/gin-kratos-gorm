@@ -418,3 +418,56 @@ TEST_MYSQL_DSN='.../mall_integration_t1_order...' \
 ### 13.4 结论
 
 T8 回归在真实 MySQL 8.4.13、独立 schema、精确 HEAD `3ce0d7d` 上 **0 FAIL / 0 SKIP**（order 38/38、order-inv 20/20、aftersales 16/16、fulfillment 4/4、metrics 1/1；`-race` order 38/38、aftersales 16/16）。T7 证据输入如上；不声称实现/Release PASS，`ac-coverage.tsv` 由 Reviewer 更新。
+
+---
+
+## 14. T7-R1..R3 残余硬化（test-only；code head `d90daf09c3f391ca207df68f02d57a38b7cf781b`，base `b731a9f`）
+
+> 只改 `_test.go`，未改生产代码/迁移/deploy/frontend/specs/adr/台账；真实 MySQL 8.4.13（独立 schema `mall_integration_t7r_{order,ff,as}`）+ `nats:2.10-alpine`。无 SKIP/FAIL。
+
+### 14.1 T7-R1（F7b 迟到 `order.paid` 真实 placeholder）
+
+- **Fulfillment 半链（已测）** `TestOrderPaidCreatesRealPlaceholderThenReviewNoop`（NATS JetStream）：通过正常 `RunOrderPaidConsumer`（`order.paid`）创建**真实 `CREATED` placeholder**（非 fixture INSERT）；随后 `REVIEW_REQUIRED`/`POST` 事件不改动它；真实 `PRE_SHIP_REVOKED` 才取消该真实行。测试使用每次运行的唯一 `order_no/refund_id`，避免 JetStream 重放历史消息污染。
+- **Order 半链（模拟已测）**：`PENDING_REMOTE` 整组 → 真实 `CANCELLED` 重放收敛 PRE（§9 W3）；部分金额预置 `PENDING_REMOTE` → 不探测/不转 PRE（§10 O4e）；已有 `REVIEW_REQUIRED` → 迟到 `CANCELLED` 不自动探测/不自动 PRE（§11 O11d/W13、§11.5 no-auto-PRE 三次 replay）。
+- **`[BLOCKED]`（全链路 F7b）**：**双库/双服务时序不可构造**。依赖：Order + Fulfillment 两个进程（真实 `AdmitRefund`/`CancelIfCreated` gRPC）与各自 MySQL + NATS `order.paid`/`refund_admitted`，在同一次测试内完成“Fulfillment 建真实 placeholder → Order 准入重探 → Fulfillment consumer 看到结果”。本仓库无跨服务集成 harness；在单个 Go test 中 import 两个 service 包违反 AGENTS 静态守卫（跨服务包引用），启动两个 `cmd/*` 服务与双 DSN 属运行时编排，超出 test-only 范围。按 Lead 指示标 `[BLOCKED]`，**不以 fixture 冒充**；建议另立 Environment/Integration harness change（owner Lead/QA，expiry 2026-12-31）。
+
+### 14.2 T7-R2（TCC 1024 截断 + gate 独立用例）
+
+- `TestTCCReviewLastErrorTruncation1024`：合成 2000 字符 `refund_id`，`refundReviewCanonical(..., 1024)` 长度 ≤1024、保留 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:` 前缀、以 ` truncated=1` 结尾、`reason=/ticket=` 各仅 1 次；`TestReviewCanonicalParseAndTruncate` 增加 1024 宽度截断文本的 parser 解析（宽高无关）。
+- `TestTCCReviewGateApplicationMirrorZeroRows`：batch 镜像可更新、application 行缺失 → Tx2 报 “tcc refund application is not PENDING while persisting review”；**admission 仍为原 PENDING、batch 仍 ADMITTING**（整体回滚）。
+- `TestTCCReviewEmptyBatchIDFailsClosed`：`source=tcc` 且 `batch_id` 空 → 在 Tx1 写之前失败，`refund_applications`/`order_refund_commitments` 均 0 行。
+
+### 14.3 T7-R3（unknown status / O19 / O1b 隔离）
+
+- `TestAC50ReviewUnknownProbeStatus`：未知/未来 `CancelIfCreated` status → `Unavailable`；permit/commitment/admission 原样，0 outbox/0 release，不写 PRE/POST/REVIEW。
+- `TestAC50ReviewOrdinaryAfterSaleNoApplicationRow`（O19）：普通售后 REVIEW 的 `refund_applications` 明确 0 行（镜像归 AfterSales task）。
+- `TestTCCReviewOtherBatchUnaffected`（O1b）：两批 TCC，A 收 `NO_WAYBILL` → `MANUAL_HOLD` + `TCC_BATCH_REQUIRES_MANUAL_HANDLING`；B 收真实 `CANCELLED` → 继续按准入/支付推进（`PAYING/DONE`），恰好 1 次 `RefundBatch`；A 不阻塞 B。
+
+### 14.4 命令与结果（HEAD `d90daf0`）
+
+```bash
+TEST_MYSQL_DSN='.../mall_integration_t7r_order...' \
+  go test ./internal/services/order -run 'TestTCCReview|TestAC50Review' -count=1 -v      # 31 PASS, ok 20.897s
+TEST_MYSQL_DSN='.../mall_integration_t7r_order...' \
+  go test -race ./internal/services/order -run 'TestTCCReview|TestAC50ReviewUnknown|TestAC50ReviewOrdinaryAfterSale' -count=1  # ok 8.018s
+TEST_MYSQL_DSN='.../mall_integration_t7r_order...' go test ./internal/services/order -count=1  # ok 129.495s
+TEST_MYSQL_DSN='.../mall_integration_t7r_as...' go test ./internal/services/aftersales -run 'TestReview' -count=1  # ok 2.093s
+TEST_MYSQL_DSN='.../mall_integration_t7r_ff...' TEST_NATS_URL='nats://127.0.0.1:14223' \
+  go test ./internal/services/fulfillment -run 'TestOrderPaidCreatesRealPlaceholderThenReviewNoop|TestRefundAdmittedConsumerReviewAndDuplicate' -count=1  # ok 4.571s
+```
+
+- 日志：`.tmp/evidence-ac50-t7r/{HEAD.txt,order-t7r.log,order-t7r-race.log,order-full.log,aftersales-t7r.log,fulfillment-t7r.log}`。NATS 用例连续重跑 3 次稳定（唯一 order/refund id + 串行 consumer）。
+
+### 14.5 【测试范围】/【未覆盖范围】
+
+【测试范围】T7-R2 1024 截断/parser/空 batch/app 0 行 gate；T7-R3 unknown status/O19 0 行/O1b 双批隔离；F7b 的 Fulfillment 半链（真实 placeholder + REVIEW/POST no-op + PRE 取消）与 Order 半链模拟；真实 MySQL/NATS、`-race` 子集、order 全包。
+
+【未覆盖范围】
+
+- **F7b 全链路 `[BLOCKED]`**（双服务/双库 harness 缺失，见 §14.1）；W8 永久悬挂仍归 AC-27-LIVE-01。
+- NATS 测试依赖本地 `TEST_NATS_URL`，未在 CI 固化；CI 未跑。
+- T7-R1 的 Order 半链使用 fake `CancelIfCreated` 状态模拟真实 placeholder 事实，不能替代跨服务端到端证据。
+
+### 14.6 不声称
+
+不声称实现/重审 PASS、Release PASS、AC-VERIFIED；F7b 全链路为 `[BLOCKED]`；`ac-coverage.tsv` 仍由 Reviewer 更新；`PAY-SETTLE-01` 冻结状态不变。

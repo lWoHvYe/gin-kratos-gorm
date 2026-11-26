@@ -2,9 +2,9 @@
 
 This is the durable entry point for developers running code and tests locally.
 It is not a session snapshot. For the current state use
-[`review-tracking.md`](review-tracking.md) and
-[`roadmap-status.md`](roadmap-status.md); for a session boundary use
-[`handoff.md`](handoff.md).
+[`review-tracking.md`](review-tracking.md) (the canonical running ledger);
+[`roadmap-status.md`](roadmap-status.md) is a 2026-11-22 roadmap snapshot.
+For a session boundary use [`handoff.md`](handoff.md).
 
 Operations/deployment (compose, Helm, production runbooks) remain owned by
 [`ops.md`](ops.md); UAT is in

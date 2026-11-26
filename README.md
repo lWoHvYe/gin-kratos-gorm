@@ -216,7 +216,8 @@ See [docs/access.md](docs/access.md) for the live `mall.local` route and port-fo
 ## New session
 
 For current state and gaps start from [docs/review-tracking.md](docs/review-tracking.md)
-and [docs/roadmap-status.md](docs/roadmap-status.md); run `make status` for the
-repo snapshot. Environment and test commands live in
+(the canonical running ledger); [docs/roadmap-status.md](docs/roadmap-status.md) is a
+2026-11-22 roadmap snapshot. Run `make status` for the repo snapshot.
+Environment and test commands live in
 [docs/development.md](docs/development.md). [docs/handoff.md](docs/handoff.md)
 is only a session-boundary snapshot, not a rule source.

@@ -3,9 +3,10 @@
 > **Purpose**: session-boundary snapshot, not a rule/contract source. Refresh
 > only before a new session.
 >
-> Current truth: [`review-tracking.md`](review-tracking.md) and
-> [`roadmap-status.md`](roadmap-status.md). Contracts: [`specs/`](specs/),
-> [`adr/`](adr/). Environment/tests: [`development.md`](development.md).
+> Canonical running ledger: [`review-tracking.md`](review-tracking.md). Roadmap
+> snapshot (2026-11-22): [`roadmap-status.md`](roadmap-status.md). Contracts:
+> [`specs/`](specs/), [`adr/`](adr/). Environment/tests:
+> [`development.md`](development.md).
 > UAT: [`runbooks/uat-environment.md`](runbooks/uat-environment.md).
 >
 > Do not use this file as a Developer rule source. If a rule exists only here,

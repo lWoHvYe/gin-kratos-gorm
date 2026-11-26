@@ -60,8 +60,11 @@
   AC-27 R-2 conflicts with SPEC v1.5 and must be withdrawn/errata.
 - **Phase 0-R CLOSED (scoped)** (`67fd571`): AC-27 **AC-VERIFIED** under
   waiver C+A; R0.1–R0.5 checked; R-2 withdrawn. NOT P0 closure/Release.
-- **Next (2026-11-27 resequencing)**: T2 -> T3 -> T4 -> T5 full (4 P0
-  blockers + 17 test gaps) -> P0 closure. No release/merge.
+- **T2 status**: T2.1–T2.4 scoped PASS (`1e57c15`, `4016c15`);
+  COMPENSATING→EXPIRED_REFUND deferred to T3; AC-63/INV-46 AC-REF.
+  T2.5/T2.6 pending.
+- **Next (2026-11-27 resequencing)**: T2.5/T2.6 -> T3 -> T4 -> T5 full
+  (4 P0 blockers + 17 test gaps) -> P0 closure. No release/merge.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 

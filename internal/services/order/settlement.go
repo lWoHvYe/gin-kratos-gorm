@@ -62,8 +62,23 @@ func shipmentStatus(status string) string {
 	}
 }
 
-// groupIsClosed means the group will never produce a parcel: it was either
-// cancelled or its permit was revoked by a refund before shipment.
+// groupIsClosed means the group will never produce a parcel. It is the single
+// closure authority for the S2 read model (SPEC-0001 v1.5 AC-27A) and the order
+// is deliberate:
+//
+//  1. nil                        -> open
+//  2. Status CANCELLED           -> closed (persisted CANCELLED only comes from
+//     whole-order cancellation)
+//  3. Status SHIPPED/RECEIVED    -> open (departure guard; before any refund fact)
+//  4. permit REVOKED             -> closed (S5 terminal state, INV-45)
+//  5. permit CONSUMED and PreShipAdmission -> closed (RefundAdmission
+//     result=PRE_SHIP_REVOKED; AC-27A clause 5)
+//  6. otherwise                  -> open (NONE, PENDING_REMOTE, POST_SHIP_ALLOWED,
+//     missing/unverifiable admission)
+//
+// Inputs are Order-owned facts only. refund_state (S9) and reservation_state are
+// never inputs: refund progress must not decide fulfillment projection, and the
+// reservation release fact belongs to Inventory.
 func groupIsClosed(group *fulfillmentGroup) bool {
 	if group == nil {
 		return false
@@ -74,12 +89,15 @@ func groupIsClosed(group *fulfillmentGroup) bool {
 	if group.Status == "SHIPPED" || group.Status == "RECEIVED" {
 		return false
 	}
-	return group.PermitState == permitRevoked
+	if group.PermitState == permitRevoked {
+		return true
+	}
+	return group.PermitState == permitConsumed && group.PreShipAdmission
 }
 
 // effectiveGroupStatus is the read-model status shown to BFFs/UI. The persisted
-// group status stays ALLOCATED for an unshipped refund; permit REVOKED makes it
-// effectively CANCELLED.
+// group status stays ALLOCATED for an unshipped refund; a revoked permit or a
+// pre-ship RefundAdmission makes the group effectively CANCELLED (AC-27A).
 func effectiveGroupStatus(group *fulfillmentGroup) string {
 	if groupIsClosed(group) && group.Status != "CANCELLED" {
 		return "CANCELLED"

@@ -24,6 +24,12 @@ type fulfillmentGroup struct {
 	PermitState      string
 	FreightCent      int64
 	FreightShareCent int64
+	// PreShipAdmission is a derived, read-only fact (not a persisted column):
+	// the group has an order_refund_admissions row with
+	// result=PRE_SHIP_REVOKED. SPEC-0001 v1.5 AC-27A clause 5 uses the
+	// Order-owned RefundAdmission result as the "pre-ship refund admitted, the
+	// group can never produce a parcel" fact; refund_state is not an input.
+	PreShipAdmission bool
 }
 
 func insertFulfillmentGroups(ctx context.Context, tx *sql.Tx, orderNo string, groups []*pb.OrderFulfillmentGroup, fallbackFreight int64) error {
@@ -84,12 +90,21 @@ func loadFulfillmentGroupsTx(ctx context.Context, tx *sql.Tx, orderNo string) ([
 }
 
 func loadFulfillmentGroups(ctx context.Context, q querier, orderNo string) ([]*fulfillmentGroup, error) {
+	// The closure predicate (settlement.go groupIsClosed) needs the group's
+	// Order-owned pre-ship RefundAdmission result. It is read as EXISTS in the
+	// same statement so a group with several admission rows (e.g. an earlier
+	// PRE audit kept after a late POST re-admission) cannot multiply rows. No
+	// schema change: 0016 already indexes (order_no, group_no).
 	rows, err := q.QueryContext(ctx, `SELECT g.group_no, g.order_no, g.seq, g.warehouse_id, g.status,
-		g.refund_state, g.reservation_state, COALESCE(p.state, 'NONE'), g.freight_cent, g.freight_share_cent
+		g.refund_state, g.reservation_state, COALESCE(p.state, 'NONE'), g.freight_cent, g.freight_share_cent,
+		EXISTS(
+			SELECT 1 FROM order_refund_admissions a
+			WHERE a.order_no = g.order_no AND a.group_no = g.group_no AND a.result = ?
+		)
 		FROM order_fulfillment_groups g
 		LEFT JOIN order_shipping_permits p
 		  ON p.order_no = g.order_no AND p.fulfillment_group_no = g.group_no
-		WHERE g.order_no = ? ORDER BY g.seq`, orderNo)
+		WHERE g.order_no = ? ORDER BY g.seq`, refundResultPre, orderNo)
 	if err != nil {
 		return nil, err
 	}
@@ -97,10 +112,13 @@ func loadFulfillmentGroups(ctx context.Context, q querier, orderNo string) ([]*f
 	groups := make([]*fulfillmentGroup, 0, 1)
 	for rows.Next() {
 		var g fulfillmentGroup
+		var preShipAdmission int64
 		if err := rows.Scan(&g.GroupNo, &g.OrderNo, &g.Seq, &g.WarehouseID, &g.Status,
-			&g.RefundState, &g.ReservationState, &g.PermitState, &g.FreightCent, &g.FreightShareCent); err != nil {
+			&g.RefundState, &g.ReservationState, &g.PermitState, &g.FreightCent, &g.FreightShareCent,
+			&preShipAdmission); err != nil {
 			return nil, err
 		}
+		g.PreShipAdmission = preShipAdmission == 1
 		groups = append(groups, &g)
 	}
 	return groups, rows.Err()

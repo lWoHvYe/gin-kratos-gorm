@@ -455,6 +455,13 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 change freeze: PAY-OPS-REPLAY-01 opened
+
+- Human chose option A: new bounded L2 `PAY-OPS-REPLAY-01` for real AC-61
+  manual replay + NOWB manual abandon/re-arm. `PAY-SETTLE-01` paused again.
+- Plan/Tasks: `docs/lead/PAY-OPS-REPLAY-01/`. No code until Architect design,
+  QC, and human Plan approval. No merge/Release.
+
 ### 2026-11-27 Phase 0-R closeout FAIL: NOWB open, LIVE blocked
 
 - Reviewer `e02677d`: `AC-27-NOWB-01` **OPEN**, `AC-27-LIVE-01` **BLOCKED**;

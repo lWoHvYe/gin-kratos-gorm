@@ -455,6 +455,16 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 parent resume: PAY-SETTLE-01 R0.3-R1c
+
+- Human direction: after L2 completion, resume the paused `PAY-SETTLE-01`
+  **only for R0.3-R1c** (AC-27A steps 5/6). No other parent scope reopens.
+- Scope: Order read model closes an unshipped group on
+  `order_refund_admissions.result=PRE_SHIP_REVOKED`; shipped/received guard
+  first; `refund_state`/`reservation_state` do not participate; **no
+  `orders.status` write**, no migration/schema, no new RPC/worker.
+- WIP only; no merge/Release. Reviewer scoped verdict required.
+
 ### 2026-11-27 L2 residual PASS; PAY-AC50-REVIEW-01 complete (scoped)
 
 - Reviewer `91b7310` (base `b731a9f`, head `d119894`, code `d90daf0`):

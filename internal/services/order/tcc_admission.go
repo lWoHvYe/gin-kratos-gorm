@@ -146,7 +146,7 @@ func (s *Service) admitTccApplication(ctx context.Context, batch *tccRefundBatch
 				GroupNo: application.GroupNo, AmountCent: application.AmountCent,
 				Result: refundReviewRequired, State: refundPending,
 			}
-			return refundReviewConflict(row, refundReasonConsumedWithoutShipment)
+			return refundReviewConflict(row, refundReasonConsumedWithoutShipment, probeStatusNoWaybill)
 		}
 	}
 	switch application.State {

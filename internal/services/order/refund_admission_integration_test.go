@@ -327,7 +327,7 @@ func TestAdmitRefundConsumedPermitTwoPhase(t *testing.T) {
 		t.Fatal(err)
 	}
 	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-ADM-2", OrderNo: "ORD-ADM2", GroupNo: "G1", AmountCent: 1000,
+		RefundId: "R-ADM-2", OrderNo: "ORD-ADM2", GroupNo: "G1", AmountCent: 10000,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -346,7 +346,7 @@ func TestAdmitRefundConsumedPermitTwoPhase(t *testing.T) {
 		VALUES ('ORD-ADM3',1,1,'x',1,1,'G1',10000,10000)`)
 	fake.status = "ALREADY_SHIPPED"
 	reply, err = svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-ADM-3", OrderNo: "ORD-ADM3", GroupNo: "G1", AmountCent: 1000,
+		RefundId: "R-ADM-3", OrderNo: "ORD-ADM3", GroupNo: "G1", AmountCent: 10000,
 	})
 	if err != nil {
 		t.Fatal(err)

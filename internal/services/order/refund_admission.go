@@ -29,6 +29,8 @@ const (
 	probeStatusNoWaybill = "NO_WAYBILL"
 	// refundReasonConsumedWithoutShipment is one of the fixed AC-72 reasons.
 	refundReasonConsumedWithoutShipment = "CONSUMED_WITHOUT_SHIPMENT"
+	refundReasonPartialUnclassifiable   = "PARTIAL_AMOUNT_UNCLASSIFIABLE"
+	refundReasonLegacyShipmentUnknown   = "LEGACY_SHIPMENT_UNKNOWN"
 	manualQueueNowb                     = "AC-27-NOWB-01"
 	// refundBatchLastErrorWidth is the TCC refund_batches.last_error column
 	// width (characters); the after-sales task column is 512.
@@ -197,15 +199,114 @@ func refundReviewCanonical(refundID, code string, width int) string {
 // refundReviewConflict is the stable REFUND_ADMISSION_CONFLICT for a
 // REVIEW_REQUIRED decision with structured (typed) details; callers must not
 // parse the message. The error code table is unchanged (AC-69/AC-72).
-func refundReviewConflict(row *refundAdmissionRow, reason string) *apperr.Error {
-	return apperr.Failed("REFUND_ADMISSION_CONFLICT: consumed permit without shipment; manual review required").
-		WithDetails(map[string]any{
-			"refund_id": row.RefundID, "order_no": row.OrderNo, "group_no": row.GroupNo,
-			"permit_state": permitConsumed, "probe_status": probeStatusNoWaybill,
-			"result": refundReviewRequired, "state": refundPending,
-			"reason": reason, "ticket": refundReviewTicket(row.RefundID),
-			"manual_queue": manualQueueNowb,
-		})
+func refundReviewConflict(row *refundAdmissionRow, reason, probeStatus string) *apperr.Error {
+	details := map[string]any{
+		"refund_id": row.RefundID, "order_no": row.OrderNo, "group_no": row.GroupNo,
+		"result": refundReviewRequired, "state": refundPending,
+		"reason": reason, "ticket": refundReviewTicket(row.RefundID),
+		"manual_queue": manualQueueNowb,
+	}
+	message := "REFUND_ADMISSION_CONFLICT: refund requires manual review"
+	if probeStatus != "" {
+		details["probe_status"] = probeStatus
+		details["permit_state"] = permitConsumed
+		message = "REFUND_ADMISSION_CONFLICT: consumed permit without shipment; manual review required"
+	}
+	return apperr.Failed(message).WithDetails(details)
+}
+
+// replayReviewConflict reconstructs the stable details of a persisted review
+// from Order-owned facts (the admission row stores no reason column).
+func (s *Service) replayReviewConflict(ctx context.Context, row *refundAdmissionRow) *apperr.Error {
+	if remaining, err := loadGroupRemainingExcluding(ctx, s.db, row.OrderNo, row.GroupNo, row.RefundID); err == nil && row.AmountCent < remaining {
+		return refundReviewConflict(row, refundReasonPartialUnclassifiable, "")
+	}
+	permit, err := loadPermitState(ctx, s.db, row.OrderNo, row.GroupNo)
+	if err == nil && permit == permitConsumed {
+		return refundReviewConflict(row, refundReasonConsumedWithoutShipment, probeStatusNoWaybill)
+	}
+	return refundReviewConflict(row, refundReasonLegacyShipmentUnknown, "")
+}
+
+func partialRefundError(groupRemaining, requested int64) *apperr.Error {
+	return apperr.Failed("partial refund of an unshipped group requires a full-group refund").
+		WithDetails(map[string]any{"group_remaining_cent": groupRemaining, "requested_cent": requested})
+}
+
+// orderExitClass is the Order-owned waybill-exit proxy used by AC-70: the
+// group projection plus (when the group row is missing) the order status.
+type orderExitClass int
+
+const (
+	exitUnshipped orderExitClass = iota
+	exitShipped
+	exitUnclassifiable
+)
+
+func classifyGroupExit(ctx context.Context, q querier, orderNo, groupNo, orderStatus string) (orderExitClass, error) {
+	var status string
+	err := q.QueryRowContext(ctx, `SELECT status FROM order_fulfillment_groups
+		WHERE order_no = ? AND group_no = ?`, orderNo, groupNo).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		switch orderStatus {
+		case statusPaid, statusAllocated:
+			return exitUnshipped, nil
+		case statusShipped, statusCompleted:
+			return exitUnclassifiable, nil
+		default:
+			return exitUnclassifiable, nil
+		}
+	}
+	if err != nil {
+		return 0, apperr.Unavailable("load group projection for refund admission", err)
+	}
+	switch status {
+	case "SHIPPED", "RECEIVED":
+		return exitShipped, nil
+	case "PAID", "ALLOCATED":
+		return exitUnshipped, nil
+	default:
+		return exitUnclassifiable, nil
+	}
+}
+
+func loadGroupRemaining(ctx context.Context, q querier, orderNo, groupNo string) (int64, error) {
+	return loadGroupRemainingExcluding(ctx, q, orderNo, groupNo, "")
+}
+
+// loadGroupRemainingExcluding excludes one refund's own RESERVED commitment so
+// a preseeded partial admission is not mistaken for a whole-group request.
+func loadGroupRemainingExcluding(ctx context.Context, q querier, orderNo, groupNo, excludeRefundID string) (int64, error) {
+	var paid, freight, consumed int64
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(line_paid_cent),0) FROM order_items
+		WHERE order_no = ? AND fulfillment_group_no = ?`, orderNo, groupNo).Scan(&paid); err != nil {
+		return 0, apperr.Internal("sum group paid amount", err)
+	}
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(freight_share_cent),0) FROM order_fulfillment_groups
+		WHERE order_no = ? AND group_no = ?`, orderNo, groupNo).Scan(&freight); err != nil {
+		return 0, apperr.Internal("load group freight share", err)
+	}
+	if err := q.QueryRowContext(ctx, `SELECT COALESCE(SUM(amount_cent),0) FROM order_refund_commitments
+		WHERE order_no = ? AND group_no = ? AND state IN ('RESERVED','SETTLED') AND refund_id <> ?`,
+		orderNo, groupNo, excludeRefundID).Scan(&consumed); err != nil {
+		return 0, apperr.Internal("sum group refund commitments", err)
+	}
+	remaining := paid + freight - consumed
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining, nil
+}
+
+func loadOrderStatus(ctx context.Context, q querier, orderNo string) (string, error) {
+	var status string
+	if err := q.QueryRowContext(ctx, `SELECT status FROM orders WHERE order_no = ?`, orderNo).Scan(&status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", apperr.NotFound("order not found")
+		}
+		return "", apperr.Internal("load order status", err)
+	}
+	return status, nil
 }
 
 // AdmitRefund is the group-level refund admission described by ADR-0007. It
@@ -248,11 +349,11 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	} else {
 		switch classifyExistingAdmission(existing) {
 		case existingAdmissionReview:
-			return nil, refundReviewConflict(existing, refundReasonConsumedWithoutShipment)
+			return nil, s.replayReviewConflict(ctx, existing)
 		case existingAdmissionTerminal:
 			return admissionReply(existing), nil
 		case existingAdmissionPending:
-			return s.finishRemoteAdmission(ctx, existing, req.GetSource(), req.GetBatchId())
+			return s.resumePendingAdmission(ctx, existing, req)
 		case existingAdmissionUnknown:
 			return nil, apperr.Conflict("refund admission has an illegal result/state combination").
 				WithDetails(map[string]any{
@@ -304,11 +405,11 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		_ = tx.Rollback()
 		switch classifyExistingAdmission(existing) {
 		case existingAdmissionReview:
-			return nil, refundReviewConflict(existing, refundReasonConsumedWithoutShipment)
+			return nil, s.replayReviewConflict(ctx, existing)
 		case existingAdmissionTerminal:
 			return admissionReply(existing), nil
 		case existingAdmissionPending:
-			return s.finishRemoteAdmission(ctx, existing, req.GetSource(), req.GetBatchId())
+			return s.resumePendingAdmission(ctx, existing, req)
 		default:
 			return nil, apperr.Conflict("refund admission has an illegal result/state combination").
 				WithDetails(map[string]any{
@@ -332,38 +433,71 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		return nil, apperr.Failed("refund exceeds the remaining captured amount").
 			WithDetails(map[string]any{"captured_cent": captured, "refunded_cent": refunded, "reserved_cent": reserved})
 	}
-	var groupPaid, groupFreight, groupConsumed int64
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(line_paid_cent),0) FROM order_items
-		WHERE order_no = ? AND fulfillment_group_no = ?`, orderNo, groupNo).Scan(&groupPaid); err != nil {
-		return nil, apperr.Internal("sum group paid amount", err)
-	}
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(freight_share_cent),0) FROM order_fulfillment_groups
-		WHERE order_no = ? AND group_no = ?`, orderNo, groupNo).Scan(&groupFreight); err != nil {
-		return nil, apperr.Internal("load group freight share", err)
-	}
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(amount_cent),0) FROM order_refund_commitments
-		WHERE order_no = ? AND group_no = ? AND state IN ('RESERVED','SETTLED')`, orderNo, groupNo).Scan(&groupConsumed); err != nil {
-		return nil, apperr.Internal("sum group refund commitments", err)
-	}
-	groupRemaining := groupPaid + groupFreight - groupConsumed
-	if groupRemaining < 0 {
-		groupRemaining = 0
+	groupRemaining, err := loadGroupRemaining(ctx, tx, orderNo, groupNo)
+	if err != nil {
+		return nil, err
 	}
 	if req.GetAmountCent() > groupRemaining {
 		return nil, apperr.Failed("refund exceeds the group remaining amount").
 			WithDetails(map[string]any{"group_remaining_cent": groupRemaining, "requested_cent": req.GetAmountCent()})
 	}
 	if permit.state != permitConsumed && req.GetAmountCent() != groupRemaining {
-		return nil, apperr.Failed("partial refund of an unshipped group requires a full-group refund").
-			WithDetails(map[string]any{"group_remaining_cent": groupRemaining, "requested_cent": req.GetAmountCent()})
+		return nil, partialRefundError(groupRemaining, req.GetAmountCent())
 	}
 
-	result := refundResultPre
-	state := refundResultPre
-	if permit.state == permitConsumed {
-		result = refundResultPost
-		state = refundPending
+	// AC-50/AC-70/D-31: a CONSUMED partial amount and a legacy NONE permit use
+	// the Order-owned group projection only; CancelIfCreated is never called for
+	// them. The decision is made before any Tx1 write so PARTIAL leaves zero
+	// admission/commitment/outbox rows.
+	partial := permit.state == permitConsumed && req.GetAmountCent() < groupRemaining
+	exitClass := exitUnshipped
+	if partial || permit.state == permitConsumed || permit.state == permitNone {
+		exitClass, err = classifyGroupExit(ctx, tx, orderNo, groupNo, locked.Status)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	result, state := refundResultPre, refundResultPre
+	reviewReason := ""
+	needsProbe := false
+	switch permit.state {
+	case permitConsumed:
+		switch {
+		case partial && exitClass == exitUnshipped:
+			return nil, partialRefundError(groupRemaining, req.GetAmountCent())
+		case partial && exitClass == exitUnclassifiable:
+			result, state = refundReviewRequired, refundPending
+			reviewReason = refundReasonPartialUnclassifiable
+		case partial:
+			// Projection SHIPPED/RECEIVED: partial post-ship refund is legal.
+			result, state = refundResultPost, refundResultPost
+		case exitClass == exitShipped:
+			// Whole-group but the projection already proves the exit: POST
+			// without probing or cancelling the waybill (AC-50 §236).
+			result, state = refundResultPost, refundResultPost
+		default:
+			// Tx1 placeholder + remote probe (existing two-phase path).
+			result, state = refundResultPost, refundPending
+			needsProbe = true
+		}
+	case permitNone:
+		switch exitClass {
+		case exitShipped:
+			result, state = refundResultPost, refundResultPost
+		case exitUnshipped:
+			result, state = refundResultPre, refundResultPre
+		default:
+			result, state = refundReviewRequired, refundPending
+			reviewReason = refundReasonLegacyShipmentUnknown
+		}
+	case permitRevoked:
+		result, state = refundResultPre, refundResultPre
+	default:
+		return nil, apperr.Failed("shipping permit state is not a legal persisted state").
+			WithDetails(map[string]any{"order_no": orderNo, "group_no": groupNo, "permit_state": permit.state})
+	}
+
 	if _, err := tx.ExecContext(ctx, `INSERT INTO order_refund_admissions
 		(refund_id, order_no, group_no, result, state, amount_cent, version)
 		VALUES (?, ?, ?, ?, ?, ?, 1)`,
@@ -377,16 +511,23 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		orderNo, groupNo, refundID, req.GetAmountCent(), "RESERVED"); err != nil {
 		return nil, apperr.Internal("insert refund commitment", err)
 	}
-	if permit.state == permitNone {
-		if _, err := tx.ExecContext(ctx, `UPDATE order_shipping_permits
+	if permit.state == permitNone && result == refundResultPre {
+		res, err := tx.ExecContext(ctx, `UPDATE order_shipping_permits
 			SET state = ?, version = version + 1, updated_at = NOW(3)
 			WHERE order_no = ? AND fulfillment_group_no = ? AND state = ?`,
-			permitRevoked, orderNo, groupNo, permitNone); err != nil {
+			permitRevoked, orderNo, groupNo, permitNone)
+		if err != nil {
 			return nil, apperr.Internal("revoke permit for refund", err)
 		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return nil, apperr.Conflict("shipping permit changed during refund admission; retry").
+				WithDetails(map[string]any{"order_no": orderNo, "group_no": groupNo})
+		}
 	}
-	if err := appendRefundAdmitted(ctx, tx, refundID, orderNo, groupNo, result, req.GetAmountCent(), 1, state); err != nil {
-		return nil, err
+	if result != refundReviewRequired {
+		if err := appendRefundAdmitted(ctx, tx, refundID, orderNo, groupNo, result, req.GetAmountCent(), 1, state); err != nil {
+			return nil, err
+		}
 	}
 	if result == refundResultPre {
 		if err := s.appendRefundReleaseTx(ctx, tx, refundID, orderNo, groupNo, req.GetSource()); err != nil {
@@ -400,10 +541,56 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		RefundID: refundID, OrderNo: orderNo, GroupNo: groupNo, Result: result,
 		State: state, AmountCent: req.GetAmountCent(), Version: 1,
 	}
-	if state == refundPending {
+	if result == refundReviewRequired {
+		if s.log != nil {
+			s.log.Error("refund admission review required",
+				"refund_id", refundID, "order_no", orderNo, "group_no", groupNo,
+				"source", req.GetSource(), "result", refundReviewRequired, "state", refundPending,
+				"reason", reviewReason, "ticket", refundReviewTicket(refundID), "manual_queue", manualQueueNowb)
+		}
+		return nil, refundReviewConflict(row, reviewReason, "")
+	}
+	if needsProbe {
 		return s.finishRemoteAdmission(ctx, row, req.GetSource(), req.GetBatchId())
 	}
 	return admissionReply(row), nil
+}
+
+// resumePendingAdmission resumes an existing PENDING_REMOTE admission. A whole
+// group keeps the two-phase probe; a partial amount is classified by the
+// Order-owned group projection without probing, and the existing placeholder/
+// commitment are never re-created for PARTIAL (AC-70/D-31).
+func (s *Service) resumePendingAdmission(ctx context.Context, row *refundAdmissionRow, req *pb.AdmitRefundRequest) (*pb.AdmitRefundReply, error) {
+	remaining, err := loadGroupRemainingExcluding(ctx, s.db, row.OrderNo, row.GroupNo, row.RefundID)
+	if err != nil {
+		return nil, err
+	}
+	orderStatus, err := loadOrderStatus(ctx, s.db, row.OrderNo)
+	if err != nil {
+		return nil, err
+	}
+	class, err := classifyGroupExit(ctx, s.db, row.OrderNo, row.GroupNo, orderStatus)
+	if err != nil {
+		return nil, err
+	}
+	if row.AmountCent >= remaining {
+		if class == exitShipped {
+			// AC-50 §236: the projection already proves the exit; never probe.
+			return s.writeAdmissionTx2(ctx, row, refundResultPost, refundResultPost, req.GetSource(), req.GetBatchId(), "", "")
+		}
+		return s.finishRemoteAdmission(ctx, row, req.GetSource(), req.GetBatchId())
+	}
+	if err != nil {
+		return nil, err
+	}
+	switch class {
+	case exitShipped:
+		return s.writeAdmissionTx2(ctx, row, refundResultPost, refundResultPost, req.GetSource(), req.GetBatchId(), "", "")
+	case exitUnshipped:
+		return nil, partialRefundError(remaining, row.AmountCent)
+	default:
+		return s.writeAdmissionTx2(ctx, row, refundReviewRequired, refundPending, req.GetSource(), req.GetBatchId(), refundReasonPartialUnclassifiable, "")
+	}
 }
 
 // admitZeroRefund implements SPEC-0002 v1.9 AC-67/AC-68 and the zero-amount
@@ -696,14 +883,14 @@ func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissio
 	switch reply.GetStatus() {
 	case "CANCELLED":
 		// A real CANCELLED row is the only probe answer that may write PRE.
-		return s.writeAdmissionTx2(ctx, row, refundResultPre, refundResultPre, source, batchID)
+		return s.writeAdmissionTx2(ctx, row, refundResultPre, refundResultPre, source, batchID, "", "")
 	case "ALREADY_SHIPPED", "RECEIVED":
-		return s.writeAdmissionTx2(ctx, row, refundResultPost, refundResultPost, source, batchID)
+		return s.writeAdmissionTx2(ctx, row, refundResultPost, refundResultPost, source, batchID, "", "")
 	case probeStatusNoWaybill:
 		// CONSUMED permit + no waybill row is not a legal AC-50 branch: persist
 		// the bounded review decision instead of guessing PRE/POST. state stays
 		// PENDING_REMOTE; no release, no terminal outbox, no Payment command.
-		return s.writeAdmissionTx2(ctx, row, refundReviewRequired, refundPending, source, batchID)
+		return s.writeAdmissionTx2(ctx, row, refundReviewRequired, refundPending, source, batchID, refundReasonConsumedWithoutShipment, probeStatusNoWaybill)
 	default:
 		// Unknown/future values stay retryable and can never become PRE.
 		return nil, apperr.Unavailable("shipment state is unknown; retry refund admission", nil)
@@ -717,7 +904,7 @@ func (s *Service) finishRemoteAdmission(ctx context.Context, row *refundAdmissio
 // re-reads the persisted decision instead of writing its own outbox/release.
 // REVIEW_REQUIRED writes no outbox and no release; PRE/POST keep the existing
 // event/release behaviour.
-func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow, result, state, source, batchID string) (*pb.AdmitRefundReply, error) {
+func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow, result, state, source, batchID, reason, probeStatus string) (*pb.AdmitRefundReply, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, apperr.Internal("begin refund admission tx2", err)
@@ -753,25 +940,36 @@ func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow
 		// application mirror are one transaction. A missing application row is
 		// normal for ordinary after-sales and must not be created here; only an
 		// already existing TCC application is mirrored.
-		lastError := refundReviewCanonical(row.RefundID, refundReasonConsumedWithoutShipment, refundBatchLastErrorWidth)
-		if _, err := tx.ExecContext(ctx, `UPDATE refund_batches
+		lastError := refundReviewCanonical(row.RefundID, reason, refundBatchLastErrorWidth)
+		res, err := tx.ExecContext(ctx, `UPDATE refund_batches
 			SET state = ?, last_error = ?, version = version + 1, updated_at = NOW(3)
 			WHERE batch_id = ? AND state IN (?, ?)`,
-			refundBatchManualHold, lastError, batchID, refundBatchFrozen, refundBatchAdmitting); err != nil {
+			refundBatchManualHold, lastError, batchID, refundBatchFrozen, refundBatchAdmitting)
+		if err != nil {
 			return nil, apperr.Internal("hold tcc refund batch for review", err)
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE refund_applications
+		if n, _ := res.RowsAffected(); n != 1 {
+			// T1c gate: never commit a REVIEW admission without the human hold.
+			return nil, apperr.Failed("tcc refund batch state changed while persisting review; no review committed").
+				WithDetails(map[string]any{"batch_id": batchID, "refund_id": row.RefundID})
+		}
+		res, err = tx.ExecContext(ctx, `UPDATE refund_applications
 			SET admission_result = ?, version = version + 1, updated_at = NOW(3)
 			WHERE refund_id = ? AND state = ?`,
-			refundReviewRequired, row.RefundID, refundApplicationPending); err != nil {
+			refundReviewRequired, row.RefundID, refundApplicationPending)
+		if err != nil {
 			return nil, apperr.Internal("mirror tcc review result on refund application", err)
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return nil, apperr.Failed("tcc refund application is not PENDING while persisting review; no review committed").
+				WithDetails(map[string]any{"batch_id": batchID, "refund_id": row.RefundID})
 		}
 	}
 	if result == refundReviewRequired && s.log != nil {
 		s.log.Error("refund admission review required: consumed permit without shipment",
 			"refund_id", row.RefundID, "order_no", row.OrderNo, "group_no", row.GroupNo,
 			"source", source, "result", refundReviewRequired, "state", refundPending,
-			"reason", refundReasonConsumedWithoutShipment,
+			"reason", reason,
 			"ticket", refundReviewTicket(row.RefundID), "manual_queue", manualQueueNowb)
 	}
 	if err := tx.Commit(); err != nil {
@@ -779,7 +977,7 @@ func (s *Service) writeAdmissionTx2(ctx context.Context, row *refundAdmissionRow
 	}
 	row.Result, row.State, row.Version = result, state, row.Version+1
 	if result == refundReviewRequired {
-		return nil, refundReviewConflict(row, refundReasonConsumedWithoutShipment)
+		return nil, refundReviewConflict(row, reason, probeStatus)
 	}
 	return admissionReply(row), nil
 }
@@ -799,7 +997,7 @@ func (s *Service) readBackAdmissionTx2(ctx context.Context, row *refundAdmission
 				"manual_queue": manualQueueNowb,
 			})
 	case existingAdmissionReview:
-		return nil, refundReviewConflict(persisted, refundReasonConsumedWithoutShipment)
+		return nil, s.replayReviewConflict(ctx, persisted)
 	case existingAdmissionTerminal:
 		return admissionReply(persisted), nil
 	case existingAdmissionPending:

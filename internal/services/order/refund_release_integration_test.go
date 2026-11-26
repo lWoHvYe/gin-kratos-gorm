@@ -285,7 +285,7 @@ func TestAdmitRefundPostDoesNotWriteReleaseOutbox(t *testing.T) {
 		{lineNo: 1, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 10000, groupNo: "G1"},
 	}, permitConsumed)
 	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-POST", OrderNo: "ORD-POST", GroupNo: "G1", AmountCent: 1000, Source: "aftersale",
+		RefundId: "R-POST", OrderNo: "ORD-POST", GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -401,7 +401,7 @@ func TestAdmitRefundRemoteAdmissionPreWritesOrderLevelRelease(t *testing.T) {
 		{lineNo: 1, skuID: 1, quantity: 1, warehouseID: 1, paidCent: 10000, groupNo: "G1"},
 	}, permitConsumed)
 	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-		RefundId: "R-REMOTE", OrderNo: "ORD-REMOTE", GroupNo: "G1", AmountCent: 1000, Source: "aftersale",
+		RefundId: "R-REMOTE", OrderNo: "ORD-REMOTE", GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
 	})
 	if err != nil {
 		t.Fatal(err)

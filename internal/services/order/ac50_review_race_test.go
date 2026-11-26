@@ -179,6 +179,7 @@ func TestAC50ReviewTx2Disappeared(t *testing.T) {
 func TestAC50ReviewLateCancelDoesNotWash(t *testing.T) {
 	db := orderTestDB(t)
 	ac50SeedOrder(t, db, "ORD-RC53", 10000)
+	ac50SeedPermit(t, db, "ORD-RC53", permitConsumed)
 	if _, err := db.Exec(`INSERT INTO order_refund_admissions
 		(refund_id, order_no, group_no, result, state, amount_cent, version)
 		VALUES ('R-RC53','ORD-RC53','G1',?,?,10000,1)`, refundReviewRequired, refundPending); err != nil {

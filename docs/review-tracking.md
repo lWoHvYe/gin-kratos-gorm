@@ -455,6 +455,15 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 human direction: continue L2 residual hardening
+
+- Director: keep advancing `PAY-AC50-REVIEW-01`; return to paused
+  `PAY-SETTLE-01` only after the L2 residuals are closed.
+- Scope (test-only, no new behavior/contract): F7b late `order.paid`
+  placeholder, TCC 1024 truncation, app 0-row/empty `batch_id`, unknown probe
+  status, O19 `refund_applications` 0 rows / O1b other-batch isolation.
+- Parent stays frozen; no deploy/merge/Release.
+
 ### 2026-11-27 PAY-AC50-REVIEW-01 final PASS (scoped) + handback
 
 - Reviewer `f0420fc` (base `3ce0d7d`, head `c8f6c9c`): **T0–T8 PASS

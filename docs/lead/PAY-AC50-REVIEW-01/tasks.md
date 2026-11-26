@@ -85,6 +85,10 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
 - [x] **T3-R1** fresh Tx1 与 Tx2 共用**唯一** REVIEW 持久化入口，应用 T1c 门禁（batch/app `RowsAffected`）；不得提交无人工持有的 REVIEW（Owner: Developer；证据: `source=tcc` partial/legacy + O4d/O10 + batch MANUAL_HOLD/app 镜像/last_error/token）
 - [ ] **T3-R2** 补 `source=tcc` partial/legacy 用例（O4d/O10、W12）；F7b/W8 残余在 T7 明示（Owner: Developer + Reviewer）
 
+- [ ] **T7-R1** F7b 迟到 `order.paid` 真实 placeholder（test-only；若不可构造，标 `[BLOCKED]` + 依赖证据）（Owner: Developer + Reviewer）
+- [ ] **T7-R2** TCC 1024 truncation + app 0 行/空 `batch_id` 独立 fail-closed 测试（Owner: Developer + Reviewer）
+- [ ] **T7-R3** unknown probe status 默认 `Unavailable`；O19 `refund_applications` 0 行、O1b 其他批隔离断言（Owner: Developer + Reviewer）
+
 ## Phase 3 — 复审/交回
 
 - [x] **R1** Reviewer 精确 base/head 复审（`f0420fc`，T0–T8 scoped PASS；NOT RELEASE）

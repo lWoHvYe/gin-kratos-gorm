@@ -455,6 +455,15 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 human resequencing: T2 -> T3 -> T4 -> T5 -> P0 closure
+
+- Director chose option B: implement T2 (historical PAID/legacy), T3
+  (line/freight/commitment release), T4 (fail-closed/shadow) first; then T5
+  full AC-39…68 (including the 4 P0 blockers AC-39/41/57/59 and 17 test gaps);
+  then P0 closure.
+- Phase 0-R scoped closeout is unchanged. AC-62..68 stay deferred until their
+  phases land. No merge/Release.
+
 ### 2026-11-27 T5.0 audit verified; 4 P0 blockers
 
 - Reviewer `528fe5d`: audit acceptable baseline with corrections; `NOT RELEASE`.

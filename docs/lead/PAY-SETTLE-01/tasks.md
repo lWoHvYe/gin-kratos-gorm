@@ -78,6 +78,8 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 
 ## Phase 2 — P-04 历史 PAID（Owner: Developer；依赖: T1.2 生产者修复 + T0.7）
 
+> 2026-11-27 人类重排：T2 → T3 → T4 → T5（含 AC-39/41/57/59 与 17 个测试缺口）→ P0 closure。
+
 - [ ] **T2.1** 先修生产者：TCC/直接路径不再产生 PAID 无生效支付
 - [ ] **T2.2** 解析 `ListOrderIntents`：`SUCCEEDED` + `captured==pay_cent` + order 匹配；零元 `zero:<order_no>`
 - [ ] **T2.3** 唯一候选 CAS 写回（`''`/NULL）；其他捕获走支付级退款/重复捕获

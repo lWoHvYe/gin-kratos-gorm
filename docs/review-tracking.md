@@ -455,6 +455,21 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 T3-T6 scoped FAIL: TCC fresh REVIEW bypass
+
+- Reviewer `e4e8a61` (base `30c6f16`, head `849cf78`, code `13a586a`+`f1946e7`):
+  **T3/T4 FAIL**, T5/T6 PASS, `NOT RELEASE`.
+- BLOCKER: fresh Tx1 REVIEW (`refund_admission.go:544-551`) bypasses the T1c
+  hold gate (`writeAdmissionTx2:940-970`). For `source=tcc` partial/legacy
+  unclassifiable, REVIEW admission+commitment is committed while the batch
+  stays `ADMITTING`, the application is not mirrored, `last_error` is absent,
+  and `admitTccBatch` returns `Unavailable` instead of
+  `TCC_BATCH_REQUIRES_MANUAL_HANDLING` (AC-71/ADR W12). T3/T4 tests only cover
+  `source=aftersale`.
+- **change_id frozen** until T3-R1/T3-R2 + re-review. T5/T6 remain PASS.
+- Residual: T6b test lives in `fulfillment`, not `order`; F7b/W8 not
+  constructed; TCC 1024 truncation not triggered.
+
 ### 2026-11-26 T1/T2 PASS (scoped)
 
 - Reviewer `30c6f16` (base `ff0d912`, head `7b28024`, code `ff7a847`):

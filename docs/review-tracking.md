@@ -363,6 +363,21 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 integrity: unowned housekeeping edits reverted
+
+- At 21:56 (after the T0 verdict commit), five files had uncommitted edits
+  outside the T0 scope and not attributable to the T0 verdict:
+  `Spec.md`, `docs/collab/ac-baseline.txt`, `docs/collab/ac-coverage.tsv`,
+  `docs/specs/0001-fulfillment-quantity-split.md`, `docs/specs/README.md`.
+- The diff (74 lines) was saved to `.tmp/unexpected-housekeeping-2026-11-26.patch`
+  and the files were reverted to HEAD to keep the T0 checkpoint exact.
+- Owner routing: PO must apply the SPEC-0001 v1.5 / SPEC-0002 v1.11 index
+  sync (`Spec.md`, `docs/specs/README.md`, the `未 commit` note in SPEC-0001);
+  Reviewer must add `ac-baseline` AC-69…72 and the AC-72 three-part rows in
+  **T7**, not during T0.
+- T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
+  (verdict); no status change.
+
 ### 2026-11-26 T0 release unit PASS (scoped)
 
 - Reviewer `84f5acd` (base `a34c845`, head `c796580`, code `e374384`):

@@ -371,7 +371,31 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 			return nil, apperr.Unavailable("payment client is required for refund admission", nil)
 		}
 		if record.SettlementPaymentNo == "" {
-			return nil, apperr.Failed("order has no settlement payment; resolve historical payment first")
+			// T2.2/T2.3 boundary: resolve the historical payment before any
+			// amount read. A unique candidate is CAS-written and continues; a
+			// zero/no/multiple candidate order is queued and fails closed.
+			resolved, rerr := s.ensureLegacyResolution(ctx, orderNo)
+			if rerr != nil {
+				return nil, rerr
+			}
+			if resolved == nil || (resolved.State != legacyResolutionStateResolved &&
+				resolved.State != legacyResolutionStateExpiredZero) {
+				details := map[string]any{"order_no": orderNo, "reason": "LEGACY_PAYMENT_UNRESOLVED"}
+				if resolved != nil {
+					details["resolution_state"] = resolved.State
+					details["candidate_count"] = resolved.CandidateCount
+				}
+				return nil, apperr.Failed("order has an unresolved historical payment; refund is blocked").
+					WithDetails(details)
+			}
+			reloaded, lerr := findOrder(ctx, s.db, orderNo)
+			if lerr != nil {
+				return nil, apperr.Internal("reload legacy-resolved order", lerr)
+			}
+			if reloaded == nil || strings.TrimSpace(reloaded.SettlementPaymentNo) == "" {
+				return nil, apperr.Failed("order has no settlement payment after legacy resolution")
+			}
+			record = reloaded
 		}
 		intent, ierr := s.payments.GetIntent(ctx, &pb.GetIntentRequest{PaymentNo: record.SettlementPaymentNo})
 		if ierr != nil {

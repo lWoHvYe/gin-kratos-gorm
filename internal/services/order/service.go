@@ -604,6 +604,13 @@ func (s *Service) MarkPaid(ctx context.Context, req *pb.MarkPaidRequest) (*pb.Or
 		return nil, apperr.Failed("order refund is in progress")
 	}
 	paymentNo := strings.TrimSpace(req.GetPaymentNo())
+	// T2.1 producer: a direct PAID write always carries the effective payment
+	// identity. Reject before confirming inventory so a caller cannot leave a
+	// PAID row with settlement_payment_no='' (historical-order bug).
+	if paymentNo == "" {
+		return nil, apperr.Invalid("payment_no is required to mark an order PAID").
+			WithDetails(map[string]any{"order_no": orderNo, "reason": "PAID_WITHOUT_PAYMENT_NO"})
+	}
 	switch record.Status {
 	case statusPaid:
 		if paymentNo == "" || record.SettlementPaymentNo == paymentNo {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
@@ -361,6 +362,14 @@ func insertAllocationSnapshotTx(ctx context.Context, tx *sql.Tx, req *pb.CreateO
 // flips PENDING_PAYMENT -> PAID sets allocation_frozen_at and seals the
 // snapshot. A second writer gets zero affected rows and the caller reloads.
 func freezeAllocationTx(ctx context.Context, tx *sql.Tx, orderNo string, paidCent int64, paymentNo string) (int64, error) {
+	// T2.1 producer invariant: PAID is never written without an effective
+	// payment identity. This is the single freeze point for TCC and direct
+	// paths, so a caller that loses its payment_no fails before touching the
+	// order row instead of creating a historical-order row.
+	if strings.TrimSpace(paymentNo) == "" {
+		return 0, apperr.Failed("order cannot be PAID without settlement_payment_no").
+			WithDetails(map[string]any{"order_no": orderNo, "reason": "PAID_WITHOUT_PAYMENT_NO"})
+	}
 	res, err := tx.ExecContext(ctx, `UPDATE orders
 		SET status = ?, paid_cent = ?, settlement_payment_no = ?, allocation_frozen_at = NOW(3), version = version + 1, updated_at = NOW(3)
 		WHERE order_no = ? AND status = ? AND allocation_frozen_at IS NULL`,

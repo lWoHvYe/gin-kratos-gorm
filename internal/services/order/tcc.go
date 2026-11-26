@@ -67,6 +67,12 @@ func (s *Service) TccConfirmMarkPaid(ctx context.Context, req *pb.TccPaymentRequ
 		return nil, apperr.Failed("order refund is in progress")
 	}
 	paymentNo := strings.TrimSpace(req.GetPaymentNo())
+	// T2.1 producer: the TCC confirm branch is the second PAID writer and must
+	// carry the payment_no just like the direct MarkPaid path.
+	if paymentNo == "" {
+		return nil, apperr.Invalid("payment_no is required to confirm an order as PAID").
+			WithDetails(map[string]any{"order_no": orderNo, "reason": "PAID_WITHOUT_PAYMENT_NO"})
+	}
 	if record.Status == statusPaid {
 		if paymentNo != "" && record.SettlementPaymentNo == paymentNo {
 			return &pb.Empty{}, nil

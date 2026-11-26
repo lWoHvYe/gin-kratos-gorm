@@ -314,6 +314,33 @@ func (s *Service) AuthorizeShipment(ctx context.Context, req *pb.ShipmentPermitR
 	if err != nil {
 		return nil, apperr.Internal("load order items for shipment", err)
 	}
+	// T2.2 boundary: a historical PAID order with no effective payment must be
+	// resolved or queued before a shipping permit can be consumed. Production
+	// always wires Payment; the nil check preserves the unit-style settlement
+	// fixture that never exercises historical orders.
+	if s.payments != nil {
+		record, err := findOrder(ctx, s.db, orderNo)
+		if err != nil {
+			return nil, apperr.Internal("load order for legacy shipping gate", err)
+		}
+		if record != nil && (record.Status == statusPaid || record.Status == statusAllocated) &&
+			strings.TrimSpace(record.SettlementPaymentNo) == "" {
+			resolved, rerr := s.ensureLegacyResolution(ctx, orderNo)
+			if rerr != nil {
+				return nil, rerr
+			}
+			if resolved == nil || (resolved.State != legacyResolutionStateResolved &&
+				resolved.State != legacyResolutionStateExpiredZero) {
+				details := map[string]any{"order_no": orderNo, "reason": "LEGACY_PAYMENT_UNRESOLVED"}
+				if resolved != nil {
+					details["resolution_state"] = resolved.State
+					details["candidate_count"] = resolved.CandidateCount
+				}
+				return nil, apperr.Failed("order has an unresolved historical payment; shipping is blocked").
+					WithDetails(details)
+			}
+		}
+	}
 	if err := s.checkOrderReady(ctx, orderNo, items); err != nil {
 		return nil, err
 	}

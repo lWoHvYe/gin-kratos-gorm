@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **APPROVED（2026-11-26，human P5）**；ADR 0.6 errata ACCEPTED（C-5）；实现进行中（T0 发布单元 PASS scoped；T1–T8 pending） |
+| Status | **APPROVED（2026-11-26，human P5）**；ADR 0.6 errata ACCEPTED（C-5）；**COMPLETE（scoped PASS T0–T8，2026-11-27）**；已交回 PAY-SETTLE-01 |
 | change_id | `PAY-AC50-REVIEW-01` |
 | Parent | `PAY-SETTLE-01`（**保持冻结**；本 L2 交付前不推进其受管代码/台账） |
 | Tier | **L2**；命中 P0、资金、跨服务、状态机、既有 RPC 响应语义、共享 metrics |
@@ -56,7 +56,7 @@
 | **T5b** | 指标/SLA | `mall_refund_review_backlog`/`oldest`；7 天查询；零元不混入 | O18 | `platform/metrics/metrics_test.go` + `order/worker_test.go` | `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/platform/metrics ./internal/services/order -run 'TestAC50ReviewMetrics|TestRefundReviewGauge'` | gauge 计数；zero 不计；7 天可查 |
 | **T5c** | ops runbook | AC-72 查询/SLA/对账、§8.3 re-arm、存量 PRE 审计写入 `docs/ops.md`（owner ops；expiry 2026-12-31；证据=runbook 链接/演练记录） | O18/O20 | `docs/ops.md`（runbook） | 人工审阅 | 查询 SQL/告警 key/SLA/对账/re-arm/存量审计步骤齐备 |
 | **T6a** | Tx1/Tx2 崩溃 | W1–W3：Tx1 后崩溃重放、Tx2 前/后崩溃；不提前终态 | O3/W1–W4 | `order/ac50_review_fault_test.go` | `TEST_MYSQL_DSN=$ORDER_DSN go test -race ./internal/services/order -run 'TestAC50ReviewCrash|TestAC50ReviewRace' -count=1` | 重放收敛；无终态/释放；W4：Ship 胜→POST、取消胜→PRE |
-| **T6b** | 重复/乱序 | W8/W9/W13：重复 PRE、迟到 `order.paid`、REVIEW 后不自动 PRE | O14/O14b/W13/F7b | `order/review_consumer_integration_test.go` | `TEST_MYSQL_DSN=$ORDER_DSN TEST_NATS_URL=nats://127.0.0.1:4222 go test -race ./internal/services/order -run 'TestReviewConsumer' -count=1` | 不重复取消/不建重复 placeholder/REVIEW 不自动 PRE |
+| **T6b** | 重复/乱序 | W8/W9/W13：重复 PRE、迟到 `order.paid`、REVIEW 后不自动 PRE | O14/O14b/W13/F7b | `order/review_consumer_integration_test.go` | `TEST_MYSQL_DSN=$FF_DSN TEST_NATS_URL=nats://127.0.0.1:4222 go test -race ./internal/services/fulfillment -run 'TestRefundAdmittedConsumerReviewAndDuplicate' -count=1` | 不重复取消/不建重复 placeholder/REVIEW 不自动 PRE |
 | **T6c** | DLQ | DLQ/ACL 重放；0 资金副作用 | F7/O14/W8/W11（W8 仅验证不重复；永久悬挂归 AC-27-LIVE-01） | `order/review_consumer_integration_test.go` | `TEST_MYSQL_DSN=$ORDER_DSN TEST_NATS_URL=nats://127.0.0.1:4222 go test ./internal/services/order -run 'TestReviewConsumerDLQ' -count=1` | 重放幂等；无重复退款 |
 | **T6d** | re-arm 顺序 | 先写审计/镜像，再 CAS 清 `result`；不自动 | O16/O20/W11/W13 | `order/ac50_review_integration_test.go` | `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestAC50ReviewRearm' -count=1` | 审计先于清；version CAS；不自动 |
 | **T7** | 证据矩阵 | 修订 AC-50/51/61/62/65/67 + AC-69…72（AC-72 三段）+ INV-51/52；Reviewer 写 tsv；`NOT RELEASE` | — | `ac-coverage.tsv`（Reviewer）+ `docs/implementation/PAY-AC50-REVIEW-01-selfcheck.md` | `git rev-parse HEAD` + Reviewer 逐行核对（无独立测试） | 每行 test_type/evidence/status；AC-72 三段；HEAD `<HEAD>` |

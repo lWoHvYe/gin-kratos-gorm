@@ -47,17 +47,19 @@
   (base `a34c845`, head `c796580`, code `e374384`): `NO_WAYBILL` probe,
   REVIEW persistence, Tx2 double-predicate CAS; real MySQL 8.4 + `-race`
   PASS. **T1/T2/T3 not landed -- do not deploy alone.**
-- **Next**: T1 (TCC `MANUAL_HOLD`), T2 (AfterSales mirror/PENDING), T3
-  (partial), T4 (zero/legacy), T5 (audit/metrics/runbook), T6 (crash/DLQ/
-  re-arm), T7 evidence, T8 regression; then final L2 Reviewer + handback.
+- **T1–T8 complete**: final Reviewer `f0420fc` **PASS (T0–T8 scoped)**,
+  `NOT RELEASE`. AC-50/69/70/71/72-backend AC-VERIFIED; AC-51/61/62/65/67
+  AC-REF; AC-72 ALERTS/ENTRY DEFERRED. Residual: F7b late placeholder,
+  W8=AC-27-LIVE-01, AC-21/25/31/32 limits.
+- **Handback**: `PAY-SETTLE-01` may resume R0.3-R1c (AC-27A 5/6) and the rest
+  of Phase 0-R; AC-27 remains AC-REF; no release/merge.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 
 ## Open — next session first
 
-1. **PAY-AC50-REVIEW-01**: implement T1–T8 (TCC `MANUAL_HOLD`, after-sales
-   mirror, partial, zero/legacy, audit/metrics, crash/DLQ/re-arm, evidence,
-   regression); then final L2 Reviewer and handback.
+1. **PAY-SETTLE-01 handback**: resume R0.3-R1c (AC-27A steps 5/6) and the
+   rest of Phase 0-R (T2/T3/T4.4/T5); AC-27 stays AC-REF until then.
 2. **After L2 handback**: resume `PAY-SETTLE-01` R0.3-R1c (AC-27A steps 5/6)
    and the rest of Phase 0-R (T2/T3/T4.4/T5).
 3. **T5/AC-39…68** evidence; AC-69…72 are DEFERRED and need ledger rows.

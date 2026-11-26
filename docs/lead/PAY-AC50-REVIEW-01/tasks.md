@@ -87,9 +87,9 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
 
 ## Phase 3 — 复审/交回
 
-- [ ] **R1** Reviewer 精确 base/head 复审（NOT RELEASE）
-- [ ] **R2** integration owner 组合验证
-- [ ] **R3** 交回 PAY-SETTLE-01（AC-27A 5/6、R0.3-R1c、Phase 0-R）
+- [x] **R1** Reviewer 精确 base/head 复审（`f0420fc`，T0–T8 scoped PASS；NOT RELEASE）
+- [x] **R2** integration owner 组合验证（T8 回归 + Reviewer final）
+- [x] **R3** 交回 PAY-SETTLE-01（AC-27A 5/6、R0.3-R1c、Phase 0-R）
 - [ ] **R4** 人类 merge/Release 决策
 
 ## DoD

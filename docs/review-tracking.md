@@ -455,6 +455,17 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 PAY-AC50-REVIEW-01 final PASS (scoped) + handback
+
+- Reviewer `f0420fc` (base `3ce0d7d`, head `c8f6c9c`): **T0–T8 PASS
+  scoped**, `NOT RELEASE`, no merge/P0 closure.
+- Ledger: AC-50/69/70/71/72-backend **AC-VERIFIED**; AC-51/61/62/65/67
+  **AC-REF**; AC-72 ALERTS/ENTRY **DEFERRED**; AC-14 remains AC-VERIFIED.
+- Residuals: `REVIEW-REQUIRED-ALERTS-01`/`ENTRY-01` deferred; F7b late
+  placeholder not constructed; W8 = AC-27-LIVE-01; AC-21/25/31/32 limits.
+- Handback (L2-R3): `PAY-SETTLE-01` may resume R0.3-R1c (AC-27A 5/6) and the
+  rest of Phase 0-R; AC-27 remains **AC-REF**; no release/merge.
+
 ### 2026-11-27 T3-T6 re-review PASS; freeze lifted
 
 - Reviewer `18933e9` (base `72575f6`, head `9d9f79d`, code `c097e98`):

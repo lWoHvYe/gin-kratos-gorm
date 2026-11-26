@@ -455,6 +455,20 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 R0.3-R1c PASS (scoped); AC-27 still AC-REF
+
+- Reviewer `ce10714` (base `ce0f6b4`, head `36b747a`, code `9a57d01`):
+  R0.3-R1c PASS scoped, `NOT RELEASE`.
+- `groupIsClosed`: fixed order; branch 5 = `CONSUMED` + EXISTS
+  `order_refund_admissions.result='PRE_SHIP_REVOKED'`; `refund_state`/
+  `reservation_state` do not participate; **no `orders.status` write**;
+  late SHIPPED/RECEIVED has no contract conflict (S3 shipped -> open;
+  no event -> keep closed, no PRE).
+- AC-27 remains **AC-REF**: `AC-27-NOWB-01` / `AC-27-LIVE-01` still open.
+  `AC-50-FIX-01` write path is delivered by the L2 (AC-50 AC-VERIFIED).
+- Architect DRAFT AC-27 R-2 (writes `orders.status`) conflicts with SPEC
+  v1.5 -> must be withdrawn/errata; Phase 0-R remains open.
+
 ### 2026-11-27 parent resume: PAY-SETTLE-01 R0.3-R1c
 
 - Human direction: after L2 completion, resume the paused `PAY-SETTLE-01`

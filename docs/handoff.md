@@ -53,8 +53,13 @@
   W8=AC-27-LIVE-01, AC-21/25/31/32 limits.
 - **L2 residuals complete**: T7-R1..R3 PASS (`91b7310`); F7b full-chain
   `[BLOCKED]` accepted (no cross-service harness). **PAY-AC50-REVIEW-01 is
-  complete (scoped)**. `PAY-SETTLE-01` resumes R0.3-R1c (AC-27A 5/6) and the
-  rest of Phase 0-R; AC-27 remains AC-REF; no release/merge.
+  complete (scoped)**.
+- **R0.3-R1c PASS (scoped)**: Reviewer `ce10714`; AC-27A steps 5/6 use
+  Order-owned `PRE_SHIP_REVOKED`, no `orders.status` write. **AC-27 remains
+  AC-REF** because `AC-27-NOWB-01`/`AC-27-LIVE-01` are open. Architect DRAFT
+  AC-27 R-2 conflicts with SPEC v1.5 and must be withdrawn/errata.
+- **Next**: close `AC-27-NOWB-01`/`AC-27-LIVE-01`, then Phase 0-R T2/T3/T4.4/
+  T5; no release/merge.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 

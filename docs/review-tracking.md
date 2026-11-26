@@ -399,6 +399,16 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 governance delta audit: GOV-SDD-HYGIENE-01
+
+- `AGENTS.md` §0.5: cross-role info only via Lead; review-tracking only
+  structured decisions/canonical pointers. §2.4: thread CLOSED marked
+  historical. `CONVENTIONS.md` §4 protocol summary removed; §7.1 G-1 now
+  checks Tier-applicable §3 fields.
+- No role/Tier/phase change; `PAY-AC50-REVIEW-01` Plan/Tasks unaffected.
+  SDD structural alignment deferred to `SDD-STRUCT-ALIGN-01`.
+- All roles re-read AGENTS/CONVENTIONS at next step; no old-summary reliance.
+
 ### 2026-11-26 integrity: unowned housekeeping edits reverted
 
 - At 21:56 (after the T0 verdict commit), five files had uncommitted edits

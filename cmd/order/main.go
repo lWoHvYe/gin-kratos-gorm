@@ -32,6 +32,9 @@ func main() {
 	defer workers.Stop()
 	workers.Go(func(ctx context.Context) { outbox.Relay(ctx, bundle.DB, bundle.MQ, bundle.Logger, time.Second) })
 	workers.Go(func(ctx context.Context) { order.RunExpiry(ctx, bundle.DB, bundle.Service, bundle.Logger, time.Minute) })
+	workers.Go(func(ctx context.Context) {
+		order.RunLegacyResolutionWorker(ctx, bundle.Service, bundle.Logger, time.Minute)
+	})
 	workers.Go(func(ctx context.Context) { order.RunShipmentConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger) })
 	workers.Go(func(ctx context.Context) { order.RunRefundConsumer(ctx, bundle.MQ, bundle.Service, bundle.Logger) })
 	workers.Go(func(ctx context.Context) {

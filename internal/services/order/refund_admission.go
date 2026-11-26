@@ -339,6 +339,34 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	// the group admission (permit / CancelIfCreated) and writes the DONE ledger
 	// row in the same transaction. The positive-amount path below is unchanged.
 	if strings.TrimSpace(req.GetSource()) == refundSourceSystemZero {
+		// T2.4 zero gate (Reviewer MAJOR): a historical zero order whose
+		// settlement identity is still empty must resolve to zero:<order_no>
+		// (or queued) before the zero short-circuit. A captured intent on a
+		// zero-pay order must never take the zero path; do not collapse the
+		// unresolved case into REFUND_ADMISSION_CONFLICT.
+		if strings.TrimSpace(record.SettlementPaymentNo) == "" {
+			resolved, rerr := s.ensureLegacyResolution(ctx, orderNo)
+			if rerr != nil {
+				return nil, rerr
+			}
+			if resolved == nil || resolved.State != legacyResolutionStateExpiredZero {
+				details := map[string]any{"order_no": orderNo, "reason": "LEGACY_PAYMENT_UNRESOLVED"}
+				if resolved != nil {
+					details["resolution_state"] = resolved.State
+					details["candidate_count"] = resolved.CandidateCount
+				}
+				return nil, apperr.Failed("zero-amount refund requires a resolved historical payment").
+					WithDetails(details)
+			}
+			reloaded, lerr := findOrder(ctx, s.db, orderNo)
+			if lerr != nil {
+				return nil, apperr.Internal("reload zero-resolved order", lerr)
+			}
+			if reloaded == nil {
+				return nil, apperr.NotFound("order not found")
+			}
+			record = reloaded
+		}
 		return s.admitZeroRefund(ctx, req, record, refundID, orderNo, groupNo)
 	}
 	// AC-69 boundedness: the persisted decision is read before any Payment read

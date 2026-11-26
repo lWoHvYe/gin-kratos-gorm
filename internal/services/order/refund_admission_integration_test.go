@@ -651,8 +651,10 @@ func TestAdmitRefundSystemZeroRejectsMismatchedFacts(t *testing.T) {
 			}
 		})
 	}
-	if payments.getCalls != 0 || payments.listCalls != 0 {
-		t.Fatalf("rejected zero refunds consulted Payment")
+	// T2.4: historical zero orders may consult ListOrderIntents once to resolve
+	// the zero identity; they must still never read an intent or refund money.
+	if payments.getCalls != 0 || len(payments.refundCalls) != 0 {
+		t.Fatalf("rejected zero refunds read/refunded Payment: get=%d refunds=%d", payments.getCalls, len(payments.refundCalls))
 	}
 }
 

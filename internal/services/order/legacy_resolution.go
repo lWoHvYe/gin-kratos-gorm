@@ -18,11 +18,12 @@ import (
 // legacy_payment_resolution. The T2.4 SLA worker is deliberately not in this
 // file; it owns expiry/COMPENSATING/terminal transitions.
 const (
-	legacyResolutionStateResolved     = "RESOLVED"
-	legacyResolutionStateExpiredZero  = "EXPIRED_ZERO"
-	legacyResolutionStateOpen         = "OPEN"
-	legacyResolutionStateResolving    = "RESOLVING"
-	legacyResolutionStateCompensating = "COMPENSATING"
+	legacyResolutionStateResolved       = "RESOLVED"
+	legacyResolutionStateExpiredZero    = "EXPIRED_ZERO"
+	legacyResolutionStateOpen           = "OPEN"
+	legacyResolutionStateResolving      = "RESOLVING"
+	legacyResolutionStateCompensating   = "COMPENSATING"
+	legacyResolutionStateExpiredFinance = "EXPIRED_FINANCE"
 )
 
 type legacyResolution struct {

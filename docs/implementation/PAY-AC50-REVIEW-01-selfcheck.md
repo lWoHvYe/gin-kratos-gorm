@@ -236,3 +236,77 @@ TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test ./internal/services/or
 ### 10.8 不声称
 
 不声称实现 PASS / merge / Release PASS / AC-VERIFIED；AC-50/69/70/71/72 待 Reviewer 绑定证据；T5/T6、ENTRY-01、ALERTS-01 未交付；`PAY-SETTLE-01` 仍冻结。
+
+---
+
+## 11. T5a/T5b/T5c + T6a–T6d 自检（追加；code head `f1946e74db7629157d9415ec29163dc8c1de8cfd`，base `e4ac80e`）
+
+| 项 | 值 |
+|---|---|
+| 范围 | T5a 审计、T5b metrics/SLA、T5c ops runbook、T6a 崩溃/竞态、T6b NATS 重复/乱序、T6c DLQ、T6d re-arm |
+| Code head | **`f1946e7`**（7 files，+654/−1） |
+| 证据 | `.tmp/evidence-ac50-t1t2/`（HEAD-t5t6.txt、t5t6-order-full、t5t6-ff-full、t5b-metrics、t5t6-race），真实 MySQL 8.4.13 + `nats:2.10-alpine` |
+
+### 11.1 T5a/T6d（审计留存 + re-arm）
+
+- `TestAC50ReviewAuditAndRearmRetention`：REVIEW 行**不删除**、`created_at` 保持首次进入、`version` 单调；`runTccReconcileOnce` 不清 `refund_batches.last_error`、不推进 `MANUAL_HOLD`（O20b）；re-arm 按“镜像已在 → 版本 CAS 清 result → batch `MANUAL_HOLD→ADMITTING`”执行后，`last_error` 保留、`created_at` 不变、`version+1`；replay 收敛 PRE，仍不删行（O20/O16/W11/W13）。
+- 代码不提供自动 re-arm；只有 ops 带真实 S6 证据/授权/工单的版本化 CAS（§8.3），清空 `last_error` 不作为处置。
+
+### 11.2 T5b（AC-72 后端段）
+
+- `internal/platform/metrics/metrics.go`：新增 `mall_refund_review_backlog`、`mall_refund_review_oldest_seconds`（名称按 ADR §10 O18），在 `init` 注册。
+- `internal/services/order/worker.go`：`refreshRefundReviewGauges` 在既有 `RunExpiry` tick 内只读刷新（**不新增 worker/scanner**）；查询 `result='REVIEW_REQUIRED' AND state='PENDING_REMOTE'` 的 count + `MIN(updated_at)` 年龄。零元冲突不写 admission 行，天然不混入。
+- `TestRefundReviewGauges`（order）+ `TestRefundReviewGaugesRegistered`（metrics）：backlog=2、oldest≥10 天、7 天逾期查询=1、非 REVIEW 行不计。
+
+### 11.3 T5c（runbook）
+
+- `docs/ops.md` 新增 “Refund review queue (AC-72 backend segment)”：发现/backlog/oldest、7 天逾期、逐项明细、TCC `MANUAL_HOLD` 与售后 `last_error` 查询；24h/7d SLA 与升级；日对账；§8.3 re-arm（授权/审计先于清除/保留 canonical/版本 CAS/同 `refund_id` replay）；存量 PRE 审计查询与“0 行≠安全”。owner ops，expiry 2026-12-31；5 分钟告警规则与用户入口仍归 `REVIEW-REQUIRED-ALERTS-01` / `REVIEW-REQUIRED-ENTRY-01`。
+
+### 11.4 T6a（W1–W4/O3）
+
+`TestAC50ReviewCrashReplayConverges`：Tx1 后崩溃（transient 保持 PENDING + 占位）→ replay 收敛 REVIEW，无提前终态/释放；真实 CANCELLED 后 replay 收敛 PRE，release 恰 1 次且重复 replay 不重复。`TestAC50ReviewShipCancelRace`：Ship/取消竞态只产生一个终态（POST 或 PRE），1 条终态 outbox，release 与结果一致（PRE=1 / POST=0）。
+
+### 11.5 T6b/T6c（NATS + DLQ）
+
+- `internal/services/fulfillment/review_consumer_integration_test.go`（真实 JetStream；消费实现位于 fulfillment，Plan 的 `order/review_consumer` 路径按实际所有者落位）：重复 PRE 只取消一次、不重复建行；`REVIEW_REQUIRED`/`POST_SHIP_ALLOWED` 事件均 no-op（不改 placeholder）；非法 JSON 进 DLQ，DLQ payload replay 仍 no-op。
+- Order 侧 `TestAC50ReviewConsumerNoAutoPre`：REVIEW 后连续 3 次 replay（含迟到真实 CANCELLED）不写任何 outbox/release，commitment 仍 RESERVED（无 auto-PRE，F7b/W9 的 Order 半侧）。
+- `TEST_NATS_URL` 未设置时测试显式 `t.Skip`；本次证据在 NATS JetStream 上真实执行（见日志）。
+
+### 11.6 命令与结果（HEAD `f1946e7`）
+
+```bash
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test ./internal/services/order -count=1        # ok 260.677s
+TEST_MYSQL_DSN='.../mall_integration_t1_ff...' TEST_NATS_URL='nats://127.0.0.1:14222' \
+  go test ./internal/services/fulfillment -count=1                                                   # ok 17.879s
+go test ./internal/platform/metrics -count=1                                                          # ok 0.100s
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test -race ./internal/services/order \
+  -run 'TestAC50ReviewAudit|TestAC50ReviewCrash|TestAC50ReviewShipCancel|TestAC50ReviewConsumer|TestRefundReviewGauges' \
+  -count=1                                                                                            # ok 8.261s
+```
+
+- 日志：`.tmp/evidence-ac50-t1t2/{HEAD-t5t6.txt,t5t6-order-full.log,t5t6-ff-full.log,t5b-metrics.log,t5t6-race.log,t6b-nats.log}`。
+
+### 11.7 【测试范围】/【未覆盖范围】
+
+【测试范围】审计行/版本/时间戳/reconcile 不清镜像/审计先行 re-arm；backlog/oldest gauge 与 7 天查询、零元不混入、既有 tick 刷新；runbook 查询与 re-arm 流程；W1–W4 崩溃/竞态；真实 NATS 重复 PRE/REVIEW/POST no-op/DLQ replay；Order 侧 REVIEW 无 auto-PRE；全包回归与 `-race`。
+
+【未覆盖范围】
+
+- **W8 `PENDING_REMOTE` 永久悬挂**只验证“不重复/不自动收敛”，未构造 DLQ 租约永久丢失的运维重放（归 AC-27-LIVE-01，不在本 L2）。
+- **迟到 `order.paid` 真实 placeholder**：本 L2 不改 Fulfillment 的 settlement consumer，未在 NATS 中构造该路径；REVIEW 不产生终态事件，Order 无 scanner，故不会自动转 PRE（由 order 侧 no-auto-PRE 测试覆盖，真实 placeholder 路径仍为既有行为）。
+- 告警规则/5 分钟部署（`REVIEW-REQUIRED-ALERTS-01`）与用户可见入口（`REVIEW-REQUIRED-ENTRY-01`）按 D-33 另立，未交付。
+- gauge 为进程内指标（多副本需按 instance 聚合/求和），runbook 未固化 Prometheus 查询表达式（ops 侧）。
+- TCC 1024 列宽截断仍未在 DB 超限场景触发（见 §9.4）。
+
+### 11.8 反妥协自检 / 返工影响声明
+
+- 并发/超时/部分成功：REVIEW 后 replay 不探测、不写事件；审计先于 CAS；re-arm 版本 CAS；Ship/取消竞态单终态；NATS 重复/DLQ replay 幂等；无自动 re-arm/自动关闭。
+- 是否加 if-else 绕过：未新增放行分支；gauge 只读挂既有 tick；consumer 语义未改（只测试 no-op/幂等）。
+- 妥协（高亮）：① W8 永久悬挂/迟到 placeholder 真实链路未构造（见上）；② NATS 测试按实际 consumer 所有者放在 fulfillment 包（Plan 文件名偏差）；③ gauge 多副本聚合口径留给 ops。
+- `[修改点]`：`internal/platform/metrics/metrics.go`（2 gauge+注册）、`order/worker.go`（tick 只读刷新）、`docs/ops.md`（AC-72/re-arm/legacy audit runbook）、新增 `order/worker_test.go`、`order/ac50_review_audit_fault_test.go`、`fulfillment/review_consumer_integration_test.go`、`platform/metrics/metrics_test.go`。
+- `[架构侵入性]`：无新 worker/扫描器/字段/迁移/RPC；复用既有 tick 与 admission/outbox 事实。
+- `[副作用评估]`：tick 每分钟一次只读聚合查询（有索引 `idx_order_refund_admissions_order_group`，按 result/state 过滤为全表扫描风险需 ops 观察——当前 P0 数据量小，未新增索引因 `migrations/**` 禁止；已在 runbook/未覆盖登记）。
+
+### 11.9 不声称
+
+不声称实现 PASS / merge / Release PASS / AC-VERIFIED；AC-50/51/61/62/65/67/69/70/71/72 待 Reviewer 绑定证据；ALERTS-01/ENTRY-01/T5 完整公告与 T6 之外的 T2–T4 收口仍待 Reviewer；`PAY-SETTLE-01` 仍冻结。

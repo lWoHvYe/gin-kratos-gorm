@@ -163,3 +163,76 @@ TEST_MYSQL_DSN='.../mall_integration_t1_as...' go test ./internal/services/after
 ### 9.6 不声称
 
 不声称实现 PASS / R0.4e / merge / Release PASS / AC-VERIFIED；AC-50/51/69/70/71/72 待 Reviewer 绑定证据；T3–T6、ENTRY-01、ALERTS-01 未交付；`PAY-SETTLE-01` 仍冻结。
+
+---
+
+## 10. T3+T4+T1c 自检（追加；code head `13a586a6df5e3bebcb2e26f7e5516b2593bb119c`，base `7b28024`）
+
+| 项 | 值 |
+|---|---|
+| 范围 | T3 partial 三分类、T4a 零元、T4b legacy、T1c 复审 `RowsAffected` 生产门禁 |
+| Code head | **`13a586a`**（6 files，+653/−59） |
+| 证据 | `.tmp/evidence-ac50-t1t2/`（HEAD-t3t4.txt、t3t4-targeted/race/full 日志），真实 MySQL 8.4.13 |
+
+### 10.1 T3（partial 三分类，AC-50/AC-70、ADR 0.6 §3.4）
+
+- CONSUMED + 部分金额只用 Order 自有事实（`order_fulfillment_groups.status`，组行缺失时用 `orders.status`）分类；**不调用 `CancelIfCreated`**（O4b/O4c/O4d/O4e 断言 `cancelCalls==0`）、`refundCalls==0`。
+- 未离仓 → `PARTIAL_REFUND_REQUIRES_FULL_GROUP`：在 Tx1 任何写入前拒绝（fresh 0 admission/commitment/outbox，O4a/O4b）；preseed 用自身 commitment 排除后重算，PARTIAL 不新增写入、保留既有 admission/commitment（O4e）。
+- 已离仓（投影 `SHIPPED/RECEIVED`）→ `POST_SHIP_ALLOWED`：1 条 `RESERVED` commitment、终态 outbox、无探测/无 release（O4c；O5c 为整组投影已离仓，直接 POST）。
+- 不可判定（组投影缺失 + `orders.status=SHIPPED`，或未知组合）→ `REVIEW_REQUIRED` + 1 条 `RESERVED` commitment、`reason=PARTIAL_AMOUNT_UNCLASSIFIABLE`、无 outbox/无探测（O4d/W10）；不得默认 PRE/POST。
+- 整组 CONSUMED 且投影已 `SHIPPED`：fresh 与 resume 都直接 POST（AC-50 §236），不探测。
+
+### 10.2 T4a（零元，AC-67）
+
+- `CONSUMED + NO_WAYBILL` → 冲突、`review_persisted=false`、0 admission/S19/REVIEW、不计 AC-72 backlog、0 Payment（O7/O21）。
+- `TRANSIENT_ERROR` → `Unavailable`、0 写入、0 Payment（O7b）。
+- 真实 `CANCELLED` 后同 `refund_id` → `PRE` + S19 `DONE`，重放幂等（O8）。
+- 未新增 `ListShipments`/预读，未改零元短路的既有语义。
+
+### 10.3 T4b（legacy，AC-70）
+
+- 无 permit 行：先按 Order 投影分类再决定 PRE——投影 `SHIPPED/RECEIVED` → POST（permit 不变）；未离仓/无组行且 `orders PAID/ALLOCATED` → `NONE→REVOKED` PRE；投影缺失且 `orders SHIPPED/COMPLETED` → REVIEW（`reason=LEGACY_SHIPMENT_UNKNOWN`、1 条 RESERVED、0 探测）。
+- 不猜 `payment_no`、不按 0 额度；O10/O10b 覆盖。
+
+### 10.4 T1c hardening
+
+- TCC REVIEW Tx2 的 `refund_batches`/`refund_applications` 镜像 UPDATE 均检查 `RowsAffected==1`；0 行即报错并回滚，**不会提交没有人工持有的 REVIEW admission**（`TestTCCReviewTx2BatchGateRollsBack`：batch 预置 `PAYING` + admission 重置 `PENDING` → 失败后 admission 仍 `PENDING`、batch 仍 `PAYING`）。
+
+### 10.5 命令与结果（HEAD `13a586a`）
+
+```bash
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test ./internal/services/order \
+  -run 'TestAC50ReviewPartial|TestAC50ReviewWhole|TestAC50ReviewLegacy|TestAC50ReviewZero|TestTCCReview|TestAdmitRefund' \
+  -count=1 -v                                    # 32 PASS, ok 26.017s
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test -race ./internal/services/order \
+  -run 'TestAC50ReviewPartial|TestAC50ReviewWhole|TestAC50ReviewLegacyUnclassifiable|TestAC50ReviewZero|TestTCCReview' \
+  -count=1                                       # ok 10.976s
+TEST_MYSQL_DSN='.../mall_integration_t1_order...' go test ./internal/services/order -count=1  # ok 154.848s
+```
+
+- 契约变更导致的既有测试更新：`TestAdmitRefundConsumedPermitTwoPhase`、`TestAdmitRefundPostDoesNotWriteReleaseOutbox`、`TestAdmitRefundRemoteAdmissionPreWritesOrderLevelRelease` 由 partial 金额改为整组金额（AC-70 下 partial CONSUMED 未离仓不再探测）；新增 partial/legacy/zero/gate 用例；既有 `TestAdmitRefund*` 全绿。
+- 日志：`.tmp/evidence-ac50-t1t2/{HEAD-t3t4.txt,t3t4-targeted.log,t3t4-race.log,t3t4-order-full.log}`。
+
+### 10.6 【测试范围】/【未覆盖范围】
+
+【测试范围】partial 三分类（fresh/preseed、shipped/unshipped/unclassifiable）、整组投影已离仓直 POST、O4a–O4e/O5c/O10b/W10、O7/O7b/O8/O21、O10/O10b、T1c 0 行门禁；真实 MySQL 8.4.13、`-race`、全包回归。
+
+【未覆盖范围】
+
+- T5（审计/metrics/ops runbook）、T6（NATS 消费/DLQ/崩溃窗口）按 Plan 另派；AC-72 的 gauge 尚未实现，O21 以“无 REVIEW admission 行”作为 backlog 代理断言。
+- 零元冲突的人工队列终态/AC-72 零元单列计数归 T5/ENTRY-01；本次只保证不持久化、不计数来源行。
+- 组投影读取失败返回 `Unavailable` 的分支未单测（代码路径存在，未构造 DB 故障）。
+- TCC 1024 列宽截断仍未在 DB 超限场景触发（见 §9.4）。
+
+### 10.7 反妥协自检 / 返工影响声明
+
+- 并发/部分成功：PARTIAL 在写前拒绝；REVIEW 走 Tx2 同事务且镜像 0 行 fail-closed；preseed 重算排除自身 commitment，避免自计入；整组投影已离仓不探测/不取消；不默认 PRE/POST。
+- 是否加 if-else 绕过：分类收敛在 `classifyGroupExit`/`loadGroupRemaining` 单一 helper；未按调用方复制状态判断；未新增“放行”分支。
+- 妥协（高亮）：① O21 以 DB 行代理 gauge（T5 前）；② 既有 partial-CONSUMED 测试按 AC-70 改为整组金额；③ 投影读取失败分支未做故障注入；④ T1c 门禁会使“batch 已被人工他路持有”时的 REVIEW 提交失败（fail-closed，符合 AC-71）。
+- `[修改点]`：`refund_admission.go`（T3 分类/预读/REVIEW 原因/整组投影 POST/resume 排除自身/T1c 镜像门禁）、`tcc_admission.go`（冲突签名）、`ac50_review_integration_test.go`（新增 O4/O5c/O10b/O7b/O8/O21/T1c 用例）、`ac50_review_race_test.go`（permit 前置）、两个既有测试的整组金额修正。
+- `[架构侵入性]`：无新字段/表/迁移/RPC/状态值；复用 permit/commitment/admission/outbox；REVIEW 仍为 `result` 承载、`state=PENDING_REMOTE`。
+- `[副作用评估]`：partial CONSUMED 未离仓现在返回 PARTIAL（不再远程探测），已离仓不再取消运单；legacy 无 permit 的 POST/REVIEW 不再一律 PRE；既有整组路径不变。
+
+### 10.8 不声称
+
+不声称实现 PASS / merge / Release PASS / AC-VERIFIED；AC-50/69/70/71/72 待 Reviewer 绑定证据；T5/T6、ENTRY-01、ALERTS-01 未交付；`PAY-SETTLE-01` 仍冻结。

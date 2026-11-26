@@ -70,9 +70,9 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
 - [ ] **T6a** Tx1/Tx2 崩溃/竞态（O3/**W1–W4**）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test -race ./internal/services/order -run 'TestAC50ReviewCrash|TestAC50ReviewRace' -count=1`
 - [ ] **T6b** 重复/乱序/迟到 placeholder（O14/O14b/**W8/W9/W13/F7b**）
-  - `TEST_MYSQL_DSN=$ORDER_DSN TEST_NATS_URL=nats://127.0.0.1:4222 go test -race ./internal/services/order -run 'TestReviewConsumer' -count=1`
+  - `TEST_MYSQL_DSN=$FF_DSN TEST_NATS_URL=nats://127.0.0.1:4222 go test -race ./internal/services/fulfillment -run 'TestRefundAdmittedConsumerReviewAndDuplicate' -count=1`
 - [ ] **T6c** DLQ/ACL 重放（F7/O14/**W8/W11**；W8 永久悬挂归 AC-27-LIVE-01，本 L2 只验证不重复）
-  - `TEST_MYSQL_DSN=$ORDER_DSN TEST_NATS_URL=nats://127.0.0.1:4222 go test ./internal/services/order -run 'TestReviewConsumerDLQ' -count=1`
+  - `TEST_MYSQL_DSN=$FF_DSN TEST_NATS_URL=nats://127.0.0.1:4222 go test ./internal/services/fulfillment -run 'TestRefundAdmittedConsumerReviewAndDuplicate' -count=1`
 - [ ] **T6d** re-arm 审计先于清（O16/O20/**W11/W13**）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestAC50ReviewRearm' -count=1`
 - [ ] **T7** 证据矩阵：修订 AC + AC-69…72（AC-72 三段）+ INV-51/52；Reviewer 写 tsv；`NOT RELEASE`；绑定 `<HEAD>`（Owner: Developer + Reviewer）
@@ -82,8 +82,8 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
   - `TEST_MYSQL_DSN=$AS_DSN go test ./internal/services/aftersales -run 'TestAC14|TestAC31|TestAC32|TestZero' -count=1`
   - `TEST_MYSQL_DSN=$FF_DSN go test ./internal/services/fulfillment -run 'TestAC21' -count=1`
 
-- [ ] **T3-R1** fresh Tx1 与 Tx2 共用**唯一** REVIEW 持久化入口，应用 T1c 门禁（batch/app `RowsAffected`）；不得提交无人工持有的 REVIEW（Owner: Developer；证据: `source=tcc` partial/legacy + O4d/O10 + batch MANUAL_HOLD/app 镜像/last_error/token）
-- [ ] **T3-R2** 补 `source=tcc` partial/legacy 用例（O4d/O10、W12）；T6b 命令改 fulfillment 包；F7b/W8 残余在 T7 明示（Owner: Developer + Reviewer）
+- [x] **T3-R1** fresh Tx1 与 Tx2 共用**唯一** REVIEW 持久化入口，应用 T1c 门禁（batch/app `RowsAffected`）；不得提交无人工持有的 REVIEW（Owner: Developer；证据: `source=tcc` partial/legacy + O4d/O10 + batch MANUAL_HOLD/app 镜像/last_error/token）
+- [ ] **T3-R2** 补 `source=tcc` partial/legacy 用例（O4d/O10、W12）；F7b/W8 残余在 T7 明示（Owner: Developer + Reviewer）
 
 ## Phase 3 — 复审/交回
 

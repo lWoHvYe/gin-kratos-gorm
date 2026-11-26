@@ -455,6 +455,17 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 T3-T6 re-review PASS; freeze lifted
+
+- Reviewer `18933e9` (base `72575f6`, head `9d9f79d`, code `c097e98`):
+  T3-R1 BLOCKER CLOSED; T3–T6 PASS scoped, `NOT RELEASE`.
+- fresh Tx1/Tx2 share `persistTCCReviewTx`; batch/app mirror require
+  `RowsAffected==1` (0-row rolls back); `source=tcc` partial/legacy produce
+  `MANUAL_HOLD` + canonical `last_error` + app REVIEW + token, 0 probe/payment.
+- Residual: T6b command package (fulfillment), app 0-row/empty batch_id lacks
+  an independent test, F7b late placeholder `[未覆盖]`, W8 = AC-27-LIVE-01.
+- change_id unfrozen for T7/T8 only; no deploy.
+
 ### 2026-11-27 T3-T6 scoped FAIL: TCC fresh REVIEW bypass
 
 - Reviewer `e4e8a61` (base `30c6f16`, head `849cf78`, code `13a586a`+`f1946e7`):

@@ -79,7 +79,7 @@
 |---|---|---|---|---|---|
 | 后端 | metrics/SLA/查询/对账（O18） | Developer/Reviewer | 2026-12-31 | in-scope | T5b |
 | 告警 | `REVIEW-REQUIRED-ALERTS-01`（deploy 规则） | ops | 2026-12-31 | DEFERRED | `deploy/**` |
-| 入口 | `REVIEW-REQUIRED-ENTRY-01`（用户/人工入口） | PO/ops | 2026-12-31 | DEFERRED | `frontend/**` |
+| 入口 | `REVIEW-REQUIRED-ENTRY-01`（用户/人工入口） | Lead/BFF/ops（SPEC-0002 v1.11 D-33） | 2026-12-31 | DEFERRED | `frontend/**` |
 
 ## 5. DoD
 

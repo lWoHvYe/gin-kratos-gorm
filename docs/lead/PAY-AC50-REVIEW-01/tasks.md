@@ -1,6 +1,6 @@
 # PAY-AC50-REVIEW-01 Tasks (L2)
 
-Status: **DRAFT — pending L2-P2b/P3b/P4b re-review + human P5**；运行状态以 `docs/review-tracking.md` 为准。
+Status: **APPROVED（2026-11-26，human P5）**；T0 PASS（scoped），T1–T8 pending；运行状态以 `docs/review-tracking.md` 为准。
 change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`。
 环境：`BASE='root:root@tcp(127.0.0.1:3306)/mall_integration_test?parseTime=true&loc=UTC'`；`ORDER_DSN=$(scripts/test-dsn.sh "$BASE" order)`、`FF_DSN=... fulfillment`、`AS_DSN=... aftersales`；`<HEAD>` 由 T7 绑定。**T0+T0b+T0c 同一发布单元**（若分批：Fulfillment → T0c → T0b）。
 

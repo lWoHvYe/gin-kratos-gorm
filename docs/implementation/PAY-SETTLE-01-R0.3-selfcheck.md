@@ -1,5 +1,7 @@
 # PAY-SETTLE-01 R0.3-R1/R2 Developer 自检清单
 
+> **2026-11-27 追加 §9（R0.3-R1c，code head `9a57d01`）**：§2.2 的 BLOCKED-1（运单 `CANCELLED`）已由 AC-27A 第 5 条读模型关闭谓词收口；BLOCKED-2/3 按 SPEC-0001 v1.5 处理；§2.3 的 §7.5 漂移已由 PO v1.5 修正。§1–§8 是 `fe1600b`/`34d0466` 的历史证据，保持原样不改写。
+
 | 项 | 值 |
 |---|---|
 | change_id | `PAY-SETTLE-01` |
@@ -246,3 +248,164 @@ ok  gin-kratos-gorm/internal/services/order  89.268s
 - 任务 B/C **完成**：目标测试在 `fe1600b` 真实 MySQL 全部 PASS（无 SKIP/FAIL），命令/耗时/行号见上；不标 AC-VERIFIED。
 - 任务 A **部分完成**：EARS-2 正向、`CANCELLED` 组、§7.5 全退款未发、post-ship 反向已真实断言；**运单 `CANCELLED`、Order 侧 `reservation released`、pre-ship `REFUNDING` 负向三支 BLOCKED**，附时序反证与影响 AC/INV，交 Architect/PO 裁决。
 - 本文件与代码提交均为 **WIP**，不构成 Reviewer PASS / merge / Release。
+
+---
+
+## 9. 追加：R0.3-R1c — AC-27A 第 5/6 条读模型关闭谓词（2026-11-27）
+
+| 项 | 值 |
+|---|---|
+| change_id / Tier / Actor | `PAY-SETTLE-01` / **L2** / `dev-r03` |
+| Base | `ce0f6b4bb365791ef46098e943f1c25a69ff233d`（Lead resume R0.3-R1c） |
+| Code head（本节证据绑定） | **`9a57d012254fcad8c34d9af7c48b2aa398c36ccb`** |
+| Selfcheck commit | 本节为 `9a57d01` 之后的 docs-only 提交；`git diff 9a57d01..HEAD --stat` 应仅本文件 |
+| Spec-Ref | SPEC-0001 **v1.5** AC-27（读模型口径）/AC-27A（第 5/6 条）；SPEC-0002 **v1.11** AC-50（只读消费，未改） |
+| 契约前置 | SPEC-0001 v1.5 approved `4215b3c`；L2 `PAY-AC50-REVIEW-01` scoped PASS（`f0420fc`/`91b7310`，code `3ce0d7d`），`order_refund_admissions.result=PRE_SHIP_REVOKED/REVIEW_REQUIRED` 写路径就绪 |
+| allowed_paths（本次改动） | `internal/services/order/fulfillment_groups.go`、`internal/services/order/settlement.go`、`internal/services/order/ac27a_closure_unit_test.go`、`internal/services/order/ac27a_closure_integration_test.go`、本文件 |
+| forbidden（未触碰） | L2 代码（`refund_admission.go` 等）、migrations、deploy、specs、adr、台账、BFF/UI |
+| Status | **WIP**；不声称实现 PASS / merge / Release / AC-VERIFIED |
+
+### 9.1 Diff 摘要（`9a57d01`）
+
+```
+internal/services/order/ac27a_closure_integration_test.go | 261 +++++++++++++
+internal/services/order/ac27a_closure_unit_test.go        | 198 +++++++++++
+internal/services/order/fulfillment_groups.go             |  24 +++-
+internal/services/order/settlement.go                     |  28 +++-
+4 files changed, 503 insertions(+), 8 deletions(-)
+```
+
+- 无迁移/无 schema/无事件/RPC/worker：`git diff 9a57d01^..9a57d01 -- migrations` 输出为空。
+- 无 `orders.status` 写入：生产 diff 只增加读模型派生字段与关闭谓词，没有 `UPDATE orders`。
+
+### 9.2 实现（仅 Order 读模型）
+
+| 文件 | 改动 |
+|---|---|
+| `fulfillment_groups.go:27-32` | `fulfillmentGroup.PreShipAdmission bool`：**非持久化派生字段**；注释明确来自 Order 自有 `order_refund_admissions.result=PRE_SHIP_REVOKED`，`refund_state` 不参与。 |
+| `fulfillment_groups.go:92-126` | `loadFulfillmentGroups` 在同一 SELECT 里用 `EXISTS(SELECT 1 FROM order_refund_admissions a WHERE a.order_no=g.order_no AND a.group_no=g.group_no AND a.result=?)` 派生该 bool；`refundResultPre` 作为参数传入避免字面量漂移。用 EXISTS 而非 LEFT JOIN：同组可能存在多行准入（如保留 PRE 审计后再以新 `refund_id` 准入 POST），JOIN 会放大行数；`0016:18` 已有 `(order_no, group_no)` 索引，无 schema 变化。 |
+| `settlement.go:64-96` | `groupIsClosed` 固定顺序：nil→open；`Status=CANCELLED`→closed；`Status∈{SHIPPED,RECEIVED}`→open（离仓守卫先于退款事实）；`PermitState=REVOKED`→closed（S5 终态/INV-45）；`PermitState=CONSUMED && PreShipAdmission`→closed；其他→open。`refund_state`/`reservation_state` **不参与**。它是唯一关闭入口；`effectiveGroupStatus`/`shipmentStatusForGroups`/`aggregateOrderStatus` 调用方式未改。 |
+
+语义要点（供 Reviewer 核对）：
+- 可达状态下 `result=PRE_SHIP_REVOKED` 意味着 `state=PRE_SHIP_REVOKED`：Tx1 的 `NONE→PRE` 与 Tx2 的 `CONSUMED+Cancelled` 都在同一条 SQL 同时写 `result/state`；`PENDING_REMOTE` 行只可能是 `result=POST_SHIP_ALLOWED`（Tx1 占位）或 `REVIEW_REQUIRED`，两者都不关闭（AC-27A 第 6 条/注）。
+- 第 5 支按 AC-27A 第 5 条原文附加 `permit=CONSUMED`：可达 PRE 只有两种来源——`CONSUMED+CancelIfCreated=CANCELLED`（permit 保持 CONSUMED）与 `NONE→REVOKED`（permit 已被第 4 支短路为 closed）；因此与 Lead Brief 的 `PreShipAdmission→true` 一行写法在**可达状态**等价，而 `NONE/其他 permit + PRE` 按 AC-27A 第 6 条保持 open（fail-safe，不为数据异常新增关闭分支）。
+- 迟到 `SHIPPED/RECEIVED`：按 AC-27A 第 3 条离仓守卫，S3 组投影收到真实 `shipment.shipped/received` 事件后读模型转为 open；PRE 准入行只作审计、读模型不写回。**若 S3 仍是 `ALLOCATED`（无事件证据/重复乱序无法判定），PRE 组保持 closed（不重新打开）**——两条都测了。
+- AC-27A 第 6 条"告警"由 AC-50 写路径承担（`REVIEW_REQUIRED` Error log + AC-72 metric），本次**不在读路径新增日志/告警**（避免读模型副作用）；不声称新增告警能力。
+
+### 9.3 与 R0.3-R1b 裁决 / SPEC v1.5 的关系
+
+| 裁决 | 处置 | 证据 |
+|---|---|---|
+| **R-1** BLOCKED-1 运单 `CANCELLED` | **关闭**：以 Order 自有 `order_refund_admissions.result=PRE_SHIP_REVOKED` 作为"pre-ship 已准入、不会再产生包裹"的代理事实；不新增运单投影、不消费 `shipment.cancelled`、不在读路径远程调用 | `TestAC27AConsumedPreAdmissionClosesFromRealRows` |
+| **R-2** 关闭后重聚合订单生命周期（ADR DRAFT 0.1 §3.2） | **未实现**：SPEC-0001 v1.5 AC-27 EARS-1 明确把"推进"限定为 S2 读模型 `shipment_status`，并规定**不因组关闭/退款完成写 `orders.status`**（`0001:599-603`）；Lead Brief 与 review-tracking scope 同口径。DRAFT ADR 的 R-2 与 v1.5 冲突，以 SPEC/PO 为准；未新增 aftersale consumer 状态迁移/outbox | 集成测试断言退款完成前后 `orders.status` 均 `ALLOCATED` |
+| **R-3** reservation released | 维持不要求 Order 可观察、不写 `RELEASED`；测试只断言语义边界（`RELEASED` 单独不关闭，PRE 关闭不受 `HELD/RELEASED` 影响） | `TestAC27AClosureIgnoresRefundStateAndReservationState` |
+| **R-4** pre-ship `REFUNDING` 投影 `CANCELLED` | 保持正确：关闭由 permit/admission 决定，`REFUNDING` 不阻止关闭；post-ship 仍不关闭 | 谓词表 + 既有 `TestAC27PostShip…` 回归 |
+| **R-5** §7.5 漂移 | PO v1.5 已修正示例表（生命周期 `ALLOCATED`、履约投影 `SHIPPED`），本次测试按该口径；§2.3 的观察作废 | `0001:405`（v1.5） |
+| AC-27A 第 6 条 REVIEW/PENDING | `REVIEW_REQUIRED`、`PENDING_REMOTE` 占位、`POST_SHIP_ALLOWED`、缺行均不关闭 | `TestAC27AAdmissionResultDerivation` 子用例 |
+
+### 9.4 命令与真实日志（HEAD `9a57d01`，MySQL **8.4.13**）
+
+环境：`docker mysql:8.4`（disposable，`127.0.0.1:13336`）；每包独立 schema，经 `scripts/test-dsn.sh` 派生：`mall_integration_order` / `mall_integration_aftersales` / `mall_integration_fulfillment`（未共用 schema）；`go1.27.1 darwin/amd64`；仓库本地 Go 环境（`GOFLAGS=-mod=readonly GOPROXY=off` 等）。日志原始文件：`.tmp/evidence-r1c/final-*.log`（未入库）。
+
+| # | 命令 | 结果 |
+|---|---|---|
+| 1 | `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -count=1` | **ok 116.705s**（wall 119.94s），exit 0 |
+| 2 | `TEST_MYSQL_DSN=$ORDER_DSN go test -race ./internal/services/order -count=1` | **ok 121.013s**（wall 124.45s），exit 0，无 data race |
+| 3 | `… go test -race ./internal/services/order -run '^(TestAC25RefundProjectionKeepsLifecycle\|TestAC27\|TestT17\|TestTCCReview\|TestAC50Review)' -count=1 -v` | **51 PASS / 0 FAIL / 0 SKIP**，ok 26.344s（wall 29.78s） |
+| 4 | `… go test -race ./internal/services/order -run '^(TestAdmitRefund\|TestZeroApplicationCheckConstraint\|TestRefundRelease)' -count=1 -v` | **20 PASS / 0 FAIL**（INV-44/45/50 回归），ok 13.531s（wall 16.92s） |
+| 5 | `TEST_MYSQL_DSN=$AS_DSN go test ./internal/services/aftersales -run '^(TestAC14\|TestAC31\|TestAC32\|TestZero\|TestReview)' -count=1` | **ok 7.116s**，exit 0 |
+| 6 | 同 5 + `-race` | **ok 8.277s**，exit 0 |
+| 7 | `TEST_MYSQL_DSN=$FF_DSN go test ./internal/services/fulfillment -run '^(TestAC21\|TestCancelIfCreated)' -count=1` | **ok 1.331s**，exit 0 |
+| 8 | `go build ./...` / `go vet ./internal/services/order/` / `gofmt -l`（4 个改动文件） | build exit 0（wall 30.30s）；vet OK；gofmt 无输出 |
+
+关键日志摘录（`9a57d01`）：
+
+```
+HEAD=9a57d012254fcad8c34d9af7c48b2aa398c36ccb
+server=VERSION: 8.4.13
+=== full order package ===
+ok  gin-kratos-gorm/internal/services/order  116.705s
+
+=== full order package -race ===
+ok  gin-kratos-gorm/internal/services/order  121.013s
+
+=== AC-25/27/27A + T17 + TCCReview + AC50Review (-race) ===
+--- PASS: TestAC27AConsumedPreAdmissionClosesFromRealRows (0.53s)
+--- PASS: TestAC27AAdmissionResultDerivation (0.60s)
+--- PASS: TestAC27AClosurePredicateOrder (0.00s)
+ok  gin-kratos-gorm/internal/services/order  26.344s
+
+=== INV-44/45/50 regression (-race) ===
+ok  gin-kratos-gorm/internal/services/order  13.531s
+
+=== aftersales non-regression ===
+ok  gin-kratos-gorm/internal/services/aftersales  7.116s   (+ -race ok 8.277s)
+```
+
+（#1/#2 的原始日志同一文件 `.tmp/evidence-r1c/final-order-plain-race.log`（先 plain 后 `-race`）；#3/#4/#5/#6/#7 各自独立日志。order 包 stderr 的 `invalid log level` 为既有噪声，非失败。）
+
+### 9.5 新增/变更测试
+
+| 文件:行号（`9a57d01`） | 测试 | 断言要点 |
+|---|---|---|
+| `ac27a_closure_unit_test.go:9` | `TestAC27AClosurePredicateOrder` | 11 个顺序用例：nil/CANCELLED/离仓守卫/REVOKED/CONSUMED+PRE/NONE+PRE/NONE/GRANTED |
+| `:76` | `TestAC27AClosureIgnoresRefundStateAndReservationState` | `refund_state∈{NONE,REFUNDING,REFUNDED}`×`reservation∈{HELD,RELEASED}` 均不改变 PRE 关闭/不关闭；`RELEASED`/`REFUNDED` 单独不关闭 |
+| `:108` | `TestAC27ALateShippedStatusWinsOverPreAdmission` | S3 确认 `SHIPPED/RECEIVED` 后 PRE 组为 open、投影保持 `SHIPPED/RECEIVED`、仍计已发 |
+| `:132` | `TestAC27AClosedGroupKeepsCancelledLifecycle` | `orders.status=CANCELLED` 与关闭组共存且保持 `CANCELLED`（AC-27 v1.5 EARS-3） |
+| `:153` | `TestAC27AThreeGroupBoundary` | G3 未关闭 → `PARTIALLY_SHIPPED` 且不推进；G3 关闭 → 读模型 `SHIPPED`，`orders.status` 仍 `ALLOCATED` |
+| `ac27a_closure_integration_test.go:20` | `TestAC27AConsumedPreAdmissionClosesFromRealRows` | 真实行 + 生产写入（`AdmitRefund`+`CancelIfCreated=CANCELLED`）→ admission `PRE/PRE`、permit 保持 `CONSUMED`、G2 closed/`CANCELLED`、G1 open；`orders.status` 前后均 `ALLOCATED`、`shipment_status=SHIPPED`；退款完成事件后 admission 未改写 |
+| `:156` | `TestAC27AAdmissionResultDerivation` | 真实行派生：PRE（CONSUMED）关闭；PRE 但 permit `NONE`、REVIEW/PENDING 占位/POST/缺行均不关闭；迟到 `SHIPPED` 不因 PRE 重新关闭 |
+
+既有 AC-27 测试（`warehouse_quote_test.go:125`、`ac27_projection_negative_test.go:9/42`、`ac27_projection_cancelled_test.go:10/36`、`ac27_projection_integration_test.go:16`）**未改期望**：它们本就断言 `orders.status` 保持 `ALLOCATED`、读模型 `shipment_status` 按 G1 推进（v1.5 口径），本次在 `-race`/真实 MySQL 下全部继续 PASS。
+
+### 9.6 【测试范围】/【未覆盖范围】
+
+**【测试范围】**
+- AC-27A 第 5/6 条关闭谓词：nil/CANCELLED/离仓守卫/REVOKED/PRE/REVIEW/PENDING/POST/缺行；`refund_state`/`reservation_state` 不参与；3 组边界；CANCELLED 生命周期共存。
+- AC-27 EARS-1/2 读模型口径：关闭组从剩余组排除、`shipment_status` 按 G1 推进、`orders.status` 不写；退款完成前后不变。
+- AC-25 生命周期不含退款态；T17 六场景（Σ/竞态/崩溃/部分失败/legacy/shipped）`-race` 回归。
+- AC-50/AC-69/70 相关 TCC/AC50 REVIEW 测试（12 个）`-race` 回归；INV-44/45/50 20 个 `-race` 回归。
+- Order 全包 plain+`-race`；aftersales 目标集 plain+`-race`；fulfillment `AC-21`+`CancelIfCreated`；`go build ./...`。
+- 真实 MySQL 8.4.13、独立 schema；无 SKIP/FAIL（SKIP 未计入 PASS）。
+
+**【未覆盖范围】**
+- `AC-27-NOWB-01`（存量 PRE 一次性审计/`CONSUMED+无运单` 写路径前置缺陷）与 `AC-27-LIVE-01`（`PENDING_REMOTE` 永久悬挂/w8）仍按 SPEC-0001 v1.5 §16.2 打开 → **AC-27 仍是 AC-REF，不得 AC-VERIFIED**。
+- `AC-50-FIX-01` 的 L2 写路径不在本次范围（只读消费其 `result`）。
+- 多组订单的 INV-44 释放请求缺口（P1/manual）未修；`reservation_state` 不可观察不变。
+- 读路径"告警"未新增（由 AC-50 写路径 log/metric 承担）；BFF/UI 未验证；UAT/prod、迁移 apply、Helm/deploy 未涉及（无变更）。
+- 未做历史数据审计（是否存在 PRE 与 SHIPPED/RECEIVED 并存）；出现时按离仓守卫保持 open，需人工核对。
+- `ListOrders` 批量场景未单独压测（新增 EXISTS 走既有 `(order_no, group_no)` 索引，未改变查询次数）。
+
+### 9.7 反妥协自检清单
+
+**并发/超时/部分成功**
+- 本次是纯读派生（每次读重算、无写、无副作用）；读与 Tx2 并发只可能"滞后关闭"，不可能"提前关闭"（PRE 只在未离仓分支写入）。
+- 崩溃窗口 `PENDING_REMOTE`：读模型不关闭；既有 worker 按 `refund_id` 幂等重写 PRE，无新 worker。
+- `-race` 覆盖 order 全包（121.013s）与目标集（51 PASS）；T17 退款准入 vs 授权发货竞态、崩溃续跑、部分失败回归 PASS。
+- 未新增 goroutine/超时/远程调用（读模型只读本库）。
+
+**是否加 if-else 绕过架构**
+- 没有。关闭判定仍是**单一函数**、固定顺序；没有在 call site 另判 `refund_state`/`reservation_state`/运单；没有新增持久字段/第二事实源；没有写 `orders.status`。
+- 派生字段用 EXISTS 而非 JOIN，避免多准入行放大；无 schema/迁移。
+
+**妥协项（重大高亮）**
+1. **【已裁决/高亮】R-2 未实现**：DRAFT ADR 0.1 §3.2 要求退款完成 consumer 重聚合 `orders.status`，与 PO SPEC v1.5（只读模型、不写 `orders.status`）冲突；按 SPEC/Lead Brief 不实现。若 Reviewer 认为仍需要 R-2，必须回 Architect/PO 先改契约，不能由实现自行加状态写入。
+2. **【已记录】第 5 支附加 `permit=CONSUMED`（AC-27A 第 5 条原文）**：与 Lead Brief 的 `PreShipAdmission→true` 一行写法在可达状态等价（见 §9.2）；`NONE/其他 permit + PRE` 按第 6 条保持 open，属契约要求而非防御性分支。
+3. **【已记录】** 读模型不做 AC-27A 第 6 条告警（写路径已有 log/metric）。
+4. **【已记录】** 未做存量审计（AC-27-NOWB-01 独立项）。
+
+**Mock/数据真实性**
+- 生产路径用例用真实 MySQL 行 + `AdmitRefund`/`applyAfterSaleCompleted`/`CancelIfCreated`（fake 仅替代跨服务端口），金额 1000/500 符合业务边界；含异常分支（REVIEW/PENDING/POST/缺行、迟到离仓、3 组边界）。
+- 未用 fixture 塞 `RELEASED` 驱动关闭（只断言语义边界）。
+
+### 9.8 返工影响声明
+
+- **[修改点]**：`fulfillment_groups.go`（派生 `PreShipAdmission` + EXISTS 查询）；`settlement.go`（`groupIsClosed` 顺序/第 5 支）；新增 `ac27a_closure_unit_test.go`、`ac27a_closure_integration_test.go`；本 selfcheck 追加。
+- **[架构侵入性]**：低。未新增持久字段/事件/RPC/worker/migration；未改状态所有权；未写 `orders.status`；关闭谓词仍是唯一 authority，未在 call site 加分支。
+- **[副作用评估]**：所有 `loadFulfillmentGroups` 调用方（GetOrder/ListOrders、shipment 投影、allocation validation、tcc precheck）多读一个 EXISTS，语义不变（无 PRE 行时结果与旧行为一致）；permit `REVOKED`/离仓/CANCELLED 排序回归已覆盖。order 全包、aftersales/fulfillment 目标集、`-race` 全绿。
+- **[未处置风险]**：AC-27-NOWB-01/AC-27-LIVE-01/AC-50-FIX-01、多组释放缺口、读路径告警缺失；AC-27 仍 AC-REF。
+
+### 9.9 结论
+
+- R0.3-R1c 的 AC-27A 第 5/6 条读模型关闭谓词已实现，并在真实 MySQL 8.4.13（独立 schema、`-race`）验证；`orders.status` 无写入；`refund_state`/`reservation_state` 不参与。
+- **不标 AC-VERIFIED / 不声称实现 PASS / Release**；AC-27 仍 AC-REF（前置项未关闭），由 Reviewer 出有范围 verdict。

@@ -105,7 +105,9 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 - [ ] **T4.5** `AuthorizeShipment` 唯一权威；组 `refund_state` 仅防御/展示
 - [ ] **T4.6** 测试：shadow 不双建运单、flags false、启动失败矩阵
 
-## Phase 5 — Evidence & Review（Owner: Reviewer + Developer；依赖: Phase 1–4）
+## Phase 5 — Evidence & Review
+
+- [ ] **T5.0** AC-39…68 证据审计：逐 AC 分类 EVIDENCE-READY / TEST-GAP / FEATURE-GAP（含 `文件:行号`、可跑命令），输出 `docs/implementation/PAY-SETTLE-01-T5-audit.md`（Owner: Developer + Reviewer；只读，不写码）（Owner: Reviewer + Developer；依赖: Phase 1–4）
 
 - [ ] **T5.1** 矩阵补 `evidence_path`；统一 `ac-coverage.tsv`（Reviewer Owner）；12 orphan 处置见 `evidence-matrix.md` §4（10 条进 T5、AC-62/64 为 T3 依赖）
 - [ ] **T5.2** `-race`：AC-41/45/46/50/51/54/56 + 退款准入 vs Ship

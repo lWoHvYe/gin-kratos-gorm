@@ -455,6 +455,14 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 T5 start: evidence audit
+
+- Human: continue after Phase 0-R closure.
+- T5.0 audit AC-39…68: classify each as EVIDENCE-READY (test exists),
+  TEST-GAP (code exists, test missing), or FEATURE-GAP (needs T2/T3/T4).
+  AC-62…68 depend on unimplemented T2/T3/T4; P0 closure scope must account.
+- No code yet.
+
 ### 2026-11-27 PAY-SETTLE-01 Phase 0-R CLOSED (scoped)
 
 - Reviewer `67fd571`: Phase 0-R **CLOSED (scoped)**, `NOT RELEASE`; not P0

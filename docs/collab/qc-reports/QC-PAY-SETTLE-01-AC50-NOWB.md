@@ -953,3 +953,393 @@ R-1 的“新增 `NO_SHIPMENT` 字符串值、无字段/无 RPC/无枚举变更�
 **R4 Actor**：`qc-ac50`
 **R4 Reviewed-by**：待 PO 修订 SPEC / Architect 修订 ADR / 人类批准
 **R4 Status**：**BLOCKED — 3 BLOCKER；不得开始实现**
+
+---
+
+# R5（L2-C3）终审
+
+| 项 | 值 |
+|---|---|
+| 审查对象 | `docs/specs/0002-payment-settlement-admission.md` v1.11（工作树 R4 delta）；`docs/adr/0007-amd1-addendum-ac50-nowaybill.md` **DRAFT 0.5**；`docs/adr/0007-amd1-ac50-impact-analysis.md` **DRAFT 0.3**；`docs/lead/PAY-AC50-REVIEW-01/plan.md` |
+| 结论 | **BLOCKED**（1 个 `[BLOCKER]` + 4 个 `[MAJOR]` + 2 个 `[TODO]`；0 BLOCKER 才 READY，不满足） |
+| 日期 | **2026-11-26** |
+| Actor | `qc-ac50`（Quality Checker；与 `arch-ac50`/`arch-ac50-impact` 不同 actor） |
+| base | `d2149c0a3935169206d6a9fa31ca8794b937079c` |
+| head | `d2149c0a3935169206d6a9fa31ca8794b937079c`（`git rev-parse HEAD`） |
+| 被审 blob | SPEC `f1667fd22f24695f8d22ade5516833a9b04e58e9`；ADR `30bbdec3d1c6321b26666778a9b1e769cd976236`；impact `9820d6c1bbf1938565cb216369a164024d05fb2c`；Plan `2c399dc20bcd9ec83014a727139417dc3d560355` |
+| review_scope | 只审 R4 delta（B1/B2/B3、M1/M2/M3、T1/T2）与新 L2 Plan 的边界/路径；不重审 v1.10 全文、不执行代码/测试/迁移。 |
+| release_status | **NOT RELEASE**；不批准 merge/Release/AC-VERIFIED；SPEC v1.11 仍 in-review，ADR 0.5 仍 DRAFT。 |
+
+## R5.0 结论
+
+**BLOCKED。** R4-B2/B3 以及 R4-M2/M3 在 SPEC/ADR/impact 文本层面已实质闭合：
+
+- **R4-B2（零元）CLOSED**：S20 明确“**持久化路径**的每个 `refund_id`，零元不进入 S20”；INV-51 加“零元路径除外”；AC-69/AC-72 零元不写 admission/不持久化/不计入计数（`0002:90,105,147,456,493`）。
+- **R4-B3（审计）CLOSED（可执行载体）**：D-32 复用既有载体——`order_refund_admissions` 行不删除 + `version` 单调 + `created_at/updated_at` + 发起方 `last_error`（reason/工单号）+ 日志 + ops 工单；`REVIEW-AUDIT-01` 仅覆盖行级历史/独立表，DEFERRED 且不阻塞（`0002:106,464,848`；ADR §8.3/§9）。
+- **R4-M2（AC-72 分段）CLOSED**：D-33 把 AC-72 拆为后端段（本 L2）与用户可见/入口（`REVIEW-REQUIRED-ENTRY-01`，DEFERRED）；`ac-coverage` 不得整体 AC-VERIFIED（`0002:491,849`）。
+- **R4-M3（PO §11 ≠ 实现批准）CLOSED**：SPEC §11 item 4/ADR 人类批准门/Plan C-4 明确 `ADR_APPROVED` + `SPEC_APPROVED` + Lead `change_id`/Plan + 人类 merge；PO §11 不是写码授权（`0002:885`；ADR `:12,22`；Plan C-4）。
+- **R4-B1（载体）SPEC 侧 CLOSED**：S20/AC-69 唯一权威载体=`order_refund_admissions`；普通售后 `after_sale_refund_tasks.PENDING + last_error`，**不新建 `refund_applications` 行**；TCC 仅镜像已有行（`0002:90,103-104,454-456`）。
+
+但 **R4-B1 的实现路径尚未闭合**：普通售后的镜像与“保持 PENDING / 不自动 FAILED_PERMANENT”必须由 **AfterSales** 写 `after_sale_refund_tasks.last_error` 并控制任务状态；ADR 0.5 `forbidden_paths` 却把 `internal/services/aftersales/**` 全部禁止，Plan `allowed_paths` 也没有 AfterSales。现有 `releaseRefundTask` 在 `maxTaskAttempts=8` 后自动置 `FAILED_PERMANENT` 并写通用 `cause.Error()`，**不满足** AC-69“不得自动 `FAILED_PERMANENT`（人工放弃除外）”/`PENDING` 镜像，也不能生成 AC-72 的稳定 `REVIEW_REQUIRED reason=<CODE> ticket=<工单号>`。**这是新的 `[BLOCKER]` R5-B1**。
+
+## R5.1 R4-B1/B2/B3 关闭表
+
+| QC 项 | R5 判定 | 依据/缺口 |
+|---|---|---|
+| **R4-B1** 普通售后无 `refund_applications` 行 | **PARTIAL（SPEC 载体 CLOSED / 实现路径未闭合）** | SPEC S20/AC-69 已分路径；但 `after_sale_refund_tasks` 的 writer/status 在 **AfterSales**，ADR `forbidden_paths:25` 禁止 `aftersales/**`，Plan `allowed_paths` 无 AfterSales；`workers.go:724-748` 自动 `FAILED_PERMANENT` + 通用 `last_error`。见 R5-B1。 |
+| **R4-B2** 零元 | **CLOSED** | S20 `:90`“持久化路径/零元不进入”；INV-51 `:147`“零元除外”；AC-69 `:456`/AC-72 `:493` 零元不写/不计数；ADR §4/§10 O7。 |
+| **R4-B3** 审计 | **CLOSED（D-32）** | `order_refund_admissions` 行不删除 + `version`/时间戳 + `last_error`（reason/工单号）+ 日志 + ops 工单；**无新表/迁移**；`REVIEW-AUDIT-01` 仅行级历史，DEFERRED 且不阻塞；ADR §8.3/§9；impact §2.4。 |
+| **R4-M1** SPEC §11 stale 0.3 | **PARTIAL** | SPEC `:884` 已改 **ADR DRAFT 0.5**；但 **ADR 0.5 `:14` 仍称 PO 残留“0.3”**，impact D-10 `:377` 同；Plan 仍写 ADR 0.4/Base `cd32fb4`。见 R5-M2。 |
+| **R4-M2** AC-72 分段 | **CLOSED（文本）** | SPEC `:491`/D-33 `:849`；入口 `REVIEW-REQUIRED-ENTRY-01`；但 **5 分钟告警规则另立 `REVIEW-REQUIRED-ALERTS-01`**（R5-M3）。 |
+| **R4-M3** PO §11 ≠ 实现批准 | **CLOSED（治理）** | SPEC `:885`；ADR `:12,22`；Plan C-4；`tcc_settlement.go`/`tcc_admission.go` 仅在此授权后。 |
+| **R4-T1** `tcc_reconcile` 清 `last_error` | **CLOSED（测试项）** | `tcc_reconcile.go:340` 只清 `refund_applications.last_error`，不清 `refund_batches`；ADR §10 O20b。 |
+| **R4-T2** metrics/告警/入口证据 | **PARTIAL** | metrics gauge/既有 tick 可验收；**`deploy/**` 在 Plan/ADR 均 forbidden**，5 分钟告警规则 `REVIEW-REQUIRED-ALERTS-01` 不在本 L2；AC-72 后端“告警”段不能据此整体验收（R5-M3）。 |
+
+## R5.2 新增 `[BLOCKER]`
+
+### `[BLOCKER]` R5-B1 — 普通售后 `after_sale_refund_tasks` 的 REVIEW 镜像/状态由 AfterSales 写，但 AfterSales 被 ADR/Plan 禁止；现有代码会自动 `FAILED_PERMANENT`
+
+**证据**
+
+- SPEC S20 `:90`/AC-69 `:456`：普通售后（`after_sale_refund_tasks`，无 `refund_applications` 行）SHALL 保持 `PENDING` + `last_error`（reason/工单号）；`S20` 终态 `:104`：自动路径不得 `FAILED_PERMANENT`（人工放弃除外）；AC-69 `:453` 自动重试上限后由人工持有。
+- 代码：`internal/services/aftersales/workers.go:724-748` 的 `releaseRefundTask` 在 `attempts >= maxTaskAttempts`（`aftersales/service.go:58`，=8）时 `next = taskFailed`，即自动置 `FAILED_PERMANENT`，并把 `cause.Error()` 截断写入 `after_sale_refund_tasks.last_error`；这不是 AC-72 的 `REVIEW_REQUIRED reason=<CODE> ticket=<工单号>`，也无“保持 PENDING”。
+- 边界：ADR 0.5 `forbidden_paths:25` 明确 `internal/services/{inventory,payment,aftersales}/**`；Plan `allowed_paths` 仅 Order/Fulfillment/`internal/platform/metrics/**`/proto/tests/gateway/BFF（后者见 M1），**没有 AfterSales**。因此 SPEC 要求的“普通售后镜像（reason/工单号）+ PENDING”**没有任何允许路径的实现者**；Order 又不能跨库写 `after_sale_refund_tasks`。
+- `after_sale_refund_tasks.last_error` 为 `VARCHAR(512)`（`migrations/aftersales/0010:92`），长度够；**但写入方/格式/状态不在本 L2 的 allowed_paths**。这不是“实现细节”，而是 **AC-69/AC-72 的普通售后分支不可实现**。
+
+**具体修改（三选一，需 Lead/Plan/人类）**
+
+1. **把 AfterSales 纳入本 L2**：`allowed_paths` 增加 `internal/services/aftersales/workers.go`（仅 `releaseRefundTask`/refund 错误路径：识别 `REFUND_ADMISSION_CONFLICT + REVIEW_REQUIRED`，保持 `PENDING`，写入固定 `last_error` 格式；达到上限也不得自动 `FAILED_PERMANENT`，转人工队列）。同步 Plan L2-T2/L2-T5 与 forbidden 例外；由 Reviewer 复核。**注意**：AfterSales 是独立服务/DB，需按跨服务变更评估，不能只加一个 `if`。
+2. **改 SPEC 的镜像/状态**：若不允许改 AfterSales，则普通售后只能以 **Order 的 `order_refund_admissions`** 作为唯一权威 + **AfterSales 既有通用 `last_error`** 作为只读提示；删除“task 必须保持 PENDING / 固定 `REVIEW_REQUIRED reason/ticket`”的 AC 要求，改为“task 状态由 AfterSales 既有策略处理（允许 `FAILED_PERMANENT` 作为人工队列信号）”。这必须由 PO 修订 SPEC AC-69/72，不得由 ADR 自行缩小。
+3. **把 AfterSales 镜像作为独立 L2**：本 L2 只交付 Order/TCC 的权威行与自动终止；普通售后的 `last_error`/PENDING 归 `AFTERSALE-REVIEW-MIRROR-01`（owner AfterSales/ops，expiry 2026-12-31）；AC-69/72 普通售后分支不得 AC-VERIFIED，`ac-coverage` 分段。**在此之前不能声称 R4-B1 关闭。**
+
+## R5.3 新增 `[MAJOR]` / `[TODO]`
+
+- **`[MAJOR]` R5-M1 — Plan 的 allowed/forbidden paths 与 ADR 0.5 不一致**：
+  - Plan allowed：`internal/services/order/`（宽泛）、`internal/services/gateway`/BFF 文案、`internal/platform/metrics/**`、`cmd/*`、`api/proto`；ADR 0.5 allowed：仅 `refund_admission.go`/`tcc_settlement.go`/`tcc_admission.go`/`metrics.go`/`worker.go`，**forbidden `gateway/**`、`frontend/**`、`internal/services/aftersales/**`、`tcc.go`/`tcc_payment.go`/`tcc_precheck.go`/`tcc_reconcile.go`、`settlement.go`、`ports.go`**。
+  - Plan `L2-T5` 写“BFF 文案”/BFF 契约测试，但 D-33 明确用户可见/入口归 `REVIEW-REQUIRED-ENTRY-01`；ADR `forbidden` `gateway/**`。**Plan 越界**或 **ADR/SPEC 漏 allowed**；Lead 必须先统一。
+  - Plan `allowed_paths` 的 `internal/platform/metrics/**` 与 ADR `metrics.go` 不一致（Plan 宽）；Plan `cmd/*` ADR 未列；Plan `internal/services/order/` 宽于 ADR 的精确文件表。修订 Plan 为 ADR 的精确文件表（或 ADR 扩到 Plan，但需说明理由）。
+  - **`aftersales` 必须在 Plan 中显式列/或按 R5-B1 选项 3 拆出**；当前 Plan 没有 AfterSales，B1 无法执行。
+- **`[MAJOR]` R5-M2 — stale 引用仍存在**：ADR 0.5 `:14` 称“SPEC `0002:884` 仍写 ADR 0.3”，但 SPEC 当前 `:884` 已写 **DRAFT 0.5**；impact D-10 `:377` 仍写“SPEC §11 stale 0.3”；Plan 仍写 ADR DRAFT 0.4、Base `cd32fb4`。SPEC §11 已修，但 ADR/impact/Plan 的 stale 会造成 Reviewer 绑定错误对象；改为 ADR 0.5 / SPEC v1.11（R4 delta）/base `d2149c0`，或注明历史沿革。
+- **`[MAJOR]` R5-M3 — AC-72 的 5 分钟告警规则不在本 L2，且 `deploy/**` 被 Plan/ADR 禁止**：SPEC AC-72 `:493` 要求 5 分钟内告警；ADR 0.5/Plan 均 `deploy/**` forbidden，规则归 `REVIEW-REQUIRED-ALERTS-01`（ops，2026-12-31）。因此 AC-72 的“后端告警段”不能仅凭 gauge/查询验收；`ac-coverage` 必须再分段（AC-72 告警规则 DEFERRED），不得写成“5 分钟告警已上线”。这不是要恢复 deploy 到本 L2，而是明确 AC-72 的分段/证据。
+- **`[MAJOR]` R5-M4 — `last_error` 固定格式三处不一致**：SPEC AC-72 `:493` 是 `REVIEW_REQUIRED reason=<CODE> ticket=<工单号>[ arm=<n>]`；ADR §3.5 的 TCC 写 `REVIEW_REQUIRED:<reason>:manual_queue=...:v<version>`（冒号、无 `ticket`/`arm`）；AfterSales 现有 `releaseRefundTask` 写通用 `cause.Error()`。三种格式无法用同一解析器；`ticket` 无写入方（D-9 只说 ops 经 AfterSales 受权入口补，当前无该入口）。**长度**：`after_sale_refund_tasks.last_error VARCHAR(512)`、`refund_batches.last_error VARCHAR(1024)` 足够容纳单条；**格式/解析/工单来源**未闭合。统一为 AC-72 的 `key=value` 格式，或明确“`reason` 用 `LIKE`、ticket 由工单系统承载，`last_error` 只放 reason”的降级口径；PO/ADR 选一。
+- **`[TODO]` R5-T1** `refund_batches.last_error` 的 TCC 文本与 AC-72 格式对齐；补 O20b 之外对 `reason`/`ticket` 的解析测试。
+- **`[TODO]` R5-T2** Plan `L2-T5` 的 BFF 文案/契约测试与 `REVIEW-REQUIRED-ENTRY-01` 的边界；若 Plan 保留 BFF，ADR/SPEC 必须显式允许（当前 `gateway/**` forbidden）。
+
+## R5.4 事实基线与代码兼容（0016/0017/AfterSales）
+
+| 项 | 结论 | 依据 |
+|---|---|---|
+| `order_refund_admissions.result VARCHAR(32)` / `state` 不新增 | **PASS** | `0016:7-19`；`REVIEW_REQUIRED` 15；无 CHECK。 |
+| `refund_applications.admission_result VARCHAR(24)` | **PASS** | `0017:45-81`（`:56`）；15 字符；`REFUND_ADMISSION_CONFLICT` 25 放不下，D-30 用 REVIEW。 |
+| `refund_batches.state='MANUAL_HOLD'` / `last_error VARCHAR(1024)` | **PASS** | `0017:20-33` CHECK；`:28`；无迁移。 |
+| `after_sale_refund_tasks.last_error VARCHAR(512)` | **PASS（列宽）/FAIL（writer）** | `migrations/aftersales/0010:92`；512 够；但 writer/状态见 R5-B1。 |
+| `after_sale_refund_tasks` 结构 | **FAIL（状态）** | `0010:88-99`：`status` 仅 PENDING/PROCESSING/DONE/FAILED_PERMANENT；AfterSales `releaseRefundTask` 自动 FAILED，AC-69 要求 PENDING/不自动 FAILED；需 R5-B1 方案。 |
+| 现有 PRE/POST/PENDING 行兼容 | **PASS** | 只新增 REVIEW；旧代码回滚需审计（ADR §7.6）。 |
+| 无迁移/无回填 | **PASS** | 0016/0017 无 schema 变化；D-32 复用既有；Plan `migrations/**` forbidden。 |
+| 共享 metrics / deploy | **PARTIAL** | `internal/platform/metrics/metrics.go` + `order/worker.go` allowed；`deploy/**` forbidden，告警规则 `REVIEW-REQUIRED-ALERTS-01`（R5-M3）。 |
+
+## R5.5 TCC / 零元 / 5 窗口
+
+- **TCC**：`REVIEW_REQUIRED` 合法、batch `MANUAL_HOLD`、`refund_batches.last_error`（1024）、自动续跑 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`、0 Payment、只阻塞本批；allowed `tcc_settlement.go`/`tcc_admission.go` 足够；`tcc.go`/`tcc_payment.go`/`tcc_precheck.go`/`tcc_reconcile.go` 不需要改（已核对 `tcc_reconcile.go:340` 只清 application `last_error`，不清 batch）。**PASS（设计）**。
+- **零元**：不进入 S20、不持久化 REVIEW、不写 admission/S19、不计入 AC-72；**PASS**。
+- **5 窗口 + 重复/乱序**：W1—W12 与 O1/O1b/O2b/O3/O4b/O4d/O7/O11/O11b/O16/O18/O20b 齐备；`REVIEW` 重放不探测，TCC `MANUAL_HOLD`，部分金额不取消运单；**PASS**。
+- **B1 仍是普通售后镜像/状态**；TCC/零元不受影响。
+
+## R5.6 是否可交人类批准 / 进入 Plan 评审
+
+**不可。**
+
+1. **不可交 `SPEC_APPROVED`/`ADR_APPROVED`**：R5-B1 尚未解决——SPEC 的普通售后分支要求 `after_sale_refund_tasks.PENDING` + 固定 `last_error`，但 AfterSales 的 `releaseRefundTask` 会自动 `FAILED_PERMANENT` 且 ADR/Plan 禁止 AfterSales；需先由 PO/Lead 选择 R5-B1 的三个方案之一（扩 AfterSales/改 SPEC/拆独立 L2），否则 SPEC 与 ADR 仍与代码事实冲突。
+2. **不可进入 Plan 评审**：Plan 的 `allowed_paths`（gateway/BFF、metrics/**、cmd、宽泛 Order）与 ADR 0.5 精确表/forbidden 冲突；Plan 的 `ADR 0.4`/Base `cd32fb4` 亦 stale；`tcc_*.go` 的批准点已写明，但 Plan 需先与 ADR 0.5/SPEC v1.11 对齐，并增补 AfterSales 边界（或按方案 3 明确不在本 L2）。
+3. **可交人类做什么**：可交人类**原则性**确认 R5-B1 选择（AfterSales 扩范围 / SPEC 降级 / 独立 L2）以及 R5-M3 的 AC-72 告警分段；在这些确认 + Plan 修订 + QC R6 复核前，**不得 `SPEC_APPROVED`/`ADR_APPROVED`**，也不得写码。
+4. **0 BLOCKER 才 READY**：本报告 **1 个 `[BLOCKER]`（R5-B1）**，故 **BLOCKED**。R4-B2/B3 已 CLOSED；R4-B1 的 **SPEC 载体** CLOSED、**实现路径** OPEN；R4-M1 仍 PARTIAL（stale），R4-M2 CLOSED（分段）/告警段 M3，R4-M3 CLOSED（治理）。
+5. **AC 状态**：AC-69..72 仍 DEFERRED/AC-REF；AC-72 不得整体 AC-VERIFIED；AC-27 仍 AC-REF；无 Release/merge。
+
+**只读声明**：未执行 `go test`/`-race`/MySQL/迁移；只审 v1.11/0.5/impact 0.3/Plan；未改 SPEC/ADR/代码/测试/台账；只追加本 R5 小节；未 commit。
+
+**R5 Actor**：`qc-ac50`
+**R5 Reviewed-by**：待 PO/Architect/Lead 修订 / 人类批准
+**R5 Status**：**BLOCKED — 1 BLOCKER；不可交人类批准/不可进入 Plan 评审**
+
+---
+
+# R6（L2-C3）终审
+
+| 项 | 值 |
+|---|---|
+| 审查对象 | `docs/specs/0002-payment-settlement-admission.md` v1.11（工作树 R5 delta）；`docs/adr/0007-amd1-addendum-ac50-nowaybill.md` **DRAFT 0.5**；`docs/adr/0007-amd1-ac50-impact-analysis.md` **DRAFT 0.3**；`docs/lead/PAY-AC50-REVIEW-01/plan.md` |
+| 结论 | **BLOCKED**（2 个 `[BLOCKER]` + 2 个 `[MAJOR]` + 1 个 `[TODO]`；0 BLOCKER 才 READY，不满足） |
+| 日期 | **2026-11-26** |
+| Actor | `qc-ac50`（Quality Checker；与 `arch-ac50`/`arch-ac50-impact` 不同 actor） |
+| base | `d2149c0a3935169206d6a9fa31ca8794b937079c` |
+| head | `d2149c0a3935169206d6a9fa31ca8794b937079c`（`git rev-parse HEAD`） |
+| 被审 blob | SPEC `cb268af799c2791c8b1ac7c993044202d1cea2da`；ADR `a9cb8dd9bf09e6197662f0df39781401f99920f4`；impact `8c55f4d998096186ff5934a67a21626b1b9c300c`；Plan `010b710ec4f802fa191ba773ef3670a86fef2c41` |
+| review_scope | 只审 R5 的 B1/M1–M4 关闭、Plan/ADR/SPEC 边界、`last_error` 一致性、AC-72 三段；不重审 v1.10 全文、不执行代码/测试/迁移。 |
+| release_status | **NOT RELEASE**；不批准 merge/Release/AC-VERIFIED；SPEC v1.11 仍 in-review，ADR 0.5 仍 DRAFT。 |
+
+## R6.0 结论
+
+**BLOCKED。** R5 的 **M1（Plan/ADR paths）**、**M3（AC-72 三段）**、**B2（零元）**、**B3（审计）** 已实质闭合；**AfterSales 已进 allowed**（ADR/Plan 均含，仅镜像/PENDING/重试上限）；TCC/零元/部分金额/5 窗口仍成立；`last_error` 列宽 512/1024 足够。
+
+但仍有 **2 个合同级 BLOCKER**：
+
+1. **R6-B1（AfterSales 8 次上限）**：ADR 0.5 **§7.3 `:487` 仍写**“AfterSales `maxTaskAttempts=8` 耗尽后 `FAILED_PERMANENT`，即人工队列信号”；而 **§8.5 `:602`/`:757`/`:816`** 与 SPEC AC-69 `:453`/S20 `:104` 明确“**8 次后仍 PENDING、不得自动 `FAILED_PERMANENT`（仅人工放弃）**”。同一 ADR 两处相反；若按 §7.3 实现，普通售后 REVIEW 任务会在 8 次后自动终态，违反 AC-69/72。R5-B1 尚未真正关闭。
+2. **R6-B2（`last_error` 唯一格式）**：SPEC AC-72 `:495-498`/S20 `:90`/`:103` 的 canonical 是 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（系统派生 `RVW:<refund_id>`，含 `truncated=1` 截断规则，**无 `arm`**）；ADR §8.4 `:587`/`:593`/`:608` 与 impact `:103` 的 canonical 是 `REVIEW_REQUIRED reason=<CODE> ticket=<ID>[ arm=<n>]`（ops 工单 ID，**认领前 ticket 空**，**无 `truncated=1`**）。两者**不是同一格式**：`ticket` 语义、`arm` 字段、`truncated` 字段均不一致；`TestAC69` 要求“**恰为** `...ticket=RVW:<refund_id>`”，而 ADR O19/O23 解析 `ticket/arm`，测试与实现无法同时通过。R5-M4 尚未真正关闭。
+
+另 **2 个 `[MAJOR]`**：Plan `C-2` 仍写“修订 Addendum **0.4**”（实际 0.5），ADR `:9` 与 impact D-10 仍称“Plan stale 待改”；ADR `baseline_impact` 仍写“**`deploy` 一条告警**”而 `deploy/**` 在 ADR/Plan 均 forbidden（AC-72 告警归 `REVIEW-REQUIRED-ALERTS-01`）。**1 个 `[TODO]`**：`AC-72` 三段的 `ac-coverage` 具体行/证据需 Reviewer 落地，不能整体 VERIFIED。
+
+## R6.1 R5-B1/M1–M4 关闭表
+
+| QC 项 | R6 判定 | 依据/缺口 |
+|---|---|---|
+| **R5-B1** AfterSales 被禁/自动 FAILED | **PARTIAL / NOT CLOSED** | ADR/Plan 已把 `internal/services/aftersales/**` 纳入 allowed（仅 `after_sale_refund_tasks.last_error`/PENDING/重试上限），Order 不跨库写；但 **ADR §7.3 `:487` 仍写“8 次后 FAILED_PERMANENT”**，与 §8.5/SPEC AC-69/S20 的“8 次后 PENDING、不得自动 FAILED”矛盾。见 R6-B1。 |
+| **R5-M1** Plan/ADR allowed/forbidden | **CLOSED（Architect 侧）** | ADR allowed/forbidden 与 Plan 已对齐：Order 精确文件、`tcc.go`/`tcc_payment.go`/`tcc_precheck.go`/`tcc_reconcile.go`/`settlement.go`/`ports.go` 禁；`aftersales` 仅镜像/PENDING/重试；`platform/metrics/**`、`gateway/**` 仅文案、`cmd/*`；`deploy`/`frontend`/`migrations`/`docs`/`api-gen` 禁。 |
+| **R5-M2** Base/ADR 0.5/Plan 版本 | **PARTIAL** | SPEC `:884` 已 DRAFT 0.5；ADR/impact Base `d2149c0`、0.5；**Plan `C-2` 仍写“修订 Addendum 0.4”**，ADR `:9` 与 impact D-10 仍称“Plan stale 待改”。见 R6-M1。 |
+| **R5-M3** AC-72 告警不在 L2 | **CLOSED（分段）** | AC-72 三段：后端（metrics/查询/SLA/对账）本 L2；告警规则 `REVIEW-REQUIRED-ALERTS-01`（ops，`deploy/**` forbidden）；入口 `REVIEW-REQUIRED-ENTRY-01`（DEFERRED）；`ac-coverage` 分段，**AC-72 不得整体 VERIFIED**。**但 ADR `baseline_impact` 仍写“`deploy` 一条告警”**，见 R6-M2。 |
+| **R5-M4** last_error 三处一致 | **NOT CLOSED** | SPEC `RVW:<refund_id>` + `truncated=1`/无 `arm`；ADR/impact `<ID>[ arm=<n>]`/无 `truncated`；`ticket` 语义/字段/截断均不同；见 R6-B2。 |
+| **R5-T1/T2** TCC 文本/Plan BFF | **PARTIAL** | TCC 只写 `refund_batches.last_error`（1024）已明确；Plan `L2-T5` BFF 文案归 gateway 仅文案、完整入口 `REVIEW-REQUIRED-ENTRY-01`；需 Lead 在 Plan/Tasks 把“BFF 契约测试”降为“文案映射测试”，不得冒充入口。 |
+| **R4-B1** 普通售后 `refund_applications` | **CLOSED（SPEC + allowed）** | S20 `:90/:103`、AC-69 `:456`；AfterSales allowed；不新建行；Order 不跨库写。**状态 B1**见 R6-B1。 |
+| **R4-B2/B3** 零元/审计 | **CLOSED** | S20/INV-51 零元例外；D-32 admission 行 + `version`/时间戳 + `last_error` + 日志 + 工单；无新表/迁移；`REVIEW-AUDIT-01` 行级历史 DEFERRED。 |
+
+## R6.2 新增 `[BLOCKER]`
+
+### `[BLOCKER]` R6-B1 — ADR §7.3 仍规定 AfterSales 8 次后自动 `FAILED_PERMANENT`，与 §8.5/SPEC AC-69 的“PENDING、不得自动 FAILED”直接矛盾
+
+**证据**
+
+- ADR 0.5 `§7.3:487`：“AfterSales `maxTaskAttempts=8`（`aftersales/service.go:58`）耗尽后 `FAILED_PERMANENT`，即人工队列信号；错误文本必须含 `REFUND_ADMISSION_CONFLICT` 以便落 `last_error`（`workers.go:724-748`）。禁止在 AfterSales 增加‘复核当成功’分支。”
+- ADR 0.5 `§8.5:602`：“AfterSales 收到 REVIEW → 写 canonical、任务保持 `PENDING`、**停止自动重试升级（释放 lease，不再次自动调度）**”；`:757` “8 次后不得自动 `FAILED_PERMANENT`；仅人工放弃（AC-62）可终态”；`:816` 同。
+- SPEC AC-69 `:453`：“IF 自动重试达到发起方上限，THEN 申请 SHALL 进入人工队列并由人工持有；不得把复核结果当作已退款、已关闭或静默丢弃”；S20 `:104`：“自动路径 SHALL NOT ... 置 `DONE`/`FAILED_PERMANENT`”；AC-69 `:449` “不得置 `FAILED_PERMANENT`（人工放弃除外）”。
+- 现有代码 `workers.go:724-748` 确实在 `attempts >= maxTaskAttempts` 时 `next = taskFailed`（`FAILED_PERMANENT`）；**若按 §7.3 保留现状，SPEC 的 AC-69/S20 被违反**。R5-B1 不能只靠“allowed_paths 已加 AfterSales”关闭；必须删除/改写 §7.3 的自动 FAILED 句子，并明确 AfterSales 实现“识别 REVIEW 后停止自动升级、保持 PENDING”。
+
+**具体修改**
+
+- 删除 ADR `§7.3:487` 的“耗尽后 `FAILED_PERMANENT`”；改为：“REVIEW 命中时 AfterSales **不得**继续自动升级/不得自动 `FAILED_PERMANENT`；释放 lease 并保持 `PENDING`，由 ops 受权入口认领/放弃；仅人工放弃（AC-62）可置 `FAILED_PERMANENT`。”与 §8.5/SPEC 统一。
+- 在 §8.5/O22 明确 AfterSales 的判定：`AdmitRefund` 返回 `REFUND_ADMISSION_CONFLICT` + `details.result=REVIEW_REQUIRED`（或 Order 裁决读回 REVIEW）→ 写 canonical、`PENDING`、停止自动调度；**不得走通用 `releaseRefundTask` 的 8 次 `taskFailed` 分支**（或该分支必须识别 REVIEW 并跳过 `FAILED_PERMANENT`）。
+- 保留 `maxTaskAttempts` 对**非 REVIEW** 错误的既有行为；不能把“8 次上限”删掉，只能对 REVIEW 分支特殊处理。O22 断言任务仍 `PENDING`、无 `FAILED_PERMANENT`、无 DONE/释放/打款。
+
+### `[BLOCKER]` R6-B2 — `last_error` canonical 在 SPEC 与 ADR/impact 不一致（`RVW:<refund_id>` vs `<ID>`、`arm`/`truncated` 字段不同）
+
+**证据**
+
+- SPEC AC-72 `:495-498`：唯一规范格式 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；`ticket` 是**系统派生**的 `RVW:<refund_id>`（AfterSales/TCC 生成）；超长保留前缀、截断 `RVW:<refund_id>`、追加 `truncated=1`；解析以 `reason=` 必需，`ticket=` 可缺省；**无 `arm`**。
+- SPEC S20 `:90/:103`、§5.10 `:684`、§12 `:911/:936/:948` 同用 `ticket=RVW:<refund_id>`；`TestAC69` `:820` 要求 last_error **恰为** `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；TCC 也“同一格式”。
+- ADR 0.5 `§8.4:587/:593/:608`：canonical `REVIEW_REQUIRED reason=<CODE> ticket=<ID>[ arm=<n>]`；`ticket` 未认领空、认领/re-arm 后**ops 工单号**；`arm` 缺省 0、每次 +1；超长只截 ticket，**无 `truncated=1`**。ADR `§3.1:343` 写 `ticket= arm=0`（空 ticket）；impact `:103/:364` 同 `<ID>`/`arm`。
+- 后果：`ticket` 是系统 `RVW:<refund_id>` 还是 ops 工单 ID？ `arm` 是否必须？ `truncated=1` 是否存在？ 三处回答不同；`TestAC69` 的“恰为 RVW”与 `O19/O23` 的“canonical reason/arm”不能同时通过；`after_sale_refund_tasks`/`refund_batches` 的解析器/`LIKE` 查询也会分叉。`512/1024` 长度本身足够，但**格式/字段/截断规则**未统一。
+
+**具体修改（二选一，PO/Architect 明确）**
+
+1. **以 SPEC 为准**：`ticket=RVW:<refund_id>`；`arm` **不写入** `last_error`（ops 工单可单独存 arm）；`truncated=1` 保留；ADR §3.1/§8.4/§8.5/impact 全部改为该格式；O19/O23 解析 `ticket`（可为空/截断）与 `truncated`，不解析 `arm`；`after_sale_refund_tasks`/`refund_batches` 用同一 `LIKE 'REVIEW_REQUIRED reason=%'`。
+2. **以 ADR 为准**：`ticket=<ID>`/`arm=<n>` 并**新增 `truncated=1`**；SPEC AC-72/S20/§5.10/§12/TestAC69 改为同一格式；说明 `RVW:<refund_id>` 是否作为 `ID` 的允许子集/旧值；`arm` 必须出现在解析契约，且 `after_sale_refund_tasks`/`refund_batches` 长度计算包含 `arm`/`truncated`。
+
+**无论选 1 或 2**：必须在 `TestAC69`/`TestAC72`/O19/O23 中用一个解析器覆盖 `after_sale_refund_tasks` 512 + `refund_batches` 1024 两个列，断言未认领空 ticket、超长截断、`reason/arm/truncated` 的允许组合；不得用两种格式并存。
+
+## R6.3 新增 `[MAJOR]` / `[TODO]`
+
+- **`[MAJOR]` R6-M1 — Plan `C-2` 仍写“修订 Addendum 0.4”**：`plan.md:31` `C-2` 的验收写“DRAFT 0.5”但动作仍“Architect 修订 Addendum **0.4**”；ADR `:9` 与 impact D-10 也仍称“Plan 的 ADR 版本/Base stale 待改”。Plan `Base`/`ADR` 字段已 0.5/d2149c0，但 `C-2` 文字 stale；Lead 改 `C-2` 为“修订 Addendum 0.5”，ADR `:9`/impact D-10 改为“Plan 已对齐/无 stale”，避免 Reviewer 证据绑定错版本。**不阻塞契约，但阻塞 Plan 评审的精确绑定。**
+- **`[MAJOR]` R6-M2 — ADR `baseline_impact` 仍写“`deploy` 一条告警”**：ADR 0.5 `:26` `baseline_impact` 写“共享 metrics 新 gauge；`deploy` 一条告警”；但 `forbidden_paths:25` 明确 `deploy/**`（告警归 `REVIEW-REQUIRED-ALERTS-01`），Plan `deploy/**` forbidden。该句会让 Reviewer 以为 `deploy` 在本 L2 交付；改为“**告警规则不在本 L2**（`REVIEW-REQUIRED-ALERTS-01`，ops，2026-12-31）”，与 §9/§12 一致。
+- **`[TODO]` R6-T1** `AC-72` 三段的 `ac-coverage.tsv` 具体行（后端/告警/入口）、证据路径、状态需 Reviewer 落地；`Plan L2-T7`/§10 O18 已有意图，但尚未见实际台账行；**不得整体 AC-VERIFIED**。`Plan L2-T5` 的“BFF 契约测试”需降为“gateway 文案映射测试”，完整入口仍 `REVIEW-REQUIRED-ENTRY-01`。
+
+## R6.4 事实基线与兼容
+
+| 项 | 结论 | 依据 |
+|---|---|---|
+| `order_refund_admissions.result VARCHAR(32)`（REVIEW 15） | **PASS** | `0016:7-19`；无 CHECK。 |
+| `refund_applications.admission_result VARCHAR(24)`（REVIEW 15） | **PASS** | `0017:45-81`（`:56`）；`REFUND_ADMISSION_CONFLICT` 25 不放入。 |
+| `refund_batches.state='MANUAL_HOLD'` / `last_error VARCHAR(1024)` | **PASS** | `0017:20-33` CHECK；`:28`；无迁移。 |
+| `after_sale_refund_tasks.last_error VARCHAR(512)` | **PASS（列宽）** | `migrations/aftersales/0010:92`；512 够 canonical + ticket/arm/truncated（若按 ADR 格式）；超长截断规则需统一（R6-B2）。 |
+| `after_sale_refund_tasks` 状态/自动 FAILED | **FAIL（R6-B1）** | `0010:88-99` status 无 REVIEW；`workers.go:724-748` 8 次自动 `FAILED_PERMANENT`；ADR §7.3 仍写自动，违反 SPEC AC-69/S20。 |
+| 现有 PRE/POST/PENDING 行兼容 | **PASS** | 只新增 REVIEW；旧代码回滚需审计（ADR §7.6）。 |
+| 无迁移/无回填 | **PASS** | 0016/0017 无 schema 变更；D-32 复用既有；Plan `migrations/**` forbidden。 |
+| metrics/gateway/cmd/deploy | **PARTIAL** | `internal/platform/metrics/**`、`gateway/**` 仅文案、`cmd/*` 在 allowed；`deploy/**` forbidden，告警 `REVIEW-REQUIRED-ALERTS-01`；ADR `baseline` 仍写 deploy alert（R6-M2）。 |
+
+## R6.5 TCC / 零元 / 5 窗口 / AC-72 三段
+
+- **TCC**：`REVIEW_REQUIRED` 合法、batch `MANUAL_HOLD`、`refund_batches.last_error`（1024）、自动续跑 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`、0 Payment、只阻塞本批；`tcc_settlement.go`/`tcc_admission.go` allowed；`tcc.go`/`tcc_payment.go`/`tcc_precheck.go`/`tcc_reconcile.go` 禁且不需改（`tcc_reconcile.go:340` 只清 application `last_error`，不清 batch）。**PASS（设计）**。
+- **零元**：不进入 S20、不持久化 REVIEW、不写 admission/S19、不计入 AC-72；**PASS**。
+- **5 窗口 + 重复/乱序**：W1—W12 与 O1/O1b/O2b/O3/O4b/O4d/O7/O11/O11b/O16/O18/O19/O20/O20b/O21/O22/O23 齐备；`REVIEW` 重放不探测，TCC `MANUAL_HOLD`，部分金额不取消运单；**PASS（设计）**。
+- **AC-72 三段**：后端（metrics/查询/SLA/对账）本 L2；告警 `REVIEW-REQUIRED-ALERTS-01`；入口 `REVIEW-REQUIRED-ENTRY-01`；`ac-coverage` 三段，**不得整体 VERIFIED**；**PASS（分段）**；台账行待 R6-T1。
+- **AfterSales/`last_error`**：allowed 已进；8 次/格式仍未闭合（R6-B1/B2）。
+
+## R6.6 是否可交人类批准 / 进入 Plan 评审
+
+**不可。**
+
+- **不可交 `SPEC_APPROVED`/`ADR_APPROVED`**：R6-B1/B2 未关闭；ADR 0.5 内部还有“8 次自动 FAILED”与“不得自动 FAILED”的矛盾；`last_error` canonical 在 SPEC/ADR/impact 不一致。SPEC/ADR 现在不能作为精确契约被批准。
+- **不可进入 Plan 评审（L2-P1..P4）**：Plan `C-2` 仍写 ADR 0.4；ADR/impact 仍称 Plan stale；R6-B1/B2 的实施边界（AfterSales 状态/格式）尚未统一；Plan 的 `L2-T5` BFF 文案/契约测试仍需降为文案映射。
+- **可交人类做什么**：可交人类**原则性**确认 R6-B1/B2 的选择（以 SPEC 格式为准 vs 以 ADR 格式为准；AfterSales 8 次分支），以及 R6-M2 的 deploy/告警分段；在这些确认 + Plan 修订 + QC R7 复核前，**不得 `SPEC_APPROVED`/`ADR_APPROVED`**，也不得写码。
+- **0 BLOCKER 才 READY**：本报告 **2 个 `[BLOCKER]`（R6-B1/B2）**，故 **BLOCKED**。R5-M1 CLOSED、R5-M3 分段 CLOSED、R5-M2 PARTIAL（Plan C-2/ADR line 9/impact D-10）、R5-B1 PARTIAL、R5-M4 OPEN。
+- **AC 状态**：AC-69..72 仍 DEFERRED/AC-REF；AC-72 不得整体 AC-VERIFIED；AC-27 仍 AC-REF；无 Release/merge。
+
+**只读声明**：未执行 `go test`/`-race`/MySQL/迁移；只审 v1.11/0.5/impact 0.3/Plan；未改 SPEC/ADR/代码/测试/台账；只追加本 R6 小节；未 commit。
+
+**R6 Actor**：`qc-ac50`
+**R6 Reviewed-by**：待 PO/Architect/Lead 修订 / 人类批准
+**R6 Status**：**BLOCKED — 2 BLOCKER；不可交人类批准/不可进入 Plan 评审**
+
+---
+
+# R7（L2-C3）终审
+
+| 项 | 值 |
+|---|---|
+| 审查对象 | `docs/specs/0002-payment-settlement-admission.md` v1.11（工作树 R6 delta）；`docs/adr/0007-amd1-addendum-ac50-nowaybill.md` **DRAFT 0.5**；`docs/adr/0007-amd1-ac50-impact-analysis.md` **DRAFT 0.3**；`docs/lead/PAY-AC50-REVIEW-01/plan.md` |
+| 结论 | **BLOCKED**（1 个 `[BLOCKER]` + 3 个 `[MAJOR]` + 1 个 `[TODO]`；0 BLOCKER 才 READY，不满足） |
+| 日期 | **2026-11-26** |
+| Actor | `qc-ac50`（Quality Checker；与 `arch-ac50`/`arch-ac50-impact` 不同 actor） |
+| base | `d2149c0a3935169206d6a9fa31ca8794b937079c` |
+| head | `d2149c0a3935169206d6a9fa31ca8794b937079c`（`git rev-parse HEAD`） |
+| 被审 blob | SPEC `d159300237d856f83d6e123ab564b3ce7d91f0c6`；ADR `c4af6c44df8e449ad2562cc8b7f0d1cecb7075a8`；impact `e87b0506631bbe799927c9832b9d27d4cf456cd9`；Plan `8c48a7db0fcc750aa97da91dff0eb1037859c07e` |
+| review_scope | 只核 R6 的 2 BLOCKER + 2 MAJOR（+ 相邻 AfterSales/Plan/impact 矛盾）；不重审全文、不执行代码/测试/迁移。 |
+| release_status | **NOT RELEASE**；不批准 merge/Release/AC-VERIFIED；SPEC v1.11 仍 in-review，ADR 0.5 仍 DRAFT。 |
+
+## R7.0 结论
+
+**BLOCKED。** R6-B1 的 **REVIEW 8 次不自动 FAILED** 已在 ADR `§7.3:496`/`§8.5:612` 改正；R6-B2 的 **`ticket=RVW:<refund_id>`/无 `arm`/`truncated=1`** 已大体统一；R6-M1 的 Plan `C-2`/Base/ADR 0.5 已对齐；R6-M2 的 `baseline_impact` 已改为 `REVIEW-REQUIRED-ALERTS-01`，**均实质推进**。
+
+但仍有 **1 个合同级 BLOCKER**：
+
+- **R7-B1（R6-B2 未完全关闭）**：SPEC AC-72 `:498`/D-35 `:863` 规定 `ticket=RVW:<refund_id>` **非空**；“`ticket=` 为空或缺失**不是合法记录**”；ADR 0.5 `§8.4:602`/`§8.4:596`/`§8.5:613`/`§8.4:617` 与 impact `:103` 却写“**`ticket=` 可缺省（未建单）**”。SPEC 的非空 ticket 与 ADR/impact 的“可缺省”**逐字不一致**；`TestAC69`（恰为 `ticket=RVW:<refund_id>`）与 O19/O23（ADR 版本允许空/可选）无法同时通过。R6-B2 的 canonical 仍有两套 ticket 空值语义。
+
+另 **3 个 `[MAJOR]`**：
+
+- **R7-M1（R6-B1 的非 REVIEW 范围）**：ADR `§7.3:496` 写“AfterSales `maxTaskAttempts=8` 耗尽后仍保持 `PENDING`、不得自动 `FAILED_PERMANENT`”，**未限定 REVIEW**；`§8.5:612` 的表格限定“且裁决为 REVIEW”。若按 §7.3 的通用句实现，**非 REVIEW 错误的既有 8 次 `FAILED_PERMANENT` 行为会被误伤**。应显式写“仅 REVIEW 分支保持 PENDING；非 REVIEW 保留既有 8 次上限/FAILED 行为”。
+- **R7-M2（impact/Plan 残留 stale）**：Plan `C-2` 已改为 0.5、Base d2149c0；ADR `:9` 已称 Plan 对齐。但 **impact `:16` 仍写“Plan 的 Base/版本记载 stale，Lead 待改”**，`:365`/D-10 `:385` 同；**impact 自身 stale**，会让 Reviewer 绑定错误 Plan 版本。改为“Plan 已对齐 d2149c0/0.5”。
+- **R7-M3（Plan L2-T5 BFF）**：Plan `L2-T5` 仍写“BFF 文案/契约测试”；ADR/SPEC 只允许 `gateway/**` 的**显示文案映射**，完整用户入口归 `REVIEW-REQUIRED-ENTRY-01`。把“BFF 契约测试”降为“gateway 文案映射测试”，否则 Plan 暗示入口在本 L2。
+- **`[TODO]` R7-T1**：`ac-coverage.tsv` 的 AC-72 三段行（后端/告警/入口）与 O18 证据需 Reviewer 落地；验收前不得整体 AC-VERIFIED。
+
+## R7.1 R6 关闭表
+
+| QC 项 | R7 判定 | 依据/缺口 |
+|---|---|---|
+| **R6-B1** §7.3 8 次自动 FAILED | **PARTIAL / DONE（REVIEW）/OPEN（非 REVIEW 范围）** | ADR `:496` 已改为“8 次=停止自动重试、PENDING；仅人工放弃 FAILED”，`§8.5:612` 同；**但 §7.3 未限定 REVIEW**，非 REVIEW 的 8 次行为需显式保留（R7-M1）。 |
+| **R6-B2** last_error 格式 | **NOT CLOSED** | `ticket=RVW:<refund_id>`/无 `arm`/`truncated=1` 三处大体一致；但 **SPEC ticket 非空** vs **ADR/impact ticket 可缺省**（R7-B1）。 |
+| **R6-M1** Plan C-2/Base/ADR 版本 | **CLOSED（Plan/ADR）** | Plan `C-2` 0.5、Base d2149c0；ADR `:9` 已称对齐；**impact 仍 stale**（R7-M2）。 |
+| **R6-M2** baseline_impact `deploy` 告警 | **CLOSED** | ADR `:26` 改为“告警另立 `REVIEW-REQUIRED-ALERTS-01`（deploy forbidden）”；§9/§14/impact 同。 |
+| **R5-M1** Plan/ADR paths | **CLOSED** | ADR/Plan 精确对齐；AfterSales 仅镜像/PENDING/重试；`tcc.go` 等禁；metrics/gateway 文案/cmd/proto/tests；deploy/frontend/migrations/docs/api-gen 禁。 |
+| **R5-M3** AC-72 三段 | **CLOSED（分段）** | 后端（metrics/查询/SLA/对账）本 L2；告警 `REVIEW-REQUIRED-ALERTS-01`；入口 `REVIEW-REQUIRED-ENTRY-01`；`ac-coverage` 三段；不得整体 VERIFIED。 |
+| **R4-B2/B3** 零元/审计 | **CLOSED** | S20/INV-51 零元例外；D-32 四载体；`REVIEW-AUDIT-01` 行级历史 DEFERRED。 |
+
+## R7.2 R7 新增 `[BLOCKER]`
+
+### `[BLOCKER]` R7-B1 — SPEC `ticket` 非空 vs ADR/impact `ticket=` 可缺省；O19/O23 与 TestAC69 互斥
+
+**证据**
+
+- SPEC AC-72 `:498`：`ticket=RVW:<refund_id>` 是系统派生复核 id，**非空**；“`ticket=` 为空或缺失**不是合法记录**”；D-35 `:863` 同；`TestAC69` `:823` 要求 `last_error` **恰为** `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；`TestAC72` `:826`/D-35 要求 ticket 非空。
+- ADR `§8.4:602`：“`ticket=RVW:<refund_id>` 是系统派生；`ticket=` **可缺省（缺失=尚未建单，仍须可被队列发现）**”；`:596` 同“ticket=可缺省”；`:613`/`:617` 同；impact `:103` 同“ticket=可缺省（未建单）”。
+- 后果：ADR O19/O23 若允许空 ticket，`TestAC69` 的“恰为 ticket=RVW”必失败；若按 SPEC 非空，ADR 的“可缺省”及 O23 的“ticket 可选”测试失败。`ticket` 是系统 `RVW:<refund_id>` 还是 ops 工单/可空，仍有两套语义；R6-B2 未关闭。
+
+**具体修改**
+
+- 二选一并逐字统一：
+  1. **按 SPEC 非空**（推荐）：删除 ADR `§8.4`/`§8.5`/impact/O19/O23 的“可缺省/未建单”表述；canonical 固定 `ticket=RVW:<refund_id>`，`RVW:` 前缀 + 非空；`ops` 工单以该 id 建单/映射（不回写）；`ticket=` 空/缺失判不可解析。`TestAC69`/`O23` 采用同一解析器。
+  2. **允许空 ticket**：修改 SPEC AC-72/D-35/TestAC69，明确空 ticket 为合法“未建单”窗口，并让 `O19/O23` 与 `TestAC69` 的“恰为”断言改为“可空/可缺省”；`ticket` 的语义/来源需写清（系统 `RVW:` 还是 ops 工单）。
+- 无论选 1 或 2，`after_sale_refund_tasks` 512 / `refund_batches` 1024 用**同一解析器**；`O19/O23/TestAC69/TestAC72` 不得出现“非空 vs 可缺省”两套期望；超长仍按 `truncated=1`。当前按方案 1 只需改 ADR/impact/O19/O23 的“可缺省”句。
+
+## R7.3 R7 新增 `[MAJOR]`
+
+- **R7-M1（非 REVIEW 8 次行为）**：ADR `§7.3:496` 的“AfterSales 8 次后仍保持 PENDING、不得 FAILED”未限定 REVIEW；`§8.5:612` 已限定“且裁决为 REVIEW”。改为：“**仅 REVIEW 分支** 8 次后保持 PENDING；非 REVIEW 错误保留既有 `maxTaskAttempts`/`FAILED_PERMANENT` 行为（不得因本 L2 改变）”；O22 仅覆盖 REVIEW，另加非 REVIEW 回归防止误伤。
+- **R7-M2（impact stale）**：impact `:16`/`:365`/D-10 `:385` 仍写“Plan 的 Base/版本记载 stale，Lead 待改”；Plan 已 d2149c0/C-2/0.5。改为“Plan 已对齐；无 stale”；否则 Reviewer 证据绑定错误对象。
+- **R7-M3（Plan L2-T5 BFF）**：Plan `L2-T5` 的“BFF 文案/契约测试”改为“gateway 文案映射测试”；完整用户入口/文案归 `REVIEW-REQUIRED-ENTRY-01`；`gateway` 不得改鉴权/路由/契约。否则 Plan 暗示入口在本 L2。
+- **`[TODO]` R7-T1**：`ac-coverage.tsv` 的 AC-72 三段（后端/告警/入口）与 O18 证据行需 Reviewer 落地；`AC-72` 不得整体 AC-VERIFIED。
+
+## R7.4 事实基线与窗口
+
+- **REVIEW/表宽**：`REVIEW_REQUIRED` 15 字符放入 `result VARCHAR(32)`、`admission_result VARCHAR(24)`；`refund_batches.state=MANUAL_HOLD` 已含；`after_sale_refund_tasks.last_error` 512、`refund_batches.last_error` 1024；**无迁移/无回填**。**PASS**。
+- **AfterSales**：allowed 已含，仅 `last_error`/`PENDING`/重试上限；Order 不跨库写；8 次 REVIEW 保持 PENDING；**非 REVIEW 范围见 R7-M1**。
+- **TCC**：合法裁决、batch `MANUAL_HOLD`、`last_error` canonical、自动续跑 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`、0 Payment、只阻塞本批；**PASS（设计）**。
+- **零元**：不进入 S20/不持久化/不计数；**PASS**。
+- **5 窗口 + 重复/乱序**：W1–W12/O1–O23 齐备；REVIEW 重放不探测；**PASS（设计）**。
+- **AC-72 三段**：后端/告警/入口分段；`ac-coverage` 三段；不得整体 VERIFIED；**PASS（分段）**；台账行待 T1。
+
+## R7.5 是否可交人类批准 / 进入 Plan 评审
+
+**不可。**
+
+- **不可交 `SPEC_APPROVED`/`ADR_APPROVED`**：R7-B1（ticket 非空/可缺省）仍未统一；R7-M1 非 REVIEW 8 次范围未写清；R7-M2 impact stale。ADR/SPEC 仍不能作为精确契约批准。
+- **不可进入 Plan 评审（L2-P1..P4）**：Plan `C-2` 已 0.5、Base d2149c0，但 `L2-T5` BFF 需降为文案映射；impact stale 需修；AfterSales 非 REVIEW 回归需在 Plan/O22 补。
+- **可交人类做什么**：可交人类**原则性**确认 R7-B1 选“ticket 非空”或“可缺省”以及 R7-M1 的“仅 REVIEW 保护、非 REVIEW 保留 8 次”；在 Plan/impact 修订 + QC R8 复核前，**不得 `SPEC_APPROVED`/`ADR_APPROVED`**，也不得写码。
+- **0 BLOCKER 才 READY**：本报告 **1 个 `[BLOCKER]`（R7-B1）**，故 **BLOCKED**。R6-B1 PARTIAL（非 REVIEW）、R6-B2 OPEN（ticket 空值）、R6-M1 PARTIAL（impact stale）、R6-M2 CLOSED、R5-M1/M3 CLOSED、R4-B2/B3 CLOSED。
+- **AC 状态**：AC-69..72 仍 DEFERRED/AC-REF；AC-72 不得整体 AC-VERIFIED；AC-27 仍 AC-REF；无 Release/merge。
+
+**只读声明**：未执行 `go test`/`-race`/MySQL/迁移；只审 v1.11/0.5/impact 0.3/Plan；未改 SPEC/ADR/代码/测试/台账；只追加本 R7 小节；未 commit。
+
+**R7 Actor**：`qc-ac50`
+**R7 Reviewed-by**：待 PO/Architect/Lead 修订 / 人类批准
+**R7 Status**：**BLOCKED — 1 BLOCKER；不可交人类批准/不可进入 Plan 评审**
+
+---
+
+# R8（L2-C3）终审
+
+| 项 | 值 |
+|---|---|
+| 审查对象 | `docs/specs/0002-payment-settlement-admission.md` v1.11（工作树 R7 delta）；`docs/adr/0007-amd1-addendum-ac50-nowaybill.md` **DRAFT 0.5**；`docs/adr/0007-amd1-ac50-impact-analysis.md` **DRAFT 0.3**；`docs/lead/PAY-AC50-REVIEW-01/plan.md` |
+| 结论 | **READY（0 BLOCKER；2 个 `[TODO]` 非阻断）** |
+| 日期 | **2026-11-26** |
+| Actor | `qc-ac50`（Quality Checker；与 `arch-ac50`/`arch-ac50-impact` 不同 actor） |
+| base | `d2149c0a3935169206d6a9fa31ca8794b937079c` |
+| head | `d2149c0a3935169206d6a9fa31ca8794b937079c`（`git rev-parse HEAD`） |
+| 被审 blob | SPEC `d159300237d856f83d6e123ab564b3ce7d91f0c6`；ADR `b2491cb1df7393d45c9047d95721676ceb05fafb`；impact `3ae8e7975972709604acf15fba48a34047b65fed`；Plan `e725a5ccd8b7ade089ef4c612a5ae4abaa28b23a` |
+| review_scope | 只核 R7 的 1 BLOCKER + 3 MAJOR（R7-B1/M1/M2/M3）及相邻非阻断项；不重审全文、不执行代码/测试/迁移。 |
+| release_status | **NOT RELEASE**；不批准 merge/Release/AC-VERIFIED；SPEC v1.11 仍 in-review，ADR 0.5 仍 DRAFT。 |
+
+## R8.0 结论
+
+**READY（0 BLOCKER）。** R7 的 1 个 BLOCKER 与 3 个 MAJOR 均已关闭：
+
+- **R7-B1 CLOSED**：ADR/impact 已删除“ticket 可缺省/空合法”；canonical 统一为 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；`ticket` **必填、非空、`RVW:` 前缀**；空/缺失/`arm`/其它 key 不可解析并告警；O19/O20/O23/§12 与 SPEC AC-72/D-35/TestAC69 同文（ADR `§3.1/§7.4/§8.4/§8.5/§12`；`:611-612`）。
+- **R7-M1 CLOSED**：ADR `§7.3:503-505`/`§8.5:621,627` 明确“**仅 REVIEW** 8 次保持 PENDING、不自动 FAILED；**非 REVIEW 保留既有 8 次上限/`FAILED_PERMANENT`**”；新增 O22b 非 REVIEW 回归（`:718`）。
+- **R7-M2 CLOSED**：impact `:16`/`:366`/D-10 `:386` 已改“Plan `d2149c0`/C-2/0.5 已由 Lead 修正”；Plan `C-2` 为 0.5、Base d2149c0；ADR `:9` 同。
+- **R7-M3 CLOSED**：Plan `L2-T5` 已写“gateway **文案映射测试**”；impact `§6.4:282` 明确“非 BFF 契约测试”。
+
+**剩余 2 个 `[TODO]`（不阻断人类批准/Plan 评审）**：
+
+1. **R8-T1（版本戳）**：ADR 头部 Revision `:6` 仍写“R5+R6 delta”、Spec-Ref `:16` 仍写“R4 delta”；impact `:404` 仍写“0.3 + R5/R6 delta”；SPEC `:26` 仍写“R6 delta”。R7 已关闭，但证据绑定建议把 Revision/变更记录补到 **R7**，避免 Reviewer 用旧戳绑错。
+2. **R8-T2（ac-coverage）**：AC-72 三段（后端/告警/入口）与 O18 的台账行/证据路径需 Reviewer 落地；不得整体 AC-VERIFIED；`REVIEW-REQUIRED-ALERTS-01`/`REVIEW-REQUIRED-ENTRY-01` 仍 DEFERRED。
+
+**结论：可交人类 `SPEC_APPROVED`/`ADR_APPROVED`，可进入 Plan 评审（L2-P1..P4）**；但批准/评审只覆盖本 L2 契约与 Plan，不等于实现/merge/Release/AC-VERIFIED。
+
+## R8.1 R7 关闭表
+
+| QC 项 | R8 判定 | 依据 |
+|---|---|---|
+| **R7-B1** ticket 空值/可缺省 | **CLOSED** | ADR `§8.4:605,611-612`、`§8.5:620`、`§3.1:361`、`§7.4:516`、`§12:775` 均写 ticket 必填非空、`RVW:` 前缀、空/缺失/`arm`/其它 key 不可解析；O19/O20/O23 `:713-715,719`；impact `:103/:365`；SPEC AC-72/D-35 同。 |
+| **R7-M1** 非 REVIEW 8 次 | **CLOSED** | ADR `§7.3:503-505`、`§8.5:621,627`、`§12:776`；O22b `:718`；非 REVIEW 保留既有 `maxTaskAttempts`/`FAILED_PERMANENT`。 |
+| **R7-M2** impact Plan stale | **CLOSED** | impact `:16/:366/:386` 已写 Plan `d2149c0`/C-2/0.5 已修正；D-10 关闭。 |
+| **R7-M3** Plan BFF 契约测试 | **CLOSED** | Plan `L2-T5` 写“gateway 文案映射测试”；impact `§6.4:282` 明确非 BFF 契约测试；完整入口归 `REVIEW-REQUIRED-ENTRY-01`。 |
+| **R6-B1/B2** | **CLOSED** | R7-B1 关闭 ticket；R7-M1 关闭 8 次范围；canonical 无 `arm`/`truncated` 统一。 |
+| **R6-M1/M2** | **CLOSED** | Plan C-2/Base/ADR 0.5；`baseline_impact` 告警归 `REVIEW-REQUIRED-ALERTS-01`。 |
+| **R5-M1/M3** | **CLOSED** | Plan/ADR allowed/forbidden 精确对齐；AC-72 三段。 |
+| **R4-B2/B3** | **CLOSED** | 零元不进入 S20；D-32 审计载体；`REVIEW-AUDIT-01` 行级历史 DEFERRED。 |
+
+## R8.2 事实基线与窗口（复核）
+
+- **REVIEW/表宽**：`REVIEW_REQUIRED` 15 字符放入 `result VARCHAR(32)`、`admission_result VARCHAR(24)`；`refund_batches.state='MANUAL_HOLD'` 已含；`after_sale_refund_tasks.last_error` 512、`refund_batches.last_error` 1024；**无迁移/无回填**；现有 PRE/POST/PENDING 行兼容。**PASS**。
+- **AfterSales**：allowed 仅 `after_sale_refund_tasks.last_error`/REVIEW PENDING/REVIEW 8 次行为；非 REVIEW 行为原样保留；Order 不跨库写；ops 经 AfterSales 受权入口 re-arm/认领。**PASS**。
+- **TCC**：合法裁决、batch `MANUAL_HOLD`、`last_error` canonical（1024）、自动续跑 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`、0 Payment、只阻塞本批；`tcc_reconcile.go:340` 只清 application `last_error`，不清 batch。**PASS（设计）**。
+- **零元**：不进入 S20/不持久化/不写 admission/S19/不计入 AC-72；**PASS**。
+- **5 窗口 + 重复/乱序**：W1–W12、O1–O23/O22b 齐备；REVIEW 重放不探测；TCC `MANUAL_HOLD`；部分金额不取消运单；**PASS（设计）**。
+- **AC-72 三段**：后端（metrics/查询/SLA/对账）本 L2；告警 `REVIEW-REQUIRED-ALERTS-01`；入口 `REVIEW-REQUIRED-ENTRY-01`；`ac-coverage` 分段；**不得整体 AC-VERIFIED**；台账行 R8-T2。**PASS（分段）**。
+
+## R8.3 新增 `[TODO]`（非阻断）
+
+- **R8-T1** 版本戳：ADR `:6` Revision 仍“R5+R6”、`:16` Spec-Ref 仍“R4 delta”；impact `:404` 仍“R5/R6”；SPEC `:26` 仍“R6 delta”。建议 Lead/Architect 在提交/批准前补 **R7** 变更记录/`Revision` 戳（只影响证据绑定，不影响契约语义）。
+- **R8-T2** `ac-coverage.tsv` 的 AC-72 三段行（后端/告警/入口）与 O18 证据路径由 Reviewer 落地；`REVIEW-REQUIRED-ALERTS-01`/`REVIEW-REQUIRED-ENTRY-01` 仍 DEFERRED；AC-72 不得整体 VERIFIED。
+
+## R8.4 是否可交人类批准 / 进入 Plan 评审
+
+**可。**
+
+- **可交 `SPEC_APPROVED`/`ADR_APPROVED`**：R7 的 1 BLOCKER + 3 MAJOR 已关闭；0 BLOCKER；SPEC v1.11 仍 in-review、ADR 0.5 仍 DRAFT，但已具备人类批准条件。
+- **可进入 Plan 评审（L2-P1..P4）**：Plan `C-2` 0.5/Base d2149c0/ADR 0.5 已对齐；`L2-T5` gateway 文案映射测试；AfterSales 非 REVIEW 回归 O22b；`allowed_paths`/forbidden 与 ADR 精确一致。
+- **人类批准范围**：仅 SPEC v1.11/ADR 0.5 与 Plan；不等于实现批准、merge、Release、AC-VERIFIED；实现仍需 C-4 人类批准 + Lead 独立 `change_id`/实施 Brief。
+- **0 BLOCKER 才 READY**：**READY（0 BLOCKER）**；R8-T1/T2 为 TODO，不阻断人类批准/Plan 评审。
+- **AC 状态**：AC-69..72 仍 DEFERRED/AC-REF；AC-72 不得整体 AC-VERIFIED；AC-27 仍 AC-REF。
+
+**只读声明**：未执行 `go test`/`-race`/MySQL/迁移；只审 v1.11/0.5/impact 0.3/Plan；未改 SPEC/ADR/代码/测试/台账；只追加本 R8 小节；未 commit。
+
+**R8 Actor**：`qc-ac50`
+**R8 Reviewed-by**：待人类 `SPEC_APPROVED`/`ADR_APPROVED` + Plan 评审
+**R8 Status**：**READY（0 BLOCKER；2 TODO 非阻断）**

@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT — pending QC**（未批准，不构成实现依据，不代表 AC-VERIFIED / merge / Release PASS） |
+| Status | **SUPERSEDED / WITHDRAWN（2026-11-27）**——不再作为实现依据，仅保留历史；R-2 撤回且未实现 |
 | Revision | **0.1** |
 | Change ID | `PAY-SETTLE-01` |
 | Tier | **L2** |
@@ -22,6 +22,10 @@
 | Reviewed-by | **待 QC**（本文件不代签；DRAFT 期间不得合入受管代码，不得标 PASS） |
 | Scope | 只裁决：BLOCKED-1 运单 `CANCELLED`、BLOCKED-2 `reservation released`、BLOCKED-3 pre-ship `REFUNDING`、SPEC-0001 §7.5:405 描述不一致。不写代码、不改 SPEC、不改已 accepted ADR Rev 2.3 |
 | 硬边界 | 不改 SPEC、不改已 accepted ADR Rev 2.3、不新增持久化字段/列/事件字段、无迁移、不新增 subject/RPC、不新增 worker；本文件未明确列出的变更一律不做 |
+| Superseded-by | SPEC-0001 **v1.5**（approved，2026-11-27）**AC-27A**；R0.3-R1c 实现（PASS）；AC-27 已按 waiver C+A 升 **AC-VERIFIED** |
+| Withdrawal | **R-2 撤回、未实现**（与 SPEC-0001 v1.5 冲突）；R-1/R-3/R-4/R-5 已由 SPEC v1.5 AC-27A 与 R0.3-R1c 取代 |
+
+> **SUPERSEDED / WITHDRAWN（2026-11-27）**：本文件**不再作为实现依据，仅保留历史**。R-2（退款完成写 `orders.status`）与已批准的 SPEC-0001 v1.5 冲突，**撤回、未实现**；R-1/R-3/R-4/R-5 已被 SPEC-0001 v1.5 **AC-27A** 与 **R0.3-R1c** 取代。以下正文为 2026-11-27 之前的历史裁决，不得据此施工或验收；现行契约以 SPEC-0001 v1.5、SPEC-0002 v1.10 与 ADR-0007 Rev 2.3 为准。
 
 > 本文件是**设计裁决**，不是实现、不是验收。所有代码/测试/台账状态归 Developer/Reviewer；§7.5 修正归 Product Owner。本文件中的任何“应当”都不免除 QC 与人类批准。
 

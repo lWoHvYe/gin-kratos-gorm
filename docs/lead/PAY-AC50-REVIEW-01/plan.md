@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **APPROVED（2026-11-26，human P5）**；ADR 0.6 errata ACCEPTED（C-5）；实现进行中（T0+T0b+T0c 发布单元） |
+| Status | **APPROVED（2026-11-26，human P5）**；ADR 0.6 errata ACCEPTED（C-5）；实现进行中（T0 发布单元 PASS scoped；T1–T8 pending） |
 | change_id | `PAY-AC50-REVIEW-01` |
 | Parent | `PAY-SETTLE-01`（**保持冻结**；本 L2 交付前不推进其受管代码/台账） |
 | Tier | **L2**；命中 P0、资金、跨服务、状态机、既有 RPC 响应语义、共享 metrics |

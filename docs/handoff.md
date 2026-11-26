@@ -40,20 +40,23 @@
   regression ACs AC-REF; 12 orphan mapped to T5.x/T3.
 - **AC-50-FIX-01 moved to a new L2**: `PAY-AC50-REVIEW-01`
   (`docs/lead/PAY-AC50-REVIEW-01/plan.md`, `tasks.md`). **PAY-SETTLE-01 is
-  frozen**; AC-27 stays AC-REF. Contract closure is **QC R8 READY**
-  (SPEC-0002 v1.11 `d159300`, ADR 0.5 `b2491cb`, impact 0.3 `3ae8e79`,
-  Plan `e725a5c`; 0 BLOCKER, 2 non-blocking TODO). Awaiting human
-  `SPEC_APPROVED`/`ADR_APPROVED`, then Plan review (L2-P1..P4) and human Plan
-  approval; **no code**.
+  frozen**; AC-27 stays AC-REF. Contract and Plan are **APPROVED**
+  (SPEC-0002 v1.11, ADR 0.5 + 0.6 errata, impact 0.4, Plan P5; 2026-11-26).
+- **T0+T0b+T0c release unit: PASS (scoped)**, Reviewer `84f5acd`
+  (base `a34c845`, head `c796580`, code `e374384`): `NO_WAYBILL` probe,
+  REVIEW persistence, Tx2 double-predicate CAS; real MySQL 8.4 + `-race`
+  PASS. **T1/T2/T3 not landed -- do not deploy alone.**
+- **Next**: T1 (TCC `MANUAL_HOLD`), T2 (AfterSales mirror/PENDING), T3
+  (partial), T4 (zero/legacy), T5 (audit/metrics/runbook), T6 (crash/DLQ/
+  re-arm), T7 evidence, T8 regression; then final L2 Reviewer + handback.
 - **Phase 0-R is NOT closable**: AC-27 prerequisites, T2/T3/T4.4 and the ops
   alarm drill remain.
 
 ## Open — next session first
 
-1. **PAY-AC50-REVIEW-01**: human SPEC/ADR approval; then Plan review
-   (Architect/QC/Developer/Reviewer) and human Plan approval; then
-   implementation T1–T8 (TCC `MANUAL_HOLD`, after-sales mirror, partial,
-   zero/legacy, audit/metrics, CAS/fault, evidence, regression).
+1. **PAY-AC50-REVIEW-01**: implement T1–T8 (TCC `MANUAL_HOLD`, after-sales
+   mirror, partial, zero/legacy, audit/metrics, crash/DLQ/re-arm, evidence,
+   regression); then final L2 Reviewer and handback.
 2. **After L2 handback**: resume `PAY-SETTLE-01` R0.3-R1c (AC-27A steps 5/6)
    and the rest of Phase 0-R (T2/T3/T4.4/T5).
 3. **T5/AC-39…68** evidence; AC-69…72 are DEFERRED and need ledger rows.

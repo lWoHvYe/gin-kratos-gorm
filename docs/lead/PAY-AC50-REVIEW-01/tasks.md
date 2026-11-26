@@ -22,13 +22,15 @@ change_id: `PAY-AC50-REVIEW-01`；Parent `PAY-SETTLE-01` 冻结；Base `a1cc809`
 
 ## Phase 2 — 实现（原子）
 
-- [ ] **T0** Fulfillment `<NO_WAYBILL>` + proto/`make proto`（F1/F1b/F2–F6/F8）
+> T0 已 PASS（scoped，`84f5acd`）；wire token 为 `NO_WAYBILL`（ADR `<NO_WAYBILL>` 为占位记法），实施 Brief 记录。T1/T2/T3 未落地前不得单独上生产。
+
+- [x] **T0** Fulfillment `<NO_WAYBILL>` + proto/`make proto`（F1/F1b/F2–F6/F8）
   - `TEST_MYSQL_DSN=$FF_DSN go test ./internal/services/fulfillment -run 'TestCancelIfCreated' -count=1`
   - expected：无行=`<NO_WAYBILL>`；CREATED→CANCELLED；SHIPPED/RECEIVED/EXCEPTION 原值；组隔离；无 outbox
-- [ ] **T0b** Order 映射 `NO_WAYBILL`→REVIEW；未知 fail-closed（O1/O7/O10）
+- [x] **T0b** Order 映射 `NO_WAYBILL`→REVIEW；未知 fail-closed（O1/O7/O10）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test ./internal/services/order -run 'TestAC50ReviewMapping' -count=1`
   - expected：`result=REVIEW_REQUIRED,state=PENDING_REMOTE`；0 终态 outbox/0 release；未知→Unavailable
-- [ ] **T0c** Tx2 CAS 双谓词（O11/O11b/O11c/O11d、**W5/W13**）
+- [x] **T0c** Tx2 CAS 双谓词（O11/O11b/O11c/O11d、**W5/W13**）
   - `TEST_MYSQL_DSN=$ORDER_DSN go test -race ./internal/services/order -run 'TestAC50ReviewConcurrent' -count=1`
   - expected：`WHERE refund_id=? AND state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`；REVIEW 不被洗；0 行→Conflict
 - [ ] **T1a** TCC 准入读 REVIEW（O1b/O2b/O13b）

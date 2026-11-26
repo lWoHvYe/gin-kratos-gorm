@@ -363,6 +363,23 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - **NOT RELEASE**; R0.4 scoped PASS only. AC-27 still AC-REF; AC-50-FIX-01
   blocked.
 
+### 2026-11-26 T0 release unit PASS (scoped)
+
+- Reviewer `84f5acd` (base `a34c845`, head `c796580`, code `e374384`):
+  **T0/T0b/T0c PASS (scoped)**, `NOT RELEASE`, no AC-VERIFIED.
+- Real MySQL 8.4.13 independent schemas: order `TestAC50Review` PASS
+  (11.965s), `-race` PASS (13.370s); fulfillment `TestCancelIfCreated` PASS
+  (2.011s); existing `TestAdmitRefund*` PASS; `make proto-guard` OK;
+  `migrations` diff empty.
+- `NO_WAYBILL` does not create a row; REVIEW persisted with typed details,
+  existing-first; no PRE/POST outbox/release/`Payment.Refund`; Tx2 CAS
+  `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`; REVIEW cannot be
+  washed to PRE.
+- Residual: unknown/future probe status lacks a T0 test (code defaults
+  `Unavailable`); partial `CONSUMED+NO_WAYBILL` still writes REVIEW until T3;
+  T1/T2/T3 not landed -- **must not deploy alone**. Wire token is
+  `NO_WAYBILL` (ADR `<NO_WAYBILL>` is a placeholder); record in Brief.
+
 ### 2026-11-26 human approval C-5 + P5
 
 - Director approved **ADR 0.6 errata** (`ADR_APPROVED`, C-5) and the

@@ -25,6 +25,8 @@
 
 > **范围声明**：本报告只审 R0.3-R2 的台账/证据与回归，不审 R0.4 实现（另见 `REV-PAY-SETTLE-01-R0.4.md`：FAIL）。PASS 只覆盖本报告 `review_scope`，不是 Spec 全量验收，不是 Release PASS，也不是 Phase 0-R closeout。
 
+> **2026-11-27 追加**：R0.3-R1c（code `9a57d01`）已实现并验证 AC-27A 第 5/6 条；本报告 §1.2/§2 中“未实现/未覆盖”的表述是 **2026-11-26 历史状态**，已被追加段取代。Phase 0-R closeout 结论见文末：**NOWB-01 OPEN、LIVE-01 BLOCKED、AC-27 仍 AC-REF、NOT RELEASE**。
+
 ---
 
 ## 0. 结论
@@ -250,3 +252,94 @@ TEST_MYSQL_DSN=.../mall_integration_reviewer_order2 \
 **Reviewed-by**：`human (merge pending)`
 **日期**：2026-11-26
 **报告**：`docs/collab/qc-reports/REV-PAY-SETTLE-01-R0.3-R2.md`
+
+
+---
+
+# 2026-11-27 Phase 0-R closeout 追加：AC-27-NOWB-01 / AC-27-LIVE-01
+
+| 项 | 值 |
+|---|---|
+| change_id | `PAY-SETTLE-01` |
+| Tier | **L2（确认）**：资金/履约准入人工终态与重放入口；不降级 |
+| review_scope | **只评估** `AC-27-NOWB-01` / `AC-27-LIVE-01` 能否用现有证据关闭；不新写代码；不重开 R0.3-R1c/T5 |
+| base | **`ce0f6b4`**（R0.3-R1c resume） |
+| code head | **`9a57d012254fcad8c34d9af7c48b2aa398c36ccb`**（R0.3-R1c；此后无 `internal/`/`migrations/` 变化） |
+| head | **`474700d8a71361dc128e2520534650384f8057b1`**（Phase 0-R resume；docs-only after code） |
+| 契约输入 | SPEC-0001 v1.5 §16.2 `:863-864`、AC-27A `:632-633`；`REV-PAY-AC50-REVIEW-01-FINAL.md`；`docs/ops.md` AC-72 runbook/re-arm；AC-61/62 台账 |
+| verification | §A：现有 `TestAC50ReviewAuditAndRearmRetention|TestAC50ReviewConsumerNoAutoPre`（1.743s）与真实 NATS `TestRefundAdmittedConsumerReviewAndDuplicate`（2.019s）在 HEAD 474700d 复跑 PASS；`migrations` 空；无新代码 |
+| release_status | **NOT RELEASE** |
+| overall verdict | **FAIL（closeout scoped）**：NOWB-01 **OPEN**，LIVE-01 **BLOCKED**；AC-27 保持 **AC-REF** |
+
+## A. 现有测试复跑（证明“测试/runbook ≠ 运维能力”）
+
+```bash
+# MySQL 8.4.13，独立 schema
+TEST_MYSQL_DSN=.../mall_integration_nowb go test ./internal/services/order \
+  -run 'TestAC50ReviewAuditAndRearmRetention|TestAC50ReviewConsumerNoAutoPre' -count=1 -v
+TEST_MYSQL_DSN=.../mall_integration_nowb_ff TEST_NATS_URL=nats://127.0.0.1:4222 \
+  go test ./internal/services/fulfillment -run 'TestRefundAdmittedConsumerReviewAndDuplicate' -count=1 -v
+```
+
+| 测试 | 结果 | 能证明什么/不能证明什么 |
+|---|---|---|
+| `TestAC50ReviewAuditAndRearmRetention` | **PASS 1.743s** | re-arm CAS/审计/版本/`created_at` 保留；**测试模拟，不是 ops 入口** |
+| `TestAC50ReviewConsumerNoAutoPre` | **PASS（同轮）** | REVIEW replay 不自动 PRE；**不是 DLQ 租约恢复** |
+| `TestRefundAdmittedConsumerReviewAndDuplicate` | **PASS 2.019s** | 测试内 DLQ/重复 PRE/POST no-op；**不是 AC-61 人工重放入口** |
+| `migrations` / 生产代码 | **无变化** | `git diff 9a57d01..HEAD -- internal migrations` 为空 |
+| selfcheck R0.3-R1c | AC-27A 5/6 PASS（9a57d01） | 不是 NOWB/LIVE 终态 |
+
+## B. AC-27-NOWB-01：**OPEN（不能关闭）**
+
+SPEC 终态（`docs/specs/0001-fulfillment-quantity-split.md:863`）：
+① Fulfillment S6 取消证据 + ops re-arm→PRE；② 无法补齐→申请保持 PENDING/人工队列，不写 PRE/不打款/不释放/不自动关闭，人工放弃须 AC-62 + SPEC-0002 owner 书面口径。
+
+| 检查 | 结论 | 文件:行号 |
+|---|---|---|
+| O19 普通售后 REVIEW 无 `refund_applications` 行 | **PASS（保持不误持久化）** | `internal/services/order/ac50_review_integration_test.go:751` |
+| O22 第 8 次 REVIEW 仍 PENDING、非 REVIEW 才 FAILED_PERMANENT | **PASS（不自动终态）** | `internal/services/aftersales/review_task_integration_test.go:64` |
+| O20 审计/re-arm 保留 canonical/version/created_at | **PASS（测试模拟）** | `internal/services/order/ac50_review_audit_fault_test.go:18` |
+| runbook 人工队列查询/SLA/不自动关闭 | **PASS（流程文本）** | `docs/ops.md:853`（明细）、`:871`（never auto-close） |
+| runbook re-arm 步骤（ticket/audit/CAS/replay） | **PASS（文本步骤）** | `docs/ops.md:895-905` |
+| **终态①：真实 S6 证据 + ops re-arm→PRE 的实际入口** | **OPEN/FAIL** | runbook 仅说“only with real S6 evidence ... Replay”（`docs/ops.md:895-905`），没有 S6 证据登记/校验工具、没有 ops replay 入口；`TestAC50ReviewAuditAndRearmRetention` 是测试。 |
+| **终态②：无法补齐→人工队列 + 人工放弃 AC-62** | **OPEN/FAIL** | `docs/ops.md:871` 仅禁止自动 `FAILED_PERMANENT`，没有人工放弃流程/AC-62 授权入口；AC-62 台账仍 **AC-REF**（`docs/collab/ac-coverage.tsv:31`）。 |
+| 组保持未关闭/不打款/不释放 | **PASS** | `docs/ops.md:863-871`；R1c 读模型保持 open；T5/T6 测试 |
+| **NOWB-01 整体** | **OPEN（FAIL closeout）** | ①②均无真正可执行的运维闭环；O19/O22/O20+runbook 只能证明“保持未关闭/不自动收敛/可审计 re-arm”，不能证明终态可执行。 |
+
+**最小剩余工作（不新写代码，登记）**：① 由 Fulfillment/ops 提供真实 S6 证据的登记/校验与授权工单，ops 用现有 re-arm CAS 后以 `AdmitRefund`/等价 replay 入口重放；② 定义 AC-62 人工放弃/`FAILED_PERMANENT` 的授权与审计流程（AC-62 实现或书面口径）；owner Developer/ops/Fulfillment，expiry 2026-12-31。未完成前 AC-27 不得 AC-VERIFIED。
+
+## C. AC-27-LIVE-01：**BLOCKED（不能关闭）**
+
+SPEC 终态（`docs/specs/0001-fulfillment-quantity-split.md:864`）：DLQ/租约丢失导致 `PENDING_REMOTE` 永久不收敛时，提供 **AC-61 人工重放入口**；重放收敛→PRE/关闭，仍冲突→NOWB 人工队列。
+
+| 检查 | 结论 | 文件:行号 |
+|---|---|---|
+| T6c NATS DLQ/重放用例 | **PASS（测试范围）** | `internal/services/fulfillment/review_consumer_integration_test.go:24`；仅消费者测试 |
+| AC-61 实际人工重放入口（按 payment_no/refund_id/after_sale_no/batch_id） | **不存在** | `api/proto/mall/v1/mall.proto:493` 只有内部 `AdmitRefund`；`:1324` 的 `ReplayDLQ` 是秒杀，不是退款；无 ops/BFF/CLI 入口 |
+| runbook “Replay the original refund_id” | **仅文本** | `docs/ops.md:899`（无命令/工具/权限入口） |
+| AC-61 台账 | **AC-REF** | `docs/collab/ac-coverage.tsv:30`（manual replay deferred） |
+| **LIVE-01 整体** | **BLOCKED** | T6c 是测试/runbook，不是运维能力；租约丢失/DLQ 无实际 replay 入口，故不可关闭。 |
+
+**最小剩余工作（BLOCKED）**：实现 AC-61 人工 replay 入口（ops 鉴权 + 审计 + 幂等，按 `payment_no/refund_id/after_sale_no/batch_id`），覆盖 DLQ 重放与 AfterSales durable task 租约恢复；owner ops/Developer/AfterSales，expiry 2026-12-31；需新 change_id/Plan（超出本次只读范围）。未完成前不得用测试冒充运维能力。
+
+## D. AC-27 台账结论
+
+- AC-27A 5/6 的 R0.3-R1c **PASS** 仍成立（`9a57d01`；`REV-PAY-SETTLE-01-R0.3-R1c.md`）。
+- **AC-50-FIX-01**：写路径已由 L2 `PAY-AC50-REVIEW-01` 交付（AC-50 **AC-VERIFIED**）。
+- **AC-27-NOWB-01**：**OPEN**；**AC-27-LIVE-01**：**BLOCKED**。
+- 因此 **AC-27 保持 AC-REF**，不升级 AC-VERIFIED；`ac-coverage.tsv` 的 AC-27 reason 已更新为上述缺口，status 仍 AC-REF。
+- **Phase 0-R 不可收口**；`NOT RELEASE`；T2/T3/T4.4/T5/Release 继续 gated。
+
+## E. 残余 / 边界
+
+1. NOWB 终态①的 S6 证据工作流/ops replay 入口，终态②的 AC-62 人工放弃；owner Developer/ops/Fulfillment，2026-12-31。
+2. LIVE AC-61 人工 replay 入口缺失；owner ops/Developer/AfterSales，2026-12-31；`[BLOCKED]`。
+3. AC-61/AC-62 台账仍 AC-REF；AC-72 ALERTS/ENTRY 仍 DEFERRED；F7b/W8 残余不变。
+4. 本报告只做评估，未改生产代码/SPEC/ADR/migrations；`NOT RELEASE`。
+
+---
+
+**Actor**：`reviewer-r04`（Reviewer）
+**Reviewed-by**：`human (merge pending)`
+**日期**：2026-11-27
+**报告**：`docs/collab/qc-reports/REV-PAY-SETTLE-01-R0.3-R2.md`（追加 Phase 0-R closeout 段）

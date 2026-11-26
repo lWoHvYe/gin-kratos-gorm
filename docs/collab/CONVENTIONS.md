@@ -145,8 +145,6 @@ L0/L1 的 `Tier`/`Tier-Rationale`/`Spec-Ref` 按 §2.3 记录；L2 另需 `spec_
 > **历史说明**：pair 线程协议已于 2026-11-25 退役（D-LC-2）；角色间交互改为经 Lead 路由（`AGENTS.md` §1.0），不再新开线程。原四项职能由 `docs/review-tracking.md`、Lead Plan/Tasks、REV 报告与 `ac-coverage.tsv` 承接。
 >
 > 三个 pair 目录 `docs/collab/{po-architect,architect-developer,developer-reviewer}/threads/` 保留为存档，**不得删除**；`ac-coverage.tsv` 历史 36 行的 `thread` 列仍指向它们、不回改，新延期行改为 `review-tracking/<change_id>`（见 §6.3）。
->
-> 原协议摘要（只作历史参考，不具备现行效力）：路径 `docs/collab/<pair>/threads/T-NNN.md`；一问一线程、编号递增不复用；状态 `OPEN -> ANSWERED -> CLOSED`；文首 YAML 记 `id / title / opened_by / opened_at / blocking / status / spec / adr / closed_by`；结论必须回写 Spec/ADR。
 
 ### 4.1 Reviewer 审查附加元数据（仍适用；线程本身已存档）
 
@@ -216,7 +214,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 | 阀门            | 人工核对要点（原机器检查范围）                  | 不能证明                                 |
 | --------------- | ----------------------------------------------- | ---------------------------------------- |
-| G-1 所有权/范围 | 受管路径、Role/Exception 是否存在、线程是否存在、HEAD 的 `change_id`/`Actor`/`Reviewed-by` 是否存在且 `Actor != Reviewed-by` | 跨提交 Role 并集能证明实际作者；架构合理 |
+| G-1 所有权/范围 | 受管路径、Role 是否存在、§3 中按 Tier 适用字段是否齐备（至少 `change_id`/`Tier`/base/head/`allowed_paths`；L2 另见 §3）、HEAD 的 `Actor`/`Reviewed-by` 是否存在且 `Actor != Reviewed-by` | 跨提交 Role 并集能证明实际作者；架构合理 |
 | G-2 契约版本    | Spec version、索引、变更记录                    | 业务规则正确                             |
 | G-3 AC-REF      | AC 编号、测试引用、延期字段                     | 测试已执行、未 SKIP、断言充分            |
 | G-4 到期        | owner/expiry/status、到期和续期记录             | 延期是否合理、残余风险是否可接受         |
@@ -227,9 +225,7 @@ AC-REF 不得命名为“覆盖率”或“验收率”。Go 测试需要执行�
 
 ### 7.2 执行器能力（历史记录，retired 2026-11-25）
 
-原 `scripts/collab_gates.py`、`scripts/check-collab-gates.sh`、`scripts/test-collab-gates.sh` 及 `make gates` / `make gates-strict` / `make gates-test` 随整体退役删除，`make verify` 已不含 `gates`，CI 已无 `collab-gates` job。以下限制清单仅为历史记录，**不再要求任何人运行或修复**：只实现 G-1/G-2/G-3 而无 G-4/`--release`；输出 `AC coverage` 而非 `AC-REF`；默认范围 `HEAD^..HEAD`；G-1 的 Role 并集只能提示；Makefile 未透传 `RANGE/RELEASE`、CI 未覆盖全部 docs/prompt 变化。
-
-退役后仍成立的只有 §7 的口径要求：**文档中的目标规则不得被描述成已经通过的机器能力**。
+退役后仍成立的只有 §7 的口径要求：**文档中的目标规则不得被描述成已经通过的机器能力**（原执行器能力边界随工具退役作废，见 §7 头部）。
 
 ---
 

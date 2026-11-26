@@ -347,6 +347,42 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   pre-ship `REFUNDING` closure; R-5 is SPEC §7.5 drift for PO next version.
   Pending QC; no code until accepted.
 
+### 2026-11-26 GOV-SDD-HYGIENE-01: P1 governance text cleanup (L2 light path)
+
+- **Human decision (2026-11-26, Director)**: approved the P1 cleanup **without**
+  a Spec Kit path-boundary declaration. Project-structure alignment with Spec
+  Kit is a separate later evaluation (`SDD-STRUCT-ALIGN-01`, not started).
+- **Change scope**: `AGENTS.md:15` (§0.5) and `AGENTS.md:77` (§2 item 4) retire
+  live pair-thread wording (Lead routing + historical archive);
+  `docs/collab/CONVENTIONS.md` removes the §4 original protocol summary,
+  replaces the G-1 "thread exists" check with Tier-applicable §3 fields, and
+  removes the §7.2 executor-limitation history. No new rule/gate/state; no Spec
+  Kit boundary text.
+- **Change input**: base `472e64f`; head = reviewed working tree; allowed_paths:
+  `AGENTS.md`, `docs/collab/CONVENTIONS.md`,
+  `docs/collab/qc-reports/QC-GOV-SDD-HYGIENE-01.md`,
+  `docs/collab/qc-reports/REV-GOV-SDD-HYGIENE-01.md`, `docs/review-tracking.md`;
+  forbidden: code/contracts/migrations/`scripts/**`/CI/`.specify/**`/
+  `docs/specs/**`; tests: docs-only, none claimed.
+- **Benefit (grep-checkable)**: `线程只承载` / `线程是否存在` live checks gone;
+  §4 protocol summary and §7.2 limitation list gone; G-1 references §3 fields.
+- **Stop condition**: only the two governance files in this increment; if the
+  cleanup needs constitution/ADR/scripts/CI or a Spec Kit boundary, stop and
+  split. Revert if the next governance review finds the removed history still
+  needed or new ambiguity appears.
+- **Delta audit (constitution :96, 2026-11-26)**: `AGENTS.md` blob `e7759cd`,
+  `CONVENTIONS.md` v3 blob `d465d50`; 5 hunks; all roles must reread both;
+  `prompt/**` unchanged; no MEMORY running-state changes. Known MINOR accepted:
+  constitution `:96/:75` remains broader (delta audit may still cite threads);
+  future PATCH, not a blocker.
+- **Actors**: Architect `arch-gov`, QC `qc-gov` (READY, 0 BLOCKER/0 MAJOR),
+  Reviewer `reviewer-gov` (PASS, `REV-GOV-SDD-HYGIENE-01`, base `472e64f`,
+  5 hunks, `NOT RELEASE`); human approval 2026-11-26 (Director).
+- **Tier**: L2 (governance text is always L2, `AGENTS.md:85`; only two
+  governance files → light path, `AGENTS.md:84`/constitution `:77`/
+  `CONVENTIONS.md:94`). `baseline_impact`: 不涉及 INV (no
+  behavior/contract/status change).
+
 ### 2026-11-26 R0.4e-R2 PASS (scoped): F-1/F-2 closed
 
 - Reviewer `49d030b` (base `da0cdd1`, head `4549ccb`): **R0.4e-R2 PASS

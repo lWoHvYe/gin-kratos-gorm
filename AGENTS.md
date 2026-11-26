@@ -12,7 +12,7 @@
 2. **拒绝“自我妥协”**：严禁为了完成 Goal，悄悄砍掉复杂逻辑、挑软柿子捏或用 `try-catch` 吞掉异常。遇到极难处理的核心链路，必须停下来出设计，绝不允许“假装完成”。
 3. **防御性架构 (Fail-Closed)**：在资金、库存链路中，所有未预期的异常、超时、配置缺失，必须直接报错阻断或进入持久化补偿，绝不允许静默放行。
 4. **人类指挥官绝对裁决权 (Supreme Command)**：人类只负责“业务裁决”与“架构方向审批”，严禁把人类当成“人肉语法检查器”。但当人类介入并给出业务 Trade-off 决策时（如：“这次先不管极端的网络脑裂”），AI 必须无条件服从并在文档中记录该豁免。
-5. **上下文最小化与隔离原则 (Context Isolation)**：严禁跨角色传递非结构化的聊天记录。所有跨角色信息必须通过精简、版本化的交付物 (`Spec`/`ADR`/`QC Report`/代码/测试报告) 交接；线程只承载结构化问题、裁决和 canonical 指针。下游角色只需要最终契约与明确范围。
+5. **上下文最小化与隔离原则 (Context Isolation)**：严禁跨角色传递非结构化的聊天记录。所有跨角色信息必须通过精简、版本化的交付物 (`Spec`/`ADR`/`QC Report`/代码/测试报告) 交接，且只经 Lead 路由（§1.0）；结论写进对应 canonical 产物，`docs/review-tracking.md` 只承载结构化裁决与 canonical 指针（pair 线程已退役，仅存档）。下游角色只需要最终契约与明确范围。
 
 ---
 
@@ -74,7 +74,7 @@
     * Reviewer 提出 FAIL 时，Dev **绝不能**为了消除报错而打补丁。
     * 如果判定为“架构缺陷”，Dev 必须停止写代码，要求打回给 Architect 修改 ADR。
 3. **阶梯门禁**：产生新 Spec/ADR 时（L2），Spec 与 ADR 均须经过 QC 和人类批准后才能进入下游；L0/L1 按 §2.7 减免，具体流程以 `docs/collab/CONVENTIONS.md` 为准。
-4. **验收语义**：AC 文本引用不等于 AC 已验收；线程 CLOSED、实现 PASS、代码合入与 Release PASS 不得混用。跨服务变更必须验证受影响的既有基线，不得只验证新增 AC。
+4. **验收语义**：AC 文本引用不等于 AC 已验收；历史线程 CLOSED（仅存档）、实现 PASS、代码合入与 Release PASS 不得混用。跨服务变更必须验证受影响的既有基线，不得只验证新增 AC。
 5. **Plan/Tasks 与 Stop-the-line**：P0/跨服务/资金/库存/权限/状态机变更必须先有 Plan/Tasks 与 AC 证据矩阵；Plan 未批准不得写业务代码。QC/Reviewer FAIL 后冻结 `change_id`，直到修复 Plan、契约裁决与重审完成。
 6. **Actor/change_id**：受管交付 MUST 使用 `change_id`、`Actor`、`Reviewed-by`、`Tier` trailer；同一 `change_id` 的 `Actor` 不得等于 `Reviewed-by`。
 7. **变更分级 (L0/L1/L2)**：判据与流程以 `docs/collab/CONVENTIONS.md` §2.3 为准；无法明确归入 L0/L1 的一律 L2，命中任一 L2 触发条即 L2。

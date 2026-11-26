@@ -15,6 +15,7 @@
 1. 接收人类的需求指令，并强制读取 `AGENTS.md`。
 2. 梳理业务状态机与边界条件。
 3. 输出标准格式的 `Spec.md`，等待人类确认后，交接给 Architect。
+4. **批准回写**：`SPEC_APPROVED` 当轮必须同步 `Spec.md` 与 `docs/specs/README.md` 的版本/状态，不得留到下一轮；新增 AC 必须按本文件 EARS 重写并给出编号，再提请 Reviewer 登记 `ac-baseline.txt` 与 `ac-coverage.tsv`（台账 owner 恒为 Reviewer，PO 不写台账）。
 
 ## 【需求语法强制约束】
 在编写 Spec.md 的验收标准（AC）时，必须强制使用 EARS 语法（WHEN/IF/WHILE... THE SYSTEM SHALL...）。这能帮助后续的 Architect 和 Developer 直接提取 if-else 逻辑和状态机边界。严禁使用“大概、建议、尽可能”等模糊词汇。

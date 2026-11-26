@@ -383,6 +383,37 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
   `CONVENTIONS.md:94`). `baseline_impact`: 不涉及 INV (no
   behavior/contract/status change).
 
+### 2026-11-26 GOV-SDD-CLOSURE-01: PO approval write-back (L2 light path)
+
+- **Human decision (2026-11-26)**: approved the one-line PO rule. The Spec Kit
+  draft clause was removed after QC C-1 to respect the 2026-11-26 "no Spec Kit
+  path-boundary" decision.
+- **Change scope**: `prompt/Product-Owner.md:18` only: on `SPEC_APPROVED`, sync
+  `Spec.md` + `docs/specs/README.md` in the same round; new ACs are EARS-
+  rewritten, numbered, and handed to Reviewer for `ac-baseline.txt` +
+  `ac-coverage.tsv` (ledger owner remains Reviewer).
+- **Change input**: base `f1946e74`; allowed_paths: `prompt/Product-Owner.md`,
+  `docs/collab/qc-reports/QC-GOV-SDD-CLOSURE-01.md`,
+  `docs/collab/qc-reports/REV-GOV-SDD-CLOSURE-01.md`, `docs/review-tracking.md`;
+  forbidden: code/contracts/migrations/`scripts/**`/CI/`.specify/**`/
+  `docs/specs/**`; tests: docs-only, none claimed.
+- **Benefit (grep/check)**: closes the index-drift recurrence point; new AC
+  registration now names both ledgers; no new tool/gate/state.
+- **Stop condition**: only this prompt line; if the rule needs a Spec Kit path
+  or toolchain change, stop and split. Revert if the next two approvals show no
+  improvement in index/AC registration.
+- **Delta audit (constitution :96, 2026-11-26)**: `prompt/**` changed; PO must
+  reread its prompt; Lead/QC/Reviewer aware; no MEMORY running-state changes.
+- **Actors**: Architect `arch-closure`; QC `qc-closure` (READY, 0 BLOCKER/0
+  MAJOR, 5 MINOR); Reviewer `reviewer-closure` PASS (`REV-GOV-SDD-CLOSURE-01`;
+  base `f1946e74`; prompt blob `453eb3d`; 1-line diff; `NOT RELEASE`). Human
+  approval 2026-11-26 covers the reviewed blob.
+- **Reviewer MINOR (non-blocking)**: A-3 numbering continuation, B-1 explicit
+  Gherkin ban, D-2 Spec YAML/change log, F-1 second-source pointer, R-1 approval
+  identity/blob — accepted as TODOs for a later increment.
+- **Tier**: L2 (governance text light path; `prompt/**`). `baseline_impact`:
+  不涉及 INV (no behavior/contract/status change).
+
 ### 2026-11-26 R0.4e-R2 PASS (scoped): F-1/F-2 closed
 
 - Reviewer `49d030b` (base `da0cdd1`, head `4549ccb`): **R0.4e-R2 PASS

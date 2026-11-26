@@ -455,6 +455,20 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 PAY-SETTLE-01 Phase 0-R CLOSED (scoped)
+
+- Reviewer `67fd571`: Phase 0-R **CLOSED (scoped)**, `NOT RELEASE`; not P0
+  closure/merge.
+- R0.1 PASS; R0.2 C-01..C-05 PASS; R0.3 **AC-27 AC-VERIFIED** (waiver C+A),
+  AC-27A via R0.3-R1c, regression/INV/12 orphan checked; R0.4 Addendum
+  ACCEPTED, R0.4e-R2 F-1/F-2 CLOSED; R0.5 matrix SPEC v1.10/v1.5 +
+  migration scope.
+- Architect R-2 now SUPERSEDED/WITHDRAWN (docs-only commit).
+- Residual: 9 MINOR, INV-44/46/47/49/50 AC-REF/DEFERRED, AC-61/62 AC-REF,
+  AC-72 ALERTS/ENTRY DEFERRED, F7b BLOCKED, UAT/prod maintenance window not
+  executed, tasks/evidence-matrix MINOR drift.
+- **Not included**: T2/T3/T4.4/T5, P0-A/B/C, Release. Next: T5/AC-39…68.
+
 ### 2026-11-27 OPS-P5b PASS; AC-27 AC-VERIFIED; PAY-OPS-REPLAY-01 complete
 
 - Reviewer `bbcf8f6` (base `7b7beb5`, head `a8fc1b3`): OPS-P5b PASS scoped;

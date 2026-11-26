@@ -16,12 +16,14 @@ Status: **APPROVED Plan (2026-11-24)**。本文件是 **Plan 视图**，不拥�
 ## Phase 0-R — 追溯复核整改（2026-11-25，RETRO FAIL；Director 已接受偏差，以下为 P0 收口/Release 前置）
 
 - [x] **R0.1** 真实迁移 apply（fresh DB）`migrations/order/0017-0020` + `migrations/fulfillment/0010`，绑定精确 HEAD；补 `chk_switch_settled_expiry`；修复 0018 重入/部分失败；记录日志（Owner: Developer；依赖: 无）——PASS 2026-11-25（`42a8db5`/`aaef9f9`，见 REV-R0.3）
-- [ ] **R0.2** Reviewer 对 C-01..C-05 出**日期化** verdict（FAIL 2026-11-25：C-04 release RPC 缺；AC-27/INV-45..50 台账缺；见 REV-R0.2）——**C-01..C-05 contract PASS（R0.2-R2，2026-11-25，B1 已撤回）**；overall 仍 FAIL 仅因 B2/B3，由 R0.3/R0.5 收口
-- [ ] **R0.3** 台账：AC-27、回归 AC-14/21/25/27/31/32、INV-45..50 的覆盖/延期决策；12 orphan 去留（FAIL 2026-11-25：AC-27 AC-REF、回归 deferred、INV 描述缺口；见 REV-R0.3）
-- [ ] **R0.4** config fail-closed 测试（`settlement_switch_approvals` 读取）；**C-04 release event/schema/consumer 验证（无 RPC）**；`group_no` 判别 CHECK；24h SLA CHECK（Owner: Developer + Architect；依赖: R0.2）
-- [ ] **R0.5** evidence-matrix 刷新到 SPEC v1.10；migration scope 与 ADR 对齐（Owner: Lead + PO；依赖: R0.3）
+- [x] **R0.2** Reviewer 对 C-01..C-05 出**日期化** verdict（FAIL 2026-11-25：C-04 release RPC 缺；AC-27/INV-45..50 台账缺；见 REV-R0.2）——**C-01..C-05 contract PASS（R0.2-R2，2026-11-25，B1 已撤回）**；overall 仍 FAIL 仅因 B2/B3，由 R0.3/R0.5 收口
+- [x] **R0.3** 台账：AC-27、回归 AC-14/21/25/27/31/32、INV-45..50 的覆盖/延期决策；12 orphan 去留（FAIL 2026-11-25：AC-27 AC-REF、回归 deferred、INV 描述缺口；见 REV-R0.3）
+- [x] **R0.4** config fail-closed 测试（`settlement_switch_approvals` 读取）；**C-04 release event/schema/consumer 验证（无 RPC）**；`group_no` 判别 CHECK；24h SLA CHECK（Owner: Developer + Architect；依赖: R0.2）
+- [x] **R0.5** evidence-matrix 刷新到 SPEC v1.10；migration scope 与 ADR 对齐（Owner: Lead + PO；依赖: R0.3）
 
 ### Phase 0-R closeout plan（Lead，2026-11-25；Base `9111740`，WIP `90b502c`）
+
+**2026-11-27：Phase 0-R CLOSED（scoped）**，见 `REV-PAY-SETTLE-01-PHASE0R-CLOSEOUT.md`；P0 closure 仍需 T5/AC-39…68，T2/T3/T4 在 P0 closure 之后。
 
 Scope：只做 R0.3/R0.4/R0.5 收口，不进入 T2/T3/T4/P3；无 Reviewer 日期化 verdict + 人类批准前不标 AC-VERIFIED、不 merge、不 Release。Tier L2（事件/迁移/deploy）。本小节即 R0.3 FAIL 与 R0.4 WIP 的修复/重审 Plan（宪法 Workflow 9）。
 

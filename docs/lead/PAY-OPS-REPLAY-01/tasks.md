@@ -13,9 +13,9 @@ Status: **DRAFT — pending OPS-P1..P3**；change_id `PAY-OPS-REPLAY-01`；Paren
 ## Phase 1 — 演练
 
 - [ ] **OPS-P4** Developer `scripts/drill-ops-replay.sh` + 证据：DLQ 重放、租约丢失重放、NOWB re-arm、NOWB abandon、重复/越权/失败；真实 MySQL 8.4 + NATS；绑定 HEAD（Owner: Developer）
-- [ ] **OPS-P5b** test-only 收敛验证：真实 `aftersale.completed` consumer 与 worker/TCC re-drive 到 PRE/POST（不改生产代码；Owner: Developer + Reviewer）
-- [ ] **OPS-P5** Reviewer 核对规程/drill/收敛；按 waiver 决定 AC-27 是否 AC-VERIFIED（Owner: Reviewer）
-- [ ] **OPS-P6** 交回 PAY-SETTLE-01（Owner: Lead）
+- [x] **OPS-P5b** test-only 收敛验证：真实 `aftersale.completed` consumer 与 worker/TCC re-drive 到 PRE/POST（不改生产代码；Owner: Developer + Reviewer）
+- [x] **OPS-P5** Reviewer 核对规程/drill/收敛；按 waiver 决定 AC-27 是否 AC-VERIFIED（Owner: Reviewer）
+- [x] **OPS-P6** 交回 PAY-SETTLE-01（Owner: Lead）
 
 ## Stop
 

@@ -455,6 +455,20 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 OPS-P5b PASS; AC-27 AC-VERIFIED; PAY-OPS-REPLAY-01 complete
+
+- Reviewer `bbcf8f6` (base `7b7beb5`, head `a8fc1b3`): OPS-P5b PASS scoped;
+  **AC-27 upgraded to AC-VERIFIED** under human waiver C+A.
+- Evidence: real `RunAfterSaleConsumer` (REFUNDING→REFUNDED; admission stays
+  REVIEW_REQUIRED/PENDING_REMOTE; no release; duplicate idempotent; invalid
+  JSON DLQ) + TCC re-drive (CANCELLED→PRE / SHIPPED→POST; exactly one
+  RefundBatch). Test-only; `migrations` empty.
+- AC-27A via R0.3-R1c only; AC-61/62 remain AC-REF; AC-72/F7b not upgraded.
+  NOT RELEASE.
+- `PAY-OPS-REPLAY-01` complete (manual runbook + drill + convergence; tool
+  design withdrawn). Parent Phase 0-R R0.3 now satisfied; next: Architect
+  withdraws R-2, Phase 0-R closeout, then T5.
+
 ### 2026-11-27 OPS-P4 PASS scoped; AC-27 AC-REF (convergence gap)
 
 - Reviewer `b1e8409`: OPS-P4 runbook/drill PASS scoped, `NOT RELEASE`.

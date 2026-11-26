@@ -61,3 +61,63 @@
 ## 结论：**BLOCKED**
 
 Plan 的契约方向与 ADR 0.5 一致，但现稿无法在不越界/不返工的前提下开工：缺 R-1（Fulfillment）与 proto 任务、allowed_paths 与 ADR:24 不一致、T6 前置与 CAS 谓词不足（可把 REVIEW 洗成 PRE）、T5 文案与 SPEC:503 冲突、AC-72 ops runbook 无路径。修订 #1–#7 后可转 READY；#8–#14 可在 P5 前补齐。除 #4 需要 Architect 以 errata/Brief 固定 CAS 谓词外，其余只需 Lead 修 Plan，无需重开 SPEC/ADR 状态机设计。
+
+---
+
+## P3b focused re-review（Plan/Tasks 重写后；HEAD `a1cc809`，ADR errata 0.6 工作树）
+
+只核上轮 7 BLOCKER + 7 MAJOR；未重复全量评审，未执行测试（只读）。
+
+| 上轮 # | 状态 | 证据 / 残余 |
+|---|---|---|
+| 1 Fulfillment `<NO_WAYBILL>` 任务 | **CLOSED** | T0：plan.md:41、tasks.md:25-27（F1/F1b/F2–F6/F8 + 文件/命令/expected） |
+| 2 proto / `api/gen` 矛盾 | **CLOSED** | T0 含 proto+`make proto`（plan.md:41）；forbidden 仅“`api/gen/**` 手改”（plan.md:15）；ADR 0.6:24 列为生成物 |
+| 3 原子性/发布顺序 | **CLOSED** | 发布单元（plan.md:13）：Fulfillment+Order 同一原子提交；拆分先 Fulfillment 后 Order |
+| 4 T6 CAS 倒置/谓词不足 | **CLOSED（含 C-5 门）** | T0c 前置并写死 `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`（plan.md:43,86；ADR 0.6 A8:447、W13:506、O11d:730）；**C-5 人类 errata 批准仍待办**（plan.md:33） |
+| 5 `order/worker.go` 不在 allowed | **CLOSED** | plan.md:14 含 `worker.go`（仅 gauge） |
+| 6 `docs/ops.md` runbook | **PARTIAL（BLOCKER 未闭）** | 路径/owner/C-5 errata 已补（plan.md:14、:12），但 §2/tasks **无任务、无 acceptance、无期限**；`docs/ops.md` 在 tasks 仅出现在 C-5 行（tasks.md:13）→ AC-72 后端段“查询/SLA/对账”与 §8.3 re-arm/存量 PRE 审计无证据路径 |
+| 7 BFF/gateway 文案越界 | **CLOSED** | plan.md:15 将 gateway 移出本 L2；无文案任务 |
+| 8 任务粒度 | **CLOSED** | T1a–e/T2a–c/T4a–b/T5a–b/T6a–d 拆分（plan.md:44-60） |
+| 9 allowed 过宽 | **CLOSED** | AfterSales 收窄到 `workers.go`、gateway forbidden、order 文件点名（plan.md:14-15）；残余 minor：`order/consumer.go` 未写“只读不改/需 Brief 论证” |
+| 10 test file/命令/expected + 环境 | **PARTIAL（BLOCKER 未闭）** | 每任务有文件/expected ✓，但命令多处不可执行：`...` 占位（tasks.md:35-43,45,50,53,56,59,61,65,71）；T5b 未加 `TEST_MYSQL_DSN=$ORDER_DSN`（tasks.md:63）；T6b 只有 `TEST_NATS_URL=...` 且缺 MySQL DSN（tasks.md:67）；T4a 包归属不明（tasks.md:56）；T8 “见 DoD” 无命令（tasks.md:73）；`-race` 仅覆盖 T0c（plan.md:68） |
+| 11 REVIEW 识别/8 次不 FAILED | **CLOSED（实现细节残留）** | T2c 绑 O22/O22b（tasks.md:49-51）；未写 typed gRPC details 识别方案（禁止字符串嗅探）→ T2b/T2c 实现时须固定 |
+| 12 零元终态/队列/AC-72 单列 | **PARTIAL** | O21 计数已绑（tasks.md:55-57）；零元冲突“有限重试→人工队列”终态无 acceptance（SPEC:434；ADR §4.1） |
+| 13 tsv 写入权 | **CLOSED** | T7 “Reviewer 写 tsv”（plan.md:61,75） |
+| 14 无迁移核验/owner | **CLOSED** | DoD `git diff --stat -- migrations` 为空（plan.md:80）；T5 owner 列已去掉，ops/Developer 分工由 plan.md:12 定义 |
+
+**新增残余（不在上轮清单，但影响 P5）**
+
+- **T0b/T0c 发布单元**：T0b 写 REVIEW、T0c 才加双谓词；若分两次部署，中间窗口仍可被迟到探测洗成 PRE。需声明 **T0/T0b/T0c 同一发布单元**（或 T0c 先行），否则违反 A12 的“原子”。
+- **F7b 未绑定**：ADR §10 的 F7b（迟到 `order.paid`/部分金额不转 PRE）未在任何任务 expected 中列出（T6b 仅 O14/O14b）。
+- **T1c expected 缺同事务断言**：标题写“Tx2 同事务写 batch/app/admission”，expected 只有 `MANUAL_HOLD`/`refundCalls==0`（plan.md:46、tasks.md:38-39）；应断言 `refund_batches.last_error` canonical 与“仅已有 `refund_applications` 行才镜像”。
+
+**P3b 结论：BLOCKED（窄口径，2 个剩余 BLOCKER + 3 个残余）**
+
+1. `docs/ops.md` runbook 有路径/owner 但无任务/验收/期限 → 补 **T5c**（owner ops，expiry 2026-12-31）：AC-72 查询/SLA/对账、§8.3 re-arm、存量 PRE 审计 SQL + expected 0 行/查询输出。
+2. 命令可执行性：删除全部 `...` 占位，逐任务写全 `TEST_MYSQL_DSN=$ORDER_DSN|$FF_DSN|$AS_DSN`（T5b 补 `ORDER_DSN`，T6b/T6c 补 MySQL DSN 与 `TEST_NATS_URL=nats://127.0.0.1:4222`），T8 给全量命令；`-race` 至少覆盖 T0c/T6a/T6b。
+3. 残余：T0/T0b/T0c 同一发布单元；F7b 绑定；T1c 同事务断言。
+
+C-5（ADR 0.6 人类 errata 批准）仍是 P5 前置门，不属于 Developer 评审阻断；上述 1–3 修订后可转 READY。
+
+---
+
+## P3c focused re-review（只核 P3b #6/#10 + 新残余）
+
+| P3b 项 | 状态 | 证据 / 残余 |
+|---|---|---|
+| #6 `docs/ops.md` runbook 无任务 | **CLOSED** | T5c：plan.md:57、tasks.md:67（owner ops、expiry 2026-12-31、证据=runbook 链接+演练记录，人工审阅）；allowed_paths 含 `docs/ops.md`（plan.md:14） |
+| #10 命令/环境 | **PARTIAL** | **Tasks 已补齐**（tasks.md:26-81：T1a–T6d/T8 全 env/包路径，T4a 拆两条 `:58-59`，T5b 补 `$ORDER_DSN` `:66`，T6b/c 补 MySQL+NATS `:71,73`，T8 按包拆三条 `:79-81`）；**Plan 表未同步**：plan.md:53 仍单条 T4a、plan.md:59 仍 `TEST_NATS_URL=...` 占位、plan.md:60 “同上”、plan.md:63 仍单 `$ORDER_DSN` 跑 `{order,aftersales,fulfillment}` 三包（违反 per-package schema，`docs/development.md:52-54`）；**`-race` 未落 T6a/T6b**（plan.md:69 要求，tasks.md:69,71 命令无 `-race`） |
+| T0/T0b/T0c 同一发布单元 | **CLOSED** | plan.md:13、tasks.md:5（分批顺序 Fulfillment → T0c → T0b） |
+| T1c 同事务断言 | **CLOSED** | plan.md:46、tasks.md:38-40（“同事务失败整体回滚”） |
+| T2a/T2b typed-details | **CLOSED** | plan.md:49-50、tasks.md:45-50（结构化 `result/reason/ticket`、禁字符串嗅探） |
+| F7b 绑定 | **CLOSED** | plan.md:59、tasks.md:70（T6b 含 F7b/W8/W9/W13） |
+| 零元终态/人工队列 | **未闭（新矛盾）** | plan.md:53、tasks.md:60 写“**零元不增加人工队列**”，与 SPEC:434（零元冲突“并告警、**进入人工队列**”）、ADR:412（有限重试后进人工队列）、ADR:581（仅“不进入 `REVIEW_REQUIRED` 计数/单列”）冲突；应为“不计入 REVIEW backlog（单列），仍进入零元人工队列”。否则实现会漏掉 AC-67 的人工队列 |
+
+**P3c 结论：BLOCKED（窄口径，2 项）**
+
+1. **零元人工队列表述**（plan.md:53、tasks.md:60）与 SPEC:434/ADR:412/581 冲突，需改为“不计入 `REVIEW_REQUIRED` backlog（单列），仍进入零元人工队列（AC-67/AC-72）”。
+2. **Plan 表与 Tasks 命令不一致**（plan.md:53,59-60,63）：同步为 tasks 的完整 env/按包命令；T6a/T6b 命令补 `-race`（或把 plan.md:69 的 `-race` 口径收窄为 T0c+显式列出）。
+
+其余 P3b 残余（T0 发布单元、T1c、T2 typed、F7b、#6 T5c）均已关闭；C-5（ADR 0.6 人类 errata 批准）仍为 P5 前置门。上述 1–2 修订后可转 READY。
+
+P3d: READY — T4a 双命令/零元 backlog 文案（plan.md:53、tasks.md:58-60）、T6a/T6b/T6c `-race`+DSN+NATS（plan.md:58-60、tasks.md:69,71,73）、T8 三包命令（plan.md:63、tasks.md:79-81）均已核对一致；C-5 仍为 P5 前置门。

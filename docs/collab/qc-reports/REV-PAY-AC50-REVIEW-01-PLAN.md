@@ -5,11 +5,11 @@
 | change_id | `PAY-AC50-REVIEW-01` |
 | Tier | **L2（确认）**：跨 Fulfillment/Order、资金/履约准入、既有 RPC 响应语义、共享 metrics；不适用 L1 减免 |
 | review_scope | **仅 L2-P4 Plan 可验证性**：Plan/Tasks 的 evidence path、AC 行、命令、HEAD 绑定、AC-69…72 台账/AC-72 三段、与 PAY-SETTLE-01 回归隔离。不审 SPEC/ADR 正文，不审实现 |
-| 被审 Plan | `docs/lead/PAY-AC50-REVIEW-01/plan.md`（Base `d2149c0`；文件当前提交 `752b3f5`）、`tasks.md` |
+| 被审 Plan | P4：`plan.md` Base `d2149c0` / 文件提交 `752b3f5`；**P4b**：工作树重写版 Base `a1cc809`（见 §6） |
 | 契约基线 | SPEC-0002 **v1.11 approved、ADR 0.5 ACCEPTED** 目前是**工作树未提交**（C-4 记录见 `docs/review-tracking.md:366-373`；提交 `70821c8`/`3c30b19` 仍是 in-review/DRAFT）；impact 0.3；QC R8 READY（`edebb85`） |
 | Actor / Reviewed-by | `reviewer-r04` / `human (Plan P5 pending)` |
 | release_status | **N/A（Plan 评审）**；PASS 只表示 Plan 可执行/可验证，不是实现/Release/AC-VERIFIED |
-| overall | **BLOCKED** |
+| overall | **P4 BLOCKED → P4b READY（conditional；见 §6）** |
 
 ## 0. 结论
 
@@ -42,3 +42,28 @@
 5. 修正 canonical、preseed partial、0 Payment 断言与回归隔离措辞。
 
 **Tier L2 确认；当前 Plan 不可交 P5。**
+
+---
+
+## 6. P4b focused re-review（2026-11-26，工作树 Plan/Tasks）
+
+**范围**：只复核上一轮 P4 的 blocker/MAJOR；Plan/Tasks 工作树，Base `a1cc809`，C-5 ADR 0.6 errata 待人类批准。
+
+| 上轮项 | P4b 判定 | 依据 |
+|---|---|---|
+| B1 任务→证据/命令/O 码/HEAD、一任务一不变量 | **CLOSED（残余 MINOR）** | `plan.md:39-62` 每任务已有 ADR §10 码、测试文件、命令、expected；T1/T2/T5/T6 已拆原子。T1a/T1b/T2a/T3/T4a/T5a/T6a/T6d 等命令仍用 `...` 省略 env 前缀，见残余 R1。 |
+| B2 AC-72 三段/AC-69…72 台账 | **CLOSED（残余 MINOR）** | `plan.md:71-75` 有 AC-72 后端/`REVIEW-REQUIRED-ALERTS-01`/`REVIEW-REQUIRED-ENTRY-01` 三段，`plan.md:61` T7 与 `tasks.md:72` 要求 3 段 tsv、不得整体 VERIFIED；exact owner/expiry/status 由 T7 填，见 R2。 |
+| B3 BFF 文案冲突 | **CLOSED** | `plan.md:14-15` 已移除 gateway；`plan.md:73-75` 保留 ENTRY-01 deferred；ADR 0.6 `:24-25` 删除 gateway 并允许 `docs/ops.md` runbook。 |
+| B4 C-4/ADR/HEAD 过期 | **CLOSED（残余 CONDITION）** | `plan.md:5,10-12,26-33`、`tasks.md:9-13` 已勾 C-1..C-4，Base `a1cc809`，Spec v1.11 approved/ADR 0.5 ACCEPTED；C-5 ADR 0.6 errata pending human，见 R4。 |
+| B5 allowed_paths 与 ADR 不一致 | **CLOSED（残余 MINOR）** | `plan.md:14` 已含 `order/worker.go`、`internal/platform/metrics/metrics.go`、`docs/ops.md`；与 ADR 0.6 `:24-25` 基本对齐。仍有两处待对齐，见 R3。 |
+| M1 canonical/partial/0 Payment | **CLOSED** | `plan.md:50` T2b canonical `ticket=RVW:<refund_id>`；`:52` T3 fresh/preseed；`:46,49,53` `refundCalls==0`/`getCalls` 区分；`tasks.md:46-57` 同。 |
+| M2 回归隔离 | **CLOSED** | `plan.md:18` “必须跑；不得改 PAY-SETTLE-01 的 AC-27/Phase 0-R 状态”；`tasks.md:73` 同。 |
+
+### 残余（不构成 P4 BLOCKER，P5 前处理）
+
+- **R1 [MINOR] 命令仍有 `...`**：`plan.md:44-60`、`tasks.md:34-71` 多条 `... -run`，不是可直接复制的命令；补 `TEST_MYSQL_DSN=$ORDER_DSN/...` 前缀与包路径。测试文件/O 码/expected 已齐。
+- **R2 [MINOR] AC-72 三段 tsv 行**：`plan.md:74` 只列段名与 DEFERRED；T7 需落三行 `ac-coverage.tsv` 的 owner/expiry/status/evidence_path，AC-72 不得整体 VERIFIED。
+- **R3 [MINOR] 两处 path 对齐**：`plan.md:14` 允许 `docs/implementation/PAY-AC50-REVIEW-01-selfcheck.md`，但 ADR 0.6 `:25` forbidden 含 `docs/implementation/**`；`plan.md:14` 未列 ADR 0.6 `:24` 允许的 `api/gen/mall/v1/{mall.pb.go,mall_grpc.pb.go}` 生成物。P5 前在 Plan/ADR 二选一补齐。
+- **R4 [CONDITION] C-5**：ADR 0.6 errata 仍待人类 `ADR_APPROVED`（`plan.md:5,33`；`tasks.md:13`）。C-5 未关不写码；P5 前确认。
+
+**P4b verdict：READY（conditional）**——上一轮 P4 blocker 均已关闭；无新的 P4 blocker。P5 前完成 R1–R4（文本/台账/path/C-5），并保留 `NOT RELEASE`、AC-27 AC-REF、不关父状态。

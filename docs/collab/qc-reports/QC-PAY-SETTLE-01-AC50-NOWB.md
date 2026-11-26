@@ -1343,3 +1343,152 @@ R-1 的“新增 `NO_SHIPMENT` 字符串值、无字段/无 RPC/无枚举变更�
 **R8 Actor**：`qc-ac50`
 **R8 Reviewed-by**：待人类 `SPEC_APPROVED`/`ADR_APPROVED` + Plan 评审
 **R8 Status**：**READY（0 BLOCKER；2 TODO 非阻断）**
+
+---
+
+# R9（ADR 0.6 errata）+ L2-P2（Plan 重写）终审
+
+| 项 | 值 |
+|---|---|
+| 审查对象 | `docs/adr/0007-amd1-addendum-ac50-nowaybill.md` **DRAFT 0.6 errata**；`docs/adr/0007-amd1-ac50-impact-analysis.md` **0.4**；`docs/lead/PAY-AC50-REVIEW-01/plan.md` + `tasks.md`（重写稿）；`docs/ops.md`（runbook 边界） |
+| R9 结论 | **READY（0 BLOCKER）**；可交人类 errata `ADR_APPROVED` |
+| L2-P2 结论 | **BLOCKED（3 个 `[BLOCKER]` + 2 个 `[MAJOR]`）**；不可 P5/不可写码 |
+| 日期 | **2026-11-26** |
+| Actor | `qc-ac50` |
+| base | `a1cc809b47c377de0d719eaece41c3f36d550b15` |
+| head | `a1cc809b47c377de0d719eaece41c3f36d550b15`（`git rev-parse HEAD`） |
+| 被审 blob | ADR `3f92e0fcfea495f9d99e8416cfb9fa52db7ade8a`；impact `dfab1504f5f4cdb10fd89a78c2c97cbbd08a2ce3`；Plan `a7cfc91338961d103b9aa41fff5d2d4fae538954`；Tasks `2228dd81f214f8ae9a725f2bbe5bd3ee9954aef8`；ops `c3bce4837cc252476dee970b652711ee965db48c` |
+| release_status | **NOT RELEASE**；不批准实现/merge/Release；R9 errata 仅契约批准；Plan 未过 L2-P2。 |
+
+## R9.0 ADR 0.6 errata（0 BLOCKER）
+
+| 检查 | 判定 | 依据 |
+|---|---|---|
+| Tx2 双谓词 CAS | **PASS** | ADR A8 `:439`：`WHERE refund_id=? AND state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`，`RowsAffected==1`；与 `refund_admission.go:590-594` 现状单谓词缺陷的修复目标一致。 |
+| 迟到 CANCELLED 不可洗 REVIEW | **PASS** | W13 `:506`：0 行→读回 REVIEW→同一错误；不写 PRE/outbox/release；A12 `:445`；O11d `:730`。 |
+| 0 行读回/W13/O11b/O11d | **PASS** | A8 `:439` 四分支（nil/PENDING/REVIEW/PRE-POST）与 O11b/O11c/O11d `:729-731` 自洽；0 行不写 outbox/release。 |
+| `docs/ops.md` 仅 runbook | **PASS** | allowed `:24` 明确仅 AC-72 查询/SLA/对账/re-arm/存量审计 runbook；forbidden `:25` 除允许段落外 `docs/ops.md` 禁改。 |
+| `api/gen` 生成 | **PASS** | allowed `:24` `api/gen` 仅 `make proto` 生成、禁止手改；提交方式由 Lead 实施 Brief 记录；`api/proto` 仅注释。 |
+| gateway 文案删除 | **PASS** | allowed `:24` 明文“本 L2 不使用 gateway/BFF/UI”；forbidden `:25` `gateway/**` 禁；SPEC 沿用既有文案/`REVIEW-REQUIRED-ENTRY-01`。 |
+| AfterSales 收窄 | **PASS** | allowed `:24` 仅 `internal/services/aftersales/workers.go` 的 `last_error`/PENDING/REVIEW 8 次例外；不改结算/回库/表结构。 |
+| §7.7 发布顺序 | **PASS** | `:564-573`：同原子提交优先；分批先 Fulfillment 后 Order；旧 Order 未知值 `Unavailable` fail-closed；旧 Fulfillment+新 Order 禁止；回滚仅前向修复（§7.6）。 |
+| 回滚漏洞 | **PASS** | 新 Order 回滚→旧会重探 REVIEW（禁止）；新 Fulfillment 回滚→旧会让新 Order 重得 CANCELLED→PRE（禁止）；只允许前向修复；ops 先审计/隔离。 |
+
+**R9 结论**：ADR 0.6 errata **0 BLOCKER**；可交人类 **errata `ADR_APPROVED`**。注意：**0.6 批准前实现不得引用 0.5 技术正文**；0.6 只改 CAS/边界/发布，不重开 0.5 已批准语义。
+
+## L2-P2.0 Plan 重写稿（BLOCKED）
+
+| 检查 | 判定 | 依据/缺口 |
+|---|---|---|
+| 一任务一不变量 | **PARTIAL** | T0/T0b/T0c/T3/T4a/T4b/T5a/T5b 基本单分支；但 **T1a**（合法读写+单调）、**T1b**（MANUAL_HOLD+app+0 Payment+只阻塞+token）、**T2b**（镜像+PENDING+8 次+非 REVIEW）、**T6a**（崩溃+重复+乱序+order.paid）、**T6b**（DLQ+re-arm）仍承载多个不变量（`plan.md:59-66`）；需再拆或明确“一个状态迁移 + 其断言”。 |
+| 测试矩阵 F/O/W | **BLOCKED** | T0c 只绑 O11/O11b/O11c/W2/W7（`plan.md:49`），**缺 W13/O11d**；T6a 只 W1–W9（`:64`），**缺 W10–W13**；T7 的 AC 矩阵不含 W13/O11d；ADR §10 的 O11d/W13 未进 Plan 矩阵。 |
+| 5 崩溃窗口 | **BLOCKED** | W1–W9 在 T6a；W10 在 T3；W11 在 T6b；W12 在 T1b；**W13 完全没有任务/用例**；5 窗口（本地提交/RPC 成功/重复乱序/取消确认/外部重放）未逐项绑定。 |
+| 每任务 test file/命令/expected/HEAD | **BLOCKED** | T0 有 file/命令（`plan.md:44`）；T0b/T0c 只有 file/用例（`:45-46`）；T1a–T6b/T8 多数只有文件/用例，**无命令、无 expected、无 HEAD**；§3 只给示例命令，未逐任务绑定；T7 才要求写 `ac-coverage`（`:68`）。 |
+| AC-69…72 / AC-72 三段 / INV-51/52 | **PASS（文字）** | T7 已写 AC-69…72 + AC-72 三段 + INV-51/52（`plan.md:68`）；T8 回归 INV-44…50；`ac-coverage` Reviewer 写，NOT RELEASE。 |
+| DoD | **PASS（文字）** | §5 `:78-84`：Diff/HEAD/日志/MySQL/NATS/-race/fault/范围/自检/`migrations` 空/`release_status=NOT RELEASE`；但需与逐任务命令合并。 |
+| canonical/partial/0 Payment 措辞 | **PARTIAL** | T2b 只写“canonical”（`plan.md:59`），未逐字 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；T3 写 `cancelCalls==0` 但未写 `refundCalls==0`；0 Payment 在 T0b/T1b/T4a 有，T3/T6 未统一。 |
+| 边界（无 BFF/deploy/迁移/AfterSales 仅 workers.go） | **PASS** | allowed/forbidden `plan.md:14-15`：无 gateway/BFF、无 deploy、无 migrations、AfterSales 仅 workers.go；与 ADR 0.6 一致。 |
+
+## L2-P2.1 `[BLOCKER]`
+
+1. **B-1 T0c 的 CAS 字面错误**：`plan.md:49` 写 `Tx2 CAS = result='PENDING_REMOTE' AND state='PENDING_REMOTE'`（或等价 `AND result<>'REVIEW_REQUIRED'`）。前者**不等价**：正金额 Tx1 占位是 `result=POST,state=PENDING_REMOTE`，会 0 行，所有正金额 Tx2 无法写 PRE/POST/REVIEW；等价式应为 `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`。**必须改为 ADR A8 的原式**并让 O11b/O11d 走该式。
+2. **B-2 W13/O11d 未进 Plan 矩阵**：T0c/T6a/T7 未绑 W13/O11d（`plan.md:49,64,68`），而 ADR §10 的 O11d `:730`/W13 `:506` 是 0.6 核心；测试矩阵不能声称覆盖。
+3. **B-3 逐任务证据不可验收**：T1a–T6b/T8 没有 test file+命令+expected+HEAD（`plan.md:50-66`）；§3 只有示例命令，T7 才写 tsv。Developer/Reviewer 无法按任务判定 PASS/FAIL，违反 Plan 的“每任务独占 + 证据”要求。
+
+## L2-P2.2 `[MAJOR]`
+
+- **M-1** T1a/T1b/T2b/T6a/T6b 仍多不变量（见上表）；应进一步拆成“状态迁移/断言”或明确一个不变量+其全部断言，否则“一任务一不变量”不成立。
+- **M-2** T2b canonical 未逐字；T3 只有 `cancelCalls==0`，未同时写 `refundCalls==0`；T3/T6 的 0 Payment 断言不统一；请按 ADR §10 O19/O23 与 T0b/T1b/T4a 统一措辞。
+- **TODO** Plan 需把 R9 errata 的 C-5 关闭条件（QC + 人类 `ADR_APPROVED`）写进 `plan.md:26-33` 的 Phase 0；当前 C-5 虽列 OPEN，但 P5 门未引 C-5 通过证据。Plan/T7 应引用 0.6（非 0.5）作为 ADR 基线。
+
+## L2-P2.3 结论
+
+**L2-P2 BLOCKED。** Plan 重写稿的边界/AC/INV/DoD 已大幅改善，但 **T0c CAS 字面错误（B-1）**、**W13/O11d 缺失（B-2）**、**逐任务证据缺失（B-3）** 是硬缺口；修复后重提 P2，不应进入 P5/写码。
+
+**只读声明**：未执行代码/测试；只审 ADR 0.6/Plan/Tasks；未改 ADR/SPEC/Plan/代码/台账；只追加本 R9+L2-P2 小节；未 commit。
+
+**Actor**：`qc-ac50`
+**Reviewed-by**：待 Plan 修订 / QC P2 复审 / 人类 errata 批准
+**Status**：**R9 READY（0 BLOCKER）；L2-P2 BLOCKED（3 BLOCKER）**
+
+---
+
+# P2b（L2-P2 focused re-review）
+
+| 项 | 值 |
+|---|---|
+| 审查对象 | `docs/lead/PAY-AC50-REVIEW-01/plan.md` **29e2139**；`tasks.md` **08b6494**；对照 R9/ADR 0.6 |
+| 结论 | **BLOCKED**（1 个 `[BLOCKER]` + 2 个 `[MAJOR]`；只核上轮 B-1/B-2/B-3 + M-1/M-2） |
+| 日期 | **2026-11-26** |
+| Actor | `qc-ac50` |
+| base/head | `a1cc809b47c377de0d719eaece41c3f36d550b15`（Plan/Tasks 工作树） |
+| release_status | **NOT RELEASE**；不批准 P5/实现。 |
+
+## P2b.0 关闭表
+
+| 上轮项 | 判定 | 依据/缺口 |
+|---|---|---|
+| **B-1** T0c CAS 字面错误 | **CLOSED** | Plan `:43` 已精确为 `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`；含 O11d/W13；正金额占位 `result=POST` 不再被 0 行打死。 |
+| **B-2** W13/O11d 缺失 | **PARTIAL** | T0c 含 O11d/W13（`:43`）、T6b 含 W13（`:58`）；但 **W4/W5/W6/W7/W10 未绑定或错位**：T6a 仅 W1–W3（`:57`）、T0c 列 W7（`:43`，W7 是零元）、T4a 未列 W7（`:53`）、T3 未列 W10（`:52`）、T6b 只 W8/W9/W13（`:58`）；五个崩溃窗口仍不齐。 |
+| **B-3** 每任务 test/命令/expected/HEAD | **PARTIAL** | T0–T6d 已有 test file/命令/expected（`:39-60`）；**T7 `:61` 仍“—”、T8 `:62` 仍“见 DoD”**，无 test file/命令/expected/HEAD；B-3 只对实现任务关闭，T7/T8 未。 |
+| **M-1** 一任务一不变量 | **CLOSED** | T1a–e/T2a–c/T6a–d 已拆分；T1c 的 `MANUAL_HOLD`+0 Payment+只阻塞本批属同一“停批”不变量；T2b/T2c 分镜像/状态；可接受。 |
+| **M-2** canonical/T3 `refundCalls==0` | **CLOSED** | T2b `:50` 逐字 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（无 arm；`truncated=1`）；T3 `:52` 已有 `refundCalls==0`；T2a `:49` 同。 |
+
+## P2b.1 `[BLOCKER]`
+
+**P2b-B1 — 五个崩溃窗口仍不齐/错位**：Plan `:43` 把 **W7（零元）** 列进 T0c（T0c 测并发 REVIEW，不是零元）；`:57` T6a 只有 W1–W3；`:58` T6b 只有 W8/W9/W13；`:53` T4a 未列 W7；`:52` T3 未列 W10。ADR §10 的 **W4（Ship/取消）、W5（同 `refund_id` 并发）、W6（REVIEW 写后崩溃）、W7（零元）、W10（部分金额）没有完整落到任务**；因此“5 崩溃窗口”不能声称覆盖。修复：把 W4/W5 归 T0c（O11b/W5），W6 归 T6a，W7 归 T4a，W10 归 T3；T6a/T6b 明确列出各自 W 集合；每行补 expected。
+
+## P2b.2 `[MAJOR]`
+
+- **P2b-M1 — T7/T8 无 test file/命令/expected/HEAD**：`plan.md:61-62` T7 仍 `—`、T8 仍“见 DoD”；上轮 B-3 对 T7/T8 未关闭。T7 至少应引 `ac-coverage.tsv` 行、Reviewer 命令/查询、expected；T8 应引既有测试命令/expected/HEAD。可保留 T7/T8 为 meta 任务，但必须写证据路径与判定。
+- **P2b-M2 — W4/W5/W6 语义仍未写 expected**：即使补任务，T0c/T6a 需写“Ship 胜→ALREADY_SHIPPED→POST；取消胜→CANCELLED→PRE；REVIEW 写后崩溃→重放 REVIEW 不探测”的 expected；否则 Reviewer 只能靠 ADR 反推。
+
+## P2b.3 结论
+
+**P2b BLOCKED。** B-1、M-1、M-2 CLOSED；B-2/B-3 仍 PARTIAL（W4/W5/W6/W7/W10 与 T7/T8 证据）。修复后重提 P2b；**P5/实现仍不可**。R9 ADR 0.6 的 **READY（0 BLOCKER）** 不变，可交人类 errata `ADR_APPROVED`。
+
+**只读声明**：未执行代码/测试；只审 Plan/Tasks；未改 Plan/SPEC/ADR/代码/台账；只追加本 P2b 小节；未 commit。
+
+**Actor**：`qc-ac50`
+**Status**：**P2b BLOCKED（1 BLOCKER + 2 MAJOR）；R9 READY 不变**
+
+---
+
+# P2c（L2-P2 focused re-review）
+
+| 项 | 值 |
+|---|---|
+| 审查对象 | `docs/lead/PAY-AC50-REVIEW-01/plan.md` **bf52cc57**；`tasks.md` **dde80589**；R9/ADR 0.6 基线 |
+| 结论 | **READY（0 BLOCKER；1 个 `[TODO]`）** |
+| 日期 | **2026-11-26** |
+| Actor | `qc-ac50` |
+| base/head | `a1cc809b47c377de0d719eaece41c3f36d550b15` |
+| release_status | **NOT RELEASE**；不批准实现/merge/Release；R9 errata 契约 READY。 |
+
+## P2c.0 关闭表
+
+| P2b 项 | 判定 | 依据 |
+|---|---|---|
+| **B-2** W 窗口不齐/错位 | **CLOSED** | W4→T6a（`plan.md:58` W1–W4）、W5/W13→T0c（`:43`）、W6→T2a/T5a（`:49,:55`）、W7→T4a（`:53`）、W8→T6b/T6c（`:59,:60`）、W9→T6b、W10→T3/T4b（`:52,:54`）、W11→T5a/T6c/T6d（`:55,:60,:61`）、W12→T1c/T1d（`:46,:47`）、W13→T0c/T6b/T6d（`:43,:59,:61`）；**W1–W13 全覆盖**。 |
+| **B-3** T7/T8 无 test/命令/expected/HEAD | **CLOSED** | T7（`:62`）`ac-coverage.tsv`+selfcheck+`git rev-parse HEAD`；T8（`:63`）三条实际回归命令（order/aftersales/fulfillment）；`tasks.md:76-81` 同步；HEAD 由 T7 绑定。 |
+| **M-1** 一任务一不变量 | **CLOSED** | T1a–e/T2a–c/T6a–d 已原子拆分；T1c 的停批、T2a 的 existing-first+幂等、T4a 零元、T6a 崩溃/竞态各自独立；T5a 审计、T5c runbook 独立。 |
+| **M-2** canonical/T3 `refundCalls` | **CLOSED** | T2b（`:50`）逐字 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（无 arm；`truncated=1`）；T3（`:52`）`refundCalls==0`；T2a（`:49`）typed details。 |
+| **P2b 残余** T0c/CAS/T1c/T2a/T4a | **CLOSED** | T0c（`:43`）精确 `state='PENDING_REMOTE' AND result <> 'REVIEW_REQUIRED'`；T1c（`:46`）同事务 batch/app/admission；T2a（`:49`）structured details；T4a（`:53`）0 Payment + no S19。 |
+| **R9** ADR 0.6 | **READY 不变** | CAS double predicate、W13/O11d、0 行、ops/api-gen/gateway/AfterSales/§7.7 均通过；可交人类 errata。 |
+
+## P2c.1 `[TODO]`（非阻断）
+
+- **T6a（`:58`）W4 的 expected 仍只写“重放收敛；无终态/释放”**：W4 是 Ship/取消竞态，expected 应显式写“Ship 胜→`ALREADY_SHIPPED`→POST；取消胜→`CANCELLED`→PRE；`SHIPMENT_CANCELLED` 不复活”；补该 assertion 后 T6a 的 W4 才算可核。**TODO**，不影响 READY。
+- **T5c（`:57`）runbook** 已列为任务，但 Plan/Tasks 未给 `docs/ops.md` 链接/演练记录路径；建议 T7 证据表补一行 runbook 链接。非阻断。
+- **T7/T8** 已有命令/tsv/HEAD；T8 的三条命令未显式附 expected（“全 PASS；无 SKIP”在表内 `:63`），建议在 T8 证据行写 expected；非阻断。
+
+## P2c.2 结论
+
+**P2c READY（0 BLOCKER）。** P2b 的 B-2/B-3 与 M-1/M-2 已关闭；W1–W13 已绑定到原子任务，T7/T8 有 HEAD/tsv/selfcheck/三条回归命令。剩余 T6a W4 expected、T5c runbook 链接、T8 expected 为 **TODO**，可在 P3/P4/P5 前补齐，不阻断 Plan 评审。
+
+**可进入 P3/P4/P5**；R9 的 ADR 0.6 仍 **READY**，可交人类 errata `ADR_APPROVED`；实现仍须 P5 人类批准 + C-5 errata 批准。
+
+**只读声明**：未执行代码/测试；只审 Plan/Tasks；未改 Plan/SPEC/ADR/代码/台账；只追加本 P2c 小节；未 commit。
+
+**Actor**：`qc-ac50`
+**Status**：**P2c READY（0 BLOCKER；1 TODO 非阻断）；R9 READY 不变**

@@ -2,29 +2,32 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT 0.4 — pending PO/QC**（未批准；不构成实现依据；不代表 AC-VERIFIED / merge / Release PASS） |
-| Revision | **0.4**（按 SPEC-0002 **v1.11 in-review** 的 D-30/D-31 与 AC-69..72 重写：持久裁决值 `REVIEW_REQUIRED`、`state` 不新增值、无迁移；部分金额改为 PO 三分法；TCC 接受合法裁决并 `MANUAL_HOLD`；补齐 AC-72 可观测性；删除 0.3 “`result=REFUND_ADMISSION_CONFLICT` 由人类 A 授权”的越权表述） |
-| Change ID | `PAY-SETTLE-01`（子范围 `AC-50-FIX-01`；实施须由 Lead 另拆独立 `change_id`，见 §0.5） |
+| Status | **DRAFT 0.5 — pending PO/QC（QC round 5）**（未批准；不构成实现依据；不代表 AC-VERIFIED / merge / Release PASS） |
+| Revision | **0.5**（R5+R6 delta：allowed/forbidden 与 Plan 精确对齐（含 AfterSales 镜像/任务状态、gateway 文案、platform metrics、cmd wiring）；`last_error` 统一 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；AfterSales 8 次后**不得自动 FAILED_PERMANENT**（REVIEW 任务保持 PENDING）；清除 stale Base/0.4/0.3 当前态引用；无新表/迁移） |
+| Change ID | **`PAY-AC50-REVIEW-01`**（本 L2；Parent `PAY-SETTLE-01` 已冻结，仅历史引用；实施须按本 L2 Plan 的 C-4 人类批准后由 Lead 授权，见 §0.5） |
+| Parent | `PAY-SETTLE-01`（**冻结**；本 L2 不推进其受管代码/台账，只保留只读引用） |
+| Plan | `docs/lead/PAY-AC50-REVIEW-01/plan.md`（`d2149c0`）；本文件 Base `d2149c0`（见下表）；Plan `d2149c0`/C-2/ADR 0.5 已由 Lead 修正（R6-M1） |
 | Tier | **L2**（跨服务契约语义、资金/履约准入、既有 RPC 响应语义、共享 metrics 包；`docs/collab/CONVENTIONS.md:90` 任一命中即 L2） |
 | Tier-Rationale | 修改既有 RPC `Fulfillment.CancelIfCreated` 的响应语义（新增可区分结果值），改变 Order 准入裁决（`REVIEW_REQUIRED` vs `PRE_SHIP_REVOKED`/`POST_SHIP_ALLOWED`），并触及 TCC 批次 `MANUAL_HOLD`、部分金额分类与共享 metrics；直接影响资金打款/释放门禁与 AC-27A 关闭谓词；跨 Fulfillment/Order 两服务。不得降级 |
-| Human decision | **2026-11-26 Director 授权 PO 升版 SPEC-0002 v1.11**：为 AC-50 `CONSUMED+无运单` 增加**有界、可持久化的 CONFLICT/PENDING 准入结果及其 TCC 处理**；影响分析（业务+技术）须 QC 审阅后方可实施；不构成 merge/Release/AC-VERIFIED（canonical：`docs/review-tracking.md:366-373`）。**PO 已在 v1.11（in-review）按该授权裁决（D-30/D-31）**：持久值 `REVIEW_REQUIRED`、`state` 不新增值、错误码不变、零元不持久化、部分金额三分法 |
-| PO 对齐状态 | **已对齐 SPEC-0002 v1.11（in-review，工作树 2026-11-26）**：S20（`0002:87`）、INV-51/52（`0002:142-143`）、AC-50（`0002:222-245`）、AC-69..72（`0002:446-491`）、§5.10（`0002:652-670`）、D-30/D-31（`0002:834-835`）、§11 对 ADR 的修订要求（`0002:868-872`）、§12 兼容/回滚（`0002:881-890`）。**v1.11 仍 in-review（未 approved）**：本 Addendum 与其同步修订，仍须 QC round 4 + 人类 `ADR_APPROVED`；PO 若再改名/改表示，回 Architect 重算 |
-| QC 输入 | `docs/collab/qc-reports/QC-PAY-SETTLE-01-AC50-NOWB.md`：R1（BLOCKED；base `da0cdd1`）+ R2（BLOCKED；head `aec9ac8`）+ **R3（BLOCKED；base/head `47db2e0`；R3-B1..B4、M-1/M-2/M-3、R3-T1..T3，见 `:575-739`）** |
-| 技术影响分析 | `docs/adr/0007-amd1-ac50-impact-analysis.md` DRAFT 0.2（schema=0 迁移、TCC、partial 三分法、幂等/回滚、文件级矩阵、剩余 D-2/D-6/D-7/D-8） |
-| Spec-Ref | SPEC-0002 **v1.11（in-review）**：AC-50/51/61/62/65/67 复核条款、**AC-69..72**、S20、INV-51/52、§5.10、E32..E35、D-30/D-31、§11/§12；SPEC-0001 **v1.5**：AC-27（`0001:592-613`）、AC-27A（`0001:615-645`）、§16.2（`0001:862-864`）、§16.3（`0001:874-879`）；ADR-0007 **Rev 2.3**：§5.2.1/§5.2.2/§5.2.4（`0007:556-583,591-594`）、§5.3（`0007:611-623`）、§5.7（`0007:706-730`）、D-11/A-06（`0007:97,111`） |
-| Base（仓库） | `b3f94f6feabdad9257ee085b464a666afd5e1ab7`（`docs(review): authorize PO SPEC-0002 v1.11 for AC-50 outcome`） |
-| Base（契约基线） | SPEC-0001 v1.5（approved 2026-11-26，`4215b3c`）；SPEC-0002 **v1.11 in-review**（工作树，未 commit；行号以 2026-11-26 读取为准，Reviewer 必须绑定 blob）；ADR-0007 **Rev 2.3**（accepted 2026-11-25） |
-| Code head | 工作树无代码改动；代码事实=本 base 的 `internal/services/**`、`migrations/order/**`（锚点与 0.3 表 `:15` 的 `c38c54f` 一致）。工作树另有 PO 的 `docs/specs/0002-*.md` 改动（in-review），不属于本文件作者 |
+| Human decision | **2026-11-26 Director 授权 PO 升版 SPEC-0002 v1.11**：为 AC-50 `CONSUMED+无运单` 增加**有界、可持久化的 CONFLICT/PENDING 准入结果及其 TCC 处理**；影响分析（业务+技术）须 QC 审阅后方可实施；不构成 merge/Release/AC-VERIFIED（canonical：`docs/review-tracking.md:366-373`）。**PO 已在 v1.11（in-review）按该授权裁决（D-30..D-33）**：持久值 `REVIEW_REQUIRED`、唯一载体 `order_refund_admissions`、分路径镜像、零元不进入 S20、审计载体见 D-32、AC-72 分段见 D-33。**本 L2 的实现批准仍须人类 `ADR_APPROVED`（Plan C-4）；PO 裁决≠实现/merge 授权** |
+| PO 对齐状态 | **已对齐** SPEC-0002 v1.11（in-review；工作树含 PO 未 commit 的 R4/R5 delta）：S20 唯一载体/分路径镜像（`0002:90,103-106`）、INV-51/52（`0002:147-148`）、AC-50（`0002:227-249`）、AC-69..72（`0002:451-499`）、§5.10（`0002:662-681`）、D-30..D-33（`0002:845-849`）、§11/§12（`0002:882-905`）。**v1.11 仍 in-review（未 approved）**：本 Addendum 与其同步修订，仍须 QC round 6 + 人类 `ADR_APPROVED`。SPEC §11 item 3（`0002:884`）**已为 DRAFT 0.5**；Plan `d2149c0`/C-2/ADR 0.5 已对齐（R6-M1）。 |
+| QC 输入 | `docs/collab/qc-reports/QC-PAY-SETTLE-01-AC50-NOWB.md`：R1（BLOCKED）+ R2（BLOCKED）+ R3（`:575-739`）+ R4（`:743-955`）+ **R5（BLOCKED；1 BLOCKER R5-B1、R5-M1..M4、R5-T1/T2，见 `:959-1062`）** |
+| 技术影响分析 | `docs/adr/0007-amd1-ac50-impact-analysis.md` **DRAFT 0.3**（schema=0 迁移、TCC、partial 三分法、B1/B2/B3 同步、审计载体、AC-72 分段、文件级矩阵/测试范围） |
+| Spec-Ref | SPEC-0002 **v1.11（in-review；工作树 R4 delta）**：AC-50/51/61/62/65/67 复核条款、**AC-69..72**、S20（唯一权威载体/分路径镜像/审计载体）、INV-51/52、§5.10、E32..E35、**D-30..D-33**、§11/§12；SPEC-0001 **v1.5**：AC-27（`0001:592-613`）、AC-27A（`0001:615-645`）、§16.2（`0001:862-864`）、§16.3（`0001:874-879`）；ADR-0007 **Rev 2.3**：§5.2.1/§5.2.2/§5.2.4（`0007:556-583,591-594`）、§5.3（`0007:611-623`）、§5.7（`0007:706-730`）、D-11/A-06（`0007:97,111`） |
+| Base（仓库） | `d2149c0a3935169206d6a9fa31ca8794b937079c`（`docs(lead): open PAY-AC50-REVIEW-01 L2; freeze PAY-SETTLE-01`） |
+| Base（契约基线） | SPEC-0001 v1.5（approved 2026-11-26，`4215b3c`）；SPEC-0002 **v1.11 in-review**（工作树，含 PO 未 commit 的 R4 delta；行号以 2026-11-26 读取为准，Reviewer 必须绑定 blob）；ADR-0007 **Rev 2.3**（accepted 2026-11-25） |
+| Code head | 工作树无代码改动；代码事实=本 base 的 `internal/services/**`、`migrations/order/**`（锚点与历史 DRAFT 0.3 记录 `:15` 的 `c38c54f` 一致）。工作树另有 PO 的 `docs/specs/0002-*.md` 改动（in-review），不属于本文件作者 |
 | Doc head | 本文件由 **Lead 统一提交**；QC/Reviewer 复核时必须记录精确 SHA（本文件不自引 SHA） |
-| Integration owner | **System Architect**（本 Addendum 作者/契约）；实现 owner = **Developer**（另拆 `change_id`）；S6 无运单证据 owner = **Fulfillment**；人工队列/告警/入口 owner = **ops**；TCC/AC-72 边界 owner = **Architect + ops** |
+| Integration owner | **System Architect**（本 Addendum 作者/契约）；实现 owner = **Developer**（在本 L2 的 C-4 批准后由 Lead 授权）；S6 无运单证据 owner = **Fulfillment**；人工队列/告警/入口 owner = **ops**；TCC/AC-72 边界 owner = **Architect + ops** |
+| 人类批准门 | 本 L2 的 C-4：`ADR_APPROVED` + Plan 批准 + 人类 merge/Release；**PO §11 / D-30..D-33 只是 PO 契约裁决，不等于人类实现批准**（R4-M3）；实施 Brief 必须逐条记录；QC R5 未 READY 前不得交批准（R5.6） |
 | allowed_paths（本文件） | 仅 `docs/adr/0007-amd1-addendum-ac50-nowaybill.md`、`docs/adr/0007-amd1-ac50-impact-analysis.md` |
-| allowed_paths（本裁决授权的最小实现，须在 Lead 另拆的 `change_id` 下） | `api/proto/mall/v1/mall.proto`（**仅** `CancelIfCreated`/`CancelIfCreatedReply.status` 注释）、`api/gen/mall/v1/mall.pb.go`、`api/gen/mall/v1/mall_grpc.pb.go`（**仅** `make proto` 生成，禁止手改）、`internal/services/fulfillment/cancel_if_created.go`、`internal/services/order/refund_admission.go`、`internal/services/order/tcc_settlement.go`（legal 裁决 / app 单调 / `MANUAL_HOLD` 短路）、`internal/services/order/tcc_admission.go`（`MANUAL_HOLD` 错误与置批 / 读回复核）、`internal/platform/metrics/metrics.go`（2 个 gauge，additive）、`internal/services/order/worker.go`（既有 tick 内只读刷新，**不得新增 worker**）、`deploy/compose/observability/alerts.yml`（AC-72 告警规则；ops 复核）、`internal/services/fulfillment/cancel_if_created_test.go`、`internal/services/fulfillment/admission_consumer_nats_integration_test.go`（**仅测试**）、`internal/services/order/refund_admission_integration_test.go`、`internal/services/order/tcc_admission_integration_test.go`（**仅测试**） |
-| forbidden_paths | `migrations/**`（**本 change 无迁移**；若需迁移即停止）、`api/gen/**` 手改、`api/proto` 新字段/新 RPC/枚举变更、`internal/platform/**`（`metrics/metrics.go` 除外）、`internal/services/order/ports.go`（**禁止**新增 `ListShipments`/`GetShipmentByOrder` 调用或接口变更）、`internal/services/order/settlement.go`、`internal/services/order/tcc.go`、`tcc_payment.go`、`tcc_precheck.go`、`tcc_reconcile.go`、`internal/services/fulfillment/consumer.go`、`internal/services/fulfillment/admission_consumer.go`（生产消费者；现有“无行 no-op”语义不得改）、`internal/services/{inventory,payment,aftersales}/**`、`frontend/**`、`gateway/**`、`docs/specs/**`、`docs/collab/**`（含 `ac-coverage.tsv`）、`docs/lead/**`、`docs/implementation/**`、`docs/ops.md`（ops owner；本 ADR 只给查询/工单字段）、`docs/adr/0007-payment-settlement-admission.md`（accepted Rev 2.3 正文）、`docs/adr/0007-payment-settlement-admission-amd1.md`、`scripts/**`、`Makefile` |
-| baseline_impact | **涉及**：AC-50 的 `CONSUMED+无运单`（整组）与 `CONSUMED` 部分金额、AC-27A 关闭谓词的 PRE 来源合法性、AC-27 的收口前提；Fulfillment/Order 既有 RPC 响应语义；`order_refund_admissions`/`refund_applications` 新增裁决值 `REVIEW_REQUIRED`（**无 schema 变更**）；TCC 批次 `MANUAL_HOLD`；共享 metrics 新 gauge；`deploy` 一条告警。**不涉及**：Payment 金额/退款实现、事件 subject/payload 结构、permit 状态机、迁移/schema、新 worker；非回归范围见 §14 |
+| allowed_paths（本裁决授权的最小实现，须在本 L2 的 C-4 人类批准后由 Lead 授权；**与 Plan `d2149c0` 精确一致**） | `internal/services/order/{refund_admission.go,tcc_settlement.go,tcc_admission.go}`、`internal/services/order/{refund_batch*.go,refund_consumer.go,consumer.go}`（**仅当 REVIEW 对账/消费必需，实施 Brief 必须逐条论证，不得改既有语义**）、`internal/services/order/worker.go`（仅 gauge 刷新）；**不含** `tcc.go`/`tcc_payment.go`/`tcc_precheck.go`/`tcc_reconcile.go`/`settlement.go`/`ports.go`；`internal/services/fulfillment/cancel_if_created.go`；**`internal/services/aftersales/**`（仅 `after_sale_refund_tasks.last_error` 的 canonical 写入、任务保持 `PENDING`、重试上限行为；不改结算/回库/其他状态机；R5-B1）**；`internal/platform/metrics/**`（AC-72 gauge，共享包）；`internal/services/gateway/**`（**仅显示文案映射**，不改鉴权/路由/契约）；`api/proto/mall/v1/mall.proto`（**仅** `CancelIfCreated`/`CancelIfCreatedReply.status` 注释/既有 string 值，无新字段/RPC；生成物由 `make proto` 产出，`api/gen/**` 不得手改，Plan 未显式列生成物 → Lead 在实施 Brief 确认生成/提交方式）；`cmd/*`（仅 wiring）；对应 `_test.go`；本 ADR/impact（Architect 交付，不由实现修改） |
+| forbidden_paths | `migrations/**`（**本 L2 无迁移**；若需迁移即停止）、`deploy/**`（告警规则另立 `REVIEW-REQUIRED-ALERTS-01`，ops）、`frontend/**`（入口另立 `REVIEW-REQUIRED-ENTRY-01`）、`docs/**`（实现不得改；**本 ADR/impact 为 Architect 交付，不由实现修改**）、`api/gen/**` 手改、`api/proto` 新字段/新 RPC/枚举变更、`internal/services/order/tcc.go`、`tcc_payment.go`、`tcc_precheck.go`、`tcc_reconcile.go`、`settlement.go`、`ports.go`、`internal/services/fulfillment/consumer.go`、`admission_consumer.go`（生产消费者语义不得改）、`internal/services/{inventory,payment}/**`、`internal/services/aftersales/**` 中除 `after_sale_refund_tasks.last_error`/`PENDING`/重试上限行为以外的任何改动、`internal/services/gateway/**` 的鉴权/路由/契约、`docs/specs/**`、`docs/collab/**`（含 `ac-coverage.tsv`）、`docs/lead/**`、`docs/implementation/**`、`docs/ops.md`、`docs/adr/0007-payment-settlement-admission.md`（accepted Rev 2.3 正文）、`docs/adr/0007-payment-settlement-admission-amd1.md`、`scripts/**`、`Makefile` |
+| baseline_impact | **涉及**：AC-50 的 `CONSUMED+无运单`（整组）与 `CONSUMED` 部分金额、AC-27A 关闭谓词的 PRE 来源合法性、AC-27 的收口前提；Fulfillment/Order 既有 RPC 响应语义；`order_refund_admissions`/`refund_applications` 新增裁决值 `REVIEW_REQUIRED`（**无 schema 变更**）；TCC 批次 `MANUAL_HOLD`；共享 metrics 新 gauge；**告警规则另立 `REVIEW-REQUIRED-ALERTS-01`（`deploy/**` forbidden，不在本 L2）**。**不涉及**：Payment 金额/退款实现、事件 subject/payload 结构、permit 状态机、迁移/schema、新 worker；非回归范围见 §14 |
 | INV | INV-36、INV-42、INV-43、INV-44、INV-45、INV-50，**新增 INV-51/52**（逐条见 §14）；INV-01/AC-25 不得触碰 |
 | Actor | `arch-ac50`（System Architect） |
-| Reviewed-by | **待 QC round 4**（本文件不代签；DRAFT 期间不得合入受管代码，不得标 PASS） |
-| 硬边界 | 不改 SPEC（SPEC-0001/0002 均归 PO）、不改 accepted ADR Rev 2.3 正文；无新字段/新 RPC/新事件/新状态字段/新 worker/新迁移；**无 `ListShipments`/`GetShipmentByOrder`/事务外预读**；不交付 T2/T3/T4.4；不交付 BFF/UI 入口；本文件未明确列出的变更一律不做 |
+| Reviewed-by | **待 QC round 6**（本文件不代签；DRAFT 期间不得合入受管代码，不得标 PASS） |
+| 硬边界 | 不改 SPEC（SPEC-0001/0002 均归 PO）、不改 accepted ADR Rev 2.3 正文；无新字段/新 RPC/新事件/新状态字段/新 worker/新迁移；**无 `ListShipments`/`GetShipmentByOrder`/事务外预读**；不交付 T2/T3/T4.4；不交付 BFF/UI 入口（gateway 仅文案映射）、不交付 `deploy/**` 告警规则；本文件未明确列出的变更一律不做 |
 
 > 本文件是**设计裁决**，不是实现、不是验收、不是台账。代码/测试状态归 Developer/Reviewer；AC 状态归 Reviewer；人工队列终态归 SPEC-0001 §16.2。文中的“MUST/不得”是给 Developer 的施工约束，不免除 QC 与人类批准。
 
@@ -48,7 +51,7 @@ SPEC-0001 v1.5 `0001:862` 登记：`CONSUMED+无运单` 写路径把“无运单
 | 8 | AC-27A 第 5/6 条：`CONSUMED` 只有 `result=PRE_SHIP_REVOKED` 才关闭；`PENDING_REMOTE`/`REVIEW_REQUIRED`、结果缺失/不可核验 → 未关闭并告警 | SPEC-0001 v1.5 `0001:622-625`、注 `0001:645`；SPEC-0002 v1.11 AC-69 `0002:450` |
 | 9 | AC-50 v1.11：`NONE→REVOKED` 无运单合法 PRE；`CONSUMED+CANCELLED` 合法 PRE；`CONSUMED+无运单`（整组）→ `REFUND_ADMISSION_CONFLICT` + `REVIEW_REQUIRED`；部分金额三分法 | SPEC-0002 `0002:222-245` |
 | 10 | `order_refund_admissions.result/state` 为 `VARCHAR(32)`，无 CHECK，默认 `PENDING_REMOTE` | `migrations/order/0016_settlement_admission.sql:7-19` |
-| 11 | `refund_applications.admission_result` 为 `VARCHAR(24)`；`REVIEW_REQUIRED`(15) 可容纳，`REFUND_ADMISSION_CONFLICT`(25) **不可** | `migrations/order/0017_refund_batch_ledger.sql:45-81`（`:56`）；D-30 `0002:834` |
+| 11 | `refund_applications.admission_result` 为 `VARCHAR(24)`；`REVIEW_REQUIRED`(15) 可容纳，`REFUND_ADMISSION_CONFLICT`(25) **不可** | `migrations/order/0017_refund_batch_ledger.sql:45-81`（`:56`）；D-30 `0002:845` |
 | 12 | 每组至多一条运单行：`UNIQUE KEY (order_no, fulfillment_group_no)` | `migrations/fulfillment/0003_group_shipments.sql:6-9` |
 | 13 | TCC 重试在 `admitTccBatch` 之前先经 `ensureTccRemoteAdmissionTx`/`ensureTccApplicationTx`；前者的 switch 只接受 `PENDING/PRE/POST` | `tcc.go:346-361`；`tcc_settlement.go:717,788-876` |
 | 14 | Tx2 更新 admission **无 `state`/version 守卫** | `refund_admission.go:590-594` |
@@ -80,14 +83,20 @@ SPEC-0001 v1.5 `0001:862` 登记：`CONSUMED+无运单` 写路径把“无运单
 - 本文件**additive**：不删除、不重写 Rev 2.3 任何条款；只给 §5.3 增加一个 `status` 值及其语义，并明确 §5.2.2/§5.2.4 的映射与 Tx1 已写事实的处置。
 - 本文件**不批准**任何实现；`ADR_APPROVED`（人类）+ SPEC-0002 v1.11 approved 之前 Developer 不得开工（宪法 Workflow 2）。
 - 不改变事实所有权、permit 状态机、退款额度、INV-45 的不可逆性；**不新增 `ListShipments`/`GetShipmentByOrder`/事务外预读**（人类 route A 保持）。
-- **0.4 撤回 0.3 的两个越权点**：①0.3 把 `result=REFUND_ADMISSION_CONFLICT` 写成“人类 A 授权”，超出 canonical 记录（R3-B3）；②0.3 的 25 字符 token 放不进 `refund_applications.admission_result VARCHAR(24)`。PO v1.11 D-30 已按授权裁决 `REVIEW_REQUIRED`（15 字符、`state` 不进新值、错误码不变、零元不持久化），本文件按此对齐。
+- **历史沿革**：历史稿 DRAFT 0.3/0.4 曾把 `result=REFUND_ADMISSION_CONFLICT` 写成人类授权（已撤回）；PO v1.11 D-30 裁决 `REVIEW_REQUIRED`（15 字符、`state` 不进新值、错误码不变、零元不持久化），0.4 已对齐，0.5 继续沿用。
+- **0.5 变更**（详见 §1.1a）：
+  - **R4-B1**：确认 S20 的**唯一权威载体**是 `order_refund_admissions`；发起方镜像**分路径**——有 `refund_applications` 行（TCC 组级等）才写该行，普通售后只写 `after_sale_refund_tasks.last_error`，**不得新建 `refund_applications` 行**（PO v1.11 `0002:90,103,456`）。
+  - **R4-B2**：零元**不进入 S20、不持久化 `REVIEW_REQUIRED`**、不计入 AC-72 复核计数（PO `0002:105,147,434,492`）。
+  - **R4-B3**：采用 PO D-32 的**可执行审计载体**（admission 行不删除 + `version`/时间戳 + 发起方镜像 `last_error` 的 reason/ticket（`RVW:<refund_id>`） + 结构化日志 + ops 工单），**不新增表/迁移**；`REVIEW-AUDIT-01` 仅覆盖“行级历史/独立审计表”，DEFERRED 且**不阻塞** AC-69/72 后端验收（PO `0002:106,464,848`）。
+  - **R4-M1/M2/M3**：SPEC §11:884 现已写 DRAFT 0.5（PO 已修）；AC-72 按 D-33 分段（后端段本 L2，用户可见/入口归 `REVIEW-REQUIRED-ENTRY-01`）；`tcc_*.go` 的 PO §11 授权**不等于**人类实现批准（本 L2 C-4 仍需 `ADR_APPROVED` + Plan + 人类 merge）。
 
 ### 0.5 `change_id` 边界（防越权）
 
 SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `change_id` 走 L2（跨 Fulfillment/Order，超 R0.3-R1c `allowed_paths`）”。因此：
 
-- 本 Addendum（契约）挂 `PAY-SETTLE-01`（Lead 指定）；
-- **实施**必须由 Lead 另拆独立 `change_id`，并在其实施 Brief 中逐文件落 `allowed_paths`；不得把本文件的 `allowed_paths` 当作 R0.3-R1c 的范围扩展，也不得在同一提交里顺手改 AC-27A 读模型（那是 R0.3-R1c 的独立实施项）。
+- 本 Addendum（契约）挂 **`PAY-AC50-REVIEW-01`**（新 L2，Lead 指定；Parent `PAY-SETTLE-01` 冻结，仅历史）；
+- **实施**必须由 Lead 在本 L2 下按 `docs/lead/PAY-AC50-REVIEW-01/plan.md` 的 C-4（`ADR_APPROVED` + Plan 批准 + 人类）授权，并在实施 Brief 中逐文件落 `allowed_paths`；不得把本文件的 `allowed_paths` 当作冻结 Parent 或 R0.3-R1c 的范围扩展，也不得在同一提交里顺手改 AC-27A 读模型（那是 R0.3-R1c 的独立实施项）；
+- **PO 裁决 ≠ 实现批准**：D-30..D-33 / PO §11 只授权契约内容与 TCC 范围，不替代 `ADR_APPROVED`、Plan/Tasks、Reviewer 与人类 merge（R4-M3）。
 
 ### 0.6 与 PO v1.11 的对齐表
 
@@ -95,12 +104,14 @@ SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `cha
 |---|---|---|
 | 持久裁决值 | `REVIEW_REQUIRED`（D-30） | §3.1/§3.5 使用同值；**不是错误码**，对外仍 `REFUND_ADMISSION_CONFLICT` |
 | Order 记录 | `result=REVIEW_REQUIRED`、`state=PENDING_REMOTE`（不新增 state 值） | 同 |
-| 发起方记录 | `refund_applications.admission_result=REVIEW_REQUIRED`、申请 `PENDING`（TCC 批次 `MANUAL_HOLD`） | 同；普通售后无该行（§12.3） |
+| 发起方镜像（分路径） | 有 `refund_applications` 行（TCC 组级）→ `admission_result=REVIEW_REQUIRED`、`state=PENDING`；普通售后（无该行）→ `after_sale_refund_tasks` 保持 `PENDING` + `last_error` 含 reason/ticket（`RVW:<refund_id>`），**不得新建 `refund_applications` 行**；TCC 批次 `MANUAL_HOLD` | §3.1/§3.3/§7.4；普通售后不双写 |
+| 审计载体 | D-32：admission 行不删除 + `version` 单调 + `created_at/updated_at` + 发起方 `last_error`（reason/ticket（`RVW:<refund_id>`））+ 结构化日志 + ops 工单；行级历史/独立表 `REVIEW-AUDIT-01` DEFERRED 且**不阻塞** | §8.3/§9 |
+| AC-72 | D-33：本 L2 只做后端段（metrics/查询/SLA/对账）；**告警规则**归 `REVIEW-REQUIRED-ALERTS-01`；**用户可见完整入口**归 `REVIEW-REQUIRED-ENTRY-01`（gateway 仅文案） | §8/§9；AC-72 不得整体 VERIFIED |
 | 部分金额 | D-31 三分法（离仓/未离仓/不可判定） | §3.4 |
 | 零元 | 不持久化 `REVIEW_REQUIRED`，重放重探 | §4 |
-| TCC | 接受合法裁决、`MANUAL_HOLD`、`TCC_BATCH_REQUIRES_MANUAL_HANDLING` | §3.6/§7.2 |
+| TCC | 接受合法裁决、`MANUAL_HOLD`、`TCC_BATCH_REQUIRES_MANUAL_HANDLING`；`refund_batches.last_error` 写复核/处置审计 | §3.6/§7.2/§8.3 |
 | 可观测性 | 5 分钟告警、24h/7d SLA、计数/最老时长 | §8/§9 |
-| 迁移 | 无（D-30） | §9.2 |
+| 迁移 | 无（D-30；D-32 复用既有列/行；D-33 不新增 API） | §9/§9.2 |
 | 回滚 | 回滚前审计是否存在 `REVIEW_REQUIRED` 行 | §7.6 |
 
 ---
@@ -109,7 +120,7 @@ SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `cha
 
 | # | 裁决 | 一句话 | 归属 |
 |---|---|---|---|
-| **R-1** | `CancelIfCreatedReply.status` 增加 **additive** 值 `<NO_WAYBILL>`（string，无新字段/无新 RPC；0.3 曾名 `NO_SHIPMENT`，**PO 定名**）；Fulfillment 对“该组没有任何运单行”返回它；`CANCELLED` 只表示真实运单已取消 | 先分开事实 | Architect（契约）/ Fulfillment（实现） |
+| **R-1** | `CancelIfCreatedReply.status` 增加 **additive** 值 `<NO_WAYBILL>`（string，无新字段/无新 RPC；历史稿曾名 `NO_SHIPMENT`，**PO 定名**）；Fulfillment 对“该组没有任何运单行”返回它；`CANCELLED` 只表示真实运单已取消 | 先分开事实 | Architect（契约）/ Fulfillment（实现） |
 | **R-2** | **整组金额** + `<NO_WAYBILL>`：Tx2 持久化 `result=REVIEW_REQUIRED,state=PENDING_REMOTE`（**不新增 state 值**）；Error 告警、commitment 保持 `RESERVED`、outbox 占位保留、0 打款/0 释放/0 准入终态；进入 `AC-27-NOWB-01` 人工队列。同 `refund_id` 重放返回**同一 `REFUND_ADMISSION_CONFLICT`**，不探测/不读 Payment/不新增写入 | 有界持久化 + 人工队列 | Order（实现） |
 | **R-2b** | **部分金额**（`amount < 组剩余`）：**一律不调用 `CancelIfCreated`**（不改运单、无预读）。只用 Order 自有事实（S3 组投影/S5/S9）三分：投影 `SHIPPED/RECEIVED` → `POST_SHIP_ALLOWED`；投影未离仓 → `PARTIAL_REFUND_REQUIRES_FULL_GROUP`（**写前拒绝**）；不可判定（投影缺失且 `orders.status ∈ {SHIPPED,COMPLETED}` 等）→ `REVIEW_REQUIRED` + 人工队列 | 不丢 PARTIAL、不改运单、不静默 POST | Order（实现） |
 | **R-3** | 零元 `decideZeroRefundResult`：`<NO_WAYBILL>` → `REFUND_ADMISSION_CONFLICT` + 告警，在写任何 admission/`DONE` 之前返回；`CANCELLED` → PRE；`ALREADY_SHIPPED/RECEIVED` → POST；瞬态/未知 → 可重试。零元无 Tx1，**不持久化** `REVIEW_REQUIRED`，重放重新探测（AC-67/AC-69） | 零元不得例外打款/造行 | Order（实现） |
@@ -118,8 +129,8 @@ SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `cha
 | **R-6** | 幂等/并发/崩溃：同 `refund_id` 重放读已持久化裁决（PRE/POST/REVIEW）并返回同一结果/错误；`PENDING_REMOTE`（无复核）重新探测；Tx2 以 `state=PENDING_REMOTE` CAS 唯一化；`AdmitRefund` 对任何非终态 existing **必须返回错误**，不得回 success reply | 可重放、无脏写、无提前打款 | Order/Fulfillment |
 | **R-7** | `REVIEW_REQUIRED`（整组/部分不可判定/legacy 不可判定）进入 **AC-27-NOWB-01** 人工队列（终态/owner/expiry/SLA 见 SPEC-0001 §16.2 与 AC-72），组保持未关闭；不得自动关闭/自动退款/恢复 permit；TCC 批次 `MANUAL_HOLD` | 人工终态 | ops + Developer + Fulfillment |
 | **R-8** | 登记：`mall.proto` 注释必须更新（生成物同步）；`docs/contracts.md` **不改**；错误码不新增；`REVIEW_REQUIRED` 为持久裁决值（D-30），`REFUND_ADMISSION_CONFLICT` 为对外错误码；**无迁移**；AC-72 需 metrics/告警（见 R-10） | 最小登记面 | Architect / Developer / PO / Reviewer |
-| **R-9** | TCC：把 `REVIEW_REQUIRED` 当**合法持久裁决**读回（`ensureTccRemoteAdmissionTx`/`ensureTccApplicationTx`），批次置 `MANUAL_HOLD`、application `PENDING`+`admission_result=REVIEW_REQUIRED`、`refund_batches.last_error` 记录原因；自动续跑返回 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`；人工 re-arm 后同 `batch_id`/`refund_id` 续跑 | 不早失败、不阻塞其他批 | Order（实现）/ Architect |
-| **R-10** | AC-72 可观测性：新增 `mall_refund_review_backlog`/`mall_refund_review_oldest_seconds`（共享 metrics，additive）+ Order 既有 tick 只读刷新 + 1 条告警规则；**不新增 worker**；用户可见文案/人工入口不在本 change（另立 L2） | 5 分钟告警 + SLA 可见 | Architect / Developer / ops |
+| **R-9** | TCC：把 `REVIEW_REQUIRED` 当**合法持久裁决**读回（`ensureTccRemoteAdmissionTx`/`ensureTccApplicationTx`），批次置 `MANUAL_HOLD`、**已有 `refund_applications` 行时** application 保持 `PENDING`+`admission_result=REVIEW_REQUIRED`、`refund_batches.last_error` 记录原因；自动续跑返回 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`；人工 re-arm 后同 `batch_id`/`refund_id` 续跑 | 不早失败、不阻塞其他批 | Order（实现）/ Architect |
+| **R-10** | AC-72 后端段：新增 `mall_refund_review_backlog`/`mall_refund_review_oldest_seconds`（共享 metrics，additive）+ Order 既有 tick 只读刷新；**不新增 worker**；**告警规则不在本 L2**（`REVIEW-REQUIRED-ALERTS-01`，ops）；用户可见完整入口归 `REVIEW-REQUIRED-ENTRY-01`（gateway 仅文案） | 计数/SLA 可见；告警规则另立 | Architect / Developer / ops |
 
 **结论级别**：R-1…R-10 均在**不改 SPEC（PO 已改 v1.11）、不改 Rev 2.3 正文、无新字段/RPC/事件/新状态值/新 worker、无迁移、无 `ListShipments`/预读**的前提下可落地。无 `[ARCHITECTURAL_FLAW]`。仍登记 DEFERRED 缺口（M-1 legacy、M-3 人工释放实现、M-4 TCC result 清理、M-5 存量审计执行、T-3 多组释放、BFF/入口），见 §1.3，owner/expiry 均为 2026-12-31。
 
@@ -131,13 +142,58 @@ SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `cha
 |---|---|---|---|
 | **R3-B1** TCC 早失败 | `result=CONFLICT` 命中 `ensureTccRemoteAdmissionTx` 的 `default` → “非法 result”；生产 `tcc_*.go` 被禁改 | PO D-30 改名 `REVIEW_REQUIRED`；R-9 要求 switch/app 单调接受合法裁决；PO §11 明确 `tcc_*.go` 纳入 `allowed_paths`；批次 `MANUAL_HOLD` + 稳定错误 | **条件 CLOSED**（PO v1.11 approved + QC） |
 | **R3-B2** 部分金额先取消运单 | `CONSUMED+部分+CANCELLED` 在返回 PARTIAL 前已取消 `CREATED`，违 AC-50 `0002:217` | PO D-31 三分法：**不探测**，只用 Order 自有事实；fresh 未离仓在写前拒绝（零写入）；已存在 PENDING 部分按 AC-70 保持既有承诺并返回 PARTIAL；不可判定→`REVIEW_REQUIRED`+冻结额度 | **条件 CLOSED** |
-| **R3-B3** canonical 未授权 `result=CONFLICT` 持久化 | 0.3 把具体表示写成人类 A 授权，超出 `review-tracking` 记录 | PO v1.11 D-30 在 Director 授权范围内裁决；本 ADR 撤回 0.3 表述并按 D-30 对齐；SPEC-0001 注按 D-3 同步 | **条件 CLOSED**（等 v1.11 approved） |
+| **R3-B3** canonical 未授权 `result=CONFLICT` 持久化 | 历史 DRAFT 0.3 把具体表示写成人类 A 授权，超出 `review-tracking` 记录 | PO v1.11 D-30 在 Director 授权范围内裁决；本 ADR 撤回 0.3 表述并按 D-30 对齐；SPEC-0001 注按 D-3 同步 | **条件 CLOSED**（等 v1.11 approved） |
 | **R3-B4** “可重试” vs “不再探测” | §8 写“保持可重试”，§3.5 写“不再探测”，自相矛盾 | 采用 PO §5.10 分界表（`0002:652-670`）：REVIEW 自动重试只返回同一冲突、不收敛；人工 re-arm 或 AC-62 后新 `refund_id` 才继续 | **CLOSED（协议）** |
 | **R3-M1** 迟到 placeholder 取消 owner | W9 写“由 Fulfillment/ops 取消”但无 owner/runbook | §7.2 W9 明确：正常 consumer 创建的真实 placeholder 由 Fulfillment 取消/ops 审计；人工侧仍禁止造行；`ORDER-PAID-PLACEHOLDER-01` | **CLOSED（协议）** |
 | **R3-M2** W9 partial 断言不准 | “重探可取消→PRE”未区分整组/部分 | W9 改为“整组→PRE；部分→§3.4（不探测）” | **CLOSED** |
 | **R3-T1** §8 与 §3.5 矛盾 | 同 R3-B4 | 已按 PO §5.10 口径改写 | CLOSED |
 | **R3-T2** 非法组合未定义 | `state=PRE/POST` + `result=REVIEW_REQUIRED` 等 | A8 补：`REVIEW_REQUIRED` 只允许与 `state=PENDING_REMOTE` 组合；其他组合 fail-closed | CLOSED |
 | **R3-T3** re-arm 过渡表 | re-arm 后组合未成表 | §8.3 给出“唯一合法过渡”表 | CLOSED |
+
+### 1.1a QC R4 处置索引（R4-B1、R4-B2、R4-B3、R4-M1、R4-M2、R4-M3、R4-T1、R4-T2）
+
+> 与 §1.1 同口径：本表是**作者处置**，最终由 QC round 5 判定；R4 的 3 BLOCKER 已在 0.5 中给出可执行闭合方案（依赖 PO v1.11 R4 delta 落库）。
+
+| QC 项 | R4 问题 | 0.5 处置 | 判定 |
+|---|---|---|---|
+| **R4-B1** 普通售后无 `refund_applications` | SPEC S20/AC-69 要求“发起方 `refund_applications`”，但普通售后用 `after_sale_refund_tasks`；0.4 按“无行”处理属自行缩小 | 采用 PO v1.11 R4 delta：S20 **唯一权威载体**=`order_refund_admissions`；镜像**分路径**（有 `refund_applications` 行才写该行；普通售后写 task `PENDING`+`last_error`，**不得新建行**）；ADR §3.1/§3.3/§7.4 同步；测试 O19 | **条件 CLOSED**（等 PO v1.11 落库/approved） |
+| **R4-B2** S20/INV-51 未排除零元 | “每个 refund_id 一条裁决”与 AC-67/69 零元不持久化矛盾 | 采用 PO 修订：S20 仅覆盖**持久化路径**、零元**不进入 S20**、不写 admission/S19、不计入 AC-72 计数；ADR §4/§8/§10 O7 同步；测试 O21 | **条件 CLOSED** |
+| **R4-B3** 原复核记录被 DEFERRED | AC-69/72 要求保留记录，0.4 §8.3 写“行内不保留”+`REVIEW-AUDIT-01` DEFERRED | 采用 PO **D-32**：admission 行**不删除**、`version` 单调、`created_at/updated_at`；发起方镜像 `last_error` 写 canonical `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；结构化日志记录进入/每次 re-arm/处置；ops 工单记录操作人/授权人/证据/时间/金额/原因。`REVIEW-AUDIT-01` 只覆盖行级历史/独立表，DEFERRED **且不阻塞** AC-69/72 后端验收；ADR §8.3/§9/§10 同步；测试 O20 | **CLOSED（可执行载体，无新表/迁移）** |
+| **R4-M1** SPEC §11 stale “ADR DRAFT 0.3” | 证据绑定错对象 | ADR/Impact 自身不再把 0.5 写成 0.3（仅历史沿革保留）；SPEC `0002:884` 已为 DRAFT 0.5；Plan `d2149c0`/C-2/0.5 已对齐（Lead 已修，R6-M1）；Reviewer 绑定 ADR 0.5 blob | **CLOSED** |
+| **R4-M2** AC-72 用户可见/入口 DEFERRED | AC-72 不能整体 AC-VERIFIED | 采用 PO **D-33**：AC-72 分**后端段**（本 L2：告警/`reason`/SLA/对账/指标）与**用户可见/入口**（`REVIEW-REQUIRED-ENTRY-01`）；`ac-coverage.tsv` 分段登记；ADR §8/§9/§14 同步 | **CLOSED（分段）** |
+| **R4-M3** PO §11 ≠ 人类实现批准 | allowed_paths 含 `tcc_*.go` 易被误读 | ADR 头部新增“人类批准门”；§0.5/§15.2 写明：PO D-30..33/§11 只授权契约与范围，实施须 `ADR_APPROVED` + Plan 批准 + 人类 merge；`tcc_*.go` 仅在本 L2 授权后由 Lead 给 Developer | **CLOSED（治理）** |
+| **R4-T1** `tcc_reconcile` 不清 batch `last_error` | 需测试断言 | §10 增 O20b：`MANUAL_HOLD` 后 `refund_batches.last_error` 保留；reconcile 不写/不清该列（`tcc_reconcile.go:340` 只清 application） | **CLOSED（测试项）** |
+| **R4-T2** 告警/metrics/入口真实执行证据 | 不能以 SQL 演练替代 | §10 O18 需真实 metrics/告警规则检查；入口归 `REVIEW-REQUIRED-ENTRY-01`；§15.3 交付证据列明 | **CLOSED（证据要求）** |
+
+### 1.1b QC R5 处置索引（R5-B1、R5-M1..M4、R5-T1/T2）
+
+| QC 项 | R5 问题 | 0.5 R5 delta 处置 | 判定 |
+|---|---|---|---|
+| **R5-B1** AfterSales 被禁止/自动 FAILED_PERMANENT | 普通售后镜像 writer 在 AfterSales，ADR/Plan forbidden；现有 8 次后自动 FAILED | allowed 增加 `internal/services/aftersales/**`（**仅** `after_sale_refund_tasks.last_error` canonical、任务保持 `PENDING`、重试上限行为）；新增 §8.5：8 次后**不得自动 `FAILED_PERMANENT`**，停止自动重试升级；ops 认领/re-arm 经受权入口，Order 不跨库写 | **条件 CLOSED**（Plan 已同步 allowed；QC R6） |
+| **R5-M1** allowed/forbidden 与 Plan 不一致 | ADR 精确表 vs Plan 宽表；gateway/aftersales 冲突 | ADR allowed/forbidden 改为与 Plan `d2149c0` 精确一致（order 精确文件、aftersales 仅镜像/PENDING/重试、platform metrics、gateway 仅文案、proto/cmd/tests；deploy/frontend/migrations/docs/api-gen forbidden） | **CLOSED（Architect 侧）** |
+| **R5-M2** stale Base/修订号/0.3 | ADR 曾称 SPEC 仍 0.3；Plan 的 ADR 版本/Base stale | ADR/impact 改 0.5、Base `d2149c0`；SPEC §11 已 0.5；Plan `d2149c0`/C-2/0.5 已由 Lead 修（R6-M1） | **CLOSED** |
+| **R5-M3** AC-72 告警规则不在 L2 | deploy forbidden；AC-72 告警段不可整体验收 | AC-72 再分段：backend metrics/查询/SLA/对账（本 L2）/告警规则 `REVIEW-REQUIRED-ALERTS-01`（ops）/用户可见入口 `REVIEW-REQUIRED-ENTRY-01`；`ac-coverage` 分段，不得写“5 分钟告警已上线” | **CLOSED（分段）** |
+| **R5-M4** last_error 三处格式不一致 | SPEC AC-72 vs ADR 冒号格式 vs AfterSales 通用错误 | 统一 canonical `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；ADR/AfterSales/TCC/AC-72 一致；长度：售后 512、TCC 1024；`ticket` **必填、非空、`RVW:` 前缀**；超长按 D-35 确定性规则保留前缀+截断 `<refund_id>`+` truncated=1`；解析 key=value（`reason=`/`ticket=` 必需） | **CLOSED（格式）** |
+| **R5-T1** TCC 文本/解析测试 | 需与 AC-72 对齐 | §10 O20/O20b 断言 canonical `reason/ticket/truncated` 解析；O1b 断言 batch.last_error canonical | **CLOSED（测试项）** |
+| **R5-T2** Plan BFF 与 ENTRY 边界 | Plan L2-T5 写 BFF 文案 | gateway 仅“文案映射”allowed；用户可见/入口仍归 `REVIEW-REQUIRED-ENTRY-01`；Plan L2-T5 已由 Lead 降为 **gateway 文案映射测试**（非 BFF 契约测试；R7-M3） | **CLOSED** |
+
+### 1.1c QC R6 处置（R6-B1、R6-B2、R6-M1、R6-M2）
+
+| QC 项 | R6 问题 | 0.5 R6 delta 处置 | 判定 |
+|---|---|---|---|
+| **R6-B1** §7.3 与 §8.5/SPEC 相反 | §7.3 写 AfterSales 8 次后 `FAILED_PERMANENT` | §7.3 改为：8 次为**停止自动重试**阈值（不是 `FAILED_PERMANENT` 阈值），REVIEW 任务保持 `PENDING` 进人工队列；仅人工放弃（AC-62）可 `FAILED_PERMANENT` | **CLOSED** |
+| **R6-B2** last_error 格式与 SPEC 不一致 | ADR 曾用 ops-ticket/arm 变体，SPEC 定稿 `ticket=RVW:<refund_id>`（无 arm，含 `truncated=1`） | ADR/impact/O19/O20/O23/§8.4/§8.5/§12 全部改为 SPEC canonical：`REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；`ticket` 必填非空、`RVW:` 前缀；超长按 D-35 截断+` truncated=1`；解析 `reason`/`ticket` 必需；删除 arm | **CLOSED** |
+| **R6-M1** Plan stale/0.4 | ADR `:9`/impact D-10 仍称 Plan stale | Plan `d2149c0`/C-2/0.5 已由 Lead 修（R6-M1）；ADR/impact 改为“已对齐”，删除 stale 描述 | **CLOSED** |
+| **R6-M2** baseline_impact 写“deploy 一条告警” | 与 deploy forbidden/ALERTS-01 矛盾 | 改为“告警规则另立 `REVIEW-REQUIRED-ALERTS-01`（deploy forbidden，不在本 L2）”；§9/§14/impact 同步 | **CLOSED** |
+
+### 1.1d QC R7 处置（R7-B1、R7-M1..M3）
+
+| QC 项 | R7 问题 | 0.5 R7 delta 处置 | 判定 |
+|---|---|---|---|
+| **R7-B1** ticket 空值语义与 SPEC 不一致 | ADR/impact 曾允许空/缺省 ticket，SPEC AC-72/D-35 要求非空必填 | §8.4/§8.5/§3.1/§7.4/§12/O19/O20/O23 全部改为 **`ticket=RVW:<refund_id>` 必填、非空、`RVW:` 前缀**；删除空/缺省口径；缺失/空/`arm`/其它 key 不可解析并告警；截断按 D-35 确定性规则 | **CLOSED** |
+| **R7-M1** 8 次行为未限定 REVIEW | §7.3 通用句会误伤非 REVIEW | §7.3/§8.5/§12 明确“**仅 REVIEW** 8 次保持 PENDING、不自动 FAILED；**非 REVIEW 保留既有 8 次上限/`FAILED_PERMANENT`**”；新增 O22b 回归 | **CLOSED** |
+| **R7-M2** impact stale Plan | impact `:16`/`:365`/D-10 仍称 Plan stale | 改为 Plan `d2149c0`/C-2/0.5 已由 Lead 对齐；D-10 标题改“引用对齐” | **CLOSED** |
+| **R7-M3** BFF 契约测试 | 与 gateway 仅文案冲突 | ADR R5-T2、impact §6.4 改为 **gateway 文案映射测试**（非 BFF 契约测试）；完整入口归 `REVIEW-REQUIRED-ENTRY-01` | **CLOSED** |
 
 ### 1.2 13 MAJOR + R2/R3 新增：逐条状态
 
@@ -149,7 +205,7 @@ SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `cha
 | **M-4** TCC `result=PENDING` | **CLOSED 读者 / DEFERRED 清理** | A2 双条件；O13b | Architect/Developer；2026-12-31；只读 result 的消费方 → FAIL |
 | **M-5** 存量 PRE 审计 | **CLOSED 协议 / DEFERRED 执行** | §8 查询 | ops/Developer；2026-12-31；审计未完成 → AC-27A 不得关闭 |
 | **M-6** TCC 测试路径 | **CLOSED** | allowed `tcc_*_test.go` + 指定生产 `tcc_*.go` | Developer；N/A |
-| **M-7** TCC 队列发现 | **CLOSED（本路径写 last_error）/ DEFERRED 通用** | R-9 要求 `refund_batches.last_error='REVIEW_REQUIRED:<reason>'`；`TCC-LAST-ERROR-01` 剩余部分保持 DEFERRED | Developer/Architect；2026-12-31 |
+| **M-7** TCC 队列发现 | **CLOSED（本路径写 last_error）/ DEFERRED 通用** | R-9 要求 `refund_batches.last_error='REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>'`（canonical，见 §8.4）；`TCC-LAST-ERROR-01` 剩余部分保持 DEFERRED | Developer/Architect；2026-12-31 |
 | **M-8** 重复/乱序 | **CLOSED** | W9；F7/O14 + F7b/O14b | Fulfillment consumer（只测试）；N/A |
 | **M-9** Tx2 守卫 | **CLOSED 规则** | A8 `state` CAS + 0 行语义；O11b/O11c | Developer；N/A；0 行脏写 → FAIL |
 | **M-10** POST commitment | **CLOSED** | §3.1 分行；O5/O5b | Developer；N/A |
@@ -174,9 +230,10 @@ SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `cha
 | SPEC 同步 `AC50-OUTCOME-SPEC-SYNC`（R3-B3/T-1） | PO | 2026-12-31 | SPEC-0001 `0001:645` 注未同步（`REVIEW_REQUIRED` 非结果）→ 以 PO v1.11 §11 item 4 的“更严格且更晚批准者为准”处理；不得据旧注否定本裁决 |
 | `ORDER-PAID-PLACEHOLDER-01`（R2-M1） | Architect/Developer | 2026-12-31 | 业务要求禁止正常 consumer 迟到 placeholder → 独立 L2；在此之前 W9 真实行为为准 |
 | 人工 re-arm runbook（§8.3） | ops | 2026-12-31 | runbook/授权/审计未就绪 → `AC-27-NOWB-01` 终态①不得执行；不得用普通 replay 冒充；组保持未关闭 |
-| `REVIEW-REQUIRED-ENTRY-01`（AC-72 用户可见/人工入口） | Lead/BFF/ops | 2026-12-31 | BFF/UI/入口未实现 → AC-72 的“用户可见/入口”不得 AC-VERIFIED；后端裁决/告警不受影响 |
+| `REVIEW-REQUIRED-ENTRY-01`（AC-72 用户可见/人工入口） | Lead/BFF/ops | 2026-12-31 | BFF/UI/入口未实现 → AC-72 的“用户可见/入口”不得 AC-VERIFIED；后端裁决/告警不受影响；AC-72 分段证据见 D-33 |
+| `REVIEW-REQUIRED-ALERTS-01`（AC-72 告警规则，`deploy/**`） | ops | 2026-12-31 | Plan `deploy/**` forbidden → 本 L2 不交付告警规则；未落地前 AC-72 后端段不得含“告警已上线”；metrics/查询仍可验收 |
 | `ADMISSION-RESULT-CHECK-01`（§9.2） | Architect/Developer | 2026-12-31 | 未加 CHECK 不得声称“DB 已兜底枚举”；加 CHECK 必须预检+维护窗 |
-| `REVIEW-AUDIT-01`（原复核记录载体） | Architect/PO | 2026-12-31 | PO 要求行级历史/独立审计表 → 另立 L2；在此之前以 ops 工单 + 日志 + `last_error` 为审计依据，不得声称“行级历史已保留” |
+| `REVIEW-AUDIT-01`（行级历史/独立审计表） | Architect/PO | 2026-12-31 | **不阻塞本 L2**（PO D-32）：仅当要求行内历史值/独立表时才另立；在此之前以 admission 行 + `version`/时间戳 + 发起方 `last_error` + 日志 + ops 工单为可追溯审计；不得声称“行级历史已实现” |
 
 ---
 
@@ -184,7 +241,7 @@ SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `cha
 
 ### 2.1 契约文本（additive，仅 string 值；名称由 PO 定）
 
-以下 `<NO_WAYBILL>` 为占位名（0.3 用 `NO_SHIPMENT`）。PO v1.11 未对该 Fulfillment 侧值命名（D-30 只定 Order 持久裁决），因此实施 Brief 必须由 Lead/PO 确认；**改名不改语义/矩阵**，但需同步 proto/测试/日志 key。
+以下 `<NO_WAYBILL>` 为占位名（历史稿曾用 `NO_SHIPMENT`）。PO v1.11 未对该 Fulfillment 侧值命名（D-30 只定 Order 持久裁决），因此实施 Brief 必须由 Lead/PO 确认；**改名不改语义/矩阵**，但需同步 proto/测试/日志 key。
 
 ```text
 message CancelIfCreatedReply {
@@ -245,7 +302,7 @@ message CancelIfCreatedReply {
 | `CancelIfCreated` 返回 | Order 准入裁决 | 持久化动作（**含 Tx1 已写事实**） | 退款/释放 |
 |---|---|---|---|
 | `CANCELLED` | `PRE_SHIP_REVOKED` | Tx2（`state` CAS）写 `result=PRE,state=PRE` + outbox；**正金额/TCC 的 Tx1 已写恰好 1 条 `RESERVED` commitment**（正金额 `:266-272`；TCC `tcc_settlement.go:898`），Tx2 **不重复写**；release 按 INV-44（单组）。Order 准入层不写 Payment；本层只写 admission/outbox/release | 允许（AC-50 合法 PRE） |
-| **`<NO_WAYBILL>`（整组）** | **`REFUND_ADMISSION_CONFLICT` + `REVIEW_REQUIRED`** | **Tx2 写 `result=REVIEW_REQUIRED,state=PENDING_REMOTE`**（`version+1`；CAS `state='PENDING_REMOTE'`）+ Error 告警；**不开 release、不写终态 outbox**；Tx1 的 **commitment 与占位 outbox 保留**；`source=tcc` 且 `batch_id` 非空时同事务置 `refund_batches.MANUAL_HOLD` + `last_error`，并把 `refund_applications.admission_result` 置 `REVIEW_REQUIRED`（state 保持 `PENDING`）；处置见 §7.4 | **禁止** `Payment.Refund/RefundBatch`、禁止 release/commitment release；`Payment.GetIntent` 只读允许（重放不读） |
+| **`<NO_WAYBILL>`（整组）** | **`REFUND_ADMISSION_CONFLICT` + `REVIEW_REQUIRED`** | **Tx2 写 `result=REVIEW_REQUIRED,state=PENDING_REMOTE`**（`version+1`；CAS `state='PENDING_REMOTE'`）+ Error 告警；**不开 release、不写终态 outbox**；Tx1 的 **commitment 与占位 outbox 保留**；`source=tcc` 且 `batch_id` 非空时同事务置 `refund_batches.MANUAL_HOLD` + `last_error`（含 reason/ticket（`RVW:<refund_id>`）），**仅当该 `refund_id` 已有 `refund_applications` 行时**才置其 `admission_result=REVIEW_REQUIRED`（state 保持 `PENDING`）；普通售后**不写/不新建** `refund_applications`（镜像由 AfterSales task 承担，§3.3/§7.4）；处置见 §7.4 | **禁止** `Payment.Refund/RefundBatch`、禁止 release/commitment release；`Payment.GetIntent` 只读允许（重放不读） |
 | `ALREADY_SHIPPED` / `RECEIVED` | `POST_SHIP_ALLOWED` | Tx2（`state` CAS）写 `result=POST,state=POST` + outbox；**正金额路径的 Tx1 已有 1 条 `RESERVED` commitment，Tx2 不重复写**；**TCC 已离仓组**由 `recordTccPostAdmission` 在同一事务写 POST admission + commitment（既有，`tcc_admission.go:214`） | 允许（已离仓） |
 | **（整组）Order 组投影已是 `SHIPPED/RECEIVED`** | `POST_SHIP_ALLOWED` | **不调用 `CancelIfCreated`**（PO AC-50 `0002:236`）；Tx1 直接写 `result=POST,state=POST` + outbox + commitment（或 Tx2 CAS POST）；**不得再探测/取消** | 允许（已离仓） |
 | `TRANSIENT_ERROR` | **不可判定（未决）** | 不动；保持 `PENDING_REMOTE` | 禁止；可重试（`apperr.Unavailable`）；**不得写 `REVIEW_REQUIRED`**（AC-70 `0002:469`） |
@@ -268,11 +325,11 @@ message CancelIfCreatedReply {
 
 | 来源 | 现有路径 | 本裁决要求 |
 |---|---|---|
-| 普通售后（`source=aftersale`） | AfterSales worker → `Order.AdmitRefund` → `finishRemoteAdmission` | 同一映射，无例外；Order 裁决落 `order_refund_admissions`（普通售后当前无 `refund_applications` 行，§12.3） |
-| SYSTEM 缺货（`source=system_shortage`） | 同上 | 同上 |
-| TCC 补偿（`source=tcc`） | `tcc_admission.go:admitTccApplication` → `Order.AdmitRefund` → `finishRemoteAdmission` | 同一映射；`admission_result=REVIEW_REQUIRED`、批次 `MANUAL_HOLD`；**禁止**在 `tcc_*.go` 再写一份 `CANCELLED→PRE`；Tx1 `result=PENDING_REMOTE` 是既有偏差（§6.2） |
+| 普通售后（`source=aftersale`） | AfterSales worker → `Order.AdmitRefund` → `finishRemoteAdmission` | 同一映射；**唯一权威裁决**落 `order_refund_admissions`；普通售后**没有 `refund_applications` 行** → 镜像由 **AfterSales**（allowed，R5-B1）写 `after_sale_refund_tasks.last_error`（canonical）、task 保持 `PENDING`、8 次后不得自动 `FAILED_PERMANENT`（§8.5）；**不得新建 `refund_applications` 行**（PO AC-69 `0002:456`/S20 `0002:103`） |
+| SYSTEM 缺货（`source=system_shortage`） | 同上 | 同上（AfterSales task 镜像；不得新建 `refund_applications`） |
+| TCC 补偿（`source=tcc`） | `tcc_admission.go:admitTccApplication` → `Order.AdmitRefund` → `finishRemoteAdmission` | 同一映射；**已有 `refund_applications` 行** → `admission_result=REVIEW_REQUIRED`、`state=PENDING`；批次 `MANUAL_HOLD` + `refund_batches.last_error`；**禁止**在 `tcc_*.go` 再写一份 `CANCELLED→PRE`；Tx1 `result=PENDING_REMOTE` 是既有偏差（§6.2） |
 | legacy（历史单/无许可行 G1） | `ensurePermitTx` 初始化后走同一 `AdmitRefund` | AC-70 `0002:468` 三分法：组投影 `SHIPPED/RECEIVED`→`POST_SHIP_ALLOWED`（不得 PRE）；组投影未离仓，或无组行且 `orders.status ∈ {PAID,ALLOCATED}`→视为未离仓，走 `NONE→REVOKED→PRE_SHIP_REVOKED`；组投影缺失且 `orders.status ∈ {SHIPPED,COMPLETED}`→`REVIEW_REQUIRED`；不得默认 PRE、不得猜 `payment_no`、不得按 0 额度 |
-| 零元（`source=system_zero`） | `admitZeroRefund` → `decideZeroRefundResult` | 同一映射语义（§4）；无 Tx1，**不持久化** `REVIEW_REQUIRED` |
+| 零元（`source=system_zero`） | `admitZeroRefund` → `decideZeroRefundResult` | 同一映射语义（§4）；**不进入 S20**（PO B2）：无 Tx1/无承诺，**不持久化** `REVIEW_REQUIRED`、不写 admission/S19、不计入复核计数 |
 
 ### 3.4 R-2b：部分金额协议（PO D-31 三分法；不探测，无预读）
 
@@ -301,7 +358,7 @@ message CancelIfCreatedReply {
 ### 3.5 `REVIEW_REQUIRED` 的持久化与重放
 
 1. Tx1 照旧（admission 占位 + commitment + 普通正金额占位 outbox）。
-2. Tx2 调 `CancelIfCreated`；`<NO_WAYBILL>` → **同一 Tx2** 以 `WHERE refund_id=? AND state='PENDING_REMOTE'` CAS 写 `result=REVIEW_REQUIRED`（`state` 不变）、`version+1`；不写 release/终态 outbox；Error 告警（§8）；若 `source=tcc`，同事务置 `refund_batches.MANUAL_HOLD` + `last_error='REVIEW_REQUIRED:<reason>'`（`WHERE batch_id=? AND state IN ('FROZEN','ADMITTING')`）并更新 `refund_applications SET admission_result='REVIEW_REQUIRED' WHERE refund_id=? AND state='PENDING'`。
+2. Tx2 调 `CancelIfCreated`；`<NO_WAYBILL>` → **同一 Tx2** 以 `WHERE refund_id=? AND state='PENDING_REMOTE'` CAS 写 `result=REVIEW_REQUIRED`（`state` 不变）、`version+1`；不写 release/终态 outbox；Error 告警（§8）；若 `source=tcc`，同事务置 `refund_batches.MANUAL_HOLD` + `last_error='REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>'`（canonical；`ticket` 必填非空、`RVW:` 前缀；`WHERE batch_id=? AND state IN ('FROZEN','ADMITTING')`），并**仅当存在** `refund_applications` 行时更新 `SET admission_result='REVIEW_REQUIRED' WHERE refund_id=? AND state='PENDING'`。普通售后**不由 Order 写** `refund_applications`；其镜像由 **AfterSales**（R5-B1，allowed）在收到 `REFUND_ADMISSION_CONFLICT(REVIEW_REQUIRED)` 时写 `after_sale_refund_tasks.last_error`（canonical；任务保持 `PENDING`；**8 次后不得自动 `FAILED_PERMANENT`**，见 §8.5）。
 3. commitment 保持 `RESERVED`；permit 保持 `CONSUMED`；`orders.status`/`refund_state` 不写；组未关闭。
 4. 同 `refund_id` 重放：`AdmitRefund` **必须在 `Payment.GetIntent` 与任何远程调用之前**先读 existing；`state=result ∈ {PRE,POST}` → 返回已持久化结果；`result=REVIEW_REQUIRED` → **返回同一 `REFUND_ADMISSION_CONFLICT`**（同一 details），**不再调用 `CancelIfCreated`/`GetIntent`**、不再写任何行；`state=PENDING_REMOTE` 且 `result≠REVIEW_REQUIRED` → 继续既有流程。
 5. 并发：两个 Tx2 都拿到 `<NO_WAYBILL>`；一个 CAS 成功，另一个 0 行（`state` 已非 `PENDING_REMOTE`）→ 读回 `REVIEW_REQUIRED` → 返回同一错误；不重复写/不重复告警（告警可每请求一条，但不得重复写）。
@@ -443,9 +500,9 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 
 ### 7.3 “有界”的定义与重试口径（R3-B4 / PO §5.10）
 
-- **有界** = ① 复核裁决在首次 `<NO_WAYBILL>`/不可判定即持久化，不进入无限 `PENDING_REMOTE`；② 同 `refund_id` 重放返回**同一**结果/错误，不再远程探测、不再新增写入；③ 自动重试上限由发起方既有机制给出（AfterSales `maxTaskAttempts=8` 后 `FAILED_PERMANENT`；TCC batch 由 ops 发现），不新增 worker/扫描器；④ 唯一前进路径是人工 re-arm（同 `refund_id`）或 AC-62 授权释放后以新 `refund_id` 重新申请。
+- **有界** = ① 复核裁决在首次 `<NO_WAYBILL>`/不可判定即持久化，不进入无限 `PENDING_REMOTE`；② 同 `refund_id` 重放返回**同一**结果/错误，不再远程探测、不再新增写入；③ 自动重试上限由发起方既有机制给出：**仅当裁决为 `REVIEW_REQUIRED`** 时，AfterSales `maxTaskAttempts=8` 为**停止自动重试**阈值（**不是 `FAILED_PERMANENT` 阈值**），任务保持 `PENDING` 转人工队列；**非 REVIEW 错误保留既有 8 次上限与 `FAILED_PERMANENT` 行为**（本 L2 不得改变）；TCC batch `MANUAL_HOLD` 由 ops 发现；不新增 worker/扫描器；④ 唯一前进路径是人工 re-arm（同 `refund_id`）或 AC-62 授权释放后以新 `refund_id` 重新申请。
 - **AC-50 `0002:228` 的“申请保持可重试”**按 PO §5.10 分界表（`0002:652-670`）收窄为“申请不丢失、幂等可重放；REVIEW 不自动收敛”；本 ADR 不再写“自动重试可收敛”。
-- AfterSales `maxTaskAttempts=8`（`aftersales/service.go:58`）耗尽后 `FAILED_PERMANENT`，即人工队列信号；错误文本必须含 `REFUND_ADMISSION_CONFLICT` 以便落 `last_error`（`workers.go:724-748`）。禁止在 AfterSales 增加“复核当成功”分支。
+- **仅 REVIEW 分支**：AfterSales `maxTaskAttempts=8`（`aftersales/service.go:58`）耗尽后**仍保持 `PENDING`**（仅停止自动重试并进人工队列），**不得自动 `FAILED_PERMANENT`**；只有人工放弃（AC-62/D-24）才可 `FAILED_PERMANENT`。**非 REVIEW 错误**：保留既有 `maxTaskAttempts`/`FAILED_PERMANENT` 行为，不得因本 L2 改变。REVIEW 的 `last_error` 必须是 AC-72 canonical（§8.5）；禁止在 AfterSales 增加“复核当成功”分支。
 - TCC 不经过 AfterSales：batch `MANUAL_HOLD`、application `PENDING`；发现见 §8；重放由 ops/发起方。
 
 ### 7.4 Tx1 已写事实的处置协议（B-1 保持）
@@ -456,9 +513,10 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 |---|---|---|
 | `order_refund_admissions` | Tx2 写 `result=REVIEW_REQUIRED`（`state` 保持 `PENDING_REMOTE`），`version+1`（CAS `state='PENDING_REMOTE'`）；不删行 | 持久化复核裁决，供重放返回同一错误；删除会丢幂等锚点/证据 |
 | `order_refund_commitments` | `RESERVED` **保留，不释放**（整组由 Tx1 写 1 条；部分不可判定由同一 Tx1 写 1 条；部分未离仓 PARTIAL 不写） | INV-45/AC-62；只有授权释放/打款才离开 RESERVED |
+| `after_sale_refund_tasks`（普通售后镜像；**AfterSales 写**，allowed 仅此范围） | 保持 `PENDING` + `last_error='REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>'`（canonical；`ticket` 必填非空、`RVW:` 前缀；超长带 ` truncated=1`；重试/8 次后**不得**自动 `FAILED_PERMANENT`）；ops re-arm 以 `RVW:<refund_id>` 建单/映射；**Order 不跨库写**；不得以清空该字段作为处置（PO AC-69 `0002:464`） | R5-B1；PO B1 carve-out；审计镜像 D-32 ② |
 | outbox `order.refund_admitted` | Tx1 占位保留（普通：`result=POST,state=PENDING_REMOTE`；TCC：无占位）；**不新增终态事件** | A7；占位不是准入事实 |
-| `refund_applications`（TCC/存在时） | 同 Tx2 置 `admission_result=REVIEW_REQUIRED`、`state=PENDING`；不写 `DONE`/`PROCESSING`/`FAILED_PERMANENT` | PO S20/AC-69；`ensureTccApplicationTx` 必须认该值为合法持久值 |
-| `refund_batches`（TCC） | `state=MANUAL_HOLD` + `last_error='REVIEW_REQUIRED:<reason>'`（同 Tx2；`WHERE batch_id=? AND state IN ('FROZEN','ADMITTING')`） | PO AC-71；0017 CHECK 已含 |
+| `refund_applications`（**仅当已存在**，TCC 组级） | 同 Tx2 置 `admission_result=REVIEW_REQUIRED`、`state=PENDING`；不写 `DONE`/`PROCESSING`/`FAILED_PERMANENT`；**普通售后不得新建/写该行** | PO S20/AC-69；`ensureTccApplicationTx` 必须认该值为合法持久值；B1 carve-out |
+| `refund_batches`（TCC） | `state=MANUAL_HOLD` + `last_error='REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>'`（canonical；同 Tx2；`WHERE batch_id=? AND state IN ('FROZEN','ADMITTING')`） | PO AC-71；0017 CHECK 已含；审计镜像 D-32 |
 | INV-44 release | **不写** | 只有 PRE 才发 release |
 | commitment release | **自动路径不写**；只有 AC-62/D-24 人工授权可写 | INV-45/AC-62 |
 | Payment | `GetIntent` 已读（首次）；**不调用 `Refund/RefundBatch`**；重放读 REVIEW 时**连 `GetIntent` 都不读** | INV-43/A4 |
@@ -482,7 +540,7 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 - 若未来要引入只读 S6 查询，属对 ADR §5.2.2 的 trade-off，须修订 ADR + 人类批准，且只读、有 deadline、不用于整组 PRE/POST（PO D-31 `0002:835`）。
 - 若未来要把 `CONSUMED` 的 Tx1 outbox 移到 Tx2，必须改 `AdmitRefund`/TCC 既有行为、扩 `allowed_paths` 并重做 W1–W3；本 amendment 不做（§13）。
 
-### 7.6 回滚约束（PO §12 `0002:886`）
+### 7.6 回滚约束（PO §12 `0002:903`）
 
 - PO 要求：旧代码读到 `REVIEW_REQUIRED` 必须 fail-closed、不得当 PRE/POST、不得打款/关闭；**回滚前必须先审计是否存在 `REVIEW_REQUIRED` 行**。
 - 当前旧代码：`state=PENDING_REMOTE` → `finishRemoteAdmission` 会**重探**，可能把复核洗成 PRE/POST → **旧代码不是 fail-closed**。
@@ -494,18 +552,19 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 
 | 项 | 裁决 |
 |---|---|
-| 队列载体 | **复用** SPEC-0001 §16.2 `AC-27-NOWB-01`（`0001:863`）+ PO v1.11 AC-72（`0002:481-491`）；**不新增**状态字段/表/队列模型；复核裁决即队列标记（`result=REVIEW_REQUIRED,state=PENDING_REMOTE`） |
+| 队列载体 | **复用** SPEC-0001 §16.2 `AC-27-NOWB-01`（`0001:863`）+ PO v1.11 AC-72（`0002:489-499`）；**不新增**状态字段/表/队列模型；复核裁决即队列标记（`result=REVIEW_REQUIRED,state=PENDING_REMOTE`）。**零元冲突不进入该队列的 `REVIEW_REQUIRED` 计数**（单列，PO B2/D-33） |
 | 组状态 | 保持未关闭（AC-27A：REVIEW/PENDING/结果缺失 → 未关闭 + 告警）；permit 保持 `CONSUMED` |
 | 申请状态 | `PENDING`（TCC batch `MANUAL_HOLD`）；不自动 `DONE`/`PROCESSING`/`FAILED_PERMANENT`（人工放弃除外）；自动重试只幂等返回同一冲突（不收敛） |
 | 终态①（整组复核） | Fulfillment 提供/修复**既有或曾存在但丢失**的真实 S6 取消证据（真实记录/承运商取消/仓出库撤销 + 恢复审计）→ ops 凭 Fulfillment 授权核对 → **受控 re-arm（§8.3）** → 重放探测 → CANCELLED → PRE → 组关闭。**不得为从未存在的运单新建行**；**不得把复核后由正常 `order.paid` 迟到的 placeholder 当证据**（W9） |
 | 终态② | 无法补齐 → 申请保持 `PENDING`/人工队列；仅人工放弃时按 AC-62 记 `FAILED_PERMANENT` 并取得 SPEC-0002 owner 书面口径；**AC-62/D-24 授权释放旧 `RESERVED` 是唯一释放路径**（只释放额度、不恢复 permit、不关闭组、不写 `DONE`）；组保持未关闭并告警；不得自动关闭/自动退款/恢复 permit |
 | 部分金额（R-2b） | 未离仓 → `PARTIAL_REFUND_REQUIRES_FULL_GROUP`（零写入，用户改整组）；不可判定 → `REVIEW_REQUIRED`（+1 条 `RESERVED` commitment 冻结额度，`reason=PARTIAL_AMOUNT_UNCLASSIFIABLE`）；已离仓 → POST。组保持未关闭 |
 | owner / SLA | `Developer（Order 数据核对）/ops（队列、重放）/Fulfillment（S6 证据）`；**单笔 24h 首次响应、7 个自然日处置上限，逾期升级财务/运营负责人**（AC-72）；工程缺口 expiry 2026-12-31（`0001:856`） |
-| 告警机制（固定 key/大小写） | Order `s.log.Error`，msg=`refund admission review required: consumed permit without shipment`，字段 `refund_id/order_no/group_no/source/result="REVIEW_REQUIRED"/state="PENDING_REMOTE"/reason/manual_queue=AC-27-NOWB-01`（TCC 另加 `batch_id`）；部分金额/legacy 按 `reason` 区分。`reason` 固定三值，**不得改名**：`CONSUMED_WITHOUT_SHIPMENT`/`PARTIAL_AMOUNT_UNCLASSIFIABLE`/`LEGACY_SHIPMENT_UNKNOWN`。不得改名（T-6）；`deploy/**` 规则见 R-10 |
+| 告警机制（固定 key/大小写） | Order `s.log.Error`，msg=`refund admission review required: consumed permit without shipment`，字段 `refund_id/order_no/group_no/source/result="REVIEW_REQUIRED"/state="PENDING_REMOTE"/reason/manual_queue=AC-27-NOWB-01`（TCC 另加 `batch_id`）；镜像 `last_error` 使用 canonical `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；部分金额/legacy 按 `reason` 区分。`reason` 固定三值，**不得改名**：`CONSUMED_WITHOUT_SHIPMENT`/`PARTIAL_AMOUNT_UNCLASSIFIABLE`/`LEGACY_SHIPMENT_UNKNOWN`。不得改名（T-6）；`deploy/**` 告警规则不在本 L2，归 `REVIEW-REQUIRED-ALERTS-01`（§9） |
 | 队列发现（普通售后） | `SELECT refund_id,order_no,group_no,source,result,state,updated_at FROM order_refund_admissions WHERE result='REVIEW_REQUIRED' AND state='PENDING_REMOTE'`；交叉 AfterSales `after_sale_refund_tasks.last_error LIKE '%REFUND_ADMISSION_CONFLICT%'` |
 | 队列发现（TCC，M-7） | `SELECT batch_id,order_no,payment_no,state,last_error,updated_at FROM refund_batches WHERE state='MANUAL_HOLD'` + `SELECT refund_id,group_no,state,admission_result FROM refund_applications WHERE batch_id=?`；原因读 `refund_batches.last_error`（R-9 写入）。**不得只依赖发起方 last_error**（PO AC-61 `0002:318`） |
 | 存量 PRE 审计（M-5，R2-M2 修正） | `SELECT a.refund_id,a.order_no,a.group_no,a.result,a.state,p.state AS permit_state,g.status AS group_status FROM order_refund_admissions a LEFT JOIN order_shipping_permits p ON p.order_no=a.order_no AND p.fulfillment_group_no=a.group_no LEFT JOIN order_fulfillment_groups g ON g.order_no=a.order_no AND g.group_no=a.group_no WHERE a.result='PRE_SHIP_REVOKED' AND (a.state='PRE_SHIP_REVOKED' OR a.state='PENDING_REMOTE')`；分别列出：`g.group_no IS NULL`、`g.status IN ('SHIPPED','RECEIVED')`、`a.state='PENDING_REMOTE'`（不可核验）、`p.state IN ('REVOKED','CONSUMED')`。owner=ops+Developer，expiry 2026-12-31；**0 行 ≠ 安全**。审计结论未出前，AC-27A 第 4/5 条不得对相关组标已关闭/AC-VERIFIED |
-| metrics（AC-72） | `mall_refund_review_backlog`、`mall_refund_review_oldest_seconds`（`internal/platform/metrics`）；Order 既有 tick 只读刷新（R-10）；7 天未处置 > 0 视为运营阻断并在日报列出 |
+| metrics（AC-72） | `mall_refund_review_backlog`、`mall_refund_review_oldest_seconds`（`internal/platform/metrics`）；Order 既有 tick 只读刷新（R-10）；7 天未处置 > 0 视为运营阻断并在日报列出；**只统计持久化路径，零元单列不混入**（PO D-33） |
+| AC-72 分段（D-33） | **后端段（本 L2 可验收）**：metrics/查询、告警 key/`reason` 字段、24h/7d SLA/升级/owner、对账；**告警规则落地**（`deploy/**`）不在本 L2 → `REVIEW-REQUIRED-ALERTS-01`（ops，2026-12-31）；**用户可见/入口段** → `REVIEW-REQUIRED-ENTRY-01`（DEFERRED，Lead/BFF/ops，2026-12-31）；`ac-coverage.tsv` 分段登记，**AC-72 不得整体 AC-VERIFIED** |
 
 ### 8.2 与 SPEC-0001 §16.2 的终态对齐
 
@@ -520,8 +579,9 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 
 - **仅 ops**，在 Fulfillment 提供**真实既有/曾存在但丢失**的 S6 证据、ops 授权核对、审计工单齐备后执行；不得自动、不得由 worker/重试触发。
 - 组裁决：`UPDATE order_refund_admissions SET result='PENDING_REMOTE', version=version+1, updated_at=NOW(3) WHERE refund_id=? AND result='REVIEW_REQUIRED' AND state='PENDING_REMOTE' AND version=?`；`state` 不动。
-- **原复核记录**：admission 行按状态机迁移（`REVIEW_REQUIRED→PENDING_REMOTE→PRE/POST`），行内不保留历史值；审计依据为 ops 工单（操作人/授权人/证据/时间/version）+ 结构化日志 +（TCC）`refund_batches.last_error`。若 PO 要求行级历史/独立审计表，属新表 → 另立 L2（`REVIEW-AUDIT-01`），不得由 Developer 夹带。
-- TCC：同一审计流程把 `refund_batches SET state='ADMITTING', last_error='', version=version+1 WHERE batch_id=? AND state='MANUAL_HOLD' AND version=?`；`refund_applications` 的 `admission_result` 保持 `REVIEW_REQUIRED` 以便重评时被 `ensureTccApplicationTx` 认作可重算（若实现选择在 re-arm 时清空，必须在实施 Brief 写明并测试）。
+- **审计留存（PO D-32，无新表/迁移）**：见 §8.4。re-arm **必须先写审计、后清除**：①ops 工单（ticket）→ ②确认发起方镜像 `last_error` 为 canonical `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（可截断带 `truncated=1`）→ ③结构化日志 → ④版本化 CAS 清 `result`。**不得先清除再补审计，不得以清空 `last_error` 作为处置**；admission 行不删除、`version` 单调、`created_at/updated_at` 保留首次进入/最近处置。
+- TCC：同一审计流程把 `refund_batches SET state='ADMITTING', last_error='REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>', version=version+1 WHERE batch_id=? AND state='MANUAL_HOLD' AND version=?`（**保留 canonical 审计文本，不得清空**）；`refund_applications` 的 `admission_result` 保持 `REVIEW_REQUIRED` 以便重评时被 `ensureTccApplicationTx` 认作可重算（若实现选择在 re-arm 时清空，必须在实施 Brief 写明并测试）。
+- **普通售后镜像**：`after_sale_refund_tasks.last_error` 由 **AfterSales** 在收到 `REFUND_ADMISSION_CONFLICT(REVIEW_REQUIRED)` 时按 canonical 写入；ops re-arm/认领经受权入口，工单以 `RVW:<refund_id>` 建单/映射（不回写），**Order 不跨库写**；AfterSales 8 次后不得自动 `FAILED_PERMANENT`（R5-B1，§8.5）。
 - **不动 commitment/permit/outbox**；审计工单记录 refund_id/batch_id/操作人/授权人/证据/时间/version。
 - 随后同 `refund_id` 重放 `AdmitRefund`：探测 `CANCELLED` → PRE → 组关闭；`SHIPPED` → POST；仍 `<NO_WAYBILL>` → 再次 REVIEW（保持人工队列）。
 - **唯一合法过渡**：
@@ -537,6 +597,37 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 - **禁止**：用迟到 `order.paid` placeholder 当证据；用普通 replay 代替 re-arm；re-arm 后自动打款/释放（仍走 AC-50/AC-62 原流程）。
 - 若组织不允许人工 DB 写：终态①改走“AC-62 授权释放旧 RESERVED + 新 `refund_id` 整组准入”（依赖 T3 release 实现）；在此之前 term① 保持未关闭（§1.3 stop）。
 
+### 8.4 复核审计留存（AC-69 `0002:464` / AC-72 `0002:498` / PO D-32；无新表/迁移）
+
+| 载体 | 写入时机/操作 | 保留方式 | 可核验 |
+|---|---|---|---|
+| ① `order_refund_admissions` 行 | 进入：Tx2 写 `result=REVIEW_REQUIRED,state=PENDING_REMOTE,version+1`；re-arm：版本化 `result→PENDING_REMOTE,version+1`；人工放弃/用户改整组：行**不删除** | 永久不 DELETE；`created_at`=首次进入、`updated_at`=最近处置、`version` 单调 | `SELECT refund_id,result,state,version,created_at,updated_at WHERE refund_id=?`；O20 |
+| ② 发起方镜像 `last_error` | **canonical**：`REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（`ticket` 必填非空、`RVW:` 前缀；超长按 D-35 保留前缀+截断 `<refund_id>`+` truncated=1`）。TCC：Order 在 Tx2 写 `refund_batches.last_error`。普通售后：**AfterSales** 写 `after_sale_refund_tasks.last_error`（`PENDING` 保持；8 次后不得自动 `FAILED_PERMANENT`） | 列宽：售后 512、TCC 1024；`reason=`/`ticket=` 必需；未截断逐字符相等，截断按 D-35；未知 key/空 ticket/`arm` 不可解析并告警；**不得以清空该字段作为复核处置**（AC-69） | `LIKE 'REVIEW_REQUIRED reason=%'`；O20 |
+| ③ 结构化日志 | 进入 REVIEW、每次 re-arm、每次处置（放弃/新 `refund_id`/收敛） | 平台日志留存策略；字段 `refund_id/order_no/group_no/from/to/reason/ticket/version` | 日志检索；O20 |
+| ④ ops 工单 | re-arm/放弃/处置 | 工单系统（外部）；操作人/授权人/证据/时间/金额/原因 | 工单审计 + 对账交叉 |
+| 行级历史/独立审计表 | **本 L2 不实现**（`REVIEW-AUDIT-01` DEFERRED） | 仅当 PO/QC 要求“行内历史值/独立表”时另立 L2；本 L2 不新增表/迁移 | 不适用 |
+
+**re-arm 强制顺序**：①写工单 → ②写镜像 `last_error` → ③结构化日志 `review_rearm` → ④版本化 CAS 清 `result` → ⑤仍 REVIEW 则写回并告警。**禁止**先清除再补审计；**禁止**清空 `last_error` 作为处置。
+**ticket 的口径（R7-B1 / SPEC D-35）**：`ticket=RVW:<refund_id>` 是系统派生复核 id，**必填、非空、固定 `RVW:` 前缀**；`ticket=` 为空或缺失**不是合法记录**。ops 工单以该 id 建单/映射，**不回写** `last_error`；缺失/空/`arm`/其它 key 一律**不可解析并告警**（按人工队列处理，不猜测/回填）。
+**普通售后 ticket（R7-B1）**：`ticket=RVW:<refund_id>` 由 AfterSales 在写 `last_error` 时**同步生成**（系统派生、非空）；ops 工单以该 id 建单/映射，无需回写。**不再有空/缺省 ticket 的口径**（D-35 定稿）。
+**保留判定**：AC-69/72 的“保留原复核记录”由 ①②③④ 共同满足（D-32 明示“不是行级历史字段”）；本 L2 不要求行级历史，**不阻塞** AC-69/72 后端验收；不得声称“行级历史已实现”。
+**`[ARCHITECTURAL_FLAW]` 门**：若 QC/PO 坚持行级历史（含普通售后 re-arm 的证据/处置人必须写入 Order 侧行），则需新表/新列（如 `order_refund_admission_audits`）→ 属 schema/迁移，与本 L2 的“无迁移”约束冲突；**标 `[ARCHITECTURAL_FLAW]` 并回 Plan**（`docs/lead/PAY-AC50-REVIEW-01/plan.md`）另排，不得由本 L2 夹带。
+
+### 8.5 AfterSales 复核镜像与任务状态（R5-B1；allowed 仅 `after_sale_refund_tasks.last_error`/PENDING/重试上限）
+
+| 场景 | AfterSales 行为（allowed） | 禁止 |
+|---|---|---|
+| `AdmitRefund` 返回 `REFUND_ADMISSION_CONFLICT` 且 details `result=REVIEW_REQUIRED`（或 Order 裁决读回为 REVIEW） | 写 `after_sale_refund_tasks.last_error='REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>'`（canonical；`ticket` 必填非空、`RVW:` 前缀）；任务保持 `PENDING`；**停止自动重试升级**（释放 lease，不再次自动调度） | 把 REVIEW 当普通失败继续重试；置 `DONE`/`FAILED_PERMANENT` |
+| 自动重试累计到 `maxTaskAttempts=8` 且裁决为 REVIEW | **仍保持 `PENDING`**（不得自动 `FAILED_PERMANENT`）；`last_error` 保持 canonical；仅告警/人工队列 | 以“次数到上限”自动 `FAILED_PERMANENT`（AC-69 `0002:457`；S20 `0002:104`） |
+| ops 认领/re-arm | 经 AfterSales 受权入口：先确认 canonical `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（可截断带 `truncated=1`）→ 再触发 Order re-arm（CAS `result→PENDING_REMOTE`）→ 日志；ops 工单以 `RVW:<refund_id>` 建单/映射；任务保持 PENDING 直到终局 | Order 跨库写 AfterSales；先清 Order 再补镜像；清空 `last_error` |
+| 人工放弃（AC-62） | 仍按 AC-62/D-24；AfterSales 任务可记 `FAILED_PERMANENT`（**仅人工放弃**），`last_error` 保留 canonical；处置人/证据在 ops 工单 | 自动放弃；自动释放 |
+| 任务最终成功（PRE/POST 后 Payment DONE） | 正常 `DONE`；`last_error` 按既有成功路径清空（不是“以清空作为复核处置”） | 在 REVIEW 未处置前清空 |
+
+- **canonical/长度**：`REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；reason ∈ 稳定枚举（§8 告警行）；`ticket=RVW:<refund_id>` 系统派生、**必填非空、`RVW:` 前缀**；售后列 512、TCC 1024；未截断逐字符相等；`L` 超列宽时保留前缀并截断 `<refund_id>`、追加 ` truncated=1`（D-35 确定性规则）；`reason=`/`ticket=` 永不丢；空/缺失/`arm`/其它 key 不可解析并告警。
+- **实现边界**：AfterSales 改动仅限 `after_sale_refund_tasks.last_error` 写入、**REVIEW 任务** `PENDING` 保持、REVIEW 的 8 次上限行为；**非 REVIEW 错误的 8 次上限/`FAILED_PERMANENT` 行为必须原样保留**；**不得改结算/回库/其他状态机/任务表结构**（无迁移）。Order 只读/不跨库写。
+- **发现**：ops 用 `last_error LIKE 'REVIEW_REQUIRED reason=%'` + Order `order_refund_admissions` + 告警；**不得只依赖 last_error 文字**（AC-61/AC-72）。
+
+
 ---
 
 ## 9. R-8 / R-10：登记面、迁移与可观测性
@@ -546,15 +637,17 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 | `api/proto/mall/v1/mall.proto` 注释 | **必须** | `CancelIfCreatedReply.status` 列出 `<NO_WAYBILL>` 及五值语义（名称由 PO/Lead 定）；RPC 注释补“or report the group has no shipment row”。owner Developer；Architect 文本见 §2.1。**不加字段/不加 RPC** | `mall.proto:1043`、`:1089-1098`；`make proto` 后 `mall.pb.go` + `mall_grpc.pb.go` 注释同步 |
 | `api/gen/**` | **仅生成** | `make proto`（`Makefile:153-157`）；禁止手改；**T-2** 固定 `protoc`/`protoc-gen-go` 版本；`git diff -- api/gen` 只允许两文件注释行 | `scripts/check-proto-evolution.py`；`make proto-guard` |
 | `docs/contracts.md` | **不需要** | 仅规定 `apperr` 映射；ADR §5.3 是契约正文 | `contracts.md:235-239` |
-| 错误码 | **不新增** | `REFUND_ADMISSION_CONFLICT`（`0002:517`/v1.11 `0002:601`）与 `PARTIAL_REFUND_REQUIRES_FULL_GROUP`；TCC 另用 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`（PO v1.11 `0002:601`）；`apperr.Failed`→`FAILED_PRECONDITION` | `apperr.go:61-64`；`refund_admission.go:312-328` |
-| 持久裁决值 `REVIEW_REQUIRED` | **PO v1.11 D-30 已定；无 schema 变更** | `order_refund_admissions.result`（`VARCHAR(32)`）+ `refund_applications.admission_result`（`VARCHAR(24)`，15 字符）；`state` 保持 `PENDING_REMOTE`；TCC batch `MANUAL_HOLD`（0017 CHECK 已含） | `0016:7-19`；`0017:20-33,56`；`0002:834` |
-| 迁移 | **无** | 不得新增 `0024`；若实现需要迁移 → 停止（§15.2） | `0002:834`；`0023:1-12` 的 frozen/checksum 合同 |
+| 错误码 | **不新增** | `REFUND_ADMISSION_CONFLICT`（`0002:596`）与 `PARTIAL_REFUND_REQUIRES_FULL_GROUP`；TCC 另用 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`（PO v1.11 `0002:608`）；`apperr.Failed`→`FAILED_PRECONDITION` | `apperr.go:61-64`；`refund_admission.go:312-328` |
+| 持久裁决值 `REVIEW_REQUIRED` | **PO v1.11 D-30 已定；无 schema 变更** | **唯一权威载体** `order_refund_admissions.result`（`VARCHAR(32)`）；`refund_applications.admission_result`（`VARCHAR(24)`，15 字符）**仅当该行已存在（TCC 组级）才写**；`state` 保持 `PENDING_REMOTE`；TCC batch `MANUAL_HOLD`（0017 CHECK 已含） | `0016:7-19`；`0017:20-33,56`；`0002:845`（D-30） |
+| 迁移 | **无** | 不得新增 `0024`；若实现需要迁移 → 停止（§15.2） | `0002:845`（D-30）；`0023:1-12` frozen/checksum；D-32/§8.4 复用既有列/行 |
+| 审计载体（D-32） | **必须（复用既有）** | admission 行不删除 + `version`/`created_at`/`updated_at`；发起方镜像 `last_error` canonical（TCC `refund_batches.last_error` ≤1024；普通售后 `after_sale_refund_tasks.last_error` ≤512）；结构化日志；ops 工单。`REVIEW-AUDIT-01` 仅行级历史/独立表，DEFERRED 且不阻塞 | `0002:106,464,848`；§8.4 |
+| AfterSales 镜像/状态（R5-B1） | **必须（allowed）** | 仅 `after_sale_refund_tasks.last_error` canonical、任务保持 `PENDING`、8 次后不得自动 `FAILED_PERMANENT`；不改结算/回库/状态机/表结构 | `migrations/aftersales/0010:92`；`workers.go:724-748`；§8.5 |
 | 事件/payload | **不需要** | REVIEW 不新增 `order.refund_admitted`；Tx1 占位按 A7 | `refund_admission.go:610-619` |
 | ADR §12.5.3 列注释 | **文档同步（无 DDL）** | `0007:1130` 的 `admission_result` 注释在 Rev 2.4 errata 中同步；本 change 不改 accepted 正文 | `0007:1130` |
-| metrics（R-10/AC-72） | **必须** | `mall_refund_review_backlog`、`mall_refund_review_oldest_seconds`（additive）；`order/worker.go` 既有 tick 只读刷新；**不新增 worker** | `internal/platform/metrics/metrics.go`；`order/worker.go:11-46` |
-| 告警规则（AC-72） | **必须（ops 复核）** | `deploy/compose/observability/alerts.yml` 增规则（`mall_refund_review_backlog > 0` 或 `oldest > 0`，`for` 由 ops 定；PO 要求 5 分钟内） | `alerts.yml:4-63` |
-| 用户可见/人工入口（AC-72/AC-61） | **另立 L2** | BFF/UI/RPC 入口不在本 change；登记 `REVIEW-REQUIRED-ENTRY-01`（Lead/BFF/ops，2026-12-31）；未实现前 AC-72 的“用户可见/入口”不得 AC-VERIFIED | §1.3；PO `0002:483-485` |
-| **T-1** SPEC-0002 错误表漂移 | **PO v1.11 已修** | v1.11 `0002:601` 已把 `REFUND_ADMISSION_CONFLICT` 扩为“准入状态/额度冲突”，并说明 `REVIEW_REQUIRED` 不是错误码 | `0002:601-602` |
+| metrics（R-10/AC-72） | **必须（Lead 确认共享包 allowed）** | `mall_refund_review_backlog`、`mall_refund_review_oldest_seconds`（additive）；`order/worker.go` 既有 tick 只读刷新；**不新增 worker**；Plan §allowed_paths 的“metrics”必须在实施 Brief 显式落 `internal/platform/metrics/metrics.go`，否则回 Lead | `internal/platform/metrics/metrics.go`；`order/worker.go:11-46` |
+| 告警规则（AC-72） | **不在本 L2**（Plan `deploy/**` forbidden） | 规则内容由本 ADR 给出（`mall_refund_review_backlog > 0` 或 `oldest > 0`，`for` 由 ops 定；PO 要求 5 分钟内），但落地归 **ops 独立 change**（`REVIEW-REQUIRED-ALERTS-01`，owner ops，2026-12-31）；交付前 AC-72 后端段不得含“告警规则已上线” | `alerts.yml:4-63`；Plan §forbidden_paths |
+| 用户可见/人工入口（AC-72/AC-61） | **另立 L2（D-33）** | BFF/UI/RPC 入口不在本 L2；登记 `REVIEW-REQUIRED-ENTRY-01`（Lead/BFF/ops，2026-12-31）；交付前沿用“退款处理中”；未实现前 AC-72 的“用户可见/入口”不得 AC-VERIFIED，`ac-coverage.tsv` 分段登记 | §1.3；PO `0002:491,849`（D-33） |
+| **T-1** SPEC-0002 错误表漂移 | **PO v1.11 已修** | v1.11 `0002:596,608` 已把 `REFUND_ADMISSION_CONFLICT` 扩为“准入状态/额度冲突”，并说明 `REVIEW_REQUIRED` 不是错误码 | `0002:596-612` |
 
 ### 9.2 CHECK 判定（不在本 change）
 
@@ -616,7 +709,14 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 | **O15** | — | AC-62 人工授权释放（REVIEW 后） | — | `[DEFERRED]`（T3；Developer/T3，2026-12-31）：不得用未授权释放/fixture 冒充；实现时断言只释放一次、不恢复 permit、组仍不关闭、未授权 → `REFUND_RELEASE_NOT_AUTHORIZED` | M-3 |
 | **O16** | preseed | 人工 re-arm（`result→PENDING_REMOTE`，TCC batch `MANUAL_HOLD→ADMITTING`）后重放 | I | 探测 `CANCELLED`→PRE；审计/授权；不动 commitment/permit；不得自动 re-arm；`version` CAS 生效 | §8.3 |
 | **O17** | — | 部分金额旧承诺释放 + 新 `refund_id` 整组退款 | — | `[DEFERRED]`（T3）：依赖 AC-62 release writer；不得改旧 `refund_id` 金额 | R-2b |
-| **O18** | I | AC-72 metrics/SLA | I | `mall_refund_review_backlog/oldest` 按 REVIEW 行计数；7 天未处置项可查询；REVIEW 不计入已退款 | AC-72 后端 |
+| **O18** | I | AC-72 metrics/SLA | I | `mall_refund_review_backlog/oldest` 按 REVIEW 行计数；7 天未处置项可查询；REVIEW 不计入已退款；**零元冲突不混入** | AC-72 后端 |
+| **O19** | fresh | 普通售后 `source=aftersale` + `<NO_WAYBILL>`（无 `refund_applications` 行） | I | `order_refund_admissions` 有 `result=REVIEW_REQUIRED,state=PENDING_REMOTE`；`refund_applications` **0 行**（不得新建）；`after_sale_refund_tasks` 保持 `PENDING` 且 `last_error` **恰为 canonical**（`ticket=RVW:<refund_id>` 非空；截断时带 ` truncated=1`） | R4-B1/R5-M4/R6-B2/R7-B1 |
+| **O20** | preseed | REVIEW → 人工 re-arm → 重评 | I | re-arm **先**写镜像 `last_error`（canonical `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`）/日志，再 CAS 清 `result`；admission 行**不删除**、`version` 递增、`created_at` 保留、`updated_at` 更新；镜像文本**未被清空**；`ticket=RVW:<refund_id>` 非空、`reason=` 必需 | R4-B3/D-32/R7-B1 |
+| **O20b** | preseed | TCC `MANUAL_HOLD` 后运行 reconcile/重试 | I | `refund_batches.last_error` 保留 `REVIEW_REQUIRED` 审计文本（`tcc_reconcile.go:340` 只清 application）；batch 不自动推进；0 打款 | R4-T1 |
+| **O21** | fresh | 零元 `CONSUMED+<NO_WAYBILL>` + 复核计数 | I | 不写 admission/S19/`REVIEW_REQUIRED`；`mall_refund_review_backlog` 不增加；AC-72 查询只统计持久化路径 | R4-B2/D-33 |
+| **O22** | fresh | 普通售后 **REVIEW** 任务自动重试至 `maxTaskAttempts=8` | I | 任务**仍 `PENDING`**（不得自动 `FAILED_PERMANENT`）；`last_error` 保持 canonical（ticket 非空）；无自动 DONE/释放/打款；仅告警/人工队列 | R5-B1/R7-M1 |
+| **O22b** | fresh | 普通售后 **非 REVIEW** 错误重试至 8 次 | I | 保留既有 `FAILED_PERMANENT`（行为不变）；不得因本 L2 改为 PENDING；无 REVIEW 镜像写入 | R7-M1 回归 |
+| **O23** | preseed | canonical `last_error` 解析（reason/ticket/truncated）+ 超长 | U/I | 解析器输出 `reason/ticket/truncated`（`reason=`/`ticket=` 必需；未截断逐字符相等；超长按 D-35 保留前缀+截断 `<refund_id>`+` truncated=1`；空/缺失/`arm`/其它 key 不可解析并告警；售后 512、TCC 1024） | R5-M4/R5-T1/R7-B1 |
 
 补充要求：
 
@@ -653,7 +753,7 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 
 1. **SPEC-0002 v1.11 仍 `in-review`**（工作树未 commit）：本文件按 2026-11-26 读取的 v1.11 对齐；PO 若改名/改表示，回 Architect 重算。v1.11 approved + QC + 人类 `ADR_APPROVED` 前不得实现。
 2. **Fulfillment 侧新值命名**：`<NO_WAYBILL>` 为占位；PO D-30 只定 Order 持久裁决，Fulfillment status 值须 Lead/PO 在实施 Brief 确认；改名需同步 proto/测试/日志。
-3. **普通售后无 `refund_applications` 行**：代码只在 Order 的 zero/TCC 路径写该表（`refund_admission.go:498`、`tcc_settlement.go:789`）；AfterSales 用 `after_sale_refund_tasks`。AC-69 的“发起方 `refund_applications.admission_result`”按“该表存在处（TCC/支付级）才写”实现，**不得为普通售后新建该行**（会双写事实）。需 QC/PO 确认（D-2）。
+3. **普通售后无 `refund_applications` 行（已由 PO B1 裁决，不再是假设）**：PO v1.11 R4 delta 已明确：唯一权威载体 `order_refund_admissions`；有 `refund_applications` 行（TCC 组级）才写该行；普通售后写 `after_sale_refund_tasks.last_error`，**不得新建 `refund_applications` 行**（`0002:90,103,456`）。本 ADR 按此实现，D-2 关闭。
 4. **“无行”事实边界**：依赖 `(order_no, fulfillment_group_no)` 唯一约束（`0003:9`）；未来同组多运单需重新裁决。
 5. **`shipment_no` 语义**：Order 传空（现状）→ 组级探测；非空时 `<NO_WAYBILL>` 只表示三键无行；发布前确认仓库外无调用方（T-5）。
 6. **`REVIEW_REQUIRED` 组合**：只允许 `result=REVIEW_REQUIRED` 且 `state=PENDING_REMOTE`；其他组合 fail-closed（A8）。replay/Tx2 必须先判 `result=REVIEW_REQUIRED`（早于 PENDING 分支），Tx2 CAS 必须 `state='PENDING_REMOTE'`。
@@ -666,12 +766,15 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 13. **`TCC-LAST-ERROR-01`（M-7 剩余）**：本 change 只在 `REVIEW_REQUIRED` 路径写 `refund_batches.last_error`；其他 TCC 失败仍只 `s.log.Error`；剩余部分 DEFERRED。
 14. **`TCC-PENDING-RESULT-01`（M-4）**：TCC Tx1 `result=PENDING_REMOTE` 与 SPEC 注不一致；清理归 Architect/Developer，2026-12-31；之前读者按 A2 双条件。
 15. **`INV-44-MULTI-01`**：多组 release 未实现（`refund_release.go:178-187` 只在单组发事件）；AC-27 EARS-3/INV-44 不得标 VERIFIED。
-16. **回滚**：旧代码读到 REVIEW 会重探（非 fail-closed）；**禁止无审计回滚**（§7.6/PO `0002:886`）；本 change 前向修复。
-17. **AC-72 用户可见/入口**：本 change 不含 BFF/UI/RPC 入口；`REVIEW-REQUIRED-ENTRY-01` 未关闭前 AC-72 不得全量 AC-VERIFIED。
+16. **回滚**：旧代码读到 REVIEW 会重探（非 fail-closed）；**禁止无审计回滚**（§7.6/PO `0002:903`）；本 change 前向修复。
+17. **AC-72 用户可见/入口**：本 L2 只允许 `internal/services/gateway/**` 的**文案映射**；完整 UI/人工入口归 `REVIEW-REQUIRED-ENTRY-01`，告警规则归 `REVIEW-REQUIRED-ALERTS-01`；两未关闭前 AC-72 不得整体 AC-VERIFIED（D-33/R5-M3）。
 18. **`change_id` 拆分**：实施须由 Lead 另拆（`0001:879`）；不得把本文件当 R0.3-R1c 放行。
-19. **原复核记录的载体**：admission/application 行随状态机迁移，不保留历史 `REVIEW_REQUIRED` 值；审计依据是 ops 工单 + 结构化日志 + `refund_batches.last_error`。PO AC-69/AC-72 的“保留原复核记录、不得删除”若被解释为行级历史或独立审计表，属新表/迁移，需另立 L2（`REVIEW-AUDIT-01`，D-8）。
-20. **部分不可判定 REVIEW 的额度冻结**：为避免同一额度被第二个 `refund_id` 重复承诺/重复退款，fresh 部分不可判定 REVIEW 会写 1 条 `RESERVED` commitment（AC-62 “REVIEW 期间承诺保持 RESERVED”）；用户改整组需先按 AC-62 处置旧承诺。若 PO/QC 认为不应冻结，需明确“不得双花”的替代护栏，回 Architect。
-21. **可达性/未执行**：`CONSUMED+无行` 正常路径不可达；生产发生率 `[不确定]`。本文件未运行测试/迁移；代码行号是阅读事实，不构成执行证据。`[不确定]`：仓库外调用方；生产 `shipments` 是否已全部应用 `0003`。
+19. **原复核记录的载体（已由 PO D-32 裁决）**：不要求行级历史；载体为 admission 行（不删除、`version`/时间戳）+ 发起方镜像 `last_error`（reason/ticket（`RVW:<refund_id>`））+ 结构化日志 + ops 工单。`REVIEW-AUDIT-01`（行级历史/独立表）DEFERRED 且**不阻塞**；若 QC/PO 反向坚持行级历史，需新表/列 → `[ARCHITECTURAL_FLAW]`/回 Plan（§8.4），D-8 关闭。
+20. **stale 引用（R5-M2）**：SPEC `0002:884` 已改 **DRAFT 0.5**；ADR/impact 已改 Base `d2149c0`/0.5。Plan `d2149c0`/C-2/ADR 0.5 已由 Lead 修正（R6-M1）；Reviewer 绑定 ADR 0.5 blob。
+21. **部分不可判定 REVIEW 的额度冻结**：为避免同一额度被第二个 `refund_id` 重复承诺/重复退款，fresh 部分不可判定 REVIEW 会写 1 条 `RESERVED` commitment（AC-62 “REVIEW 期间承诺保持 RESERVED”）；用户改整组需先按 AC-62 处置旧承诺。若 PO/QC 认为不应冻结，需明确“不得双花”的替代护栏，回 Architect。
+22. **canonical `last_error` 与 ticket（R5-M4）**：统一为 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；`reason=`/`ticket=` 必填，`ticket` 非空且 `RVW:` 前缀；售后 512、TCC 1024；未截断逐字符相等；超长按 D-35 确定性截断并追加 ` truncated=1`；空/缺失/`arm`/其它 key 不可解析并告警；禁止冒号/自由文本。
+23. **AfterSales 状态与重试（R5-B1）**：REVIEW 任务保持 `PENDING`；`maxTaskAttempts=8` 后**不得自动 `FAILED_PERMANENT`**；停止自动重试升级；仅人工放弃（AC-62）可终态。AfterSales 改动限 `last_error`/**REVIEW 任务** PENDING/REVIEW 重试上限；非 REVIEW 的 8 次 `FAILED_PERMANENT` 行为不变；不改结算/回库/表结构。
+24. **可达性/未执行**：`CONSUMED+无行` 正常路径不可达；生产发生率 `[不确定]`。本文件未运行测试/迁移；代码行号是阅读事实，不构成执行证据。`[不确定]`：仓库外调用方；生产 `shipments` 是否已全部应用 `0003`。
 
 ---
 
@@ -680,8 +783,8 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 - **不交付 T2/T3/T4.4**；仍按 `docs/lead/PAY-SETTLE-01/tasks.md` 的既有 DEFERRED。
 - **不改 SPEC-0002**（PO 已改 v1.11）、**不改 SPEC-0001**、**不改 accepted ADR Rev 2.3 正文**（未来 Rev 2.4 errata 由 Architect 合并，需人类批准）。
 - **不新增**：RPC、proto 字段、事件 subject/payload、迁移（本 change 无迁移）、permit 状态值、新 `state` 值、worker、分布式锁、配置开关；**不新增 `ListShipments`/`GetShipmentByOrder`/事务外预读**。
-- **不改**：Payment 金额/退款实现、AfterSales task 策略、Inventory 释放协议、`orders.status`/`refund_state` 语义、Fulfillment consumer 生产语义、`autoShipAllowed`/`order.paid` 路径（阻断另立 L2）。
-- **不做**：AC-27A 读模型实现（R0.3-R1c）；M-1 legacy 修复；M-4 TCC result 清理；T3 release/re-arm 工具化；把 Tx1 outbox 移到 Tx2 的重构；BFF/UI/人工入口；DB CHECK——均另立 `change_id`/L2。
+- **不改**：Payment 金额/退款实现、Inventory 释放协议、`orders.status`/`refund_state` 语义、Fulfillment consumer 生产语义、`autoShipAllowed`/`order.paid` 路径（阻断另立 L2）；**AfterSales 仅 `after_sale_refund_tasks.last_error`/PENDING/重试上限**（不改结算/回库/其他状态机）。
+- **不做**：AC-27A 读模型实现（R0.3-R1c）；M-1 legacy 修复；M-4 TCC result 清理；T3 release/re-arm 工具化；把 Tx1 outbox 移到 Tx2 的重构；**完整 BFF/UI/人工入口（gateway 仅文案映射）**；**deploy 告警规则**；DB CHECK——均另立 `change_id`/L2。
 
 ---
 
@@ -715,6 +818,8 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 | AC-51/AC-65（v1.11） | 非回归 | TCC 共用映射；REVIEW → `MANUAL_HOLD`，不得进入 `ADMITTED/PAYING`；不得早失败 |
 | AC-67/AC-68（v1.11） | 非回归 | 零元错误不写 DONE、不持久化 REVIEW；合法分支不变；零元无 Payment |
 | AC-27-NOWB-01 / AC-27-LIVE-01（`0001:863-864`） | 人工队列/不收敛 | 终态见 §8；term① re-arm（§8.3）；term② 人工放弃；LIVE 重放仍冲突 → NOWB；均不自动关闭/退款 |
+| AC-72（v1.11 `0002:489-499`） | **分段** | 本 L2：metrics/查询/`reason`/SLA/对账；**告警规则** `REVIEW-REQUIRED-ALERTS-01`；**用户可见完整入口** `REVIEW-REQUIRED-ENTRY-01`（gateway 仅文案）；**AC-72 不得整体 AC-VERIFIED** |
+| AC-69/72 审计 | 载体 | D-32/§8.4：admission 行 + `version`/时间戳 + 镜像 `last_error` + 日志 + 工单；**非行级历史** |
 
 ---
 
@@ -723,21 +828,22 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 ### 15.1 施工图（最小 diff，不写代码）
 
 1. **Fulfillment**：`cancel_if_created.go` 的 `sql.ErrNoRows` 分支返回 `<NO_WAYBILL>`（不 commit、不建行）；其余分支不变；注释。
-2. **Order 金额分类（Tx1 内）**：`AdmitRefund` 在 `GetIntent`/远程前先读 existing；Tx1 计算 `groupRemaining` 后按 §3.4 三分：`PARTIAL` → rollback 零写入；`REVIEW` → 写 `result=REVIEW_REQUIRED,state=PENDING_REMOTE` + 1 条 `RESERVED` commitment（无终态 outbox）；`POST` → 写 POST + commitment + 终态 outbox；`CONSUMED+整组` → Tx1 占位后走 `finishRemoteAdmission`。
+2. **Order 金额分类（Tx1 内）**：`AdmitRefund` 在 `GetIntent`/远程前先读 existing；Tx1 计算 `groupRemaining` 后按 §3.4 三分：`PARTIAL` → rollback 零写入；`REVIEW` → 写 `result=REVIEW_REQUIRED,state=PENDING_REMOTE` + 1 条 `RESERVED` commitment（无终态 outbox）；`POST` → 写 POST + commitment + 终态 outbox；`CONSUMED+整组` → Tx1 占位后走 `finishRemoteAdmission`。**普通售后不得写/新建 `refund_applications`**；仅当 `refund_id` 已有该行（TCC 组级）才镜像 `admission_result`。
 3. **Order 整组映射**：`CONSUMED+整组` 若 Order 组投影已 `SHIPPED/RECEIVED` → 直接 POST（**不探测**）；`finishRemoteAdmission` 需接收 `batch_id`（来自 `AdmitRefundRequest`，可为空）以便 Tx2 同事务持批；其余映射： `CANCELLED→PRE`、`ALREADY_SHIPPED/RECEIVED→POST`、`<NO_WAYBILL>→Tx2 REVIEW_REQUIRED + 告警 (+TCC MANUAL_HOLD)`、瞬态/未知→`Unavailable`；Tx2 按 A8 `state` CAS；仅 PRE 触发既有释放。
 4. **Order 重放**：`AdmitRefund` existing 分类（terminal / review / pending / unknown）：terminal→reply；review→同一错误、不探测/不读 Payment；pending→继续；unknown→fail-closed；`finishRemoteAdmission` 入口也防御 REVIEW。
 5. **Order 零元**：`decideZeroRefundResult` 的 `CONSUMED + <NO_WAYBILL>` → 冲突；不进入 `writeZeroRefundTx`；不持久化 REVIEW；组投影 SHIPPED/RECEIVED → POST+DONE（AC-67）。
-6. **TCC**：`ensureTccRemoteAdmissionTx`/`ensureTccApplicationTx` 接受 `REVIEW_REQUIRED`；`writeTccBatchGroupsTx` 对 `MANUAL_HOLD` 短路返回 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`；`admitTccBatch` 识别复核并置 `MANUAL_HOLD`+`last_error`；Tx2 同事务置批（§3.2）。
-7. **proto**：只改 `CancelIfCreated`/`CancelIfCreatedReply` 注释；`make proto`；`make proto-guard` 通过。
-8. **AC-72**：`internal/platform/metrics` 加 2 gauge；`order/worker.go` 既有 tick 只读刷新；`deploy` 加 1 条告警规则；不新增 worker。
-9. **测试**：§10；真实 MySQL + `-race` + 日志/NATS；不含 ListShipments 用例。
-10. **迁移**：无。若实现需要迁移 → 停止。
+6. **AfterSales（R5-B1，allowed）**：`AdmitRefund` 返回 REVIEW 时，`after_sale_refund_tasks` 保持 `PENDING`、写 canonical `last_error`、停止自动重试升级；**8 次后不得自动 `FAILED_PERMANENT`**；仅人工放弃（AC-62）可置 `FAILED_PERMANENT`；不改结算/回库/表结构（§8.5）。
+7. **TCC**：`ensureTccRemoteAdmissionTx`/`ensureTccApplicationTx` 接受 `REVIEW_REQUIRED`；`writeTccBatchGroupsTx` 对 `MANUAL_HOLD` 短路返回 `TCC_BATCH_REQUIRES_MANUAL_HANDLING`；`admitTccBatch` 识别复核并置 `MANUAL_HOLD`+`last_error`；Tx2 同事务置批 + **仅已有 application 行时**镜像 `admission_result`（§3.2/§3.6）。
+8. **proto**：只改 `CancelIfCreated`/`CancelIfCreatedReply` 注释；`make proto`；`make proto-guard` 通过。
+9. **AC-72**：`internal/platform/metrics` 加 2 gauge；`order/worker.go` 既有 tick 只读刷新；**不新增 worker**；告警规则不在本 L2（`REVIEW-REQUIRED-ALERTS-01`）；gateway 仅文案映射（`REVIEW-REQUIRED-ENTRY-01` 交付完整 UI/入口）。
+10. **测试**：§10；真实 MySQL + `-race` + 日志/NATS；不含 ListShipments 用例；**必须含 O19（普通售后无 application 行）、O20/O20b（审计留存）、O21（零元不计入）、O22（8 次不自动 FAILED）、O23（canonical 解析）**。
+11. **迁移**：无。若实现需要迁移（含为审计/任务状态新增表/列）→ 停止；若 QC/PO 坚持行级历史或新任务状态 → `[ARCHITECTURAL_FLAW]`/回 Plan（§8.4/§8.5）。
 
 ### 15.2 停止条件（命中即停手，回 Architect/Lead）
 
 1. **SPEC-0002 v1.11 未 approved，或 PO 改名/改表示，或人类未 `ADR_APPROVED`** → **不得开工**。
 2. 需要新增 proto 字段/RPC/事件字段、迁移、permit 状态、新的 `state` 值、额外的持久裁决值 → 超出本 amendment。
-3. 需要修改 AfterSales/Payment/Inventory/Deploy 其他文件、`docs/specs/**`、`tcc.go`/`tcc_payment.go`/`tcc_precheck.go`/`tcc_reconcile.go`、`consumer.go`/`admission_consumer.go`/`settlement.go`/`ports.go` 语义 → 越界，回 Lead 拆范围。
+3. 需要修改 **AfterSales 的镜像/PENDING/重试上限以外的逻辑**、Payment/Inventory/Deploy 其他文件、`docs/specs/**`、`tcc.go`/`tcc_payment.go`/`tcc_precheck.go`/`tcc_reconcile.go`、`consumer.go`/`admission_consumer.go`/`settlement.go`/`ports.go` 语义 → 越界，回 Lead 拆范围。
 4. 为实现部分金额/整组复核而引入任何 `ListShipments`/`GetShipmentByOrder`/事务外预读，或恢复“取消副作用分类” → **停止**（route A/D-31）。
 5. 出现任何 `<NO_WAYBILL>`（整组）写 PRE/POST、或 REVIEW 被当准入成功/关闭/打款/释放 → 停止，Reviewer FAIL。
 6. 部分金额触发 `CancelIfCreated`、先写 commitment 再写 REVIEW、或静默放行 → 停止。
@@ -746,11 +852,18 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 9. 用迟到 `order.paid` placeholder 当人工证据、或普通 consumer 建行被写成“人工证据” → 停止（W9）。
 10. 测试无法区分 fresh/preseed/REVIEW、或无法证明 Tx1 占位/终态/复核三分 → 证据不成立，停止。
 11. 任何 `AdmitRefund` 对非终态 existing 返回 nil error（可能被判成功）→ 停止，Reviewer FAIL。
-12. 未做 AC-72 metrics/告警即声称 AC-72 完成，或未做 BFF/入口即声称“用户可见完成” → 停止。
+12. 未做 AC-72 metrics/查询即声称 AC-72 后端段完成，或把**告警规则**（`deploy/**`，本 L2 forbidden）夹带进本 L2，或未做 BFF/入口即声称“用户可见完成” → 停止。
+13. **未按 D-32/§8.4 写审计载体**（admission 行被删除/重置、re-arm 先清后补审计、清空镜像 `last_error` 作为处置、缺结构化日志/工单）→ 停止，Reviewer FAIL。
+14. **以 PO D-30..D-33/§11 代替人类 `ADR_APPROVED`、Plan 批准或人类 merge 开始写码** → 停止（R4-M3）。
+15. 普通售后为写镜像而**新建 `refund_applications` 行**（双写事实）→ 停止（R4-B1）。
+16. 零元写 `REVIEW_REQUIRED`/admission/S19 或计入 AC-72 复核计数 → 停止（R4-B2）。
+17. **AfterSales 在 REVIEW 8 次后自动 `FAILED_PERMANENT`**，或写非 canonical `last_error`，或改任务状态机/结算/回库 → 停止（R5-B1/R5-M4）。
+18. **Order 跨库写 `after_sale_refund_tasks`**，或 re-arm 先清 Order 再补镜像 → 停止（§8.5）。
+19. 把告警规则（`deploy/**`）或完整 BFF/UI 入口夹带进本 L2 → 停止（R5-M3/T2）。
 
 ### 15.3 交付证据（实施时，不属本文件）
 
-- 精确 base/head；`go test`/`-race`/真实 MySQL 日志；`【测试范围】`/`【未覆盖范围】`；受影响 AC 行由 Reviewer 更新；O1/O2/O3/O4b/O4c/O4d/O7 的“REVIEW/PARTIAL、0 终态、0 退款命令、0 释放”断言；F1“无行不建行”；O1b 经 `TccCancelMarkPaid` + `MANUAL_HOLD`；O11b/O11c；O16 re-arm；O18 metrics；proto 生成 diff 仅注释；无迁移声明。
+- 精确 base/head；`go test`/`-race`/真实 MySQL 日志；`【测试范围】`/`【未覆盖范围】`；受影响 AC 行由 Reviewer 更新；O1/O2/O3/O4b/O4c/O4d/O7 的“REVIEW/PARTIAL、0 终态、0 退款命令、0 释放”断言；F1“无行不建行”；O1b 经 `TccCancelMarkPaid` + `MANUAL_HOLD`；O11b/O11c；O16 re-arm；**O19/O20/O20b/O21（B1/B2/B3）、O22（8 次不自动 FAILED）、O23（canonical 解析）**；O18 metrics；proto 生成 diff 仅注释；无迁移声明；**AC-72 分段证据**（后端段单独登记，用户可见/入口不冒充）。
 - **不**声称 AC-VERIFIED/Release/merge；`AC-27` 在 `AC-50-FIX-01`/`AC-27-NOWB-01`/`AC-27-LIVE-01` 关闭前保持 AC-REF；AC-69..72 在 Reviewer 绑定执行证据前保持 AC-REF。
 
 ---
@@ -759,11 +872,12 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 
 | 对象 | 动作 |
 |---|---|
-| **PO** | APPROVED SPEC-0002 v1.11（当前 in-review）；确认 D-2（普通售后是否需 `refund_applications` 镜像行）；同步 SPEC-0001 `0001:645` 注（D-3/2026-12-31） |
-| **QC（round 4）** | 复核 0.4：R3-B1..B4 是否闭合；`REVIEW_REQUIRED` 取值/持久化/幂等；TCC `MANUAL_HOLD`；partial 三分法；A8/A10/A11；§10 矩阵；AC-72 后端/入口边界 |
+| **PO** | 落库/approved SPEC-0002 v1.11（当前工作树 R4/R5 delta）；SPEC §11:884 已 0.5；同步 SPEC-0001 `0001:645` 注（D-3/2026-12-31）；D-2 已关闭（B1 裁决） |
+| **QC（round 6）** | 复核 0.5 R5 delta：R5-B1（AfterSales 8 次/PENDING/canonical）；R5-M1 allowed/forbidden；R5-M2 stale；R5-M3 AC-72 分段；R5-M4 last_error 格式；R4-B1/B2/B3；A8/A10/A11；§10 O19–O23 |
 | **人类（Director）** | 批准 L2 ADR（`ADR_APPROVED`）；保留 merge/Release |
-| **Lead** | 按 `0001:879` 另拆实施 `change_id`；建 Plan/Tasks + AC 证据矩阵；登记 `LEGACY-SHIPPED-PRE-01`/`TCC-PENDING-RESULT-01`/`TCC-LAST-ERROR-01`/`INV-44-MULTI-01`/`ORDER-PAID-PLACEHOLDER-01`/`AC50-OUTCOME-SPEC-SYNC`/`REVIEW-REQUIRED-ENTRY-01`/`ADMISSION-RESULT-CHECK-01`/T-1 的 owner/expiry/stop |
-| **Developer** | 在独立 `change_id` 下实现 §15.1；跑 §10；提交 proto 生成物、metrics/告警、测试；不 commit 本文件 |
+| **Lead** | 在本 L2 的 C-4 后授权 Developer；维护 Plan/Tasks + AC 证据矩阵；登记 `LEGACY-SHIPPED-PRE-01`/`TCC-PENDING-RESULT-01`/`TCC-LAST-ERROR-01`/`INV-44-MULTI-01`/`ORDER-PAID-PLACEHOLDER-01`/`AC50-OUTCOME-SPEC-SYNC`/`REVIEW-REQUIRED-ENTRY-01`/`REVIEW-REQUIRED-ALERTS-01`/`ADMISSION-RESULT-CHECK-01`/`REVIEW-AUDIT-01`（DEFERRED，不阻塞）/T-1 的 owner/expiry/stop；确认 `internal/platform/metrics` 是否属 Plan allowed；AC-72 分段入 `ac-coverage.tsv` |
+| **Developer** | 在本 L2 C-4 后实现 §15.1；跑 §10；提交 proto 生成物、metrics、gateway 文案映射、AfterSales 镜像/状态、测试；**不交付 deploy 告警规则/BFF 入口**；不 commit 本文件 |
+| **AfterSales owner** | R5-B1：在 allowed 范围内写 canonical `last_error`、保持 `PENDING`、8 次后不得自动 `FAILED_PERMANENT`；不改结算/回库/表结构；配合 ops re-arm 审计顺序 |
 | **Fulfillment owner** | 提供 `<NO_WAYBILL>` 与**既有/曾存在但丢失**的 S6 证据；配合 AC-27-NOWB-01 终态①；不得新建行 |
 | **ops** | 用 §8 查询/日志发现队列；执行存量 PRE 审计；按 §8.3 授权/审计 re-arm；告警规则复核；SLA/升级 |
 | **Reviewer** | 按精确 base/head 校验：无预读；REVIEW/PARTIAL 不写 PRE/POST；部分不调 `CancelIfCreated`；0 行语义；replay 不探测；`AdmitRefund` 非终态必错误；TCC 不早失败；测试真实执行 |
@@ -778,8 +892,9 @@ REVIEW_REQUIRED：组未关闭；commitment RESERVED；占位 outbox 保留；0 
 | 0.1 | 2026-11-26 | 初稿：R-1…R-8；`NO_SHIPMENT`、映射、不变量、窗口、矩阵、登记面 |
 | 0.2 | 2026-11-26 | 按 QC R1 整改：B-1/B-2/B-3；M-1…M-13；R-2a 部分金额预读；W9；setup；T-1…T-7 |
 | 0.3 | 2026-11-26 | 按人类裁决 A 与 QC R2：删除 R-2a 与全部 `ListShipments`；整组 `NO_SHIPMENT` 持久化 `result=CONFLICT`；R-2b 部分金额无预读；W9 真实 placeholder；审计补无 group 行；A8 四分支；§1.3 per-item stop；re-arm runbook |
-| **0.4** | 2026-11-26 | **按 SPEC-0002 v1.11（in-review，D-30/D-31/AC-69..72）重写**：持久裁决定为 `REVIEW_REQUIRED`（`result` 承载、`state` 不新增值、无迁移；错误码仍 `REFUND_ADMISSION_CONFLICT`）；删除 0.3 的 `result=CONFLICT` 越权表述；partial 改为 PO 三分法（投影离仓→POST、未离仓→PARTIAL 写前拒绝零写入、不可判定→REVIEW + 冻结额度 commitment）；TCC 改 R-9（接受合法裁决、`MANUAL_HOLD`、`refund_batches.last_error`、`TCC_BATCH_REQUIRES_MANUAL_HANDLING`，`tcc_settlement.go`/`tcc_admission.go` 进 `allowed_paths`）；新增 R-10/AC-72（metrics gauge + 既有 tick + 告警规则；用户可见/入口另立 `REVIEW-REQUIRED-ENTRY-01`）；A2/A8/A9/A10/A11 强化；§8.3 re-arm 过渡表；§10 O1/O1b/O4b/O4c/O4d/O18 重写；§12 补 D-2/普通售后镜像行/回滚/入口假设；§15.2 停止条件补 TCC/复核/入口。未写代码、未改 SPEC/Rev 2.3 正文、未 commit |
+| **0.4** | 2026-11-26 | **按 SPEC-0002 v1.11（in-review，D-30/D-31/AC-69..72）重写**：持久裁决定为 `REVIEW_REQUIRED`（`result` 承载、`state` 不新增值、无迁移；错误码仍 `REFUND_ADMISSION_CONFLICT`）；删除 0.3 的 `result=CONFLICT` 越权表述；partial 改为 PO 三分法（投影离仓→POST、未离仓→PARTIAL 写前拒绝零写入、不可判定→REVIEW + 冻结额度 commitment）；TCC 改 R-9（接受合法裁决、`MANUAL_HOLD`、`refund_batches.last_error`、`TCC_BATCH_REQUIRES_MANUAL_HANDLING`，`tcc_settlement.go`/`tcc_admission.go` 进 `allowed_paths`）；新增 R-10/AC-72（metrics gauge + 既有 tick + 告警规则；用户可见/入口另立 `REVIEW-REQUIRED-ENTRY-01`）；A2/A8/A9/A10/A11 强化；§8.3 re-arm 过渡表；§10 O1/O1b/O4b/O4c/O4d/O18 重写；§12 补 D-2/普通售后镜像行/回滚/入口假设；§15.2 停止条件补 TCC/复核/入口。**R6 delta**：§7.3 改 8 次不自动 FAILED；canonical 改为 SPEC 定稿 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（无 arm；含 `truncated=1`；ticket 必填非空）；Plan/0.4 stale 清除；baseline_impact 告警规则改 `REVIEW-REQUIRED-ALERTS-01`。未写代码、未改 SPEC/Rev 2.3 正文、未 commit |
+| **0.5** | 2026-11-26 | **按 QC R4-B1/B2/B3 + 3 MAJOR 整改，对齐 PO v1.11 R4 delta（D-30..D-33）**：①B1 普通售后无 `refund_applications` → 唯一权威载体 `order_refund_admissions`，镜像分路径（有该行才写；普通售后写 `after_sale_refund_tasks.last_error`，**不新建行**）；②B2 零元不进入 S20、不持久化、不计入 AC-72 计数；③B3 采用 D-32 可追溯审计载体（admission 行不删除 + `version`/时间戳 + 镜像 `last_error` 的 reason/ticket（`RVW:<refund_id>`） + 结构化日志 + ops 工单），**无新表/迁移**，`REVIEW-AUDIT-01` DEFERRED 且不阻塞，新增 §8.4 与 `[ARCHITECTURAL_FLAW]` 门；④M1 删除/改正 ADR 自身 stale 0.3 当前态引用，SPEC `0002:884` 由 PO 改 0.5；⑤M2 AC-72 按 D-33 分段（后端段本 L2，用户可见/入口 `REVIEW-REQUIRED-ENTRY-01`）；⑥M3 新增“人类批准门”，PO D-30..33/§11 ≠ 实现批准；⑦测试新增 O19/O20/O20b/O21；§15.2 停止条件补审计/B1/B2/M3。未写代码、未改 SPEC/Rev 2.3 正文、未 commit |
 
 **Actor**：`arch-ac50`（System Architect）
-**Reviewed-by**：待 QC round 4
+**Reviewed-by**：待 QC round 5
 **Status**：**DRAFT — pending PO/QC**

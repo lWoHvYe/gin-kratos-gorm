@@ -455,6 +455,16 @@ Director decisions on ADR-0008 QC-01 (BLOCKED 4/8/8), recorded by Lead:
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 T2a PASS scoped; zero gate MAJOR
+
+- Reviewer `b907d26` (base `106e5ac`, head `b73ac51`, code `1e57c15`):
+  T2.1–T2.3 PASS scoped, `NOT RELEASE`; AC-60/63 stay AC-REF.
+- MAJOR: `source=system_zero` bypasses the legacy gate
+  (`refund_admission.go:341`); historical zero with empty settlement is not
+  resolved and zero refund hits `REFUND_ADMISSION_CONFLICT`. Fail-closed but
+  AC-60 zero path not closed; fix before T2.4/T2.5.
+- Next: zero gate fix + T2.4 queue/SLA/COMPENSATING/admin entry.
+
 ### 2026-11-27 human resequencing: T2 -> T3 -> T4 -> T5 -> P0 closure
 
 - Director chose option B: implement T2 (historical PAID/legacy), T3

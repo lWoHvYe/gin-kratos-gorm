@@ -80,9 +80,9 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 
 > 2026-11-27 人类重排：T2 → T3 → T4 → T5（含 AC-39/41/57/59 与 17 个测试缺口）→ P0 closure。
 
-- [ ] **T2.1** 先修生产者：TCC/直接路径不再产生 PAID 无生效支付
-- [ ] **T2.2** 解析 `ListOrderIntents`：`SUCCEEDED` + `captured==pay_cent` + order 匹配；零元 `zero:<order_no>`
-- [ ] **T2.3** 唯一候选 CAS 写回（`''`/NULL）；其他捕获走支付级退款/重复捕获
+- [x] **T2.1** 先修生产者：TCC/直接路径不再产生 PAID 无生效支付
+- [x] **T2.2** 解析 `ListOrderIntents`：`SUCCEEDED` + `captured==pay_cent` + order 匹配；零元 `zero:<order_no>`
+- [x] **T2.3** 唯一候选 CAS 写回（`''`/NULL）；其他捕获走支付级退款/重复捕获
 - [ ] **T2.4** 0/多候选写 `legacy_payment_resolution`（`OPEN/RESOLVING/RESOLVED/EXPIRED_REFUND/EXPIRED_ZERO/EXPIRED_FINANCE/REJECTED`，SLA 24h，Owner/恢复命令；`EXPIRED_*` 映射到订单/组终态）
 - [ ] **T2.5** 回填工具 dry-run/计数/幂等；只处理 PAID；先修生产者后运行
 - [ ] **T2.6** `refund_seq` 取号与并发唯一

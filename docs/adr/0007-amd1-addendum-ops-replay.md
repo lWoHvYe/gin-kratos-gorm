@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT 0.2 — pending QC round 2（OPS-C2）**（未批准；不构成实现依据；不代表 AC-VERIFIED / merge / Release PASS；含 1 个 `[CONTRACT-IMPACT]` 待人类批准） |
+| Status | **WITHDRAWN（工具路线，未批准；2026-11-27 human C+A；不实施）**（历史设计保留；由 `0007-amd1-addendum-ops-manual.md` 取代；不代表 AC-VERIFIED / merge / Release PASS） |
 | Change ID | **`PAY-OPS-REPLAY-01`**（Parent `PAY-SETTLE-01` 再次暂停；本 L2 交付后 handback） |
 | Parent | `PAY-SETTLE-01`（**暂停**；本 L2 不推进其受管代码/台账） |
 | Tier | **L2**：P0、资金/退款、跨服务/持久恢复、运维入口；不适用 L1 |
@@ -11,9 +11,11 @@
 | Plan/Tasks | `docs/lead/PAY-OPS-REPLAY-01/plan.md`（`:20-38`）、`tasks.md`（`:5-27`） |
 | integration_owner | **System Architect**（本设计）；Order（admission/commitment）；AfterSales（task/lease）；Fulfillment（S6 证据）；ops（执行/审计） |
 | Actor | `arch-ops-replay`（System Architect） |
-| Reviewed-by | **待 QC round 2**（0.1 被 QC BLOCKED；本文件不代签） |
+| Reviewed-by | **QC BLOCKED（0.1/0.2）**；human 2026-11-27 裁决 C+A 撤回工具路线；本文件不代签 |
 | 硬边界 | **不新增 RPC**；**新增 1 个 additive 授权表（`[CONTRACT-IMPACT]`，migration 0024，须人类批准）**；不改 SPEC/AC-50/69/70 语义；不交付 BFF/UI；不释放/不恢复 permit/不关闭组（abandon）；不 commit |
-| 结论级别 | 设计可执行；**无 `[ARCHITECTURAL_FLAW]`**；**`[CONTRACT-IMPACT]`：授权记录表/迁移**；AC-62 abandon 不释放口径仍待 SPEC-0002 owner 书面确认；`workers.go` guard 在同一 allowed 文件 |
+| 结论级别 | **WITHDRAWN**；QC 判 BLOCKED（5B/4M）；human C+A 改为人工规程，不实施本工具/授权表/迁移 |
+
+> **WITHDRAWN（2026-11-27，human C+A）**：本工具路线（`cmd/ops`、`ops_action_authorizations`、0024 迁移）**未获批准、不实施**。历史保留供审计；人工替代见 `docs/adr/0007-amd1-addendum-ops-manual.md`。
 
 ## 0. 决策摘要
 
@@ -305,4 +307,4 @@ Task:  PENDING/PROCESSING(lease free/expired) --CAS--> PENDING(attempts=0) --wor
 | AC-27-NOWB/LIVE 复审 | Lead/Reviewer | `ac-coverage.tsv` 仅 Reviewer；AC-27 仍 AC-REF |
 
 **Actor**：`arch-ops-replay`（System Architect）
-**Status**：**DRAFT 0.2 — pending QC round 2（OPS-C2；含 `[CONTRACT-IMPACT]` 授权表）**
+**Status**：**WITHDRAWN（2026-11-27，human C+A；工具路线未批准，不实施）**

@@ -1,16 +1,18 @@
-# PAY-OPS-REPLAY-01 — 运维重放/ NOWB 人工处置 影响分析（DRAFT 0.2）
+# PAY-OPS-REPLAY-01 — 运维重放/ NOWB 人工处置 影响分析（WITHDRAWN）
 
 | 项 | 值 |
 |---|---|
-| Status | **DRAFT 0.2 — pending QC round 2（OPS-C2）**；不构成实现依据 |
+| Status | **WITHDRAWN（工具路线，未批准；2026-11-27 human C+A；不实施）**；历史影响分析保留，由 `0007-amd1-addendum-ops-manual.md` 取代 |
 | Change ID | `PAY-OPS-REPLAY-01`（Parent `PAY-SETTLE-01` 暂停） |
 | Base | `160a45d`（Plan）；契约基线 SPEC-0001 v1.5 §16.2、SPEC-0002 v1.11 AC-61/62、ADR-0007 AC-50 0.6 ACCEPTED |
 | 设计输入 | `docs/lead/PAY-OPS-REPLAY-01/plan.md`（`:20-38`）、`tasks.md`（`:5-27`）；`docs/ops.md:829-936`；QC `QC-PAY-OPS-REPLAY-01-DESIGN.md`（BLOCKED 5B/4M） |
 | 推荐 | **`cmd/ops` + 现有 identity JWT + 1 张 additive 授权表**；**零新 RPC**；`[CONTRACT-IMPACT]` 迁移待人类批准 |
 | Actor | `arch-ops-replay`（System Architect） |
-| Reviewed-by | 待 QC round 2 |
+| Reviewed-by | QC BLOCKED；human 2026-11-27 C+A 撤回工具路线 |
 
 ## 1. 结论
+
+> **WITHDRAWN**：工具路线（`cmd/ops`、`ops_action_authorizations`、0024）被 human C+A 撤回，不实施；替代为人工规程 `0007-amd1-addendum-ops-manual.md`。
 
 - **`cmd/ops` 仍推荐**：`replay dlq|task`、`nowb rearm|abandon`、`inspect`；只读默认，`--execute` 才写；不监听端口。
 - **授权模型修正（B-1）**：消费现有 identity JWT（HS256，`admin` 角色；operator/authorizer/reviewer 三个不同 `sub`；金额 ≥100000 cent 必须 reviewer），并写 **`ops_action_authorizations`**（Order DB，additive `0024`）记录 authorization_id/op_id/金额/复核/有效期/JTI；`ticket=RVW` 只是复核 id。**零迁移假设不成立**，标 `[CONTRACT-IMPACT]`，需 OPS-C3 人类批准；未批准不得实现。
@@ -94,4 +96,4 @@
 先由人类批准 **1 个授权表迁移**；实现 `cmd/ops` + JWT/S6/ACL + `workers.go` guard；RP-1..RP-13 全过；OPS-C2 复审 0 BLOCKER 后 OPS-3/4；AC-62 no-release 口径由 SPEC-0002 owner 书面确认。
 
 **Actor**：`arch-ops-replay`（System Architect）
-**Status**：**DRAFT 0.2 — pending QC round 2**
+**Status**：**WITHDRAWN（2026-11-27，human C+A；工具路线未批准，不实施）**

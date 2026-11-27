@@ -483,6 +483,29 @@ re-review and human merge decision are still required.
   阻断后续 RELEASED 的语义待 Phase 3；FAILED ack 写失败仅 DLQ。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5 Phase 3a - Order release receipt + ack consumer
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `f27c17c`.
+- **迁移 0024**：`refund_release_receipts`（PENDING/RELEASED/FAILED、lease、version、refund UNIQUE）。
+- **ack consumer**：订阅 Inventory ack；只 `PENDING→RELEASED/FAILED`；重复 no-op；终态不降级；
+  FAILED 记 last_error；order 不匹配/未知 fail-closed；`cmd/order` 启动。
+- **未做**：legacy worker 写 release/receipt、Payment-last、EXPIRED_REFUND（Phase 3b）；
+  AC-63 仍未验证；T5.2/3/5/6/7 未做；`NOT RELEASE`。
+- **测试**：真实迁移 23 个文件 + ack 2 例 **4.146s PASS**；vet 0。
+- **NB**：`insert` 同 refund 不同 release 静默 no-op（Phase 3b 校验）；未知 receipt/终态/order mismatch
+  测试缺口；启动接线无集成测试。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 Phase 3a PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `f27c17c`..工作树（未提交；HEAD=`f27c17c`；migration `0024`、ack consumer、`cmd/order`、2 tests；无 inventory/api；tests 4.146s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-63/INV-46）；`docs/adr/0011-legacy-24h-release-ack.md`
+- 结论: PASS（Phase 3a 可合入；Phase 3b Payment-last 未做；AC-63 仍未验证；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: insert `ON DUPLICATE` one-to-one；unknown/terminal/order-mismatch/startup tests；direct apply 绕过 validator；Phase 3b；AC-63/T5.2/3/5/6/7
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-63 未验证 -> 未验证（Phase 3a 回执，不是 Payment/EXPIRED_REFUND；报告 §7）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 Phase 2 PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `9853e01`..工作树（未提交；HEAD=`9853e01`；`refund_release_consumer.go` `34b0e8d8…`、integration test `eb9b2d78…`；无 order/migration/api；inventory 2.312s、events 0.103s、vet 0、boundary 0）

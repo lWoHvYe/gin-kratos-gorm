@@ -48,6 +48,7 @@
 
 ```text
 specs/[###-feature]/
+├── spec.md              # Feature specification (authority)
 ├── plan.md              # This file (/speckit-plan command output)
 ├── research.md          # Phase 0 output (/speckit-plan command)
 ├── data-model.md        # Phase 1 output (/speckit-plan command)

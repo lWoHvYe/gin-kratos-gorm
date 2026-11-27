@@ -1,10 +1,19 @@
+---
+id: SPEC-<NNNN>
+title: [FEATURE NAME]
+status: draft              # draft | in-review | approved | historical | superseded
+version: 0.1.0
+owner: [OWNER]
+supersedes: []
+superseded_by: null
+adr: []
+---
+
 # Feature Specification: [FEATURE NAME]
 
 **Feature Branch**: `[###-feature-name]`
 
 **Created**: [DATE]
-
-**Status**: Draft
 
 **Input**: User description: "$ARGUMENTS"
 

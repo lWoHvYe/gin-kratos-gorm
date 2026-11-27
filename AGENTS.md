@@ -1,4 +1,4 @@
-# AGENTS.md v3.0（设计稿）
+# AGENTS.md v3.0
 
 > 2026-11-28 v3.0 已合并到 main（人类方向）；独立 review pending。只写操作细节，冲突以宪法 v3.0 为准。
 

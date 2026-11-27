@@ -64,8 +64,8 @@ func claimSettlementTask(ctx context.Context, database *sql.DB, owner string, le
 	var task settlementTask
 	err = tx.QueryRowContext(ctx, `SELECT payment_no, order_no, attempts, dtm_gid
 		FROM payment_settlement_tasks
-		WHERE state = ? AND (lease_until IS NULL OR lease_until < NOW(3))
-		ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`, settlementPending).
+		WHERE state IN (?, ?) AND (lease_until IS NULL OR lease_until < NOW(3))
+		ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`, settlementPending, settlementProcessing).
 		Scan(&task.PaymentNo, &task.OrderNo, &task.Attempts, &task.GID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -76,8 +76,9 @@ func claimSettlementTask(ctx context.Context, database *sql.DB, owner string, le
 	if _, err := tx.ExecContext(ctx, `UPDATE payment_settlement_tasks
 		SET state = ?, lease_owner = ?, lease_until = DATE_ADD(NOW(3), INTERVAL ? SECOND),
 		    version = version + 1, updated_at = NOW(3)
-		WHERE payment_no = ? AND state = ?`,
-		settlementProcessing, owner, int(lease.Seconds()), task.PaymentNo, settlementPending); err != nil {
+		WHERE payment_no = ? AND state IN (?, ?) AND (lease_until IS NULL OR lease_until < NOW(3))`,
+		settlementProcessing, owner, int(lease.Seconds()), task.PaymentNo,
+		settlementPending, settlementProcessing); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {

@@ -574,6 +574,30 @@ re-review and human merge decision are still required.
   新专门测试。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5.3 - AC-43 settlement crash/resume
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS，部分）;
+  `级别: 实现变更`; `阶段: 合入前`; base `aad98a1`.
+- **修复**：`claimSettlementTask` 原来只认 `PENDING`，崩溃后 `PROCESSING` 任务永不恢复；
+  改为 `state IN (PENDING,PROCESSING)` 且 `lease_until` 过期可 claim，UPDATE 同条件 CAS。
+- **测试**：`TestSettlementTaskCrashResume`（过期后新 owner 恢复并 DONE）、
+  `TestSettlementTaskMaxAttemptsFailsPermanent`（10 次 → FAILED_PERMANENT）；3 PASS 2.155s；
+  `TestSettlement` 2.149s PASS；vet 0。
+- **AC-43 部分**：crash/resume + max attempts；CANCELLED 全额退款/HELD-CONFIRMED 未做；
+  AC-59 3/4（第 4 条库存失败事件契约缺）；AC-60/63 不变；T5.3 仍部分；`NOT RELEASE`。
+- **NB**：无活跃 lease 第二 claim 断言；UPDATE RowsAffected 未查；max attempt 未断言无 Payment；
+  sleep 1.2s 有时序余量。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5.3 AC-43 Payment crash/resume PASS（部分）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `aad98a1`..工作树（未提交；HEAD=`aad98a1`；payment settlement/test；无 api/migration；2.155s/2.149s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-43；AC-59/AC-60/63 不变）；`docs/adr/0007-payment-settlement-admission.md`
+- 结论: PASS（AC-43 部分（crash/resume + max attempts）；T5.3 仍部分；AC-60/63 不变；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: active-lease/RowsAffected；CANCELLED/HELD-CONFIRMED；AC-59 第 4 条；T5.3
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-43 未验证 -> 未验证（部分）；AC-60/63 不变
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5.3 AC-59 第 2/3 分支 + AC-57 CREATED PASS（部分）
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `54013a6`..工作树（未提交；HEAD=`54013a6`；shortage/delivery/tests；无 api/migration；order 40.648s、fulfillment 5.660s、vet 0、boundary 0）

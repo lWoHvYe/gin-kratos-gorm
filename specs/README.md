@@ -12,3 +12,4 @@
 - `specs/sdd-struct-align-01` 为 historical，不进入本 index，不再作为当前证据。
 - 新工作 `specs/<feature>/spec.md`；变更原地更新；evidence 放 `specs/<id>/evidence/<change_id>/`。
 - legacy `docs/specs/` 仅保留重定向；无 active Spec。
+- 0001/0002 目前没有 `plan.md`：`--paths-only` 只读取路径；`--require-spec` 只用于有 plan 的 Spec；不伪造 legacy plan。

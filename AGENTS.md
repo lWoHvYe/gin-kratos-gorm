@@ -1,94 +1,104 @@
 # AGENTS.md
 
+> Trial branch `reform/lean-core`（base `6ee05df`，宪法 v2.2.0 不变）。
+> 本文件只改流程；不新增角色/批准点。合并前需 reviewer/human；指标不改善则丢弃本分支。
+
 ## 1. 谁做什么
 
 | 角色 | 是谁 | 做 | 不做 |
 |---|---|---|---|
-| 作者 | 主会话 | 写 Spec、ADR、plan、tasks；实现；交证据；记录人类决定和状态变化 | 审自己的东西；改写审查者的裁决；合入 |
-| 审查者 | 独立的审查 subagent（有运行时，能复跑测试；不能复跑时必须在裁决里写明原因、未覆盖范围，并取得人类书面豁免，否则不构成代码阶段 PASS） | 审 Spec、ADR、代码；写裁决；更新验收状态表 | 改代码；改 Spec 和 ADR 正文 (验收状态表除外)；给补丁建议 |
-| 人类 | 人 | 批准 Spec；合入；做 Release；回答业务裁决题 | 逐条核对文字和语法 |
+| 作者 | 主会话 | 写 Spec、ADR、plan、tasks；实现；交证据；记录人类决定 | 审自己的东西；改写审查者裁决；合入 |
+| 审查者 | 独立 subagent（有运行时；不能复跑时写明原因/未覆盖并取得人类书面豁免） | 审 Spec/ADR/代码；写裁决；更新验收状态表 | 改代码；改 Spec/ADR 正文（验收表除外）；给补丁建议 |
+| 人类 | 人 | 批准 Spec；合入；Release；回答业务裁决题 | 逐条核对文字/语法 |
 
-- 作者和审查者都先读 `.specify/memory/constitution.md`。本文件只补充操作细节，规则本身不在这里重复。
-- 作者可以用 subagent 做机械性的子任务，它们都算作者这一侧。审查者始终独立。
-- 修改宪法或本文件，按宪法 Governance：作者起草，审查者审查，人类批准。
+- 作者和审查者都先读宪法；本文件只写操作细节，不重复原则。
+- 作者可用 subagent 做机械子任务；审查者始终独立。
+- 修改宪法/本文件仍按宪法 Governance：作者起草、审查者审查、人类批准。
 
 ## 2. 流程
 
-契约变更：
+### 2.1 契约变更
 
 | 步 | 动作 | 谁 | 产物 |
 |---|---|---|---|
-| 1 | 写 Spec：宪法附录 A 的必备问题；用 Spec Kit 时可用其原生章节（User Scenarios/FR/SC/Assumptions），并加“附录 A 对照”；命中附录 B 的情形必须写 ADR，并在 Spec 里链接 | 作者 | Spec、ADR |
-| 2 | 契约审查，任务书见 §3 | 审查者 | 台账 |
-| 3 | 批准 Spec 和它链接的 ADR，回答业务裁决题 | 人类 | 台账 |
-| 4 | 写 plan (本次的做法，含不需要 ADR 的局部设计) 和 tasks；列出遵守的 ADR；做一次自检 | 作者 | plan、tasks |
-| 5 | 实现，按阶段分批，每批停下交证据 | 作者 | 代码、测试日志 |
-| 6 | 代码审查，任务书见 §3；更新验收状态表 | 审查者 | 台账、Spec |
-| 7 | 合入，在审查通过之后 | 人类 | 台账 |
-| 8 | Release | 人类 | 台账 |
+| 1 | 写 Spec：宪法附录 A；命中附录 B 写 ADR 并链接 | 作者 | Spec、ADR |
+| 2 | 契约审查（任务书见 §3） | 审查者 | 台账 |
+| 3 | 批准 Spec 和链接 ADR，回答业务裁决题 | 人类 | 台账 |
+| 4 | 写 plan/tasks：`baseline_impact`、`stop_conditions`、AC→检查；实现按阶段分批，批后停下交证据 | 作者 | plan、tasks、代码、日志 |
+| 5 | 代码审查（§3）；更新验收状态表 | 审查者 | 台账、Spec |
+| 6 | 合入、Release | 人类 | 台账 |
 
-- 实现变更做第 4-8 步；plan 可以一页以内，但不省略。plan 必须写 `baseline_impact`（“不涉及”也要写依据）与 `stop_conditions`；金额、库存、权限、履约准入变更不得只写“不涉及”。
-- 第 2 步 FAIL：回到第 1 步。第 2 步只审 Spec 和 ADR；plan 在第 6 步随代码一起审。
-- 第 6 步 FAIL，分三种。代码不符合已批准的 Spec 或 ADR：回第 5 步，改代码。架构缺陷，或同一问题第二次不过且判定为设计问题：冻结，回第 1 步。越出了已批准的 Spec 的范围：按契约变更重新从第 1 步走。
-- 任何实现工具都不得无人值守连续执行：一个阶段一批，批后停下。用 `speckit-implement` 时，按 tasks 阶段分批调用或在阶段边界主动中止；工具默认会连续跑完全部任务，不能作为豁免。
-- 线上紧急修复不设专门路径：按契约变更或实现变更走最短的 Spec，当日取得人类批准后实施；不得用 hotfix 或新 change_id 绕过 FAIL（宪法 30）。
-- 跨服务变更在写 plan 时指定一名 integration owner（由既有角色兼任，作者或人类指定，不新增角色），负责基线与组合验证；没有 owner 的跨服务契约变更不得进入第 5 步。
-- 简单变更的 plan 可以很短，但不省略。tasks 里状态机拆分、并发控制排在前面，不得先做 CRUD。
+- plan 不省略；金额、库存、权限、履约准入不得只写“不涉及”。
+- 第 2 步 FAIL 回第 1 步；第 5 步 FAIL：代码不符合 Spec/ADR 回第 4 步，架构/设计问题或同一问题第二次不过且判为设计问题则冻结回 Spec/ADR，越界按契约变更重走。
+- 线上紧急修复不设 hotpath：走最短 Spec/实现流程，当日取得人类批准；不得用 hotfix/新 change_id 绕过 FAIL。
 
-## 3. 审查者的任务书
+### 2.2 实现变更
 
-作者启动审查者时只用下面这段，不得增删内容。
+- 行为已被批准 Spec 覆盖、且不触及契约主题：走 2.1 的第 4–6 步；不新建 Spec/ADR。
+- 无法归入或触及契约主题：按契约变更。
+- **bugfix 不设特殊路由**：满足上述条件就是实现变更；否则是契约变更。用现有工具修，不新建 Spec。
+- 同一时间只推进一个 change_id；并行需人类批准。
+- 任何实现工具不得无人值守连续执行；`speckit-implement` 按阶段分批。
+
+### 2.3 Legacy
+
+- `docs/specs/0001/0002` 冻结：不迁移、不复制；需要修改时只做必要原地修改，迁移另案。
+- 新工作默认 `specs/<feature>/spec.md`；0001/0002 保持 `docs/specs/`；不确定先问人类。
+
+## 3. 审查者任务书
+
+作者启动审查者时只用下面这段，不得增删。
 
 ```text
 你是独立审查者。先读 .specify/memory/constitution.md，再读 Spec 和它链接的 ADR。
 change_id: <编号>; 级别: 契约变更 | 实现变更 | 治理变更; Spec 和 ADR: <路径，治理变更写"无">
 声称受影响的其他 Spec 的 AC: <编号，没有就写"无">
 base: <sha>; head: <sha>; 阶段: Spec | 代码
-只依据 Spec、它链接的 ADR、宪法，以及这个 base/head 之间的代码、plan 和测试日志判断，不依据作者的自述；审查者之外的其他输入只作问题提案（宪法 12），不作为证据。
+只依据 Spec、ADR、宪法，以及 base/head 之间的代码、plan、测试日志判断，不依据作者自述；其他输入只作问题提案（宪法 12），不作证据。
 输出:
 1. 裁决 PASS / SCOPED-PASS / FAIL，写明范围。
-2. 逐条问题，每条注明违反的 AC、领域不变量、已批准的 ADR、必备问题的要求或宪法条款；摘不到的记为 [TODO]。
-3. AC 位移: 本次 Spec 和受影响的其他 Spec 里，哪些 AC 从什么状态移到什么状态，附检查类型和证据路径。
-4. 能写台账，就把裁决按 AGENTS.md §4 的格式写入 docs/review-tracking.md，并更新 Spec 的验收状态表；不能写，就输出同格式的条目。
-5. 写明 review_scope、release_status（NOT RELEASE / PASS；PASS 只表示该范围证据满足，不是 Release PASS）、`spec_version`/`adr_revision`、`verification`、受影响的 INV 与 `baseline_impact`；所有变更至少写 `INV: 不涉及（依据）` 或列可能影响的 INV；资金、库存、权限、跨服务、数据迁移必须逐条列 INV。审查者之外的其他输入按宪法 12 只作问题提案，不作为证据。
-第 5 项的字段写入审查报告；台账至少记 review_scope 与 release_status。
+2. 逐条问题，指向被违反的 AC/INV/ADR/必备章节/宪法条款；摘不到的记 [TODO]。
+3. AC 位移：受影响 AC 的旧/新状态、检查类型、证据路径。
+4. 能写台账就按 AGENTS §4 写入 docs/review-tracking.md 并更新 Spec 验收表；不能写就输出同格式条目。
+5. 写明 review_scope、release_status、spec_version/adr_revision、verification、受影响 INV、baseline_impact；资金/库存/权限/跨服务/迁移必须逐条列 INV。
+一次给全所有 blocking 问题；只追 blocker；作者修完后只复跑失败项+diff；不给补丁；发现设计缺口标 DESIGN-GAP，停代码回 Spec/ADR。
 ```
 
-- Spec 阶段审三件事：必备问题是否都有落点、回答是否到位；是否违反领域不变量或已批准的 ADR；每条 AC 是否可达，是否落到了具体的测试、契约检查或可观测指标上。跨服务变更还要核对 integration owner 与 baseline_impact；资金、库存、权限、跨服务裁决必须写 INV。
-- 审查期间 HEAD 变化时，重新确认差异和受影响验证；作者的 plan 必须写 `baseline_impact`（“不涉及”也要写依据）与 `stop_conditions`。
-- 代码阶段还要核对：这次改动有没有使其他 Spec 里已验证的 AC 失效。
-- SCOPED-PASS: 范围内通过，写明未覆盖的 AC 或路径。
-- 审查方式：按所有权、不变量和裁决门来审，先看状态机和并发，不按清单逐条挑边缘问题。
-- 能运行测试就复跑；不能复跑时按 §1 的条件写明原因、未覆盖范围并取得人类书面豁免，否则不构成代码阶段 PASS。
+- Spec 阶段审：附录 A 是否都有落点、回答到位；是否违反 INV/ADR；AC 是否可达、落到测试/契约检查/可观测指标；跨服务 integration owner/baseline_impact；资金/库存/权限/跨服务必须写 INV。
+- 代码阶段：代码是否符合 Spec/ADR；测试/证据是否支持 AC；是否使其他 Spec 已验证 AC 失效；高风险是否按宪法 13 有并发/故障证据。
+- 审查期间 HEAD 变化要重新确认差异和受影响验证。
+- `analyze`/`checklist` 只作 lint/自检，不构成 PASS；审查者不给补丁，不替作者设计。
+- 超过 2 轮仍不收敛：由人类按“实现错误/证据不足/设计问题/契约缺口/环境”分类决定下一步，不自动放行；权限/安全/数据完整性/迁移/资金/库存阻断不受轮次影响。
 
 ## 4. 台账与提交
 
-台账是 `docs/review-tracking.md`，最新在上，只有一个插入位置。历史台账尚未重排时，同日条目按插入位置（块顶为最新）判定，日期只用于分组；重排是独立动作，未完成不改变“最新在上”的语义。条目格式：
+台账 `docs/review-tracking.md`，最新在上，只有一个插入位置；同日条目按插入位置判定，日期只分组。格式：
 
 ```text
 ### YYYY-MM-DD <审查裁决|人类决定|状态变化>: <change_id> - <一句话>
 - Actor / Reviewed-by: ...; 级别: 契约变更 | 实现变更 | 治理变更; 阶段: Spec | 代码; base..head: ...
 - Spec 和 ADR: <路径>
-- 结论: PASS | SCOPED-PASS | FAIL | 批准 | 冻结 | Release; 范围: ...; release_status: NOT RELEASE | PASS (仅表示该范围证据满足，不是 Release)
+- 结论: PASS | SCOPED-PASS | FAIL | 批准 | 冻结 | Release; 范围: ...; release_status: NOT RELEASE | PASS
 - 取代: <被取代条目的日期和标题> (没有就写"无")
 - 阻断项: ...; 待办: ...
 - AC 位移: <Spec> <AC 编号> <旧状态> -> <新状态> (证据路径)
 ```
 
-提交尾注：`change_id:`、`Actor:`、`Reviewed-by:`。作者不执行合入，由人类在合入提交上补这三个尾注。
+提交尾注：`change_id:`、`Actor:`、`Reviewed-by:`。作者不合入；人类在合入提交补尾注。尾注必须真实；未审写 `Reviewed-by: pending`，不得冒充。
 
 ## 5. 交付要求
 
-作者每次代码交付必须满足宪法 12-14，并带对应的 AC 编号。
+每次代码交付满足宪法 12–14，并带对应 AC：
 
-测试日志和审查报告：新 Spec 放 Spec 同目录的 `evidence/`（扁平 Spec 用 `docs/specs/evidence/<change_id>/`）；在途变更可沿用 `docs/implementation/**`；治理变更的审查报告放 `docs/collab/qc-reports/`。台账必须写精确路径和 `git rev-parse HEAD`。台账的"AC 位移"写它们的路径。
+- 证据：diff、测试日志（绑定 `git rev-parse HEAD`）、【测试范围】【未覆盖范围】【取舍】。
+- 新 Spec 证据放 Spec 同目录 `evidence/`；在途变更可沿用 `docs/implementation/**`；治理变更放 `docs/collab/qc-reports/`。
+- 台账写精确路径和 HEAD；AC 位移写路径。
+- 高风险按宪法 13 附并发/故障注入；不适用须人类书面豁免。
 
-缺任何一项，审查者按证据不足退回，不进入审查。
+缺一项，审查者按证据不足退回。
 
-## 6. 推荐工具
+## 6. 工具（非规则）
 
-这一节不是规则，和上文冲突时以上文为准。
-
-- 装了 Spec Kit 时，第 1、4 步可以用它的 specify、clarify、plan、tasks，第 5 步可以用 implement，但必须分批；checklist 默认是作者自检，若作为审查产物，`[x]` 表示审查者判定，不是实现完成；converge 的方法可供审查者参考；修宪可以用 constitution 辅助起草。`speckit-implement` 没有阶段参数，分批靠操作者在阶段边界主动中止/重启，不能依赖工具自动停。
-- 官方脚手架里的核心模板和脚本不要直接改。要改 Spec 必备问题，走它的模板覆盖层：项目覆盖层 `.specify/templates/overrides/` 是整体替换；只追加章节时用预设/扩展层的 `append`，不要用 override 冒充 append。
-```
+- Spec Kit：契约变更可用 specify/clarify/plan/tasks/implement，implement 分批；checklist 是作者自检；converge 只参考。核心模板/脚本不改；扩展用 preset/override 官方机制。
+- 按需参考（非规范，冲突以宪法/本文件为准）：`docs/checklists/author.md`、`docs/checklists/design.md`、`docs/checklists/reviewer.md`、`docs/guides/spec-writing.md`、`docs/guides/spec-kit.md`、`docs/guides/review-protocol.md`。
+- 不引入新角色/新状态文件；不把非规范 guide 当验收依据。

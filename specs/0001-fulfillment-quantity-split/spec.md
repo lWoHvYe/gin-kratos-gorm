@@ -23,7 +23,7 @@ adr: [0005]               # Architect 出稿后回填
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件，不接收口头补充） |
 | 冻结规则 | v1.5 后任何业务口径变更必须升版为 v1.6 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
-| 依据 | `AGENTS.md`、ADR [0002](../adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../architecture-baseline.md)（INV-01…INV-16）、[SPEC-0002](0002-payment-settlement-admission.md) v1.10（AC-50/INV-45）、[QC-PAY-SETTLE-01-R0.3-AC27](../collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15](../collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15-R2](../collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15-R2.md) |
+| 依据 | `AGENTS.md`、ADR [0002](../../docs/adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../../docs/architecture-baseline.md)（INV-01…INV-16）、[SPEC-0002](../0002-payment-settlement-admission/spec.md) v1.10（AC-50/INV-45）、[QC-PAY-SETTLE-01-R0.3-AC27](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15-R2](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15-R2.md) |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准。任何实现方式、数据结构、接口形态、算法选择均不在本文件范围内，Architect 需要自行设计并接受本文件的验收。
 
@@ -783,7 +783,7 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | Product Owner | 原地升版 v1.5：按上述授权改写 AC-27、新增 AC-27A、修正 §4.2/§6.6.1/§6.7/§7.1/§7.5、更新 YAML/变更记录/批准记录/裁决记录；未改 SPEC-0002/ADR/代码/台账 | 2026-11-26 |
 | Product Owner | 按 QC-PAY-SETTLE-01-SPEC-0001-V15 与 R2 修订 v1.5：关闭 B-1 读写路径拆分、B-2 `CANCELLED`、B-3 证据载体/前置缺陷、M-1…M-9、N-1…N-4；未改 SPEC-0002/ADR/代码/台账；未 commit；待 QC delta 复审 | 2026-11-26 |
 | System Architect | 已接收，产出 ADR-0005（accepted） | 2026-11-22 |
-| Developer | 实施中；偏差与待回写项见 [adr-0005-deviation-register.md](../implementation/adr-0005-deviation-register.md) | 2026-11-22 |
+| Developer | 实施中；偏差与待回写项见 [adr-0005-deviation-register.md](../../docs/implementation/adr-0005-deviation-register.md) | 2026-11-22 |
 
 交接顺序不可颠倒：`Spec.md`（本文件，v1.5 已批准；QC delta 复核后实现）→ `ADR.md`（Architect）→ 代码与测试（Developer）→ 对照本文件第 4/5/8/9 节审查（Reviewer）。
 
@@ -822,7 +822,7 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 
 | ID | 问题 | 裁决 | 依据 / 影响 |
 |---|---|---|---|
-| V15-1 | AC-27 EARS-1 的“订单投影”是持久化 `orders.status` 还是读模型？ | **S2 读模型 `shipment_status`**。持久化 `orders.status` 不因“组退款完成/组关闭”写入，仍只由运单创建（发货授权）/发货/收货/取消事实迁移；AC-27 的“推进/不得停留”限定为读模型；§6.6.1/AC-25/INV-01 不变。 | §6.6.1、§6.7、AC-25；[PAY-SETTLE-01-R0.3-selfcheck](../implementation/PAY-SETTLE-01-R0.3-selfcheck.md) §2.2；[QC-PAY-SETTLE-01-R0.3-AC27](../collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md) B-1。**未采纳**“允许持久化推进”：那将修改 §6.6.1/AC-25，属契约变更，不在 2026-11-26“澄清”授权内。 |
+| V15-1 | AC-27 EARS-1 的“订单投影”是持久化 `orders.status` 还是读模型？ | **S2 读模型 `shipment_status`**。持久化 `orders.status` 不因“组退款完成/组关闭”写入，仍只由运单创建（发货授权）/发货/收货/取消事实迁移；AC-27 的“推进/不得停留”限定为读模型；§6.6.1/AC-25/INV-01 不变。 | §6.6.1、§6.7、AC-25；[PAY-SETTLE-01-R0.3-selfcheck](../../docs/implementation/PAY-SETTLE-01-R0.3-selfcheck.md) §2.2；[QC-PAY-SETTLE-01-R0.3-AC27](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md) B-1。**未采纳**“允许持久化推进”：那将修改 §6.6.1/AC-25，属契约变更，不在 2026-11-26“澄清”授权内。 |
 | V15-2 | 未离仓组的关闭谓词是什么？ | 按 AC-27A 固定顺序：持久化 `CANCELLED`（仅整单取消）→ 已关闭；`SHIPPED/RECEIVED` → 未关闭（优先）；`permit=REVOKED` → 已关闭；`permit=CONSUMED` 且组退款准入结果 `PRE_SHIP_REVOKED` → 已关闭；其他 → 未关闭。`refund_state`（S4；SPEC-0002 S9）不参与；pre-ship `REFUNDING` 可关闭但≠退款完成；`reservation_state` 不参与；运单事实只通过组退款准入结果代理。唯一证据载体是 Order 自有的 `order_refund_admissions.result`；`result` 仅 `PRE_SHIP_REVOKED`/`POST_SHIP_ALLOWED`，`state=PENDING_REMOTE` 是中间态、不等同于 PRE。AC-27A 不包含 `CONSUMED+无运单` 的写路径错误码/告警字段。 | SPEC-0002 §4.5 AC-50、AC-48；INV-45；AC-62；QC B-2/M-5/M-7；ADR-0007 Rev 2.3 §5.2.3/§5.7。 |
 | V15-3 | AC-50 `CONSUMED` 且无运单：CONFLICT 还是 PRE？ | **保持 `REFUND_ADMISSION_CONFLICT` + 告警**（AC-50 现行口径），且仅在“未离仓、本次金额 = 整组退款金额”分支；部分金额先按 AC-50 返回 `PARTIAL_REFUND_REQUIRES_FULL_GROUP`。该分支是异常状态，不得写 `PRE_SHIP_REVOKED`、不得据此关闭组。写路径修复必须覆盖正金额/TCC/`system_zero`/legacy 全部来源；当前实现把“无运单行”映射为 PRE 属偏差。修复前需 Architect 对 ADR Rev 2.3 §5.3 `CancelIfCreatedReply` 做 additive amendment（新增可区分的“无运单”结果或等价字段），再由 Developer 修复；登记 `AC-50-FIX-01`（owner Developer，expiry 2026-12-31；未修前 AC-27 不得 AC-VERIFIED）。AC-27A 读模型不输出该错误码、不要求 Order 观测运单。 | SPEC-0002 AC-50/AC-48；ADR Rev 2.3 §5.3；`cancel_if_created.go:51-55`；`refund_admission.go:370-390,576-597`；QC B-1/B-2/B-3/M-4。 |
 | V15-4 | §7.5:405/:409（v1.4 行号）与 AC-27 冲突；与 AC-26 谁优先？ | §7.5 示例按 AC-27/AC-27A 修正：G2 已关闭且 G1 已发 → 生命周期 `ALLOCATED`（持久化，不因退款推进）、履约投影 `SHIPPED`、G2 `CANCELLED`/`REFUNDED`（或 `REFUNDING`）；未创建运单的“未发”行为 `PAID`，已创建运单为 `ALLOCATED`；本表以 2 组为例，3 组按剩余组聚合。AC-26 适用于 G2 未发且未关闭（仍计划履约）；AC-27 适用于 G2 已关闭；两者不冲突，按组是否关闭选择。 | AC-26、AC-27、§7.5；QC M-3/M-6/R-5。 |

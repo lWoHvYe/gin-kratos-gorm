@@ -1,7 +1,7 @@
 # SDD-STRUCT-ALIGN-01 — Spec Kit 双布局试点
 
-**Feature**: `specs/sdd-struct-align-01/`
-**Status**: Approved（2026-11-27 人类批准；实现 PASS，待人类合入）
+**Feature**: `specs/sdd-struct-align-01/`（historical）
+**Status**: historical（原 ADR-0009 试点；单布局迁移后不再作为当前证据）
 **Input**: 人类 2026-11-27 选择方案 A（双布局 + 自举试点）+ Spec.md 加一行指针。
 
 ## User Scenarios & Testing

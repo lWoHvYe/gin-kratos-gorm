@@ -23,10 +23,10 @@ adr: [0007]
 | 日期 | 2026-11-26 |
 | change_id | **`PAY-AC50-REVIEW-01`**（L2，Phase 0 L2-C1；Parent `PAY-SETTLE-01` 为历史父变更；其冻结/解冻状态见台账（2026-11-27 B-4），仍 no merge/no release） |
 | 状态 | **已批准（approved v1.11）**：Director 2026-11-26 批准 SPEC-0002 v1.11；QC R8 `READY`（`edebb85`）；同日 `ADR_APPROVED`。本版不是 Release PASS，不声称任何 AC-VERIFIED；实现须按 §11 批准点与 `PAY-AC50-REVIEW-01` 的 Plan/Tasks（含 `tcc_*.go` 范围）启动 |
-| 位置 | `docs/specs/`：v1.11 新增 S20、INV-51/52、AC-69…72、§5.10、E32…E35、D-30…D-34、`## 改动影响`；修订 AC-50/51/61/62/65/67 的复核决定条款；R4 delta 关闭 B1（持久载体分路径）/B2（零元例外）/B3（审计载体）与 M1（ADR 0.5）/M2（AC-72 分段）/M3（实现批准点）；**R5 delta：AfterSales 写 task 镜像/保持 PENDING/上限不自动 FAILED（B1）、last_error 唯一格式与截断（M4）、5 分钟告警归 REVIEW-REQUIRED-ALERTS-01（M3）、实现 allowed_paths 对齐 Plan（M1）**；**R6 delta：canonical 定稿为 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（无 `arm`；含确定性截断/解析契约；D-35），并明确 O19/O23/TestAC69/TestAC72 同一解析器（B2）；复核 REVIEW 任务 ≥8 次仍 PENDING/不自动 FAILED 的全文档一致性（B1）**；不删除/不重编号既有 AC |
+| 位置 | `specs/`：v1.11 新增 S20、INV-51/52、AC-69…72、§5.10、E32…E35、D-30…D-34、`## 改动影响`；修订 AC-50/51/61/62/65/67 的复核决定条款；R4 delta 关闭 B1（持久载体分路径）/B2（零元例外）/B3（审计载体）与 M1（ADR 0.5）/M2（AC-72 分段）/M3（实现批准点）；**R5 delta：AfterSales 写 task 镜像/保持 PENDING/上限不自动 FAILED（B1）、last_error 唯一格式与截断（M4）、5 分钟告警归 REVIEW-REQUIRED-ALERTS-01（M3）、实现 allowed_paths 对齐 Plan（M1）**；**R6 delta：canonical 定稿为 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（无 `arm`；含确定性截断/解析契约；D-35），并明确 O19/O23/TestAC69/TestAC72 同一解析器（B2）；复核 REVIEW 任务 ≥8 次仍 PENDING/不自动 FAILED 的全文档一致性（B1）**；不删除/不重编号既有 AC |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件与 QC 报告，不接收口头补充） |
-| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`docs/specs/0001` **v1.5**（`4215b3c`；AC-27/AC-27A/§16.2）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3（latest）；`docs/adr/0007-amd1-addendum-ac50-nowaybill.md` **0.5（2026-11-26 ADR_APPROVED；R4 审查对象为 0.4）**；`docs/collab/qc-reports/QC-PAY-SETTLE-01-AC50-NOWB.md` **R4/R5/R6**；`docs/lead/PAY-AC50-REVIEW-01/plan.md`（`d2149c0`）；`docs/review-tracking.md` 2026-11-26 Director 授权；`migrations/order/0016_settlement_admission.sql`、`0017_refund_batch_ledger.sql`、`migrations/aftersales/0010_settlement_protocol.sql` |
+| 依据 | `AGENTS.md` §4；`docs/architecture-baseline.md` INV-01…16；`specs/0001-fulfillment-quantity-split/spec.md` **v1.5**（`4215b3c`；AC-27/AC-27A/§16.2）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3（latest）；`docs/adr/0007-amd1-addendum-ac50-nowaybill.md` **0.5（2026-11-26 ADR_APPROVED；R4 审查对象为 0.4）**；`docs/collab/qc-reports/QC-PAY-SETTLE-01-AC50-NOWB.md` **R4/R5/R6**；`docs/lead/PAY-AC50-REVIEW-01/plan.md`（`d2149c0`）；`docs/review-tracking.md` 2026-11-26 Director 授权；`migrations/order/0016_settlement_admission.sql`、`0017_refund_batch_ledger.sql`、`migrations/aftersales/0010_settlement_protocol.sql` |
 | 范围 | H1/H2 批准的业务口径：首次支付、结算、取消竞态、库存就绪、发货准入、退款统一准入、缺货、收货；v1.8 增加 P-04/P-05/P-06、TCC Σ、历史队列 `COMPENSATING`、`order.settled` shadow；v1.9 增加零元售后闭环；v1.10 将退役机器门禁前置替换为 K-6 人工门禁；**v1.11 只增加 AC-50 准入复核决定（`REVIEW_REQUIRED`）及其 TCC/零元/legacy 处理语义与影响分析** |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准（EARS）。**不定义**表结构、事件名、RPC 形态、事务边界、重试算法或开关实现；这些由 Architect 在 ADR 中设计并接受本文件验收。
@@ -877,7 +877,7 @@ REVIEW_REQUIRED --新 refund_id（旧承诺先按 AC-62 处置）--> 新申请�
   3. **签收事实**：沿用 SPEC-0001 S7；Fulfillment 落签收证据，Order 只消费与投影。
   4. **取消**：沿用 SPEC-0001 §6.7；已支付订单不提供取消，只能走售后/退款。
 - **SPEC-0001 升版冲突（D-17，已解决）**：
-  - `docs/specs/0001` 第 287 行明文禁止“预留已释放但订单仍为已支付”。本 Spec 的组退款（普通售后/缺货）在未离仓时必然释放该组预留，同时订单生命周期仍为 `PAID`（退款态由 `refund_state` 投影表达，不存在 `PARTIALLY_REFUNDED` 生命周期值）。二者只能通过升版 0001 解决：把该禁止限定为“仍计划履约的组”，并明确组退款释放库存的合法性；否则只能改为“任何组退款都整单退款”，但这会与 AC-27/INV-38 冲突。
+  - `specs/0001-fulfillment-quantity-split/spec.md` 第 287 行明文禁止“预留已释放但订单仍为已支付”。本 Spec 的组退款（普通售后/缺货）在未离仓时必然释放该组预留，同时订单生命周期仍为 `PAID`（退款态由 `refund_state` 投影表达，不存在 `PARTIALLY_REFUNDED` 生命周期值）。二者只能通过升版 0001 解决：把该禁止限定为“仍计划履约的组”，并明确组退款释放库存的合法性；否则只能改为“任何组退款都整单退款”，但这会与 AC-27/INV-38 冲突。
   - 该升版已由 SPEC-0001 v1.3（2026-11-23 批准）完成，并在 0001 变更记录写明影响的 INV-06/INV-26/AC-27；SPEC-0001 v1.4（2026-11-24）完成 AC-27 的 EARS 迁移。
 - 本 Spec 如与上述条款冲突，以更严格且更晚批准的条款为准，并在 §13 记录影响的 INV/AC。
 
@@ -1020,19 +1020,19 @@ REVIEW_REQUIRED --新 refund_id（旧承诺先按 AC-62 处置）--> 新申请�
 | 甲方（业务） | 批准 SPEC-0001 v1.3（组退款释放边界）；解除本 Spec 的 C-1 | 2026-11-23 |
 | 甲方（业务） | 批准 D-11…D-21 全部按建议默认值生效 | 2026-11-23 |
 | 甲方（业务） | 批准本 Spec v1.6 与 C-9 落库（台账/索引/提交） | 2026-11-23 |
-| Product Owner | 移入 `docs/specs/`、更新索引与 AC 台账指针 | 2026-11-23 |
+| Product Owner | 移入 `specs/`、更新索引与 AC 台账指针 | 2026-11-23 |
 | Quality Checker | QC-08 `PASS WITH CONDITIONS`；C-1/C-8/C-9 关闭后无代码级 BLOCKER | 2026-11-23 |
 | 甲方（业务） | 批准 ADR-0007 v0.4；确认 INV-43 仅约束组级退款，支付级退款为 capture correction | 2026-11-23 |
 | 甲方（Director） | 批准 SPEC-0002 v1.8；同时批准 SPEC-0001 v1.4 与 ADR-0007 Amendment 1 | 2026-11-24 |
 | Quality Checker | QC-14 `READY FOR HUMAN SPEC APPROVAL`（0 BLOCKER；2 条非阻断待批准记录） | 2026-11-24 |
-| Product Owner | 将已批准的 v1.8 变更应用为 `docs/specs/` v1.8 approved；更新变更记录/批准记录；按 Human 指示登记 AC-62…66 延期行，Reviewer 复核 | 2026-11-24 |
+| Product Owner | 将已批准的 v1.8 变更应用为 `specs/` v1.8 approved；更新变更记录/批准记录；按 Human 指示登记 AC-62…66 延期行，Reviewer 复核 | 2026-11-24 |
 | 甲方（Director） | 批准 SPEC-0002 v1.9 零元售后补充（AC-67/68、S19、INV-50、AC-55 零元例外） | 2026-11-24 |
 | Quality Checker | QC-18 `READY FOR HUMAN ZERO AMENDMENT APPROVAL`（0 BLOCKER） | 2026-11-24 |
-| Product Owner | 将已批准的 v1.9 变更应用为 `docs/specs/` v1.9 approved；按 Human 指示登记 AC-67/68 延期行，Reviewer 复核 | 2026-11-24 |
+| Product Owner | 将已批准的 v1.9 变更应用为 `specs/` v1.9 approved；按 Human 指示登记 AC-67/68 延期行，Reviewer 复核 | 2026-11-24 |
 | 甲方（Director） | K-8：指示 PO amendment，移除 SPEC-0002 中已退役 `G-4` / 已删除 `--release --range` 前置，改用 K-6 人工门禁口径；不设 waiver | 2026-11-25 |
 | Quality Checker | QC-32 / QC-33 `READY`（0 BLOCKER / 0 MAJOR；v1.10 与 ADR-0007 Rev 2.3 一致）；非 Release PASS | 2026-11-25 |
 | 甲方（Director） | 批准 SPEC-0002 v1.10（K-8 amendment；G-4/`--release --range` 由 K-6 人工门禁替代） | 2026-11-25 |
-| Product Owner | 产出 SPEC-0002 v1.10，并按 Director 2026-11-25 批准落库为 `docs/specs/` v1.10 approved：仅 AC-66、§5.9、D-27、§9、§12；未改其他 AC/INV/decision | 2026-11-25 |
+| Product Owner | 产出 SPEC-0002 v1.10，并按 Director 2026-11-25 批准落库为 `specs/` v1.10 approved：仅 AC-66、§5.9、D-27、§9、§12；未改其他 AC/INV/decision | 2026-11-25 |
 | 甲方（Director） | **2026-11-26 授权 PO 升版**：为 AC-50 `CONSUMED+无运单` 增加有界、可持久化的 `REVIEW_REQUIRED` 复核决定及其 TCC 处理语义，避免静默映射为 PRE；须产出影响分析，QC 复核后再实现；不隐含 merge/Release/AC-VERIFIED | 2026-11-26 |
 | Product Owner | 产出 SPEC-0002 v1.11（in-review）：S20、INV-51/52、AC-69…72、AC-50/51/61/62/65/67 修订、§5.6/§5.10/§6/§7/§8/§9/§10/§11/§12、`## 改动影响`；D-30…D-34 为 PO 裁决；仅改本文件，未 commit（Lead 统一提交） | 2026-11-26 |
 | Lead | 立项 L2 `PAY-AC50-REVIEW-01`（Parent `PAY-SETTLE-01` 冻结）；Plan/Tasks `docs/lead/PAY-AC50-REVIEW-01/`（`d2149c0`） | 2026-11-26 |

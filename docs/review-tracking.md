@@ -589,6 +589,20 @@ re-review and human merge decision are still required.
   sleep 1.2s 有时序余量。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 状态变化: PAY-SETTLE-01 T5.3 - AC-47/55/56 + TCC 对账证据
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: -（T5.6 复审待）`;
+  `级别: 实现变更（测试/证据）`; `阶段: T5`; base `ef867f4`.
+- **AC-47**：新增 `TestAC47MarkPaidConfirmFailureCompensates`（Confirm 失败→TccCancelConfirm、
+  保持 PENDING_PAYMENT、无 paid outbox）。
+- **AC-55/56/TCC**：`TestAC25RefundProjection...`、`TestRefundProjection...`、
+  `TestGroupShortageChoiceAndDefaultRefund`、`TestTccRefundBatchLazyReconcile*`、
+  `TestTccReconcileWorker*` → **16.449s PASS**。
+- **AC-61**：仍只有 `docs/ops.md` runbook，无告警/入口/每日对账代码证据。
+- **T5.3 仍部分**：AC-59 第 4 条、AC-56 4h/48h、AC-61、AC-43 CANCELLED/HELD-CONFIRMED 未完成；
+  AC-60/63 不变；`NOT RELEASE`。
+- 证据：`docs/lead/PAY-SETTLE-01/t5.2-t5.3-evidence.md`。
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5.3 AC-43 Payment crash/resume PASS（部分）
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `aad98a1`..工作树（未提交；HEAD=`aad98a1`；payment settlement/test；无 api/migration；2.155s/2.149s、vet 0、boundary 0）

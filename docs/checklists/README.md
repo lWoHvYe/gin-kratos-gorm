@@ -17,7 +17,7 @@
 | 写 ADR/状态机/并发设计 | `docs/checklists/design.md`、`docs/adr/template.md` |
 | 审查 | `docs/checklists/reviewer.md` |
 | 用 Spec Kit | `docs/guides/spec-kit.md` |
-| 历史 | `docs/archive/**`、旧 convert 草案、旧 QC 报告：**不默认加载**；`docs/convert/LEAN-CORE-V3/**` 是当前设计包，按需读 |
+| 历史 | `docs/archive/**`、旧 convert 草案、旧 QC 报告：**不默认加载**；`docs/archive/2026-11-28-v3/**` 是历史设计包，按需读 |
 
 ## 权威
 

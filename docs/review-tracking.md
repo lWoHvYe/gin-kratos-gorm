@@ -345,6 +345,31 @@ re-review and human merge decision are still required.
 - AC-60/AC-63 **仍未验证**（T2.5/T2.6/T2.7 为子集；T2.8/T3/T5 未做）；`NOT RELEASE`；
   合入由人类执行。本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T3.1/T3.3 - 不变量验证；T3 缺口审计
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（SCOPED-PASS）;
+  `级别: 实现变更`; `阶段: 合入前`.
+- **T3.1**：现有 6 处 permit 写路径无 `REVOKED→NONE/GRANTED`；新增
+  `TestRevokedPermitCannotBeRestored`（AdmitRefund/BlockShipmentForRefund/AuthorizeShipment
+  后仍 REVOKED；AuthorizeShipment 断言 revoked 分支）。
+- **T3.3**：现有 `AdmitRefund` 在写 admission/commitment/outbox 前完成 over-amount/partial
+  校验；新增 `TestRejectedAdmissionWritesNoCommitment`（零行、permit 仍 NONE）。
+- **T3.2/T3.4/T3.5/T3.6 缺口**：T3.4 proto/`0018` 列已存在但 `AdmitRefund` 未使用
+  `lines/responsibility/freight_refundable_cent`；T3.2 无 `RELEASED` 写路径/ release 命令；
+  T3.6 未接线；均需 Plan/人类批准。详见 `docs/lead/PAY-SETTLE-01/t3-audit.md`。
+- 证据：`go test ./internal/services/order -run 'TestRevokedPermitCannotBeRestored|TestRejectedAdmissionWritesNoCommitment'`
+  → PASS；无代码/契约/迁移改动；AC-60/63 仍未验证；`NOT RELEASE`。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3 审计 + T3.1/T3.3 不变量测试 SCOPED-PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `7d103a5`..工作树（未提交；HEAD=`7d103a5`；新增 `t3_invariants_integration_test.go` `e167630e…`、`t3-audit.md` `44236a31…`；`tasks.md` `7796b327…`；`git diff` 无内部非测试代码/迁移/proto/契约）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-60/AC-63）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3（§4.4/Amd1 §6.5）
+- 结论: SCOPED-PASS; 范围: T3.1/T3.3（公共路径测试 + 全包 permit 写路径 grep）；T3.2/T3.4/T3.5/T3.6 缺口审计；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无; 待办: tcc/worker permit 路径未测试（grep 审计）；CONSUMED partial 分支未测试；outbox 断言按 aggregate_id；审计“Tx1 前”应改为“Tx1 内写前”；审计行号/GRANTED→REVOKED/zero UPDATE 829/EOF 修正；T3.2/T3.4/T3.5/T3.6 需 Plan/人类批准；AC-60/63 未验证
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60/AC-63 未验证 -> 未验证（T3.1/T3.3 子集；报告 §5）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T2.5/T2.6/T2.7 复审 PASS（B1 消解；ADR-0010）
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待合入；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `45fe958`..工作树（未提交；HEAD=`45fe958`；`refund_seq.go` `8c02a7c2…`、`refund_seq_integration_test.go` `77d4d54e…`、`legacy_backfill_integration_test.go` `dd205dbb…`、`ADR-0010` `c5b6643a…`、plan `77ef33ed…`、tasks `75abf7a1…`；tracked diff 仅 `tasks.md` 3/3 行）

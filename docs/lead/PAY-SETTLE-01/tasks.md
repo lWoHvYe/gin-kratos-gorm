@@ -90,9 +90,11 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 
 ## Phase 3 — P-05 / P-06（Owner: Developer；依赖: T0.7、T1.2）
 
-- [ ] **T3.1** permit 不可恢复；禁止 worker 静默释放
+> 2026-11-27 T3 审计：T3.1/T3.3 现有代码已满足并补不变量测试；T3.2/T3.4/T3.5/T3.6 需契约级 Plan/人类批准，见 `t3-audit.md`。T3.7 仍部分。
+
+- [x] **T3.1** permit 不可恢复；禁止 worker 静默释放（既有写路径已满足；`TestRevokedPermitCannotBeRestored`）
 - [ ] **T3.2** `FAILED_PERMANENT`/人工放弃：人工授权、审计、幂等、CAS/lease 的 `RESERVED→RELEASED`（只释放额度）
-- [ ] **T3.3** 准入前拒绝/取消不创建 commitment；准入后失败进持久任务/人工
+- [x] **T3.3** 准入前拒绝/取消不创建 commitment；准入后失败进持久任务/人工（既有校验；`TestRejectedAdmissionWritesNoCommitment`）
 - [ ] **T3.4** proto/存储：行、商品/运费组成、责任、`UNDETERMINED/168h`
 - [ ] **T3.5** `AdmitRefund`：行层 INV-24 + 组层 + Payment 三层；未离仓整组；已离仓部分
 - [ ] **T3.6** AfterSales/缺货责任→可退运费唯一 Owner；Order 只校验

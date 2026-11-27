@@ -496,6 +496,10 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	if permit.state != permitConsumed && req.GetAmountCent() != groupRemaining {
 		return nil, partialRefundError(groupRemaining, req.GetAmountCent())
 	}
+	composition, err := validateRefundComposition(ctx, tx, req, orderNo, groupNo)
+	if err != nil {
+		return nil, err
+	}
 
 	// AC-50/AC-70/D-31: a CONSUMED partial amount and a legacy NONE permit use
 	// the Order-owned group projection only; CancelIfCreated is never called for
@@ -556,12 +560,8 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 		refundID, orderNo, groupNo, result, state, req.GetAmountCent()); err != nil {
 		return nil, apperr.Internal("insert refund admission", err)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO order_refund_commitments
-		(order_no, group_no, refund_id, amount_cent, state, version)
-		VALUES (?, ?, ?, ?, ?, 1)
-		ON DUPLICATE KEY UPDATE refund_id = refund_id`,
-		orderNo, groupNo, refundID, req.GetAmountCent(), "RESERVED"); err != nil {
-		return nil, apperr.Internal("insert refund commitment", err)
+	if err := insertRefundCommitmentTx(ctx, tx, orderNo, groupNo, refundID, req.GetAmountCent(), composition); err != nil {
+		return nil, err
 	}
 	if permit.state == permitNone && result == refundResultPre {
 		res, err := tx.ExecContext(ctx, `UPDATE order_shipping_permits

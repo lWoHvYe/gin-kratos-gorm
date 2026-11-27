@@ -97,6 +97,7 @@ frontend/**/vite.config.ts.timestamp-*
 /cart
 /pricing
 /order
+/order-legacy-backfill
 /payment
 /fulfillment
 /aftersales

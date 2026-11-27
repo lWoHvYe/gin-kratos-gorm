@@ -361,6 +361,39 @@ re-review and human merge decision are still required.
   → PASS；无代码/契约/迁移改动；AC-60/63 仍未验证；`NOT RELEASE`。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T3.4/T3.5 Phase 1 - 行组成 + commitment lines
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（SCOPED-PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `0740286`.
+- **范围**：`AdmitRefund` 读取 `lines`，行剩余 = `line_paid - RESERVED/SETTLED commitment lines`
+  （S14/S15 由 commitments 表达）；`Σ goods + freight = amount`；freight ≤ 组剩余；known=0 拒绝行级；
+  header + `order_refund_commitment_lines` 落库并回读校验；无 lines 的旧 amount-only 路径不变。
+- **测试**：正常落库/幂等、行超限、Σ 不匹配、known=0 拒绝、正运费 line 0、SETTLED 行剩余；
+  `TestAdmitRefund|TestTccAdmission|TestLegacy` full **51.969s PASS**（reviewer 复跑）。
+- **未做**：responsibility/reason_code 封闭枚举、168h 运费挂起、T3.6 AfterSales 接线、
+  post-departure partial 强制 lines、T3.2 release。T3.4/T3.5 仍 `[ ]`。
+- **NB**：quantity=0 的部分金额语义需产品/架构确认（NB-7）；known=1 无 lines 的 amount-only 不发现（NB-5）；
+  并发/known=0 amount-only/mixed 测试缺口。AC-60/63 仍未验证；`NOT RELEASE`。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.4/T3.5 Phase 1 delta SCOPED-PASS（NB 加固）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `0740286`..工作树（未提交；HEAD=`0740286`；`refund_admission.go` 6/6；`refund_composition.go` `2a2468d4…`、`t3_5_line_composition_integration_test.go` `f1a7086d…`、plan `3abc51c7…`；6 个 Phase 1 测试 PASS；full 51.969s；`git diff 0740286 -- migrations api docs/specs` = 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-60/AC-63）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3 / Amd1 §4.4
+- 结论: SCOPED-PASS（Phase 1 delta；NB-1/2/4/6 已修；新增 NB-7 quantity=0 产品语义）；release_status: NOT RELEASE
+- 取代: 无（原 2026-11-27 Phase 1 SCOPED-PASS 仍有效；本条为 NB 加固后的 delta 确认）
+- 阻断项: 无; 待办: T3.4/T3.5 其余未做；NB-7 quantity=0 部分金额语义需产品裁决（不阻断 Phase 1）；NB-5 known=1 无 lines 的 amount-only 未发现；并发/known=0 amount-only/mixed 测试缺口；AC-60/63 未验证
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60/AC-63 未验证 -> 未验证（Phase 1 子集；报告 §0A/§10）
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.4/T3.5 Phase 1 行组成 SCOPED-PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `0740286`..工作树（未提交；HEAD=`0740286`；`refund_admission.go` 6/6；新增 `refund_composition.go` `6115b48f…`、`t3_5_line_composition_integration_test.go` `c5d4b9d1…`、plan `316b1dce…`；`tasks.md` T3.4/T3.5 仍 `[ ]`）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-60/AC-63）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3 / Amd1 §4.4
+- 结论: SCOPED-PASS（Phase 1 行组成 + commitment lines；T3.4/T3.5 其余未做）；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无; 待办: responsibility/reason_code/168h/T3.6 未做；SETTLED/known=1 prior/positive freight/idempotency/concurrency 测试缺口；plan Draft 状态与“唯一键兜底”措辞；header 冲突未比较 order/group/source；AC-60/63 未验证
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60/AC-63 未验证 -> 未验证（Phase 1 子集；报告 §0/§10）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3 审计 + T3.1/T3.3 不变量测试 SCOPED-PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `7d103a5`..工作树（未提交；HEAD=`7d103a5`；新增 `t3_invariants_integration_test.go` `e167630e…`、`t3-audit.md` `44236a31…`；`tasks.md` `7796b327…`；`git diff` 无内部非测试代码/迁移/proto/契约）

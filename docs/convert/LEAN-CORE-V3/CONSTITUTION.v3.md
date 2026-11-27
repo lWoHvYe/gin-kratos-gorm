@@ -1,14 +1,14 @@
 # 项目宪法 v3.0
 
-> 目标版本，未生效。只写原则与附录；迁移/采用动作单独批准，操作细节在 `AGENTS.v3.md`。
+> 2026-11-28 v3.0 已合并到 main（人类方向）；独立 review pending；release_status: NOT RELEASE。只写原则与附录，操作细节在 AGENTS.md。
 
 ## I. 契约与变更
 
 1. **行为变更先有 Spec。** 新增或修改行为/AC，必须先写 Spec，经独立审查、人类批准后才能实现。实现变更按已批准 Spec 执行。
 2. **bugfix 不设特殊路由。** 已有行为被破坏、且已被批准 Spec 覆盖、且不触及契约主题时，按实现变更处理；否则按契约变更处理。不得用“bug”名义绕过 Spec/ADR。契约主题 = 新增/修改行为或 AC，或命中附录 B。
 3. **ADR 与修订。** 跨服务协议/事件、数据模型/迁移、状态机、并发控制方案、技术选型必须写 ADR；ADR 与 Spec 同批审查、同批批准。已批准 Spec/ADR 不得静默改写；要变就升版或写新 ADR 取代，并重新批准。Spec 写业务/AC，机制写 ADR；plan 只承载不需要 ADR 的局部设计。核心交易链路重构不得 Break Change；用双写/版本化事件/影子消费，并写收口、移除日期、回滚。
-4. **Spec 权威。** 一份业务能力只有一份权威 Spec；状态只在权威 Spec 的验收状态表。所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index；`docs/specs/` 只做重定向；不得同时维护两份权威。0001 为 frozen reference，0002 为 active；sdd-struct-align-01 为 historical。
-5. **状态唯一来源。** 验收状态只在权威 Spec 的验收状态表；运行状态（裁决、冻结、批准、Release）只在 `docs/review-tracking.md`。plan/tasks/汇总文档不保存状态；任务勾选只是执行进度。0001 作为 frozen reference 不再新增/改 AC；0002 的 AC 状态以 §15 为准。
+4. **Spec 权威。** 一份业务能力只有一份权威 Spec；状态只在权威 Spec 的验收状态表。所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index；`docs/specs/` 只做重定向；不得同时维护两份权威。0001 为 historical reference（QC delta 待复审），0002 为 active；sdd-struct-align-01 为 historical。
+5. **状态唯一来源。** 验收状态只在权威 Spec 的验收状态表；运行状态（裁决、冻结、批准、Release）只在 `docs/review-tracking.md`。plan/tasks/汇总文档不保存状态；任务勾选只是执行进度。0001 为 historical reference（QC delta 待复审；不再新增/改 AC；§17 表为历史状态）；0002 的 AC 状态以 §15 为准。
 
 ## II. 独立审查
 
@@ -53,7 +53,7 @@
 | 可达性检查 | 每条 AC 在现有代码的触发态，给 `文件:行号`；不可达标 `[不确定]`。 |
 | 假设与不确定性 | 底层依赖风险。 |
 | 业务裁决题 | 每题带编号选项；没有写“无”。 |
-| 验收状态表 | AC 编号、状态（未验证/有引用/已验证）、检查类型、证据路径、审查者。 |
+| 验收状态表 | AC 编号、状态（未验证/有引用/已验证/historical）、检查类型、证据路径、审查者。 |
 | 延期清单 | AC/工作项、owner、expiry、reason；到期未关闭阻断对应范围；不得删行/批量续期/用新 change_id 规避。 |
 
 ## 附录 B：ADR

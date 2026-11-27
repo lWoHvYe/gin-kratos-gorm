@@ -1,6 +1,6 @@
 # v3.0 adoption
 
-Status: applied on `reform/lean-core`; merge after reviewer + human approval.
+Status: merged on main (human direction); independent review pending; release_status: NOT RELEASE.
 
 ## Scope
 

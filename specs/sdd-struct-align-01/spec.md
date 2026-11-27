@@ -88,6 +88,8 @@
 
 AC-1…AC-6 与 FR-001…FR-006 一一对应。
 
+> 历史验收表：本表只记录 ADR-0009 试点结果；AC-4/5 不再作为当前证据。
+
 | AC 编号 | 状态 | 检查类型 | 证据路径 | 审查者 |
 |---|---|---|---|---|
 | AC-1 | 已验证 | 契约检查 | FR-001；`--json --require-spec` exit 0，`FEATURE_DIR` = `specs/sdd-struct-align-01`；`--paths-only --json` exit 0，`FEATURE_SPEC` = 该目录 `spec.md`；见 `docs/collab/qc-reports/REV-SDD-STRUCT-ALIGN-01-SPEC.md` §2 | reviewer-syntax |

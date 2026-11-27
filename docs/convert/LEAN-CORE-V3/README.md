@@ -1,6 +1,6 @@
 # Lean Core v3.0 设计包
 
-Status: **applied on trial branch** `reform/lean-core`；未合并 main、未生效。
+Status: merged on main (human direction); independent review pending; release_status: NOT RELEASE.
 
 | 文件 | 内容 |
 |---|---|
@@ -18,7 +18,7 @@ Status: **applied on trial branch** `reform/lean-core`；未合并 main、未生
 ## 本轮范围
 
 - 目标：减少 review 轮次/协调成本；防自证/伪造 AC/trailer；高风险证据可执行；流程重量与风险匹配。
-- 不做：0001/0002 迁移、ADR-0009 迁移、bugfix 特殊路由、mutation/state model 强制、新增角色。
+- 不做：bugfix 特殊路由、mutation/state model 强制、新增角色。
 - 单布局已迁移：0001/0002 在 `specs/`；sdd historical；ADR-0009 被 ADR-0012 取代；docs/specs 只重定向。
 
 ## 采用前必须

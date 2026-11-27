@@ -34,6 +34,11 @@ ADR-0009 采用 `docs/specs/` 扁平 + `specs/<change_id>/` 双布局。实际�
 - 新工作 `specs/<feature>`；变更原地更新；evidence 放 `specs/<id>/evidence/<change_id>/`。
 - `check-prerequisites --require-spec` 仅对含 `plan.md` 的 Spec 使用；legacy 无 plan 用 `--paths-only`。
 
+## 兼容 / 回滚
+
+- 兼容：`Spec.md`/`docs/specs/README` 只重定向；旧链接指向新路径。
+- 回滚：把 `specs/0001.../spec.md`、`specs/0002.../spec.md` 移回 `docs/specs/`；恢复 `Spec.md`/README/ADR-0009 header/sdd status；不留副本。
+
 ## 验证
 
 - AC-001：`docs/specs` 无 active `*.md`，只 README；
@@ -41,6 +46,6 @@ ADR-0009 采用 `docs/specs/` 扁平 + `specs/<change_id>/` 双布局。实际�
 - AC-003：`specs/README` 唯一 index，每能力一行；
 - AC-004：`Spec.md` 指针；docs/specs README 重定向；
 - AC-005：ADR-0009 header superseded；sdd historical；
-- AC-006：live 引用无旧 `docs/specs/0001|0002`；历史台账保留；
+- AC-006：live normative 引用无旧 `docs/specs/0001|0002`（历史段/台账除外）；
 - AC-007：`--paths-only`/`--require-spec` 边界符合；
 - AC-008：回滚可 `mv` 回，且无副本。

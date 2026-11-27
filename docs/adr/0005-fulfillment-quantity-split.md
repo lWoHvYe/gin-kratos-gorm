@@ -7,7 +7,7 @@
 - Previous: **1.1 / Amendment 1**（吸收 SPEC-0001 v1.1，回应[偏差登记](../implementation/adr-0005-deviation-register.md) A/B/C）
 - Review: **二次审计 2026-11-22（§19）**；19.1 的硬伤已入正文，19.2 的 P-01…P-18 已按 SPEC v1.2 全部 closed
 - Normative: **§18、§20 是增量契约；§19.2 已全部 closed，无未决项。与前文冲突时以 §18/§20 为准。**
-- Spec: [SPEC-0001 v1.3](../../specs/0001-fulfillment-quantity-split/spec.md)（已冻结）
+- Spec: [SPEC-0001 v1.5（当前）](../../specs/0001-fulfillment-quantity-split/spec.md)（决策时为 v1.3）
 - Amends: [ADR 0002](0002-cross-warehouse-split-orders.md) 的 v1「行级拆分」范围；**废止基线 INV-10**
 - Related: [architecture-baseline.md](../architecture-baseline.md)、[ADR 0003](0003-c-production-rollout.md)、[ADR 0004](0004-p3-0-contract-and-production-scope.md)
 - Owners: Order / Pricing / Inventory / Fulfillment / AfterSales / Payment / Gateway+Admin BFF

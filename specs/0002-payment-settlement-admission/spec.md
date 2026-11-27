@@ -1045,7 +1045,7 @@ REVIEW_REQUIRED --新 refund_id（旧承诺先按 AC-62 处置）--> 新申请�
 
 ## 15. 验收状态表
 
-> 本章是 SPEC-0002 验收状态的**当前值**（宪法 27；本表由 Review 更新，作者不改写）。状态映射：`docs/collab/ac-coverage.tsv` 的 `AC-VERIFIED` → 已验证，`AC-REF` → 有引用，`DEFERRED` → 未验证；证据路径照录 tsv（C-4 归档 tsv 前的迁移源），本次不新增证据、不改任何 AC 正文。`检查类型` 按 §9（每条 AC 必须有 `TestAC<NN>`）与 tsv `test_type`/reason 归类；DEFERRED 行尚未执行，具体测试落点见 §15.3 的 reason。
+> 本章是 SPEC-0002 验收状态的**当前值**（宪法 5/10（v3）；本表由 Review 更新，作者不改写）。状态映射：`docs/collab/ac-coverage.tsv` 的 `AC-VERIFIED` → 已验证，`AC-REF` → 有引用，`DEFERRED` → 未验证；证据路径照录 tsv（C-4 归档 tsv 前的迁移源），本次不新增证据、不改任何 AC 正文。`检查类型` 按 §9（每条 AC 必须有 `TestAC<NN>`）与 tsv `test_type`/reason 归类；DEFERRED 行尚未执行，具体测试落点见 §15.3 的 reason。
 >
 > **与 v1.11 正文的关系**：§9 与 `## 改动影响` §5 的“本版不交付 T5 证据矩阵…不声称任何 AC-VERIFIED”“AC-69…72 与修订后的 AC-50/51/61/62/65/67 仍为 DEFERRED/AC-REF”是 **2026-11-26 批准时**的状态陈述；2026-11-27 的实现证据与台账裁决已把这些 AC 推进到本表的状态。本表不修改上述正文，也不构成 Release PASS 或 merge。
 >
@@ -1094,7 +1094,7 @@ REVIEW_REQUIRED --新 refund_id（旧承诺先按 AC-62 处置）--> 新申请�
 
 ### 15.2 基线 AC（SPEC-0001）
 
-> 以下 AC 属于 **SPEC-0001 v1.5**（唯一当前值应在 SPEC-0001 的验收状态表）。本子表只记录本次变更受影响的基线 AC 的回归影响，**不修改 SPEC-0001 正文**，也不替代其验收状态表；SPEC-0001 建表后以其表为准。状态按 `ac-coverage.tsv`/台账镜像。AC-22/28/29/30/35/37 为 **DEFERRED/未验证**；在 SPEC-0001 建表前，以本表为当前值迁移镜像，明细见 §15.3。
+> 以下 AC 属于 **SPEC-0001 v1.5（historical reference）**。SPEC-0001 §17 是历史验收表（全部 historical），不再作为当前 evidence；本子表只记录本次变更受影响的 12 个 baseline AC 的当前回归影响，不修改 SPEC-0001 正文。AC-22/28/29/30/35/37 为 **DEFERRED/未验证**；明细见 §15.3。
 
 | AC 编号 | 状态 (未验证/有引用/已验证) | 检查类型 (测试/契约检查/可观测指标) | 证据路径 | 审查者 |
 |---|---|---|---|---|

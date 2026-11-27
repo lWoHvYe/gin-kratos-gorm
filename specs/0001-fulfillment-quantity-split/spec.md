@@ -17,13 +17,13 @@ adr: [0005]               # Architect 出稿后回填
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.5（已批准；QC delta 复核整改中） |
+| 版本 | v1.5（已批准；QC delta 复核整改中；historical reference） |
 | 日期 | 2026-11-26（v1.5：AC-27 读模型口径 + AC-27A 关闭谓词 + AC-50 `CONSUMED+无运单` 裁决） |
-| 状态 | **已批准**：甲方 2026-11-22 批准 v1.0；v1.1、v1.2、v1.3、v1.4 为回写裁决；v1.5 于 2026-11-26 经 Director 授权 PO 升版，QC delta 复核后实现（见第 13、14、16 节） |
+| 状态 | **已批准 v1.5（historical reference；QC delta 复核整改中）**：行为/AC 定义保留；不再新增/改 AC；不作为 current release evidence。见 §17 验收状态表。 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件，不接收口头补充） |
 | 冻结规则 | v1.5 后任何业务口径变更必须升版为 v1.6 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
-| 依据 | `AGENTS.md`、ADR [0002](../../docs/adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../../docs/architecture-baseline.md)（INV-01…INV-16）、[SPEC-0002](../0002-payment-settlement-admission/spec.md) v1.10（AC-50/INV-45）、[QC-PAY-SETTLE-01-R0.3-AC27](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15-R2](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15-R2.md) |
+| 依据 | `AGENTS.md`、ADR [0002](../../docs/adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../../docs/architecture-baseline.md)（INV-01…INV-16）、[SPEC-0002](../0002-payment-settlement-admission/spec.md) v1.11（AC-50/INV-45）、[QC-PAY-SETTLE-01-R0.3-AC27](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15-R2](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15-R2.md) |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准。任何实现方式、数据结构、接口形态、算法选择均不在本文件范围内，Architect 需要自行设计并接受本文件的验收。
 
@@ -879,3 +879,57 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 - Developer：在 `AC-50-FIX-01`、`AC-27-NOWB-01`、`AC-27-LIVE-01` 未关闭前，不得声称 AC-27 EARS-1/EARS-2 收敛；AC-50 修正覆盖正金额/TCC/`system_zero`/legacy，且需 Lead 拆独立 `change_id` 走 L2（跨 Fulfillment/Order，超 R0.3-R1c `allowed_paths`）。
 - Reviewer：AC-27/AC-27A 必须分别登记 `ac-coverage.tsv` 行与证据；AC-REF ≠ AC-VERIFIED；记录精确 base/head/blob。
 - SPEC-0002 owner：全部 `v1.4` 引用同步为 v1.5；AC-50 仍按 v1.10 执行。
+
+## 17. 验收状态表（historical reference）
+
+> 本表只登记 0001 的 historical 生命周期；全部 AC 不再作为 current evidence。
+> 12 个 baseline AC 的当前回归状态只在 `specs/0002-payment-settlement-admission/spec.md §15.2`。
+> `historical` 不等于已验证/可发布；0001 的 QC delta 仍待复审。
+
+| AC 编号 | 状态 | 检查类型 | 证据路径 | 审查者 |
+|---|---|---|---|---|
+| AC-01 | historical | — | — | — |
+| AC-02 | historical | — | — | — |
+| AC-03 | historical | — | — | — |
+| AC-04 | historical | — | — | — |
+| AC-05 | historical | — | — | — |
+| AC-06 | historical | — | — | — |
+| AC-07 | historical | — | — | — |
+| AC-08 | historical | — | — | — |
+| AC-09 | historical | — | — | — |
+| AC-10 | historical | — | — | — |
+| AC-11 | historical | — | — | — |
+| AC-12 | historical | — | — | — |
+| AC-13 | historical | — | — | — |
+| AC-14 | historical | — | — | — |
+| AC-15 | historical | — | — | — |
+| AC-16 | historical | — | — | — |
+| AC-17 | historical | — | — | — |
+| AC-18 | historical | — | — | — |
+| AC-19 | historical | — | — | — |
+| AC-20 | historical | — | — | — |
+| AC-21 | historical | — | — | — |
+| AC-22 | historical | — | — | — |
+| AC-23 | historical | — | — | — |
+| AC-24 | historical | — | — | — |
+| AC-25 | historical | — | — | — |
+| AC-26 | historical | — | — | — |
+| AC-27 | historical | — | — | — |
+| AC-27A | historical | — | — | — |
+| AC-28 | historical | — | — | — |
+| AC-29 | historical | — | — | — |
+| AC-30 | historical | — | — | — |
+| AC-31 | historical | — | — | — |
+| AC-32 | historical | — | — | — |
+| AC-33 | historical | — | — | — |
+| AC-34 | historical | — | — | — |
+| AC-35 | historical | — | — | — |
+| AC-36 | historical | — | — | — |
+| AC-37 | historical | — | — | — |
+| AC-38 | historical | — | — | — |
+| AC-48 | historical | — | — | — |
+| AC-50 | historical | — | — | — |
+| AC-51 | historical | — | — | — |
+| AC-61 | historical | — | — | — |
+| AC-62 | historical | — | — | — |
+| AC-65 | historical | — | — | — |

@@ -1,6 +1,6 @@
 # AGENTS.md v3.0
 
-> 目标版本，未生效。只写操作细节；冲突以宪法 v3.0 为准。旧 AGENTS 只作来源。
+> 2026-11-28 v3.0 已合并到 main（人类方向）；独立 review pending。只写操作细节，冲突以宪法 v3.0 为准。
 
 ## 1. 谁做什么
 
@@ -15,6 +15,8 @@
 - 修改宪法/本文件仍按宪法 Governance：作者起草、审查者审查、人类批准。
 
 ## 2. 流程
+
+- 变更范围/停止：见宪法 20；一个 change 只解决一个问题；同一问题 2 次 review FAIL 停止/分类/重置。
 
 ### 2.1 契约变更
 
@@ -42,7 +44,7 @@
 ### 2.3 Spec 布局
 
 - 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
-- `0001` 为 frozen reference（不再新增/改 AC）；`0002` 为 active。
+- `0001` 为 historical reference（QC delta 待复审；不再新增/改 AC；§17 表为历史状态）；`0002` 为 active。
 - `docs/specs/` 只做重定向；`specs/sdd-struct-align-01` 为 historical，不进入当前 index。
 - 新工作 `specs/<feature>`；变更原地更新；evidence 放 `specs/<id>/evidence/<change_id>/`。
 - 不得同时维护同一能力的两份 active Spec。

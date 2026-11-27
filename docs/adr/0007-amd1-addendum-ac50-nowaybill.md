@@ -4,8 +4,8 @@
 |---|---|
 | Status | **ACCEPTED（2026-11-26，human C-5；QC R9 READY）**（0.6 errata 已 `ADR_APPROVED`；不代表 merge/Release/AC-VERIFIED；实现仍需人类 merge/Release） |
 | Revision | **0.6**（ERRATA：①Tx2 CAS 双谓词，REVIEW 行不可被自动探测覆盖；②`docs/ops.md` 仅 runbook 允许；③`make proto` 生成物提交方式写明；④删除 gateway 文案（本 L2 不交付 BFF/UI）；⑤发布顺序/兼容矩阵；⑥AfterSales 收窄到 `workers.go`。技术基线=R5+R6+R7：allowed/forbidden 与 Plan 精确对齐（含 AfterSales 镜像/任务状态、platform metrics、cmd wiring）；`last_error` 统一 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`；AfterSales 8 次后**不得自动 FAILED_PERMANENT**（REVIEW 任务保持 PENDING）；清除 stale Base/0.4/0.3 当前态引用；无新表/迁移） |
-| Change ID | **`PAY-AC50-REVIEW-01`**（本 L2；Parent `PAY-SETTLE-01` 已冻结，仅历史引用；实施须按本 L2 Plan 的 C-4 人类批准后由 Lead 授权，见 §0.5） |
-| Parent | `PAY-SETTLE-01`（**冻结**；本 L2 不推进其受管代码/台账，只保留只读引用） |
+| Change ID | **`PAY-AC50-REVIEW-01`**（本 L2；Parent `PAY-SETTLE-01` 为历史父变更；冻结/解冻状态见 `docs/review-tracking.md`（2026-11-27 B-4）；实施须按本 L2 Plan 的 C-4 人类批准后由 Lead 授权，见 §0.5） |
+| Parent | `PAY-SETTLE-01`（**历史父变更**；冻结/解冻状态见台账（2026-11-27 B-4），仍 no merge/no release；本 L2 不推进其受管代码/台账，只保留只读引用） |
 | Plan | `docs/lead/PAY-AC50-REVIEW-01/plan.md`（`d2149c0`）；本文件 Base `d2149c0`（见下表）；Plan `d2149c0`/C-2/ADR 0.5 已由 Lead 修正（R6-M1） |
 | Tier | **L2**（跨服务契约语义、资金/履约准入、既有 RPC 响应语义、共享 metrics 包；`docs/collab/CONVENTIONS.md:90` 任一命中即 L2） |
 | Tier-Rationale | 修改既有 RPC `Fulfillment.CancelIfCreated` 的响应语义（新增可区分结果值），改变 Order 准入裁决（`REVIEW_REQUIRED` vs `PRE_SHIP_REVOKED`/`POST_SHIP_ALLOWED`），并触及 TCC 批次 `MANUAL_HOLD`、部分金额分类与共享 metrics；直接影响资金打款/释放门禁与 AC-27A 关闭谓词；跨 Fulfillment/Order 两服务。不得降级 |
@@ -95,8 +95,8 @@ SPEC-0001 v1.5 `0001:862` 登记：`CONSUMED+无运单` 写路径把“无运单
 
 SPEC-0001 v1.5 §16.3 `0001:879` 明确：AC-50 修正“需 Lead 拆独立 `change_id` 走 L2（跨 Fulfillment/Order，超 R0.3-R1c `allowed_paths`）”。因此：
 
-- 本 Addendum（契约）挂 **`PAY-AC50-REVIEW-01`**（新 L2，Lead 指定；Parent `PAY-SETTLE-01` 冻结，仅历史）；
-- **实施**必须由 Lead 在本 L2 下按 `docs/lead/PAY-AC50-REVIEW-01/plan.md` 的 C-4（`ADR_APPROVED` + Plan 批准 + 人类）授权，并在实施 Brief 中逐文件落 `allowed_paths`；不得把本文件的 `allowed_paths` 当作冻结 Parent 或 R0.3-R1c 的范围扩展，也不得在同一提交里顺手改 AC-27A 读模型（那是 R0.3-R1c 的独立实施项）；
+- 本 Addendum（契约）挂 **`PAY-AC50-REVIEW-01`**（新 L2，Lead 指定；Parent `PAY-SETTLE-01` 为历史父变更；冻结/解冻状态见台账（2026-11-27 B-4），仍 no merge/no release）；
+- **实施**必须由 Lead 在本 L2 下按 `docs/lead/PAY-AC50-REVIEW-01/plan.md` 的 C-4（`ADR_APPROVED` + Plan 批准 + 人类）授权，并在实施 Brief 中逐文件落 `allowed_paths`；不得把本文件的 `allowed_paths` 当作历史 Parent 或 R0.3-R1c 的范围扩展，也不得在同一提交里顺手改 AC-27A 读模型（那是 R0.3-R1c 的独立实施项）；
 - **PO 裁决 ≠ 实现批准**：D-30..D-33 / PO §11 只授权契约内容与 TCC 范围，不替代 `ADR_APPROVED`、Plan/Tasks、Reviewer 与人类 merge（R4-M3）。
 
 ### 0.6 与 PO v1.11 的对齐表

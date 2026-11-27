@@ -6,7 +6,7 @@ version: 1.11
 updated_at: 2026-11-26
 owner: Product Owner
 change_id: PAY-AC50-REVIEW-01
-parent_change_id: PAY-SETTLE-01   # 冻结；仅保留历史引用
+parent_change_id: PAY-SETTLE-01   # 历史父变更；冻结/解冻状态见 docs/review-tracking.md（2026-11-27 B-4）
 approved_by: Director（2026-11-26 批准 v1.11；ADR_APPROVED 同日）
 approved_at: 2026-11-26
 domain: payment
@@ -21,7 +21,7 @@ adr: [0007]
 |---|---|
 | 版本 | v1.11（approved：v1.10 全部内容 + AC-50 `CONSUMED+无运单` 的 `REVIEW_REQUIRED` 复核决定、TCC 处理语义与影响分析；含 QC R4/R5/R6 delta；Director 2026-11-26 授权 PO 升版） |
 | 日期 | 2026-11-26 |
-| change_id | **`PAY-AC50-REVIEW-01`**（L2，Phase 0 L2-C1；Parent `PAY-SETTLE-01` **冻结**，仅保留历史引用） |
+| change_id | **`PAY-AC50-REVIEW-01`**（L2，Phase 0 L2-C1；Parent `PAY-SETTLE-01` 为历史父变更；其冻结/解冻状态见台账（2026-11-27 B-4），仍 no merge/no release） |
 | 状态 | **已批准（approved v1.11）**：Director 2026-11-26 批准 SPEC-0002 v1.11；QC R8 `READY`（`edebb85`）；同日 `ADR_APPROVED`。本版不是 Release PASS，不声称任何 AC-VERIFIED；实现须按 §11 批准点与 `PAY-AC50-REVIEW-01` 的 Plan/Tasks（含 `tcc_*.go` 范围）启动 |
 | 位置 | `docs/specs/`：v1.11 新增 S20、INV-51/52、AC-69…72、§5.10、E32…E35、D-30…D-34、`## 改动影响`；修订 AC-50/51/61/62/65/67 的复核决定条款；R4 delta 关闭 B1（持久载体分路径）/B2（零元例外）/B3（审计载体）与 M1（ADR 0.5）/M2（AC-72 分段）/M3（实现批准点）；**R5 delta：AfterSales 写 task 镜像/保持 PENDING/上限不自动 FAILED（B1）、last_error 唯一格式与截断（M4）、5 分钟告警归 REVIEW-REQUIRED-ALERTS-01（M3）、实现 allowed_paths 对齐 Plan（M1）**；**R6 delta：canonical 定稿为 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（无 `arm`；含确定性截断/解析契约；D-35），并明确 O19/O23/TestAC69/TestAC72 同一解析器（B2）；复核 REVIEW 任务 ≥8 次仍 PENDING/不自动 FAILED 的全文档一致性（B1）**；不删除/不重编号既有 AC |
 | 作者 | Product Owner |
@@ -1040,3 +1040,113 @@ REVIEW_REQUIRED --新 refund_id（旧承诺先按 AC-62 处置）--> 新申请�
 | Product Owner | `PAY-AC50-REVIEW-01` **R5 delta**（QC R5）：R5-B1 普通售后镜像由 AfterSales 写、task 保持 `PENDING`、达到 8 次重试上限也不自动 `FAILED_PERMANENT`（AfterSales 职责边界：只镜像/任务状态，不改结算语义）；`last_error` 统一为 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（AC-69/72/§5.10/§12 一处口径，512/1024 截断规则）；AC-72 三段（5 分钟告警规则归 `REVIEW-REQUIRED-ALERTS-01`，D-34）；实现 `allowed_paths` 对齐 Plan（含 `aftersales/`、`gateway/` 文案、`metrics`、`cmd` wiring）；ADR 引用确认 0.5；仅改本文件、未 commit | 2026-11-26 |
 | Product Owner | `PAY-AC50-REVIEW-01` **R6 delta**（QC R6）：**canonical 定稿**为 `REVIEW_REQUIRED reason=<CODE> ticket=RVW:<refund_id>`（无 `arm`；`ticket` 系统派生非空；确定性截断追加 ` truncated=1`；解析契约：未截断逐字符相等、截断匹配固定正则、未知 key/空 ticket/`arm`＝不可解析告警；单一解析器覆盖 512/1024；新增 D-35）；`TestAC69`/`TestAC72`/O19/O23 按同一契约（ADR 的 O19/O23 不得要求 `arm`/空 ticket）；全文档确认 REVIEW 任务 ≥8 次仍 `PENDING`、不自动 `FAILED_PERMANENT`（R6-B1，ADR §7.3 须删除该句）；仅改本文件、未 commit | 2026-11-26 |
 | 甲方（Director） | **2026-11-26 批准 SPEC-0002 v1.11**（approved）；同日 `ADR_APPROVED`（0.5）；QC R8 `READY`（`edebb85`）；实现仍须按 §11 批准点与 `PAY-AC50-REVIEW-01` Plan/Tasks 启动，不构成 Release PASS/AC-VERIFIED | 2026-11-26 |
+
+---
+
+## 15. 验收状态表
+
+> 本章是 SPEC-0002 验收状态的**当前值**（宪法 27；本表由 Review 更新，作者不改写）。状态映射：`docs/collab/ac-coverage.tsv` 的 `AC-VERIFIED` → 已验证，`AC-REF` → 有引用，`DEFERRED` → 未验证；证据路径照录 tsv（C-4 归档 tsv 前的迁移源），本次不新增证据、不改任何 AC 正文。`检查类型` 按 §9（每条 AC 必须有 `TestAC<NN>`）与 tsv `test_type`/reason 归类；DEFERRED 行尚未执行，具体测试落点见 §15.3 的 reason。
+>
+> **与 v1.11 正文的关系**：§9 与 `## 改动影响` §5 的“本版不交付 T5 证据矩阵…不声称任何 AC-VERIFIED”“AC-69…72 与修订后的 AC-50/51/61/62/65/67 仍为 DEFERRED/AC-REF”是 **2026-11-26 批准时**的状态陈述；2026-11-27 的实现证据与台账裁决已把这些 AC 推进到本表的状态。本表不修改上述正文，也不构成 Release PASS 或 merge。
+>
+> 表内审查者：`reviewer-r04` = 2026-11-27 `PAY-AC50-REVIEW-01` T0–T8/residual 与 `PAY-SETTLE-01` R0.3-R2/T5.0 的独立审查者；`reviewer-c3` = 本次 `GOV-CONVERT-01` 状态迁移的独立审查者（静态审查 + 1 个单元测试复跑，见 `docs/collab/qc-reports/REV-GOV-CONVERT-01-C3.md`）。DEFERRED 行由 tsv 迁入，审查者只核对状态，不声称验收。
+
+### 15.1 SPEC-0002 验收状态（AC-39…72）
+
+| AC 编号 | 状态 (未验证/有引用/已验证) | 检查类型 (测试/契约检查/可观测指标) | 证据路径 | 审查者 |
+|---|---|---|---|---|
+| AC-39 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:8`） | reviewer-r04（T5.0） |
+| AC-40 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:9`） | reviewer-r04（T5.0） |
+| AC-41 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:10`） | reviewer-r04（T5.0） |
+| AC-42 | 未验证 | 契约检查 | -（无证据；`ac-coverage.tsv:11`） | reviewer-r04（T5.0） |
+| AC-43 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:12`） | reviewer-r04（T5.0） |
+| AC-44 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:13`） | reviewer-r04（T5.0） |
+| AC-45 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:14`） | reviewer-r04（T5.0） |
+| AC-46 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:15`） | reviewer-r04（T5.0） |
+| AC-47 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:16`） | reviewer-r04（T5.0） |
+| AC-48 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:17`） | reviewer-r04（T5.0） |
+| AC-49 | 未验证 | 契约检查 | -（无证据；`ac-coverage.tsv:18`） | reviewer-r04（T5.0） |
+| AC-50 | 已验证 | 测试 | `internal/services/order/ac50_review_integration_test.go:102,347,405,438,537,567`；`internal/services/order/ac50_review_audit_fault_test.go:117`（MySQL 8.4.13 @ 3ce0d7d） | reviewer-r04（T0–T8） |
+| AC-51 | 有引用 | 测试 | `internal/services/order/t17_evidence_integration_test.go:26,83,204,306,371,442`；`internal/services/order/tcc_review_integration_test.go:34,137,228`（MySQL+race @ 3ce0d7d） | reviewer-r04（T0–T8） |
+| AC-52 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:21`） | reviewer-r04（T5.0） |
+| AC-53 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:22`） | reviewer-r04（T5.0） |
+| AC-54 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:23`） | reviewer-r04（T5.0） |
+| AC-55 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:24`） | reviewer-r04（T5.0） |
+| AC-56 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:25`） | reviewer-r04（T5.0） |
+| AC-57 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:26`） | reviewer-r04（T5.0） |
+| AC-58 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:27`） | reviewer-r04（T5.0） |
+| AC-59 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:28`） | reviewer-r04（T5.0） |
+| AC-60 | 未验证 | 测试 | -（无证据；无 `TestAC60`，仅生产注释 `tcc_precheck.go:97`/`legacy_resolution.go:14`/`refund_admission.go:679`；`ac-coverage.tsv:29`） | reviewer-r04（T5.0）；reviewer-c3（B-1 落表） |
+| AC-61 | 有引用 | 可观测指标 | `docs/ops.md`（runbook/人工重放）；`internal/services/order/ac50_review_audit_fault_test.go:18` | reviewer-r04（T0–T8） |
+| AC-62 | 有引用 | 测试 | `internal/services/order/ac50_review_integration_test.go:102`；`internal/services/order/refund_release_integration_test.go:279` | reviewer-r04（T0–T8） |
+| AC-63 | 未验证 | 测试 | -（无证据；无 `TestAC63`，仅生产注释；`ac-coverage.tsv:32`） | reviewer-r04（T5.0）；reviewer-c3（B-1 落表） |
+| AC-64 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:33`） | reviewer-r04（T5.0） |
+| AC-65 | 有引用 | 测试 | `internal/services/order/t17_evidence_integration_test.go:26,83,204,306,371,442`；`internal/services/order/tcc_review_integration_test.go:34,137,228`（MySQL+race @ 3ce0d7d） | reviewer-r04（T0–T8） |
+| AC-66 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:35`） | reviewer-r04（T5.0） |
+| AC-67 | 有引用 | 测试 | `internal/services/order/ac50_review_integration_test.go:159,567,597`；`internal/services/aftersales/zero_refund_integration_test.go:497` | reviewer-r04（T0–T8） |
+| AC-68 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:37`） | reviewer-r04（T5.0） |
+| AC-69 | 已验证 | 测试 | `internal/services/order/ac50_review_integration_test.go:102,159,261`；`internal/services/order/ac50_review_audit_fault_test.go:18`；`internal/services/order/ac50_review_race_test.go:179`；`internal/services/aftersales/review_task_integration_test.go:33,64`（MySQL+race @ 3ce0d7d） | reviewer-r04（T0–T8） |
+| AC-70 | 已验证 | 测试 | `internal/services/order/ac50_review_integration_test.go:203,347,374,405,438,469,510,537`（MySQL+race @ 3ce0d7d） | reviewer-r04（T0–T8） |
+| AC-71 | 已验证 | 测试 | `internal/services/order/tcc_review_integration_test.go:34,137,228`；`internal/services/order/ac50_review_integration_test.go:640`（MySQL+race @ 3ce0d7d） | reviewer-r04（T0–T8） |
+| AC-72（后端段） | 已验证 | 测试 / 可观测指标 | `internal/services/order/worker_test.go:14`；`internal/platform/metrics/metrics_test.go:11`；`docs/ops.md`（Refund review queue） | reviewer-r04（T0–T8）；reviewer-c3（分段落表） |
+
+**AC-72 不是整体已验证**：上表只含后端段（复核 metric/结构化事件字段可供采集、SLA/升级、owner、对账）；`REVIEW-REQUIRED-ALERTS-01`（5 分钟告警规则/值班部署）与 `REVIEW-REQUIRED-ENTRY-01`（用户可见文案/人工入口）为 **未验证**，见 §15.3。不得据本表声称“5 分钟告警已上线”。
+
+### 15.2 基线 AC（SPEC-0001）
+
+> 以下 AC 属于 **SPEC-0001 v1.5**（唯一当前值应在 SPEC-0001 的验收状态表）。本子表只记录本次变更受影响的基线 AC 的回归影响，**不修改 SPEC-0001 正文**，也不替代其验收状态表；SPEC-0001 建表后以其表为准。状态按 `ac-coverage.tsv`/台账镜像。AC-22/28/29/30/35/37 为 **DEFERRED/未验证**；在 SPEC-0001 建表前，以本表为当前值迁移镜像，明细见 §15.3。
+
+| AC 编号 | 状态 (未验证/有引用/已验证) | 检查类型 (测试/契约检查/可观测指标) | 证据路径 | 审查者 |
+|---|---|---|---|---|
+| AC-14 | 已验证 | 测试 | `internal/services/aftersales/settlement_integration_test.go:875` TestAC14FreightRefundSixScenarios（MySQL 8.4.13 @ 9322e75） | reviewer-r04（R0.3-R2） |
+| AC-21 | 有引用 | 测试 | `internal/services/fulfillment/delivery_integration_test.go:397` TestAC21AutoConfirmT7（MySQL 8.4.13 @ 9322e75） | reviewer-r04（R0.3-R2） |
+| AC-25 | 有引用 | 测试 | `internal/services/order/settlement_integration_test.go:355` TestAC25RefundProjectionKeepsLifecycle（MySQL+race @ 9322e75） | reviewer-r04（R0.3-R2） |
+| AC-27 | 有引用 | 测试 / 可观测指标 | `internal/services/order/ops_replay_convergence_test.go:42,129,179`；`internal/services/order/ac27a_closure_integration_test.go:20,156`；`docs/ops.md:941-1210`；`scripts/drill-ops-replay.sh` | reviewer-r04（R0.3-R2）；human 裁决 6；reviewer-c3（B-3 落表） |
+| AC-31 | 有引用 | 测试 | `internal/services/aftersales/settlement_integration_test.go:1101` TestAC31FreightHoldTimeout（MySQL 8.4.13 @ 9322e75） | reviewer-r04（R0.3-R2） |
+| AC-32 | 有引用 | 测试 | `internal/services/aftersales/settlement_integration_test.go:1102` TestAC32FreightHoldTimeoutDefaultsToMerchant（MySQL 8.4.13 @ 9322e75） | reviewer-r04（R0.3-R2） |
+| AC-22 | 未验证 | 测试 | -（DEFERRED；见 §15.3 延期清单，expiry 2026-12-15） | reviewer-syntax（本次补行；未验收） |
+| AC-28 | 未验证 | 测试 | -（DEFERRED；见 §15.3 延期清单，expiry 2026-12-15） | reviewer-syntax（本次补行；未验收） |
+| AC-29 | 未验证 | 测试 | -（DEFERRED；见 §15.3 延期清单，expiry 2026-12-15） | reviewer-syntax（本次补行；未验收） |
+| AC-30 | 未验证 | 测试 | -（DEFERRED；见 §15.3 延期清单，expiry 2026-12-15） | reviewer-syntax（本次补行；未验收） |
+| AC-35 | 未验证 | 测试 | -（DEFERRED；见 §15.3 延期清单，expiry 2026-12-15） | reviewer-syntax（本次补行；未验收） |
+| AC-37 | 未验证 | 测试 | -（DEFERRED；见 §15.3 延期清单，expiry 2026-12-15） | reviewer-syntax（本次补行；未验收） |
+
+### 15.3 延期清单（owner / expiry / reason）
+
+> 从 `docs/collab/ac-coverage.tsv` 全量迁入 32 行 `DEFERRED`（C-4 归档 tsv 后不丢失）。`AC-22/28/29/30/35/37` 属 **SPEC-0001**，已在 §15.2 补当前值行，SPEC-0001 建表时以其表为准。`REVIEW-AUDIT-01` 为本 Spec D-32 的 DEFERRED 工作项（tsv 未单列，此处补齐）。到期前须由 owner 交付或交人类重新裁决；附录 A v2.1.0 已定义延期清单格式与到期规则；本表是迁移清单。
+
+| AC | owner | expiry | reason |
+|---|---|---|---|
+| AC-22（SPEC-0001） | Developer | 2026-12-15 | 3 个工作日 SLA 告警 worker 与页面提示未实现 |
+| AC-28（SPEC-0001） | Developer | 2026-12-15 | Playwright 结算页包裹数断言未接入 CI |
+| AC-29（SPEC-0001） | Developer | 2026-12-15 | Playwright 订单详情组级物流断言未接入 CI |
+| AC-30（SPEC-0001） | Developer | 2026-12-15 | C 端缺货二选一按钮/进度页面未接 BFF |
+| AC-35（SPEC-0001） | Developer | 2026-12-15 | 同刻申诉与到期 job 的真实竞态 Playwright/并发用例未跑 |
+| AC-37（SPEC-0001） | Developer | 2026-12-15 | AUTO_T7 页面文案未做浏览器断言 |
+| AC-39 | Developer | 2026-12-31 | T5.3 fault injection: channel exception and amount != pay_cent refund (was orphan) |
+| AC-40 | Developer | 2026-12-31 | WP-R3 |
+| AC-41 | Developer | 2026-12-31 | WP-R1 |
+| AC-42 | Developer | 2026-12-31 | T5.1 contract/handler: captured-unsettled shows processing, PAID != shippable (was orphan) |
+| AC-43 | Developer | 2026-12-31 | T5.3 fault injection: crash-resume after capture; HELD/CONFIRMED converge on CANCELLED (was orphan) |
+| AC-44 | Developer | 2026-12-31 | WP-R1 |
+| AC-45 | Developer | 2026-12-31 | WP-R1 |
+| AC-46 | Developer | 2026-12-31 | WP-E2 |
+| AC-47 | Developer | 2026-12-31 | T5.3 fault injection: inventory shortage/technical retry; shortage hands to AC-56 (was orphan) |
+| AC-48 | Developer | 2026-12-31 | T5.2 -race: permit NONE/CONSUMED/REVOKED, line confirm, Ship reads state (was orphan) |
+| AC-49 | Developer | 2026-12-31 | T5.1 contract/handler: four facts emitted separately (was orphan) |
+| AC-52 | Developer | 2026-12-31 | WP-R2 |
+| AC-53 | Developer | 2026-12-31 | WP-R2 |
+| AC-54 | Developer | 2026-12-31 | WP-R2 |
+| AC-55 | Developer | 2026-12-31 | WP-R2 |
+| AC-56 | Developer | 2026-12-31 | T5.2/T5.3 -race+fault: 4h/48h, restock, concurrent CAS (was orphan) |
+| AC-57 | Developer | 2026-12-31 | T5.5 baseline ADR-0005 receipt tests: cite/rerun then AC-REF (was orphan) |
+| AC-58 | Developer | 2026-12-31 | T5.5 baseline ADR-0005 dispute tests: cite/rerun then AC-REF (was orphan) |
+| AC-59 | Developer | 2026-12-31 | T5.3 fault injection: refund/receipt/stock-failure/shortage out-of-order rejection (was orphan) |
+| AC-60 | Developer | 2026-12-31 | WP-B2 |
+| AC-63 | Developer | 2026-12-31 | WP-B2 |
+| AC-64 | Developer | 2026-12-31 | T3 dependency: P1-T3 line/freight ledger; not Phase 0-R/T5 (was orphan) |
+| AC-66 | Developer | 2026-12-31 | WP-E4 |
+| AC-68 | Developer | 2026-12-31 | WP-R3 |
+| REVIEW-REQUIRED-ALERTS-01（AC-72-ALERTS） | ops | 2026-12-31 | AC-72-ALERTS: 5-minute alert rule/on-call deployment not delivered (deploy/** excluded) |
+| REVIEW-REQUIRED-ENTRY-01（AC-72-ENTRY） | Lead/BFF/ops | 2026-12-31 | AC-72-ENTRY: User-visible text/manual entry not delivered (frontend/** excluded) |
+| REVIEW-AUDIT-01（工作项，非 AC；D-32） | Lead/Architect | 2026-12-31 | 行级历史/独立审计表未交付；另立 L2；tsv 未单列 |

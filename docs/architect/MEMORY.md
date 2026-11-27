@@ -1,23 +1,23 @@
 # Architect 记忆区
 
-> 所有者：System Architect。其他角色只读。
+> 历史角色记忆（原 System Architect）。2026-11-27 治理模型 v2.0 后角色为作者 / 审查者 / 人类。
 > 用途：跨会话保留**设计结论索引、工作守则、易漂移点**，避免重新翻 1000 行 ADR。
 > 规则：这里不放业务规则；业务结论以 `docs/specs/**` 为准，设计结论以 `docs/adr/**` 为准。本文件只是指针 + 稳定经验。
-> 只收跨变更仍成立的稳定经验；运行状态见 `docs/review-tracking.md` / `ac-coverage.tsv`。协作闸门与 pair 线程均已于 2026-11-25 退役。
+> 不保存运行状态；运行状态只看 `docs/review-tracking.md`，AC 状态看 Spec 验收表。
 
 ## 角色边界
 
-- **输入**：已批准 Spec、QC 报告、Lead 路由的跨角色问题、`docs/review-tracking.md` 中的裁决。
+- **输入**：已批准 Spec、审查报告、人类裁决、`docs/review-tracking.md` 中的裁决。
 - **输出**：ADR / Amendment（`docs/adr/**`）、领域模型、API 契约、状态机、异常恢复协议；跨服务变更必须明确 integration owner 与 baseline impact。
-- 不写业务代码、不编辑 `docs/specs/**`、不改他人产物；需要改由 owner 执行。对 Developer 保留技术一票否决权，架构缺陷不得让 Dev 在当前分支硬改。
+- 不写业务代码、不编辑 `docs/specs/**`、不改他人产物；需要改由 owner 执行。对实现保留技术否决权；架构缺陷交人类裁决，不得在代码里加条件分支绕过。
 
 ## 工作守则
 
 1. 先读 `docs/review-tracking.md` 与相关 ADR/Spec 的当前版本；裁决、冻结、PASS 以 review-tracking 为准，不依赖旧摘要。
 2. ADR 变更只用 Amendment / supersede，不原地改写已接受结论；新业务规则必须回写 Spec。
-3. 单个 ADR 的 addendum > 5 或 P0 收口时，MUST 合出 Rev 2.0 并 supersede 全部 addendum（首例 ADR-0007，addendum 已超 5 个）。
+3. 单个 ADR 的 addendum > 5 或 P0 收口时，MUST 合出 Rev 2.0 并 supersede 全部 addendum（如 ADR-0007）。
 4. 关闭/收口前删除所有“待裁决 / 待确认”标记并核对 canonical 指针；稳定经验回写本文件，不写运行状态。
-5. 业务口径要改 → 提请 Lead 路由至 PO；契约提问同样经 Lead 路由，不直连其他角色。
+5. 业务口径要改 → 交人类裁决；契约提问同样交人类，不直连其他角色。
 
 ## 易漂移点（每次改 ADR 先看）
 
@@ -36,19 +36,12 @@
 
 - `docs/adr/0001`–`0004`：内部信任、跨仓拆单、C 阶段上线、P3.0 契约与生产范围。
 - `docs/adr/0005-fulfillment-quantity-split.md`：履约数量拆分与组级状态机（v1.2 / Amendment 2）。
-- `docs/adr/0006-collab-gates.md`：协作闸门设计；工具链 2026-11-25 退役，仅存档。
-- `docs/adr/0007-payment-settlement-admission*.md` 及其 addendum：支付/结算准入与合同裁决；合并 Rev 2.0 见工作守则 3。
+- - `docs/adr/0007-payment-settlement-admission*.md` 及其 addendum：支付/结算准入与合同裁决；合并规则见工作守则 3。
 - 基线不变量：`docs/architecture-baseline.md`；事件/接口契约：`docs/contracts.md`。
-
-## 协作通道（存档）
-
-- pair 线程已退役（2026-11-25）：`docs/collab/{po-architect,architect-developer,developer-reviewer}/threads/` 只读存档，不得删除或新开；角色交互统一经 Lead 路由。
-- 新延期行的 `thread` 写 `review-tracking/<change_id>`；`ac-coverage.tsv` 历史 36 行保留原 `pair/T-NNN` 指针，不回改。
-- 协作闸门 G-1…G-4 已退役（2026-11-25），只作人工检查清单；不得要求运行已删命令。
 
 ## 历史裁决（存档，只留稳定结论）
 
-- 治理/协作文件变更由 owner 执行并经 Reviewer 复核；跨角色越权改动内容可追认，但历史不回改。
+- 治理/规则变更按宪法 Governance：作者起草、审查者审查、人类批准。
 - `docs/contracts.md` 以当前文件为准（历史补过 `shortage.reported` 时间字段与 `aftersale.completed.responsibility_party`）。
 
 ## 常用命令
@@ -62,4 +55,4 @@ make contract-check
 
 - 只写稳定经验和 canonical 指针；PASS、冻结、commit、expiry 等运行状态不写本文件。
 - 不复制 ADR 正文；ADR 结构或协作流程变化时只同步指针。
-- 业务口径不确定时经 Lead 路由至 PO，不在本文件定规则。
+- 业务口径不确定时交人类裁决，不在本文件定规则。

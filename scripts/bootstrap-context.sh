@@ -11,7 +11,7 @@ git status --short --untracked-files=all | head -30 || true
 
 echo
 echo "== key docs"
-printf '%s\n' docs/handoff.md docs/access.md docs/seckill-design.md docs/services/seckill.md docs/ops.md
+printf '%s\n' docs/review-tracking.md docs/access.md docs/seckill-design.md docs/services/seckill.md docs/ops.md
 
 echo
 echo "== live cluster"
@@ -29,4 +29,4 @@ echo "== access"
 
 echo
 echo "== next"
-echo "read docs/handoff.md; run make verify / make seckill-integration when the stack is up"
+echo "read docs/review-tracking.md; run make verify / make seckill-integration when the stack is up"

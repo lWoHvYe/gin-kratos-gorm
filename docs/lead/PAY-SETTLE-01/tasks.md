@@ -23,7 +23,7 @@ Status: **APPROVED Plan (2026-11-24)**。本文件是 **Plan 视图**，不拥�
 
 ### Phase 0-R closeout plan（Lead，2026-11-25；Base `9111740`，WIP `90b502c`）
 
-**2026-11-27：Phase 0-R CLOSED（scoped）**，见 `REV-PAY-SETTLE-01-PHASE0R-CLOSEOUT.md`；P0 closure 仍需 T5/AC-39…68，T2/T3/T4 在 P0 closure 之后。
+**2026-11-27：Phase 0-R CLOSED（scoped）**，见 `REV-PAY-SETTLE-01-PHASE0R-CLOSEOUT.md`；P0 closure 仍需 T5/AC-39…68；按 2026-11-27 裁决 7-B，顺序为 **T2→T3→T4→T5→P0 closure**（取代原“T2/T3/T4 在 P0 closure 之后”的写法）。
 
 Scope：只做 R0.3/R0.4/R0.5 收口，不进入 T2/T3/T4/P3；无 Reviewer 日期化 verdict + 人类批准前不标 AC-VERIFIED、不 merge、不 Release。Tier L2（事件/迁移/deploy）。本小节即 R0.3 FAIL 与 R0.4 WIP 的修复/重审 Plan（宪法 Workflow 9）。
 
@@ -57,7 +57,7 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 - **R0.3-R1c DONE (scoped PASS，2026-11-27，`ce10714`)**：`AC-50-FIX-01` 已推进到 **SPEC-0002 v1.11**（`REVIEW_REQUIRED`，`c2bca33`）+ ADR DRAFT 0.4/impact（`43bbe5a`），但 QC 第四轮 BLOCKED：售后无 `refund_applications` 行、零元 no-persist 例外缺失、复核审计留存与 ADR §8.3 冲突。需先关闭 3 个 blocker + 人类 `ADR_APPROVED` + 独立 Plan/change_id；`AC-27-NOWB-01`/`AC-27-LIVE-01` 同开。**未关闭前 AC-27 不得 AC-VERIFIED**（SPEC-0001 v1.5 §16.2，owner/expiry 2026-12-31）；不得实现 AC-27A 谓词后自称收敛。
 - **R0.3-R3 DONE**：evidence-matrix INV-44…50 描述/路径/状态补全；**R0.3-R4 待 Reviewer** 更新 12 orphan reason。
 - **R0.5 DONE**：matrix 到 SPEC-0002 v1.10 + SPEC-0001 v1.5 AC-27A；migration scope 与 ADR 对齐。
-- **Phase 0-R 未闭合**；无 merge/Release/AC-VERIFIED。
+- **Phase 0-R CLOSED（scoped，2026-11-27）**；无 merge/Release/AC-VERIFIED 全集。
 
 ## Phase 1 — P-01 TCC 补偿 / P-03 零元回归（Owner: Developer；依赖: T0.7）
 

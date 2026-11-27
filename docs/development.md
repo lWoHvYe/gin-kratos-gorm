@@ -4,7 +4,8 @@ This is the durable entry point for developers running code and tests locally.
 It is not a session snapshot. For the current state use
 [`review-tracking.md`](review-tracking.md) (the canonical running ledger);
 [`roadmap-status.md`](roadmap-status.md) is a 2026-11-22 roadmap snapshot.
-For a session boundary use [`handoff.md`](handoff.md).
+For a session boundary use [`review-tracking.md`](review-tracking.md); `handoff.md`
+was retired on 2026-11-27.
 
 Operations/deployment (compose, Helm, production runbooks) remain owned by
 [`ops.md`](ops.md); UAT is in
@@ -94,8 +95,9 @@ pnpm test:e2e
 - Bind every test claim to the exact HEAD.
 - Money, inventory, permissions and cross-service recovery need `-race` or
   fault-injection evidence; a happy path is not enough.
-- AC-REF is not AC-VERIFIED; the Reviewer owns
-  [`collab/ac-coverage.tsv`](collab/ac-coverage.tsv).
+- AC-REF is not AC-VERIFIED; AC 状态见
+  [`SPEC-0002 §15`](specs/0002-payment-settlement-admission.md#15-验收状态表) 与
+  [`review-tracking.md`](review-tracking.md)。
 - Include `【测试范围】` and `【未覆盖范围】` in the delivery.
 
 ## 8. Canonical pointers
@@ -108,4 +110,4 @@ pnpm test:e2e
 | Architecture baseline | [`architecture-baseline.md`](architecture-baseline.md) |
 | Operations / compose / Helm | [`ops.md`](ops.md) |
 | UAT | [`runbooks/uat-environment.md`](runbooks/uat-environment.md) |
-| Session boundary | [`handoff.md`](handoff.md) — snapshot only |
+| Session boundary | [`review-tracking.md`](review-tracking.md) — handoff 已于 2026-11-27 停用 |

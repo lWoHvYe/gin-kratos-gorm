@@ -219,5 +219,6 @@ For current state and gaps start from [docs/review-tracking.md](docs/review-trac
 (the canonical running ledger); [docs/roadmap-status.md](docs/roadmap-status.md) is a
 2026-11-22 roadmap snapshot. Run `make status` for the repo snapshot.
 Environment and test commands live in
-[docs/development.md](docs/development.md). [docs/handoff.md](docs/handoff.md)
-is only a session-boundary snapshot, not a rule source.
+[docs/development.md](docs/development.md). `docs/handoff.md` was retired on
+2026-11-27; the only running-status source is
+[docs/review-tracking.md](docs/review-tracking.md).

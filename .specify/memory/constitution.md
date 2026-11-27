@@ -1,111 +1,99 @@
-# gin-kratos-gorm Constitution（项目根本大法）
-
-本文件是本仓库所有 AI 生成物（Spec, Plan, Tasks, Code）必须绝对遵守的最高准则。任何违背本宪法的设计或代码，将被直接拒绝合入。
-
-## Ratification
-
-- v1.2.0 经人类指挥官于 2026-11-24 批准；G1–G4 同日完成，状态 **EFFECTIVE**。
-- v1.2.1（2026-11-25）：协作闸门工具退役；v1.2.2（2026-11-25）：L0/L1/L2 分级路由与 Workflow/Governance 对齐；v1.2.3（2026-11-25）：历史记录与人工清单口径澄清（PATCH，无语义变更）。
-- v1.3.0（2026-11-25）：新增治理文本 L2 轻路径（Architect→QC→人类→Reviewer，不建 Spec/ADR/Plan；ADR 修订除外），与 AGENTS §2.7 对齐。
-- 层级：**本宪法 > `AGENTS.md` > `docs/collab/CONVENTIONS.md`**；冲突时以本宪法为准。
-- G1：AGENTS/CONVENTIONS 已对齐；G2：G-1 已校验 `change_id`/`Actor`/`Reviewed-by`；
-  G3：`ac-coverage.tsv` 已含 `test_type/evidence_path/status`；G4：人类裁决 B 已记录在
-  `docs/review-tracking.md`。（G-1…G-4 为已退役的协作闸门代号，仅作历史记录。）
-- 遗留：SPEC-0001 AC-27 在下一次版本升级改为 EARS；PAY-SETTLE-01 WIP 按裁决 B 冻结。
+# 项目宪法
 
 ## Core Principles
 
-### I. 架构与工程哲学 (Engineering Philosophy)
+### I. 契约先行
 
-1. **拒绝"屎山雕花"（Refactor over Patch）**：严禁用散落的条件分支替代状态机设计。判定线：同一业务路径为修复同一类缺陷已存在 2 处及以上状态判断分支时，MUST 停止编码并提出状态机拆分或领域模型重构方案。修复 MUST NOT 通过新增 `if-else` 默认放行或掩盖冲突状态。
-2. **防御性架构（Fail-Closed）**：涉及资金、库存、订单的核心链路，所有未预期的异常、超时、配置缺失必须直接报错阻断（Fail-Closed），或进入持久化补偿队列（Outbox/MQ）。严禁通过 `try-catch` 静默吞掉异常或默认放行。测试替身、开发默认值或 nil 依赖 MUST NOT 弱化生产守卫。资金/库存/履约准入的必需依赖（Inventory、Payment、Fulfillment）MUST 在构造期必填、服务启动期 fail-fast；可选能力（pricing/promotion/AI 等）MUST 用显式 Options 开关，禁止用 nil 表示关闭。测试替身只允许在 `_test.go` 或 build tag 中注入。
-3. **契约优先（Contract First）**：修改任何跨服务 RPC 或事件之前，必须先定义 `proto` 或 JSON Schema，严禁在没有契约的情况下修改生产代码。
-4. **拒绝自我妥协**：严禁为完成 Goal 而悄悄砍掉复杂逻辑、专挑简单路径或用 `try-catch` 吞掉异常。遇到极难处理的核心链路 MUST 停下出设计，严禁"假装完成"。进度不得以 round 数、commit 数或测试数量衡量；没有合规产出的轮次 MUST 停手，而不是为提交而提交。
+1. **先有 Spec 再有代码。** 契约变更先提交 Spec，实现变更按已批准的 Spec 执行。Spec 必须回答附录 A 的必备问题；章节标题可按 Spec Kit 模板组织，但每个问题都要有落点。只写影响实现和验收的内容，没有内容的写“无”。命中附录 B 的情形必须写 ADR，在 Spec 里链接，与 Spec 同等审查和批准。
+2. **批准后才实现。** Spec 经独立审查通过、人类批准后，才能写代码。Spec 修订后要重新走这一审查，审查只审差异和受影响的 AC；人类批准时给出的裁决原文填入 Spec 的，不算修订。已批准的 ADR 不得改写（错别字和失效引用除外），要变就写新 ADR 取代，重新走契约变更。
+3. **变更分类。**
+   - 契约变更：新增或修改行为或 AC；或触及资金、库存、履约、权限、跨服务协议或事件、数据迁移、状态机、`api/proto/**`、`migrations/**`、`internal/platform/**`、共享包、`frontend/**`、`deploy/**`、`scripts/**`、CI 配置；或命中附录 B 的 ADR 触发条件。
+   - 实现变更：行为已被批准的 Spec 覆盖，且不触及上述主题。
+   - 不改变规范含义的文案、注释、格式修改，以及纯测试文件的增改，不受上述路径限制。无法归入的，按契约变更。作者在台账登记级别，审查者核对。
+   - 治理变更：修改本宪法或 `AGENTS.md`，按 Governance 处理，不走 Spec/ADR；它不是契约变更，也不是实现变更。
+4. **设计问题回 Spec 和 ADR。** 发现设计缺陷时修改 Spec，或用新 ADR 取代旧 ADR，并重新批准；不得在代码里加条件分支或本地锁绕过协议。
+5. **同一问题第二次审查不过，不再提交第三版局部修复。** 先判断是不是设计问题：是就回到 Spec 和 ADR；不是就写明原因后继续修。
+6. **渐进式兼容。** 核心交易链路的重构（状态机拆分、事件身份升级等）不得 Break Change，必须用双写、版本化事件或影子消费过渡。
+7. **代码不得覆盖契约。** 代码不符合已批准的 Spec 或 ADR 时改代码，不得改契约来迁就。已批准的 Spec 或 ADR 本身与代码事实冲突、照做做不下时，停止交付，交人类裁决。描述性文档与代码冲突时，以代码事实为准并修正文档。
 
-### II. 事实所有权与状态机 (State Ownership & Facts)
+### II. 独立审查
 
-1. **事实分离（Fact Separation）**：`PaymentCaptured`（支付成功）、`OrderSettled`（订单结算）、`InventoryReady`（库存就绪）、`FulfillmentAllowed`（允许履约）是四个独立的事实。严禁用一个统一的 `status` 或单一的 `order.paid` 事件来混合表达。唯一例外是 ADR 批准的**版本化兼容期**：灰度期 MAY 双发 `order.paid` 作 BFF/旧消费者兼容，但 `order.paid` MUST NOT 作为履约准入、结算或库存就绪的依据；收口后 MUST 停止其准入用途。兼容期 MUST 写明默认消费者切换、收口条件、移除日期与回滚路径；MUST NOT 以"flag 默认 false"长期保留旧准入路径。灰度影子期 MAY 保留旧默认，但 MUST 有 ADR 批准的切换步骤、owner 与收口日期；切换完成后的生产默认 MUST 消费 `OrderSettled` 或经 ADR 批准的等价事实。
-2. **状态唯一所有权**：每个核心状态字段只能有一个微服务拥有写入权（如资金状态属于 Payment，履约状态属于 Fulfillment）。禁止跨服务直接修改其他服务的核心状态字段。
-3. **幂等与最终一致性**：所有跨服务写操作（支付回调、TCC 分支、消息消费）必须实现强幂等。必须使用数据库唯一约束或状态机 CAS 作为兜底，严禁仅靠 Redis 缓存做幂等。
-4. **渐进式兼容演进**：核心交易链路重构（状态机拆分、事件身份升级）MUST NOT 采用 Break Change 直接替换，MUST 采用双写、版本化事件或影子消费（Shadow Consumption）平滑过渡，并明确收口条件与回滚路径。自本宪法 1.2.0 生效起，`main` MUST NOT 新增半成品**协议路径**；未完成的协议实现 MUST 留在 WIP 分支。**契约完整/协议完整**指事件、消费者、迁移、幂等与回滚路径齐全；缺任一即半成品。Feature flag 可用于契约完整增量的灰度，但 MUST NOT 用于掩盖未实现的协议分支；flags 默认 false 不构成合入理由。既有 WIP 按人类裁决冻结或隔离，不得继续扩展。
-5. **退款与履约准入**：普通售后、TCC 补偿与 SYSTEM 退款 MUST 进入同一组幂等准入协议，由 permit 裁决退款与发货竞态。IF 某履约组存在未完成退款且尚未授权发货，THEN THE SYSTEM SHALL 撤销或拒绝该组的发货 permit；IF 已离仓后发生退款，THEN THE SYSTEM SHALL 保留已发货事实并只退款，不得回滚履约。TCC 补偿与 SYSTEM 退款 MUST 逐组准入并满足活动组金额之和等于订单剩余可退金额（Σ 等式）；MUST NOT 用整单退款事件替代逐组准入。退款准入一旦作用于 permit，MUST NOT 由实现自行恢复 `REVOKED` permit；恢复 MUST 由版本化 SPEC/ADR 规定并经人类批准。准入前拒绝/取消 MUST NOT 创建 commitment；准入后执行失败 MUST 进入持久重试或人工队列，不得由实现静默释放。任何 commitment 释放 MUST 由版本化 SPEC/ADR 规定并经人类批准。
-6. **读写隔离**：`skus.stock` 是投影，真实库存在 inventory；MUST 实现 Read-Your-Writes。禁止把跨服务异步投影读作准入事实。
+8. **审查者不是作者。** 审查者必须是另一个 agent 实例，不参与被审变更的写作。审查者审的是已提交的 Spec 和精确的 base/head，不是作者的自述。
+9. **问题必须可溯源。** 审查者的每条阻断问题必须指向被违反的 AC、领域不变量、已批准的 ADR、Spec 必备章节的要求或本宪法条款；摘不下的只能记为 `[TODO]`，不得阻断。权限、安全、数据完整性、迁移风险不受此限，必须阻断。僵持时，审查者指出违反依据的，以审查者为准；作者认为审查者的要求本身违反宪法或已批准的 AC 的，交人类。
+10. **不给补丁建议。** 审查者只指出违反了什么，不得建议“加个锁”“加个 if”式的局部修补。
+11. **通过的含义要写清。** 实现通过不等于 Spec 全量验收，也不等于 Release。审查者只把有证据支撑的 AC 标为已验证。
 
-### III. 微服务技术栈铁律 (Tech Stack Hard Limits)
+### III. 证据交付
 
-1. **分布式事务（DTM & Outbox）**：
-   - DTM Saga 分支必须走 `dtm.Branch`，业务写表与 `outbox.Append` 必须共用同一个 `*sql.Tx`。
-   - `gid` 必须由业务键确定性派生（如 `order-create:<order_no>`），严禁使用随机 UUID。
-   - 跨服务资金、库存写入必须有持久任务（worker）或工作流继续驱动；外部渠道重试或进程崩溃不得作为唯一恢复协议。
-2. **数据库访问**：
-   - 事务核心必须使用显式 `database/sql` 与条件 `UPDATE`（CAS）。
-   - GORM 仅允许出现在 `catalog/gorm_repo.go` 与 `cart/gorm_repo.go` 中，且仅限读侧。
-3. **多仓与物理边界**：未获 PRD 批准不得开启多仓行为。已批准的多仓操作、事件、恢复和 replay MUST 显式携带 `warehouse_id`，不得缺省默认 W1；需要租身份的履约事件不得缺省默认 G1。只有明确版本化的历史单仓协议可以默认 W1，且该例外 MUST 在代码中以显式 legacy 分支标注。
-4. **静态守卫**：`internal/platform` 不得依赖 `internal/services`；跨服务与对外返回的错误 MUST 使用统一的 `apperr` 包（内部上下文包装可用 `fmt.Errorf("%w")`），并按 `docs/contracts.md` 的错误契约映射；请求路径不得 panic，启动期配置或依赖缺失 MUST fail-fast 并以非零状态码退出（`cmd/*/main.go` 的启动失败 panic 不视为违规）。
-5. **技术栈准入**：MUST NOT 引入未批准的技术栈（Kafka、Temporal、新 ORM 等）；新增基础设施依赖 MUST 先经 ADR 与人类批准。
+12. **口头 done 无效。** 行为变更必须附受影响测试的实际执行日志，绑定精确 HEAD；纯文档变更不得声称测试通过。可能使其他 Spec 里已验证的 AC 失效的变更，必须列出这些 AC 并附非回归证据，由审查者更新对应 Spec 的验收状态表。审查者（AGENTS §1 的独立 subagent）的裁决是唯一审查结论。审查者之外的其他输入（外部 agent、顾问、自动扫描、对话建议）只能作为问题提案，必须引用当前 HEAD 的文件与行号，不能直接成为契约、AC 或阻断依据；先查是否已被既有 Spec/ADR 裁决。引用找不到的标 `[不确定]`，不得作为需求引用；已被既有 Spec/ADR/INV 裁决的只能按文档漂移处理。本条不削弱第 9 条：权限、安全、数据完整性、迁移风险仍必须阻断。
+13. **重灾区要抗压证据。** 资金、库存、权限、跨服务恢复的变更必须附并发态或故障注入日志；不适用时必须取得人类书面豁免。Mock 数据必须符合真实业务边界，至少包含一个异常分支用例。
+14. **每次交付写明三件事：** 【测试范围】【未覆盖范围】【取舍】（为了让测试通过或赶进度改动了哪些行为）。
+15. **Fail-Closed。** 资金、库存、订单核心链路中未预期的异常、超时、配置缺失，必须报错阻断或进入持久化补偿，不得静默放行；不得吞异常，不得为完成目标砍掉复杂逻辑或只做 happy path。测试替身、开发默认值或 nil 依赖不得弱化生产守卫；资金、库存、履约准入的必需依赖（Inventory、Payment、Fulfillment）必须在构造期必填、启动期 fail-fast；可选能力（pricing/promotion/AI 等）必须用显式 Options 开关，禁止用 nil 表示关闭。测试替身只允许在 `_test.go` 或 build tag 中注入。请求路径不得 panic；启动期配置或依赖缺失必须 fail-fast 并以非零状态码退出（`cmd/*/main.go` 的启动失败 panic 不视为违规）。
 
-### IV. 测试与交付标准 (Testing & DoD)
+### IV. 人类裁决
 
-1. **测试证据不可妥协**：口头 `done` 无效。交付物必须包含实际执行日志，并绑定精确 HEAD。AC 文本引用（AC-REF）不等于 AC-VERIFIED；每条**受影响 AC** MUST 映射到 `docs/collab/ac-coverage.tsv`（`test_type`、`evidence_path`、`status`，Owner 固定为 Reviewer）；只有真实执行日志才能标记 AC-VERIFIED。机器门禁已于 2026-11-25 退役；AC-VERIFIED 永久以 Reviewer 人工矩阵 + 真实执行日志为准，MUST NOT 仅凭 AC-REF 宣称 AC-VERIFIED；机器阀门为可选辅助，不构成宪法要求。
-2. **重灾区强制抗压**：资金、库存、权限和跨服务恢复 MUST 提供**并发竞态测试**（如 Go `-race`）或**故障注入测试**（模拟下游超时/崩溃）的日志。不适用时 MUST 书面说明依据并经人类确认，严禁以"不适用"静默跳过。仅功能测试通过、仅 Mock 全绿，不构成抗压证据。
-3. **Mock 数据真实性**：测试用例中的 Mock 数据必须符合真实业务边界（支付/退款金额 MUST > 0；零元单 `pay_cent=0` 是合法路径，需单独覆盖），且必须包含至少一个异常分支，严禁用假数据糊弄全绿。
-4. **组合与发布隔离**：实现测试绿色（Implementation PASS）不等于 Spec 全量验收，更不等于 Release PASS。跨服务变更必须包含受影响基线的非回归证据。
+16. **人类的常规批准点有三个：** 批准 Spec、合入、做 Release。合入在审查通过后由人类执行；批准时只回答 Spec 里列出的业务裁决题。
+17. **只有三类情形作者不得自行决定：** 业务取舍；契约或状态所有权需要变更；架构缺陷。遇到就交人类裁决，或修改 Spec 或 ADR 后重新走批准。范围内的缺陷修复由作者直接做。
+18. **豁免必须逐台账。** 写明范围、期限、受影响的不变量；没有期限的豁免无效。
+19. **对业务裁决有异议时先服从并记录。** 认为会导致崩溃或资损的，附一个具体的失败时序，由人类定夺。
 
-### V. AI 子系统与安全约束 (AI Safety)
+### V. 领域不变量 (违反即错)
 
-1. **可用性隔离**：`ai` 模块是可选项，其任何故障（超时、幻觉、RAG 构建失败）不得影响商城的浏览、下单和支付主链路。
-2. **身份与权限防越权**：
-   - AI 工具默认只读。写操作必须走"草案 → 人工确认 → 调用原业务 RPC"。
-   - AI 身份必须来自服务端请求上下文，严禁信任模型生成的 `user_id`。
-3. **RAG 生命周期**：RAG 必须走版本化可变索引与可恢复发布协议，严禁原地删除重建索引（Drop Index）。
-4. **协议与网络边界**：AI MUST 走统一的 `Turn/Action` 协议。Mesh MUST 使用显式服务间 ALLOW 与 AI 精确只读 ALLOW；禁止以 broad ALLOW + 不完整 DENY 收敛权限，DENY 仅作第二道防线。
+20. **全局幂等。** 所有跨服务写操作（支付回调、TCC 分支、消息消费）必须强幂等，以数据库唯一约束或状态机 CAS 兜底；不得只靠 Redis。
+21. **超时与重试。** 跨服务调用必须设置 Deadline/Timeout；重试必须有退避，并确认下游幂等。
+22. **事务与持久恢复。** DTM Saga 走 `dtm.Branch`；业务写与 `outbox.Append` 共用 `*sql.Tx`；`gid` 确定性派生。跨服务的资金、库存、履约写入必须有持久任务或工作流继续驱动；外部渠道重试、消息恰好重放、进程崩溃不得作为唯一恢复协议。
+23. **事实所有权。** `PaymentCaptured`、`OrderSettled`、`InventoryReady`、`FulfillmentAllowed` 是不同事实，不得由单一状态或 `order.paid` 事件合并替代。普通售后、TCC 补偿、SYSTEM 退款必须进入同一组幂等准入协议，由 permit 裁决退款与发货竞态。IF 某履约组存在未完成退款且尚未授权发货，THEN THE SYSTEM SHALL 撤销或拒绝该组的发货 permit；IF 已离仓后发生退款，THEN THE SYSTEM SHALL 保留已发货事实并只退款，不得回滚履约。退款准入作用于 permit 后，不得由实现自行恢复 `REVOKED` permit；恢复必须由版本化 Spec/ADR 规定并经人类批准。准入前拒绝/取消不得创建 commitment；准入后执行失败必须进入持久重试或人工队列，不得静默释放。任何 commitment 的创建/释放规则必须由版本化 Spec/ADR 规定；改变该规则须经人类批准，范围内的单次创建/释放由作者按已批准规则执行。TCC 补偿与 SYSTEM 退款必须逐组准入，活动组金额之和等于订单剩余可退金额（Σ 等式），不得用整单退款事件替代逐组准入。`order.paid` 仅可作 BFF/旧消费者兼容，不得作为履约准入、结算或库存就绪的依据；兼容期必须写明默认消费者切换、收口条件、移除日期与回滚路径，不得以“flag 默认 false”长期保留旧准入路径；灰度影子期还必须由 ADR 批准切换步骤、owner 与收口日期，切换完成后的生产默认必须消费 `OrderSettled` 或经 ADR 批准的等价事实。
+24. **读写隔离。** `skus.stock` 是投影，真实库存在 inventory；必须 Read-Your-Writes。
+25. **多仓身份。** 未获 PRD 批准不得开启多仓行为。已批准的多仓操作、事件、恢复、replay 必须显式携带 `warehouse_id`；需要组身份的履约事件不得缺省 G1。
+26. **静态守卫。** 跨服务禁走包引用；`internal/platform` 不依赖 `services`；事务核心必须使用显式 `database/sql` 与条件 `UPDATE`（CAS）；GORM 仅限 `catalog/gorm_repo.go` 与 `cart/gorm_repo.go`，且仅限读侧；禁止手工改生成物；错误用 `apperr`（内部上下文包装可用 `fmt.Errorf("%w")`，对外错误按 `docs/contracts.md` 的错误契约映射）。
 
-## 附加协议: 需求定义规范 (Specification Standard)
+### VI. 单一状态来源
 
-所有**新增或修订**的 Spec 与 AC MUST 强制使用 **EARS 语法** 穷举异常分支：
+27. **状态各有一个家。** 验收状态的当前值只在 Spec 的验收状态表；运行状态（裁决、冻结、批准、Release）只在 `docs/review-tracking.md`。台账里的 AC 位移是流水记录。plan、tasks 的勾选、MEMORY、任何汇总文档都不保存状态；tasks 的勾选只是执行进度标记，Spec Kit `implement` 写 `[X]` 不改变本条。
+28. **条目与明取代关系。** 台账条目必须写明取代了哪一条，没有就写“无”。提交给人类的选项必须带固定编号，不得使用未定义的标签。
+29. **谁写谁落账。** 审查者的裁决和 AC 状态更新由审查者本人写入台账和验收状态表，作者不得改写。审查者没有写权限时，作者照文照录，并把审查报告原件存档。人类的决定由作者按原话记录。
+30. **Spec 身份与 change_id 分开。** Spec 的身份是文件或目录本身：本仓扁平 Spec 用 `SPEC-<NNNN>` 或文件名主干，独立目录用目录名；一个 Spec 可以经历多次变更。每次变更只有一个 change_id：新 Spec 可用 Spec 目录名/文件名主干；在途或长期 Spec 的 change_id 在台账登记，登记后不得更换。同一时间只推进一个 change_id，并行须人类批准。提交尾注写在合入提交：`change_id`、`Actor`、`Reviewed-by`，Actor 与 Reviewed-by 不得相同。历史变更不回溯补登。不得用新 change_id、hotfix 或缩小范围来绕过 FAIL。
+31. **冻结只针对 Spec 或 ADR 自身的缺陷：** 架构缺陷，或按第 5 条判定的设计问题。冻结即停止写代码，直到 Spec 修订或 ADR 被新 ADR 取代，并重新批准。
+32. **上下文压缩后以 Spec 和 ADR 为准：** 不以对话记忆为准。
 
-- `WHEN [触发条件] THE SYSTEM SHALL [系统行为]`
-- `IF [异常场景] THEN THE SYSTEM SHALL [报错或补偿行为]`
-- `WHILE [并发状态] THE SYSTEM SHALL [锁或隔离机制]`
+### VII. 安全与技术边界
 
-本要求不追溯改写已批准并冻结的历史 Spec；历史 Spec 在下一次版本升级时 MUST 将受影响的 AC 改写为 EARS，并登记为基线迁移任务。新增或修订的 AC MUST NOT 以**行首** `Given/When/Then/And` 的 Gherkin 步骤规避 EARS；EARS 句内 MAY 使用 `AND/OR` 组合条件。对已批准 Spec 的任何 Amendment/修订同样 MUST 遵守本条。
-
-## 开发工作流与门禁 (Development Workflow & Gates)
-
-本宪法只定义不可谈判的结果约束；执行细则（角色矩阵、产物所有权、线程协议）以 `AGENTS.md` 与 `docs/collab/CONVENTIONS.md` 为准。优先级 MUST 为 **本宪法 > `AGENTS.md` > `CONVENTIONS.md`**；二者不得与本宪法冲突。`AGENTS.md` §4/§5 为领域铁律，§1/§2/§6 为角色、SDD 与 DoD 执行细则，均与本宪法并行有效：本宪法未显式覆盖处仍受其约束，不得以"宪法未禁止"为由放行。
-
-1. **阶梯门禁**：业务想法 → PO 输出 Spec Draft → QC 审查 Spec → 人类批准 `SPEC_APPROVED` → Architect 输出 ADR Draft → QC 审查 ADR → 人类批准 `ADR_APPROVED` → Developer 实现 → Reviewer 按精确 base/head 审查 → integration owner 组织基线与组合验证 → 人类决定 `RELEASE_APPROVED`。L0/L1 的适用与减免以 `docs/collab/CONVENTIONS.md` §2.3 为准；L2 MUST 走本条完整阶梯；**治理文本类 L2（仅改 `AGENTS.md`/`CONVENTIONS.md`/MEMORY/`prompt/**`/台账格式，不改代码/契约/CI/`scripts/**`）MAY 走轻路径：Architect 起草 → QC → 人类批准 → Reviewer 复核，不建 Spec/ADR/Plan；ADR 修订不属于轻路径**。任何级别保留人类合入与 Release。
-2. **批准不得越级**：Spec 未批准 MUST NOT 开始 ADR；ADR 未批准 MUST NOT 开始实现。PO/Architect 的批准是业务与架构批准，不构成代码验收。
-3. **验收语义隔离**：线程 CLOSED、实现 PASS、代码合入、Release PASS 是四种不同状态，MUST NOT 互相替代；Reviewer 的 PASS 必须声明 `review_scope`。
-4. **反证义务**：Developer 若认为 ADR 存在架构缺陷，MUST 停止编码并附上至少一个会引发崩溃或资损的具体时序推演或伪代码，MUST NOT 只提问题不提供证据。
-5. **架构缺陷不得就地打补丁**：Reviewer 判定为架构缺陷时 MUST 标记 `[ARCHITECTURAL_FLAW]` 并要求打回 Architect，MUST NOT 允许 Developer 在当前分支硬改或添加局部锁等诱导性补丁。
-6. **证据绑定**：交付必须附带实际执行日志与精确 HEAD；纯文档变更不得伪造测试声明；跨服务变更必须附受影响基线的非回归证据。
-7. **人类裁决记录**：人类给出的业务 Trade-off 豁免 MUST 在文档中记录并指明影响范围，AI 无条件服从，但不得据此自行扩展到未裁决范围。
-8. **Plan/Tasks 门禁**：涉及 P0、跨服务、资金、库存、权限或状态机拆分的变更 MUST 在实现前产出 Plan/Tasks 与 AC 证据矩阵。Plan owner 为 Lead；Architect 审技术可行性，QC 审异常分支与测试矩阵，Developer 提供可执行性与风险估算，Reviewer 确认可验证性；人类批准 Plan 后 MUST 才能写业务代码。Plan 未批准 MUST NOT 写业务代码。
-9. **Stop-the-line**：Reviewer 对某 `change_id` 出具 FAIL 后，该变更 MUST 冻结并登记到 `docs/review-tracking.md` 的 change freeze 区（`change_id`、冻结时间、重审 Plan 链接）；MUST NOT 继续在该 `change_id` 提交受管代码（业务代码、契约、迁移），直到修复 Plan、契约裁决与重审完成。修复 MUST NOT 用新增 `if-else`、临时锁或"安全网"补丁替代协议修复。人类可批准**独立 `hotfix:` change_id** 处理紧急安全问题；hotfix 范围只限安全修复，触及原 `allowed_paths` 视为扩展原变更。FAIL 后的修复提交 MUST 挂重审 Plan。`change_id` MUST 出现在变更输入与提交元数据中。
-10. **Actor 独立性**：每个交付 MUST 使用 commit trailer 记录 `change_id: <id>`、`Actor: <agent-id>`、`Reviewed-by: <agent-id|human>`；同一 actor MUST NOT 同时是作者与 Reviewer。Lead 的职责边界与治理草案例外见 `Governance / Actors & Independence` 第 1 条。
+33. **AI 可选。** `ai` 故障不得影响浏览、下单、支付。AI 必须走统一的 `Turn/Action` 协议；RAG 必须走版本化可变索引，不得原地重建。
+34. **AI 工具默认只读。** 写操作必须“草案 → 人工确认 → RPC”；身份只能来自服务端。Mesh 必须使用显式的服务间 ALLOW 和 AI 精确只读 ALLOW；不得依赖 broad ALLOW 加不完整 DENY。
+35. **不得引入未批准的技术栈** (Kafka、Temporal、新 ORM 等)。
+36. **无测量依据不得在非核心链路做高复杂度的极值性能优化。**
+37. **压测上限。** 单节点 dev 集群不得超过 100k/1M RPS。
+38. **main 不得新增半成品协议路径**；未完成的协议留在 WIP 分支。
 
 ## Governance
 
-### Actors & Independence (Lead + SubAgent)
+- **修订：** 宪法和 `AGENTS.md` 的修改由作者起草、审查者审查、人类批准后生效，不需要另有 Spec。工具只用来辅助起草。宪法只写原则和规则；运行状态、实例名、带日期的公告不得写进宪法。
+- **效力：** 本宪法 > `AGENTS.md`。任何工具自带的检查与本文件冲突时，以本文件为准。
+- **治理变更的最小增量：** 治理文本和工具链的变更必须从最小可行增量开始，写明可验证收益和停止条件；收益没有出现就撤回，不继续加层。安全、合规、数据完整性类变更可以豁免“可测收益”，但必须写明风险、范围和停止条件。
+- **版本：** 语义化版本。删除或重定义原则为 MAJOR，新增原则或规则为 MINOR，澄清为 PATCH。
 
-1. **Lead 的职责边界**：Lead 负责拆分任务、选择 subagent、维护 Plan/Tasks 与证据索引、集成交付、向人类报告；MUST NOT 编写 Spec、ADR、业务代码、QC 报告、Reviewer 裁决或本宪法文本（人类明确指示的治理修订草案除外，且仍须人类批准并记录指示）。若没有合适的 owner，Lead MUST 停下并向人类请求角色，不得自任。
-2. **SubAgent 的治理义务**：每个 subagent MUST 自行读取 `AGENTS.md`、本宪法、`docs/collab/CONVENTIONS.md` 与自身角色 prompt；MUST NOT 仅依赖 Lead 摘要。Brief MUST 包含 role、`change_id`、允许/禁止路径、输入契约、验收标准、停止条件与证据要求。
-3. **Reviewer 独立性**：Reviewer MUST 与作者为不同 actor；报告 MUST 逐条核对本宪法 Article I–V 以及 Governance/Workflow 相关条款，写明 `review_scope`、精确 base/head、`release_status` 与 `Actor/Reviewed-by`。Reviewer 的 PASS 只在声明范围内有效；FAIL 触发 Stop-the-line。
-4. **人类检查点**：在适用时，Spec 批准、ADR 批准、Plan 批准、每个 `change_id` 的首次与重审 FAIL、merge、release 均须人类知会/裁决；L0/L1 无 Spec/ADR/Plan 时仍保留人类合入；任何级别均保留人类 Release。Lead 与 subagent MUST NOT 代行。
-5. **治理基线同步**：`AGENTS.md`、本宪法或 `CONVENTIONS.md` 变更后，Lead 与所有 subagent MUST 重新读取，并在 `docs/review-tracking.md`（或对应 `docs/collab/<pair>/threads/`）记录 delta audit（日期、版本、差异摘要）；MUST NOT 依赖旧摘要或"未看到新版本"作为免责理由。
-6. **进度度量**：不得以 round 数、commit 数、测试数量作为合规或交付进度的替代；无合规产出的轮次 MUST 停手并报告阻断。
+**Version**: 2.2.0 | **Approved**: 2026-11-27 | **Effective**: 2026-11-27 | **Last Amended**: 2026-11-27
 
-### Amendment & Compliance
+## 附录 A: Spec 必备内容
 
-1. **效力与优先级**：本宪法是仓库内所有 AI 生成物的最高准则，优先于 Spec、Plan、Tasks、ADR 与代码；冲突时本宪法胜出，冲突产物 MUST 被拒绝合入。
-2. **修订程序**：修订 MUST 通过 `/speckit-constitution` 提出，经人类指挥官批准后生效；涉及资金、库存、履约或跨服务协议的原则修订，MUST 同时记录迁移方案或明确豁免范围。
-3. **版本策略**：遵循语义化版本。MAJOR：删除或重定义不兼容的原则/治理条款；MINOR：新增原则或实质性扩展现有指导；PATCH：澄清、措辞、错别字等非语义修订。
-4. **合规审查**：任何 Spec/ADR Review（QC 或 Reviewer）MUST 逐条核对本宪法 Article I–V 以及 Governance/Workflow 中与本次变更相关的条款；Reviewer 的 PASS 只在声明的 `review_scope` 内有效；机器阀门只校验客观事实，不构成语义批准。
-5. **持续对齐**：本宪法与 `AGENTS.md`、`docs/collab/CONVENTIONS.md` MUST 保持同源表述；发现漂移时 MUST 修正文档。描述性文档（不含本宪法与已批准的 Spec/ADR）与代码冲突时以代码事实为准；本宪法或已批准 Spec/ADR 与代码冲突时，MUST 停止相关交付并交由对应所有者裁决，不得以代码现状静默废止契约。
-6. **人类豁免**：人类指挥官可对本宪法条款给出有范围的 Trade-off 豁免。豁免 MUST 以书面形式记录于 `docs/` 并在受影响的 Spec/ADR/线程中引用，MUST 注明范围、期限与受影响不变量；豁免不修改本宪法文本，MUST NOT 由 AI 自行推断或扩大适用范围。无记录的豁免视为不存在。
-7. **过渡条款**：本宪法 1.2.0 生效前已存在于 `main` 的 WIP（含 PAY-SETTLE-01）按人类裁决 B 处理：**隔离 = 保留在 `main`、冻结、不合并到 release、不发布**；其 open 项（当前 P-01 安全网、P-04、P-05、P-06）在冻结清单中列明，不得据此新增半成品协议路径，也不得把"已存在"作为继续扩展的理由。B 裁决 MUST 记录在 `docs/review-tracking.md` 的 human decisions 区并被本章引用。
+| 必备问题 | 必须回答 |
+|---|---|
+| 业务规则与验收标准 | 每条 AC 必须可判定，并能落到一个测试、一个契约检查或一个可观测指标上。语法不限：EARS（`WHEN/IF/WHILE ... THE SYSTEM SHALL ...`）或 Spec Kit 原生语法（`User Scenarios` 的 Given/When/Then、`Functional Requirements` 的 MUST、`Success Criteria`）均可。金额、状态、并发相关的规则必须写出拒绝时返回的错误；`SHALL`/`THEN`/`MUST` 后不得接无法判定的形容词（快速、及时、合理等）。 |
+| 状态所有权 | 每个核心状态字段的唯一事实来源；不得把多个状态揉在一个字段里 |
+| 契约与异常恢复 | 必须成立的保证：幂等、最终一致性、由谁持久恢复；并发、超时、崩溃、部分成功、网络脑裂下系统必须表现成什么；状态机不得有死胡同。协议、数据模型、状态机怎么设计写进 ADR，在这里链接 |
+| 可达性检查 | 每条 AC 的触发态在现有代码里怎么到达，给出 `文件:行号`；到达不了的 AC 标 `[不确定]`，先解决再提交审查。行号过期时更新，不算契约变更 |
+| 假设与不确定性 | 所有底层依赖风险 |
+| 业务裁决题 | 需要人类决定的业务取舍，每题带编号选项；没有就写“无” |
+| 验收状态表 | 列：AC 编号、状态（未验证 / 有引用 / 已验证）、检查类型（测试 / 契约检查 / 可观测指标）、证据路径、审查者。新 Spec 的 AC 可用 `<change_id>-AC-<序号>`；长期 Spec 沿用原 `AC-<序号>`；退役的编号不得复用。AC 编号标识 AC，不要求等于 change_id |
+| 延期清单 | 每条延期写 `AC/工作项、owner、expiry、reason`；到期未关闭阻断对应范围；不得删行、批量续期或用新 change_id 规避。延期是待完成工作，不等于豁免；豁免按第 18 条另行登记（范围、期限、不变量） |
 
-**Version**: 1.3.0 | **Approved**: 2026-11-25 | **Effective**: 2026-11-25 | **Ratified**: 2026-11-24 | **Last Amended**: 2026-11-25
+> **Spec Kit 兼容**：用 `speckit-specify` 生成 Spec 时，允许保留其 `User Scenarios & Testing` / `Requirements` / `Success Criteria` / `Assumptions` 章节。作者必须在 Spec 中给出这些章节与上表必备问题的对照（可在末尾加“附录 A 对照”短表），并确保每条 AC 在验收状态表里有稳定编号。Spec Kit 的 Acceptance Scenarios 是验收标准的一部分：每条被实现或验收依赖的 scenario 必须映射到验收表的一行 AC，不能只引用 `FR`/`SC` 而遗漏 scenario。用 Spec Kit 默认布局时 Spec 目录名可作为 change_id；若把 Spec 移入本仓 `docs/specs/` 扁平布局，保留台账已登记的 change_id，不按文件名重算。工具语法不构成对可判定性、异常分支、错误码和证据要求的豁免。
 
-**Status**: EFFECTIVE.
+## 附录 B: ADR
+
+| 项 | 要求 |
+|---|---|
+| 何时必须写 | 涉及跨服务协议或事件，数据模型或迁移、状态机、并发控制方案、技术选型之一 |
+| 写什么 | 背景、决策、备选方案与否决理由、后果；取代哪一条已批准的 ADR (没有就写“无”) |
+| 怎么核对 | 每条决策写明由哪条 AC、哪条领域不变量或哪个测试核对 |
+```

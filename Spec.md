@@ -34,4 +34,4 @@ Developer 在 ADR 获批前不得开工。
 - 长期记忆与项目状态：[docs/po/MEMORY.md](docs/po/MEMORY.md)
 - 未立项需求池：[docs/po/backlog.md](docs/po/backlog.md)
 - 跨角色裁决与冻结记录（唯一运行状态台账）：[docs/review-tracking.md](docs/review-tracking.md)
-- **协作执行细则（全员必读）**：[docs/collab/CONVENTIONS.md](docs/collab/CONVENTIONS.md)
+- **协作规则（全员必读）**：[AGENTS.md](AGENTS.md)；原则：[.specify/memory/constitution.md](.specify/memory/constitution.md)

@@ -43,7 +43,7 @@
 ### 2.3 Legacy
 
 - `docs/specs/0001/0002` 冻结：不迁移、不复制；需要修改时只做必要原地修改，迁移另案。
-- 新工作默认 `specs/<feature>/spec.md`；0001/0002 保持 `docs/specs/`；不确定先问人类。
+- 本轮不改变 Spec 布局；新工作按当前已批准的 `specs/README.md`/`docs/specs/README.md`；遇到歧义先问人类。
 
 ## 3. 审查者任务书
 

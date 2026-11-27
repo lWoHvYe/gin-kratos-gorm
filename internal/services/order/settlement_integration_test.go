@@ -210,31 +210,53 @@ func applyOrderTestMigration(t *testing.T, db *sql.DB, name string) {
 	if err != nil {
 		t.Fatalf("read migration %s: %v", name, err)
 	}
-	// Drop full-line SQL comments first: the header comments contain ";" and
-	// would otherwise be split into invalid fragments.
-	var cleaned strings.Builder
-	for _, line := range strings.Split(string(body), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "--") {
-			continue
-		}
-		cleaned.WriteString(line)
-		cleaned.WriteString("\n")
-	}
 	ctx := context.Background()
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("open migration connection: %v", err)
 	}
 	defer conn.Close()
-	for _, statement := range strings.Split(cleaned.String(), ";") {
+
+	delimiter := ";"
+	var buffer strings.Builder
+	execute := func(statement string) {
 		statement = strings.TrimSpace(statement)
 		if statement == "" {
-			continue
+			return
 		}
 		if _, err := conn.ExecContext(ctx, statement); err != nil {
 			t.Fatalf("apply migration %s: %v\n%s", name, err, statement)
 		}
 	}
+	flush := func() {
+		text := buffer.String()
+		for {
+			index := strings.Index(text, delimiter)
+			if index < 0 {
+				break
+			}
+			execute(text[:index])
+			text = text[index+len(delimiter):]
+		}
+		buffer.Reset()
+		buffer.WriteString(text)
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		if strings.HasPrefix(strings.ToUpper(trimmed), "DELIMITER ") {
+			flush()
+			delimiter = strings.TrimSpace(trimmed[len("DELIMITER "):])
+			continue
+		}
+		buffer.WriteString(line)
+		buffer.WriteString("\n")
+		flush()
+	}
+	flush()
+	execute(buffer.String())
 }
 
 func seedSettlementOrder(t *testing.T, db *sql.DB, orderNo, status string, paid, refunded int64, refundState string) {

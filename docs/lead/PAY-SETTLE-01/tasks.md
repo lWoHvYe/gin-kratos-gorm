@@ -121,7 +121,7 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 - [ ] **T5.1** 矩阵补 `evidence_path`；统一 `ac-coverage.tsv`（Reviewer Owner）；12 orphan 处置见 `evidence-matrix.md` §4（10 条进 T5、AC-62/64 为 T3 依赖）
 - [ ] **T5.2** `-race`：AC-41/45/46/50/51/54/56 + 退款准入 vs Ship
 - [ ] **T5.3** 故障注入：AC-43/47/50/51/55/56/59/61 + TCC 崩溃续跑 + 惰性对账
-- [ ] **T5.4** 真实迁移测试（非内联 DDL）；AC-60 回填
+- [x] **T5.4** 真实迁移测试（非内联 DDL）；AC-60 回填（`TestT5RealMigrationSchemaAndAC60Backfill`）
 - [ ] **T5.5** AC-57/58 仅引用既有测试并标 AC-REF；不重跑不得标 VERIFIED
 - [ ] **T5.6** Reviewer 精确 base/head 复审（Article I–V + Governance/Workflow）
 - [ ] **T5.7** integration owner 组合验证；人类决定 WIP/Release（Release 不等于本 Plan）

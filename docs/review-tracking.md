@@ -545,6 +545,29 @@ re-review and human merge decision are still required.
 - 证据：`docs/lead/PAY-SETTLE-01/t5.2-t5.3-evidence.md`；新增
   `TestLegacy24hPaymentFailureKeepsCompensating`。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5.3 - AC-59 退款投影先于捕获拒绝
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS，部分）;
+  `级别: 实现变更`; `阶段: 合入前`; base `ec36339`.
+- **实现**：`applyPaymentRefunded` 读取 `paid_cent`；`RefundedCent>0 && paid_cent<=0` →
+  `EVENT_OUT_OF_ORDER`，在 ledger/金额/commitment 写入前返回；消费者可有限重试。
+- **测试**：`TestPaymentRefundedBeforeCaptureRejected`（PENDING_PAYMENT/paid=0 → 错误、
+  refunded_cent 仍 0）；既有累计较老事件仍 SETTLED；full **100.678s PASS**；vet 0。
+- **AC-59**：只完成 1/4（退款投影先于捕获）；收货先于发货、库存失败先于支付成功、缺货解决先于
+  上报未做；**AC-59 仍未验证**；T5.3 仍部分；AC-60/63 不变；`NOT RELEASE`。
+- **NB**：历史 PAID paid=0 会 fail-closed（需回填/告警）；未断言 ledger/commitment 零行；
+  未测 consumer 重试/DLQ 分类。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5.3 AC-59 第一条 PASS（部分）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `ec36339`..工作树（未提交；HEAD=`ec36339`；refund_consumer.go/test；无 api/migration；full 100.678s、targeted 2.597s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-59；AC-60/63 不变）；`docs/adr/0007-payment-settlement-admission.md`
+- 结论: PASS（AC-59 部分（仅第一条）；T5.3 仍部分；AC-60/63 不变；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: 历史 PAID paid=0 fail-closed risk；consumer retry test；ledger/commitment zero-write assertion；AC-59 其余 3 分支；T5.3
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-59 未验证 -> 未验证（仅 1/4 分支；AC-60/63 不变）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 AC-60 收口 PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `4202747`..工作树（未提交；HEAD=`4202747`；proto/migration 0025/allocation/shipping/tests；无 inventory；full 41.902s、proto-guard OK 1002、vet 0、boundary 0）

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -302,5 +303,26 @@ func TestPaymentRefundedKeepsRefundingWhileTccBatchPays(t *testing.T) {
 	}
 	if refundState != refundStateFull || refundStatus != statusRefunded || refunded != 10000 {
 		t.Fatalf("final projection = %s/%s/%d, want FULL/REFUNDED/10000", refundState, refundStatus, refunded)
+	}
+}
+
+func TestPaymentRefundedBeforeCaptureRejected(t *testing.T) {
+	db := orderTestDB(t)
+	svc := consumerTestService(t, db)
+	if _, err := db.Exec(`INSERT INTO orders
+		(order_no,user_id,status,total_cent,pay_cent,paid_cent,settlement_payment_no,
+		 refunded_cent,refund_status,refund_state,expire_at,applied_promotions_json)
+		VALUES ('ORD-OOO-EARLY',1,'PENDING_PAYMENT',10000,0,0,'',0,'','NONE',NOW(3),'[]')`); err != nil {
+		t.Fatal(err)
+	}
+	err := applyPaymentRefunded(context.Background(), svc, paymentRefundedEvent{
+		PaymentNo: "PAY-OOO-EARLY", OrderNo: "ORD-OOO-EARLY", RefundID: "R-OOO-EARLY",
+		AmountCent: 2000, RefundedCent: 2000, CapturedCent: 10000,
+	})
+	if err == nil || !strings.Contains(err.Error(), "EVENT_OUT_OF_ORDER") {
+		t.Fatalf("early refund error = %v", err)
+	}
+	if got := countRows(t, db, `SELECT refunded_cent FROM orders WHERE order_no = 'ORD-OOO-EARLY'`); got != 0 {
+		t.Fatalf("early refund projected %d", got)
 	}
 }

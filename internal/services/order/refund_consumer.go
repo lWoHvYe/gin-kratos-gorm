@@ -58,12 +58,20 @@ func applyPaymentRefunded(ctx context.Context, svc *Service, event paymentRefund
 		return nil
 	}
 	err := db.WithTx(ctx, svc.db, func(tx *sql.Tx) error {
-		var current int64
+		var current, paidCent int64
 		var status, refundStatus, refundState string
-		if err := tx.QueryRowContext(ctx, `SELECT refunded_cent, status, refund_status, refund_state
+		if err := tx.QueryRowContext(ctx, `SELECT refunded_cent, paid_cent, status, refund_status, refund_state
 			FROM orders WHERE order_no = ? FOR UPDATE`, event.OrderNo).
-			Scan(&current, &status, &refundStatus, &refundState); err != nil {
+			Scan(&current, &paidCent, &status, &refundStatus, &refundState); err != nil {
 			return err
+		}
+		// AC-59: a refund projection that arrives before the capture/paid fact
+		// must be rejected, never applied against a zero-paid order. The
+		// consumer framework retries it, so a later capture event can converge.
+		if event.RefundedCent > 0 && paidCent <= 0 {
+			return apperr.Failed("EVENT_OUT_OF_ORDER: refund projection arrived before capture").
+				WithDetails(map[string]any{"order_no": event.OrderNo, "paid_cent": paidCent,
+					"refunded_cent": event.RefundedCent, "status": status})
 		}
 
 		// 1. Converge the durable refund execution ledger first (commitment,

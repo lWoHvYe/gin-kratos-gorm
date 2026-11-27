@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"gin-kratos-gorm/internal/platform/consumer"
 	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/mq"
+	"gin-kratos-gorm/internal/platform/outbox"
 
 	"github.com/nats-io/nats.go"
 )
@@ -41,7 +43,7 @@ func RunRefundReleaseConsumer(ctx context.Context, client *mq.Client, svc *Servi
 		AckWait:        30 * time.Second,
 		HandlerTimeout: 30 * time.Second,
 	}, func(hctx context.Context, msg *nats.Msg) error {
-		return handleRefundRelease(hctx, svc, msg.Data)
+		return handleRefundReleaseEvent(hctx, svc, msg.Data)
 	})
 	if err != nil {
 		logger.Error("subscribe inventory refund release", "error", err)
@@ -53,14 +55,36 @@ func RunRefundReleaseConsumer(ctx context.Context, client *mq.Client, svc *Servi
 // released items as RELEASED so the redelivery skips them. A malformed event
 // (missing warehouse, mismatched release_id, wrong enum) is permanent and goes
 // to the DLQ instead of being guessed.
-func handleRefundRelease(ctx context.Context, svc refundReleaseExecutor, data []byte) error {
+func decodeRefundRelease(data []byte) (*events.RefundReleaseRequested, error) {
 	if err := events.ValidateJSON(events.RefundReleaseEventType, data); err != nil {
-		return consumer.Permanent(err)
+		return nil, err
 	}
 	var event events.RefundReleaseRequested
 	if err := json.Unmarshal(data, &event); err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+// handleRefundReleaseEvent routes the legacy_24h source through the ack-aware
+// transaction; all other sources keep the existing no-ack path.
+func handleRefundReleaseEvent(ctx context.Context, svc *Service, data []byte) error {
+	event, err := decodeRefundRelease(data)
+	if err != nil {
 		return consumer.Permanent(err)
 	}
+	if event.Source == events.RefundReleaseSourceLegacy24h {
+		return handleRefundReleaseLegacyAck(ctx, svc, event)
+	}
+	return handleRefundRelease(ctx, svc, data)
+}
+
+func handleRefundRelease(ctx context.Context, svc refundReleaseExecutor, data []byte) error {
+	eventp, err := decodeRefundRelease(data)
+	if err != nil {
+		return consumer.Permanent(err)
+	}
+	event := *eventp
 	// group_count is the safety fact for a full-reservation release. P0 only
 	// supports single-group orders; missing/0/!=1 is a contract error and must
 	// never release stock.
@@ -126,6 +150,106 @@ func handleRefundRelease(ctx context.Context, svc refundReleaseExecutor, data []
 		}
 	}
 	return nil
+}
+
+// handleRefundReleaseLegacyAck applies every item and appends the ack outbox in
+// one DB transaction (ADR-0011). A retryable error returns without an ack; a
+// permanent data error writes a best-effort FAILED ack and then DLQs.
+func handleRefundReleaseLegacyAck(ctx context.Context, svc *Service, event *events.RefundReleaseRequested) error {
+	err := svc.write(ctx, func(tx *sql.Tx) error {
+		for _, item := range event.Items {
+			if err := svc.applyLegacyReleaseItemTx(ctx, tx, event.OrderNo, item); err != nil {
+				return err
+			}
+		}
+		return appendRefundReleaseAckTx(ctx, tx, event, events.RefundReleaseStatusReleased, "")
+	})
+	if err == nil {
+		return nil
+	}
+	if !isPermanentReleaseError(err) {
+		return err
+	}
+	// The release transaction rolled back; persist a FAILED ack so Order keeps
+	// COMPENSATING instead of waiting forever. Best effort: the DLQ still has
+	// the original message.
+	appendErr := svc.write(ctx, func(tx *sql.Tx) error {
+		return appendRefundReleaseAckTx(ctx, tx, event, events.RefundReleaseStatusFailed, truncateReleaseError(err))
+	})
+	if appendErr != nil {
+		return consumer.Permanent(fmt.Errorf("%w (failed ack: %v)", err, appendErr))
+	}
+	return consumer.Permanent(err)
+}
+
+func (s *Service) applyLegacyReleaseItemTx(ctx context.Context, tx *sql.Tx, orderNo string, item events.RefundReleaseItem) error {
+	r, err := s.reservationByOrderSku(ctx, tx, orderNo, item.SkuID, item.WarehouseID, false)
+	if apperr.IsCode(err, apperr.CodeNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	switch r.status {
+	case statusReleased:
+		return nil
+	case statusHeld:
+		_, err = s.releaseTx(ctx, tx, reserveInput{
+			orderNo: orderNo, skuID: item.SkuID, warehouseID: item.WarehouseID,
+		})
+		return err
+	case statusConfirmed:
+		if r.quantity <= 0 {
+			return apperr.Invalid("confirmed reservation has no quantity")
+		}
+		_, err = s.cancelReservationTx(ctx, tx, orderNo, item.SkuID, item.WarehouseID, r.quantity)
+		return err
+	default:
+		return apperr.Invalid("unknown reservation status %s", r.status)
+	}
+}
+
+func appendRefundReleaseAckTx(ctx context.Context, tx *sql.Tx, event *events.RefundReleaseRequested, status, failure string) error {
+	var existing int
+	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM outbox_events
+		WHERE event_type = ? AND aggregate_id = ?`, events.RefundReleaseCompletedEventType, event.ReleaseID).Scan(&existing)
+	if err != nil {
+		return apperr.Internal("check refund release ack", err)
+	}
+	if existing > 0 {
+		return nil
+	}
+	payload := events.RefundReleaseCompleted{
+		SchemaVersion: 1,
+		ReleaseID:     event.ReleaseID,
+		RefundID:      event.RefundID,
+		OrderNo:       event.OrderNo,
+		Status:        status,
+		Items:         event.Items,
+		ReleasedAt:    time.Now().UTC().Format(time.RFC3339),
+		Error:         failure,
+	}
+	return outbox.Append(ctx, tx, outbox.Event{
+		Topic:         events.RefundReleaseCompletedTopic,
+		AggregateType: "inventory",
+		AggregateID:   event.ReleaseID,
+		EventType:     events.RefundReleaseCompletedEventType,
+		Payload:       payload,
+	})
+}
+
+func isPermanentReleaseError(err error) bool {
+	return apperr.IsCode(err, apperr.CodeInvalidArgument) ||
+		apperr.IsCode(err, apperr.CodeNotFound) ||
+		apperr.IsCode(err, apperr.CodeFailedPrecondition)
+}
+
+func truncateReleaseError(err error) string {
+	text := err.Error()
+	if len(text) > 512 {
+		return text[:512]
+	}
+	return text
 }
 
 // refundReleaseReservation returns "" when the reservation does not exist. A

@@ -467,6 +467,31 @@ re-review and human merge decision are still required.
 - **NB**：ack `items` 未 required/validated；FAILED `error` 可选；FAILED `released_at` 语义待 Phase 2。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5 Phase 2 - Inventory release + ack 同事务
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `9853e01`.
+- **实现**：`source=legacy_24h` 路由到 ack 路径；一个 `svc.write` 事务内逐项
+  `releaseTx`/`cancelReservationTx`，成功写 Inventory outbox
+  `inventory.refund_release_completed`（RELEASED）；永久失败回滚后写 FAILED ack；
+  可重试失败不写 ack；ack 去重。
+- **测试**：同事务释放+ack、重复消息只 1 ack、永久失败 FAILED ack、部分释放回滚
+  （新增）；Inventory `2.412s`/`0.720s` PASS；events PASS；vet 0。
+- **未做**：Order `refund_release_receipts`/ack consumer/Payment last/EXPIRED_REFUND（Phase 3）；
+  AC-63 仍未验证；T5.2/3/5/6/7 未做；`NOT RELEASE`。
+- **NB**：ack 去重无 `(event_type,aggregate_id)` 唯一键（并发 no-row 可重复）；FAILED ack
+  阻断后续 RELEASED 的语义待 Phase 3；FAILED ack 写失败仅 DLQ。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 Phase 2 PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `9853e01`..工作树（未提交；HEAD=`9853e01`；`refund_release_consumer.go` `34b0e8d8…`、integration test `eb9b2d78…`；无 order/migration/api；inventory 2.312s、events 0.103s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-63/INV-46）；`docs/adr/0011-legacy-24h-release-ack.md`
+- 结论: PASS（Phase 2 可合入；Phase 3 Order receipt/Payment 未做；AC-63 仍未验证；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: ack dedup 无 unique/并发；FAILED ack 阻塞 later RELEASED；retryable/partial rollback/CONFIRMED/no-row 测试；decode/group_count 错误无 FAILED ack；Phase 3；AC-63/T5.2/3/5/6/7
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-63 未验证 -> 未验证（Phase 2 release+ack，不是 Payment/EXPIRED_REFUND；报告 §8）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 Phase 1 PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `a9758c7`..工作树（未提交；HEAD=`a9758c7`；`events.go` `eaa8dcb0…`、`registry.go` `fdfc9728…`、tests `da6bdb34…`/`8bd4e100…`；无 order/migration/api；events 0.100s、inventory 0.117s、vet 0、boundary 0）

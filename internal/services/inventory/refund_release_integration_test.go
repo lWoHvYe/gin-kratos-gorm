@@ -3,8 +3,10 @@ package inventory
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"sync"
 	"testing"
+	"time"
 
 	"gin-kratos-gorm/internal/platform/events"
 )
@@ -251,5 +253,132 @@ func TestRefundReleaseConsumerCanceledContextDoesNotRelease(t *testing.T) {
 	}
 	if got := releaseReservationStatus(t, db, "ORD-CTX", 1, 1); got != statusHeld {
 		t.Fatalf("reservation=%s, want HELD", got)
+	}
+}
+
+func legacy24hReleasePayload(t *testing.T, orderNo string, item events.RefundReleaseItem) []byte {
+	t.Helper()
+	refundID := "pay:PAY-LEGACY:legacy_expired"
+	raw, err := json.Marshal(events.RefundReleaseRequested{
+		SchemaVersion: 1,
+		ReleaseScope:  events.RefundReleaseScopeOrderReservationFull,
+		GroupCount:    1,
+		ReleaseID:     events.RefundReleaseID(refundID),
+		RefundID:      refundID,
+		OrderNo:       orderNo,
+		GroupNo:       "G1",
+		Source:        events.RefundReleaseSourceLegacy24h,
+		Reason:        events.RefundReleaseReasonLegacy24hExpiry,
+		Items:         []events.RefundReleaseItem{item},
+		RequestedAt:   time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func TestLegacy24hReleaseAckInSameTransaction(t *testing.T) {
+	db := seckillTestDB(t)
+	seedReleaseStock(t, db, 1, 1, 10, 1)
+	seedReleaseReservation(t, db, "ORD-LEGACY-ACK", 1, 1, 1, statusHeld)
+	svc := &Service{db: db}
+	data := legacy24hReleasePayload(t, "ORD-LEGACY-ACK", events.RefundReleaseItem{SkuID: 1, Quantity: 1, WarehouseID: 1})
+	for i := 0; i < 2; i++ {
+		if err := handleRefundReleaseEvent(context.Background(), svc, data); err != nil {
+			t.Fatalf("attempt %d: %v", i+1, err)
+		}
+	}
+	if got := releaseReservationStatus(t, db, "ORD-LEGACY-ACK", 1, 1); got != statusReleased {
+		t.Fatalf("reservation = %s, want RELEASED", got)
+	}
+	onHand, reserved := releaseStockCounters(t, db, 1, 1)
+	if onHand != 10 || reserved != 0 {
+		t.Fatalf("stock = %d/%d, want 10/0", onHand, reserved)
+	}
+	var payload string
+	if err := db.QueryRow(`SELECT payload FROM outbox_events
+		WHERE event_type = ? AND aggregate_id = ?`, events.RefundReleaseCompletedEventType,
+		events.RefundReleaseID("pay:PAY-LEGACY:legacy_expired")).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	var ack events.RefundReleaseCompleted
+	if err := json.Unmarshal([]byte(payload), &ack); err != nil {
+		t.Fatal(err)
+	}
+	if ack.Status != events.RefundReleaseStatusReleased {
+		t.Fatalf("ack status = %q", ack.Status)
+	}
+	var ackCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM outbox_events WHERE event_type = ?`, events.RefundReleaseCompletedEventType).Scan(&ackCount); err != nil {
+		t.Fatal(err)
+	}
+	if ackCount != 1 {
+		t.Fatalf("ack events = %d, want 1", ackCount)
+	}
+}
+
+func TestLegacy24hReleasePermanentFailureWritesFailedAck(t *testing.T) {
+	db := seckillTestDB(t)
+	seedReleaseStock(t, db, 1, 1, 10, 0)
+	seedReleaseReservation(t, db, "ORD-LEGACY-FAIL", 1, 1, 1, "BROKEN")
+	svc := &Service{db: db}
+	data := legacy24hReleasePayload(t, "ORD-LEGACY-FAIL", events.RefundReleaseItem{SkuID: 1, Quantity: 1, WarehouseID: 1})
+	if err := handleRefundReleaseEvent(context.Background(), svc, data); err == nil {
+		t.Fatal("permanent release failure was accepted")
+	}
+	if got := releaseReservationStatus(t, db, "ORD-LEGACY-FAIL", 1, 1); got != "BROKEN" {
+		t.Fatalf("reservation = %s, want BROKEN", got)
+	}
+	var payload string
+	if err := db.QueryRow(`SELECT payload FROM outbox_events
+		WHERE event_type = ? AND aggregate_id = ?`, events.RefundReleaseCompletedEventType,
+		events.RefundReleaseID("pay:PAY-LEGACY:legacy_expired")).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	var ack events.RefundReleaseCompleted
+	if err := json.Unmarshal([]byte(payload), &ack); err != nil {
+		t.Fatal(err)
+	}
+	if ack.Status != events.RefundReleaseStatusFailed || ack.Error == "" {
+		t.Fatalf("failed ack = %+v", ack)
+	}
+}
+
+func TestLegacy24hReleasePartialFailureRollsBack(t *testing.T) {
+	db := seckillTestDB(t)
+	seedReleaseStock(t, db, 1, 1, 10, 1)
+	seedReleaseReservation(t, db, "ORD-LEGACY-PART", 1, 1, 1, statusHeld)
+	seedReleaseReservation(t, db, "ORD-LEGACY-PART", 2, 1, 1, "BROKEN")
+	svc := &Service{db: db}
+	refundID := "pay:PAY-LEGACY-PART:legacy_expired"
+	raw, err := json.Marshal(events.RefundReleaseRequested{
+		SchemaVersion: 1,
+		ReleaseScope:  events.RefundReleaseScopeOrderReservationFull,
+		GroupCount:    1,
+		ReleaseID:     events.RefundReleaseID(refundID),
+		RefundID:      refundID,
+		OrderNo:       "ORD-LEGACY-PART",
+		GroupNo:       "G1",
+		Source:        events.RefundReleaseSourceLegacy24h,
+		Reason:        events.RefundReleaseReasonLegacy24hExpiry,
+		Items: []events.RefundReleaseItem{
+			{SkuID: 1, Quantity: 1, WarehouseID: 1},
+			{SkuID: 2, Quantity: 1, WarehouseID: 1},
+		},
+		RequestedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := handleRefundReleaseEvent(context.Background(), svc, raw); err == nil {
+		t.Fatal("partial legacy release failure was accepted")
+	}
+	if got := releaseReservationStatus(t, db, "ORD-LEGACY-PART", 1, 1); got != statusHeld {
+		t.Fatalf("first reservation = %s, want HELD after rollback", got)
+	}
+	onHand, reserved := releaseStockCounters(t, db, 1, 1)
+	if onHand != 10 || reserved != 1 {
+		t.Fatalf("stock after rollback = %d/%d, want 10/1", onHand, reserved)
 	}
 }

@@ -267,3 +267,30 @@ func TestRefundReleaseHandlerAcceptsSingleGroupCoveredAudit(t *testing.T) {
 		t.Fatalf("release calls=%d, want 1", len(fake.releaseCalls))
 	}
 }
+
+func TestRefundReleaseLegacy24hAcceptedByConsumer(t *testing.T) {
+	fake := newFakeRefundRelease()
+	fake.statuses[[2]int64{1, 1}] = statusHeld
+	raw, err := json.Marshal(events.RefundReleaseRequested{
+		SchemaVersion: 1,
+		ReleaseScope:  events.RefundReleaseScopeOrderReservationFull,
+		GroupCount:    1,
+		ReleaseID:     events.RefundReleaseID("pay:PAY-1:legacy_expired"),
+		RefundID:      "pay:PAY-1:legacy_expired",
+		OrderNo:       "ORD-LEGACY",
+		GroupNo:       "G1",
+		Source:        events.RefundReleaseSourceLegacy24h,
+		Reason:        events.RefundReleaseReasonLegacy24hExpiry,
+		Items:         []events.RefundReleaseItem{{SkuID: 1, Quantity: 1, WarehouseID: 1}},
+		RequestedAt:   time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := handleRefundRelease(context.Background(), fake, raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.releaseCalls) != 1 || fake.releaseCalls[0].GetOrderNo() != "ORD-LEGACY" {
+		t.Fatalf("legacy_24h release calls = %+v", fake.releaseCalls)
+	}
+}

@@ -42,6 +42,14 @@ const (
 	RefundReleaseTopic     = "shop.inventory.refund_release_requested.v1"
 	RefundReleaseEventType = "inventory.refund_release_requested"
 
+	// RefundReleaseCompletedTopic/EventType is the Inventory ack for a durable
+	// INV-44 release request. Order consumes it into refund_release_receipts and
+	// must not call Payment until it sees RELEASED (ADR-0011).
+	RefundReleaseCompletedTopic     = "shop.inventory.refund_release_completed.v1"
+	RefundReleaseCompletedEventType = "inventory.refund_release_completed"
+	RefundReleaseStatusReleased     = "RELEASED"
+	RefundReleaseStatusFailed       = "FAILED"
+
 	// RefundReleaseScopeOrderReservationFull is the only T1.4b2 release
 	// scope: Inventory releases every reservation of the order, not one group.
 	RefundReleaseScopeOrderReservationFull = "order_reservation_full"
@@ -50,11 +58,15 @@ const (
 	RefundReleaseSourceSystemZero     = "system_zero"
 	RefundReleaseSourceSystemShortage = "system_shortage"
 	RefundReleaseSourceAfterSale      = "aftersale"
+	// RefundReleaseSourceLegacy24h is the ADR-0011 source for the legacy 24h
+	// compensation. It must not be reused by ordinary admissions.
+	RefundReleaseSourceLegacy24h = "legacy_24h"
 
 	RefundReleaseReasonTCCCompensation = "TCC_COMPENSATION"
 	RefundReleaseReasonZeroAfterSale   = "ZERO_AFTER_SALE"
 	RefundReleaseReasonShortageRefund  = "SHORTAGE_REFUND"
 	RefundReleaseReasonAfterSaleRefund = "AFTER_SALE_REFUND"
+	RefundReleaseReasonLegacy24hExpiry = "LEGACY_24H_EXPIRY"
 )
 
 // RefundReleaseID is the deterministic idempotency key of one order-level full
@@ -94,6 +106,20 @@ type RefundReleaseRequested struct {
 	Reason          string              `json:"reason"`
 	Items           []RefundReleaseItem `json:"items"`
 	RequestedAt     string              `json:"requested_at"`
+}
+
+// RefundReleaseCompleted is the Inventory ack for one release_id. RELEASED is
+// the only status that lets Order proceed to Payment; FAILED keeps the legacy
+// row in COMPENSATING.
+type RefundReleaseCompleted struct {
+	SchemaVersion int32               `json:"schema_version"`
+	ReleaseID     string              `json:"release_id"`
+	RefundID      string              `json:"refund_id"`
+	OrderNo       string              `json:"order_no"`
+	Status        string              `json:"status"`
+	Items         []RefundReleaseItem `json:"items,omitempty"`
+	ReleasedAt    string              `json:"released_at"`
+	Error         string              `json:"error,omitempty"`
 }
 
 // PaymentRefunded is the canonical payment refund fact consumed by Order.

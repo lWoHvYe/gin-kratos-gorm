@@ -98,6 +98,7 @@ func TestRefundReleaseSourceReasonPairs(t *testing.T) {
 		RefundReleaseSourceSystemZero:     RefundReleaseReasonZeroAfterSale,
 		RefundReleaseSourceSystemShortage: RefundReleaseReasonShortageRefund,
 		RefundReleaseSourceAfterSale:      RefundReleaseReasonAfterSaleRefund,
+		RefundReleaseSourceLegacy24h:      RefundReleaseReasonLegacy24hExpiry,
 	}
 	for source, reason := range pairs {
 		payload := refundReleasePayload()
@@ -120,5 +121,49 @@ func TestRefundReleaseCoveredGroupAuditIsValidForSingleGroup(t *testing.T) {
 	payload["covered_group_nos"] = []any{"G1"}
 	if err := ValidateJSON(RefundReleaseEventType, marshalPayload(t, payload)); err != nil {
 		t.Fatalf("single-group covered audit rejected: %v", err)
+	}
+}
+
+func refundReleaseCompletedPayload() map[string]any {
+	return map[string]any{
+		"schema_version": 1,
+		"release_id":     "rr:AS-1",
+		"refund_id":      "AS-1",
+		"order_no":       "ORD-1",
+		"status":         RefundReleaseStatusReleased,
+		"items": []any{
+			map[string]any{"sku_id": 1, "quantity": 1, "warehouse_id": 1},
+		},
+		"released_at": "2026-11-27T00:00:00Z",
+	}
+}
+
+func TestRefundReleaseCompletedContract(t *testing.T) {
+	if err := ValidateJSON(RefundReleaseCompletedEventType, marshalPayload(t, refundReleaseCompletedPayload())); err != nil {
+		t.Fatalf("valid ack rejected: %v", err)
+	}
+	failed := refundReleaseCompletedPayload()
+	failed["status"] = RefundReleaseStatusFailed
+	failed["error"] = "inventory unavailable"
+	if err := ValidateJSON(RefundReleaseCompletedEventType, marshalPayload(t, failed)); err != nil {
+		t.Fatalf("valid FAILED ack rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"bad status":       func(p map[string]any) { p["status"] = "OK" },
+		"release mismatch": func(p map[string]any) { p["release_id"] = "rr:AS-2" },
+		"missing order":    func(p map[string]any) { delete(p, "order_no") },
+		"bad timestamp":    func(p map[string]any) { p["released_at"] = "yesterday" },
+		"schema 2":         func(p map[string]any) { p["schema_version"] = 2 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := refundReleaseCompletedPayload()
+			mutate(p)
+			if err := ValidateJSON(RefundReleaseCompletedEventType, marshalPayload(t, p)); err == nil {
+				t.Fatalf("invalid ack accepted: %v", p)
+			}
+		})
+	}
+	if reason, ok := RefundReleaseReasonForSource(RefundReleaseSourceLegacy24h); !ok || reason != RefundReleaseReasonLegacy24hExpiry {
+		t.Fatalf("legacy_24h reason = %q/%v", reason, ok)
 	}
 }

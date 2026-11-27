@@ -454,6 +454,28 @@ re-review and human merge decision are still required.
   迁移归属、t5-status 已提交。下一步 Phase 1（events source + ack 事件）。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5 Phase 1 - legacy_24h + ack 契约
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `a9758c7`.
+- **events**：新增 `legacy_24h` + `LEGACY_24H_EXPIRY`；旧 source 仍封闭；
+  ack `inventory.refund_release_completed`（RELEASED/FAILED、release_id/refund_id/order/released_at）。
+- **Inventory**：consumer 接受 `legacy_24h`（consumer-first）；未发 producer。
+- **未做**：ack producer、Order receipt、Payment-last、migration；AC-63 仍未验证。
+- 测试：events source/ack 正反例 + inventory 接受；`go test ./internal/platform/events -run TestRefundRelease`
+  0.100s、inventory 0.117s PASS；vet 0；boundary 0。
+- **NB**：ack `items` 未 required/validated；FAILED `error` 可选；FAILED `released_at` 语义待 Phase 2。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 Phase 1 PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `a9758c7`..工作树（未提交；HEAD=`a9758c7`；`events.go` `eaa8dcb0…`、`registry.go` `fdfc9728…`、tests `da6bdb34…`/`8bd4e100…`；无 order/migration/api；events 0.100s、inventory 0.117s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-63/INV-46）；`docs/adr/0011-legacy-24h-release-ack.md`
+- 结论: PASS（Phase 1 可合入；Phase 2 Inventory ack 未做；AC-63 仍未验证；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: ack `items` 未 required/validated；FAILED `error` 可选；`released_at` 对 FAILED 语义；Phase 2/3；AC-63/T5.2/3/5/6/7
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-63 未验证 -> 未验证（Phase 1 不是全链路；报告 §7）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 + 证据 PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更（Spec/代码混合）; 阶段: Spec/代码; base..head: `a92c53a..0416bc6`；新增 ADR-0011、T5 plan/status、T5 tests、migration runner；`migrations/api` 0；T5 tests 7.984s、vet 0、boundary 0

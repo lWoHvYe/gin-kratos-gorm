@@ -202,6 +202,7 @@ var refundReleaseReasons = map[string]string{
 	RefundReleaseSourceSystemZero:     RefundReleaseReasonZeroAfterSale,
 	RefundReleaseSourceSystemShortage: RefundReleaseReasonShortageRefund,
 	RefundReleaseSourceAfterSale:      RefundReleaseReasonAfterSaleRefund,
+	RefundReleaseSourceLegacy24h:      RefundReleaseReasonLegacy24hExpiry,
 }
 
 // RefundReleaseReasonForSource returns the canonical reason for a T1.4b2
@@ -216,6 +217,7 @@ func RefundReleaseReasonForSource(source string) (reason string, ok bool) {
 // cannot express.
 var validators = map[string]validateSample{
 	"inventory.refund_release_requested": validateRefundRelease,
+	"inventory.refund_release_completed": validateRefundReleaseCompleted,
 }
 
 // validateRefundRelease enforces INV-44/AGENTS: group identity and per-item
@@ -301,6 +303,36 @@ func validateRefundRelease(sample any) error {
 	return nil
 }
 
+// validateRefundReleaseCompleted enforces the ADR-0011 ack contract: the
+// release identity must match its refund_id, the status is closed, and the ack
+// is timestamped. It carries no money/permit decision.
+func validateRefundReleaseCompleted(sample any) error {
+	ev, ok := sample.(RefundReleaseCompleted)
+	if !ok {
+		return fmt.Errorf("refund release completed validator received %T", sample)
+	}
+	if ev.SchemaVersion != 1 {
+		return fmt.Errorf("schema_version must be 1, got %d", ev.SchemaVersion)
+	}
+	refundID := strings.TrimSpace(ev.RefundID)
+	if refundID == "" {
+		return fmt.Errorf("refund_id is required")
+	}
+	if strings.TrimSpace(ev.ReleaseID) != RefundReleaseID(refundID) {
+		return fmt.Errorf("release_id must be %q, got %q", RefundReleaseID(refundID), ev.ReleaseID)
+	}
+	if strings.TrimSpace(ev.OrderNo) == "" {
+		return fmt.Errorf("order_no is required")
+	}
+	if ev.Status != RefundReleaseStatusReleased && ev.Status != RefundReleaseStatusFailed {
+		return fmt.Errorf("status must be RELEASED or FAILED, got %q", ev.Status)
+	}
+	if _, err := time.Parse(time.RFC3339, strings.TrimSpace(ev.ReleasedAt)); err != nil {
+		return fmt.Errorf("released_at must be RFC3339: %w", err)
+	}
+	return nil
+}
+
 var schemas = map[string]schema{
 	"order.created":                    {orderEvent{}, []string{"order_no", "user_id", "items"}},
 	"order.cancelled":                  {orderEvent{}, []string{"order_no", "user_id", "status", "cancelled_at", "items"}},
@@ -320,6 +352,9 @@ var schemas = map[string]schema{
 	"inventory.refund_release_requested": {RefundReleaseRequested{}, []string{
 		"schema_version", "release_scope", "group_count", "release_id", "refund_id", "order_no", "group_no",
 		"source", "reason", "items", "requested_at",
+	}},
+	"inventory.refund_release_completed": {RefundReleaseCompleted{}, []string{
+		"schema_version", "release_id", "refund_id", "order_no", "status", "released_at",
 	}},
 	"inventory.reserved":              {inventoryEvent{}, []string{"reservation_no", "order_no", "sku_id", "warehouse_id", "quantity", "status"}},
 	"inventory.confirmed":             {inventoryEvent{}, []string{"reservation_no", "order_no", "sku_id", "warehouse_id", "quantity", "status"}},

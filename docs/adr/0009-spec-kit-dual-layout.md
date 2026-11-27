@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| Status | **Accepted**（2026-11-27 人类批准 Spec 时同批接受；实现 PASS） |
+| Status | **Superseded by ADR-0012**（2026-11-28 单布局迁移） |
 | Change ID | `SDD-STRUCT-ALIGN-01` |
 | 取代 | 无 |
 | 关联 | `specs/sdd-struct-align-01/spec.md`、`docs/adr/0007-payment-settlement-admission.md`（无冲突） |

@@ -1,23 +1,17 @@
-# v3.0 adoption — process only
+# v3.0 adoption
 
-Status: trial branch applied (`d90d850`); merge only after reviewer + human approval.
+Status: applied on `reform/lean-core`; merge after reviewer + human approval.
 
 ## Scope
 
-- v3.0 只改变角色/流程/审查/证据；**不改 Spec 布局**。
-- `docs/specs/0001/0002` 保持原样：不迁移、不复制、不改路径。
-- `specs/` 现有布局与 README 保持原样；不新建 per-change 第二份 Spec。
-- `specs/sdd-struct-align-01` 保持原样；不标 historical、不做 AC 位移。
-- `Spec.md`、`specs/README.md`、`docs/specs/README.md` 本轮不改。
-- ADR-0009 保持原样；Spec 权威/迁移是另案。
-
-## 采用
-
-1. 应用 `CONSTITUTION.v3.md`、`AGENTS.v3.md` 的 process 部分；
-2. 不执行任何 Spec 文件移动/README 切换；
-3. 记录 adoption 的 change_id、base/head、reviewer/human 裁决；
-4. 跑两个真实变更，按 `PILOT.md` 记录指标。
+- 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
+- `0001/0002` 已从 `docs/specs/` 迁移；只改链接/路径，不改业务/AC。
+- `0001` 为 frozen reference；`0002` 为 active；`sdd-struct-align-01` 为 historical。
+- `docs/specs/` 只保留重定向 README；不保留副本。
+- `Spec.md` 只做指针；ADR-0009 由 ADR-0012 取代。
 
 ## Rollback
 
-- revert v3.0 process commit；没有文件迁移需要反向恢复。
+- 把 `specs/0001.../spec.md`、`specs/0002.../spec.md` 移回 `docs/specs/`；
+- 恢复 `Spec.md`/`specs/README`/`docs/specs/README`/ADR-0009 header/sdd status；
+- 不留副本。

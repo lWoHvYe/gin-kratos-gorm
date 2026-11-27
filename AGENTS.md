@@ -39,10 +39,12 @@
 - 同一时间只推进一个 change_id；并行需人类批准。
 - 实现工具不得无人值守连续执行；`speckit-implement` 按阶段分批。
 
-### 2.3 Spec 布局（本轮不改）
+### 2.3 Spec 布局
 
-- `docs/specs/0001/0002` 保持原样：不迁移、不复制、不改路径；需要修改另行批准，迁移另案。
-- 新工作按当前已批准的 `specs/README.md`/`docs/specs/README.md`；两处冲突先问人类。
+- 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
+- `0001` 为 frozen reference（不再新增/改 AC）；`0002` 为 active。
+- `docs/specs/` 只做重定向；`specs/sdd-struct-align-01` 为 historical，不进入当前 index。
+- 新工作 `specs/<feature>`；变更原地更新；evidence 放 `specs/<id>/evidence/<change_id>/`。
 - 不得同时维护同一能力的两份 active Spec。
 
 ## 3. 审查者任务书
@@ -95,7 +97,7 @@ base: <sha>; head: <sha>; 阶段: Spec | 代码
 每次代码交付满足宪法 11–15，并带对应 AC：
 
 - 证据：diff、测试日志（绑定 `git rev-parse HEAD`）、【测试范围】【未覆盖范围】【取舍】。
-- 新 Spec 证据放 Spec 同目录 `evidence/`；在途可沿用 `docs/implementation/**`；治理变更放 `docs/collab/qc-reports/`。
+- 证据放 `specs/<id>/evidence/<change_id>/`；在途可沿用 `docs/implementation/**`；治理变更放 `docs/collab/qc-reports/`。
 - 台账写精确路径和 HEAD；AC 位移写路径。
 - 高风险按宪法 12 附并发/故障证据；不适用须人类书面豁免。
 - 缺一项，审查者按证据不足退回。

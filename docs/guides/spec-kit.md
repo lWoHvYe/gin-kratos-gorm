@@ -14,12 +14,12 @@
 - 只有 `specify` 是 `plan` 前严格必需的；`clarify`/`checklist`/`analyze` 是可选质量门。
 - 不要求每个变更生成全套 `spec.md/plan.md/tasks.md/research/contracts/quickstart`。
 
-## 2. Spec 持久化（本轮不改布局）
+## 2. Spec 持久化
 
-- `docs/specs/` 与 `specs/` 按现有已批准 README 使用；不迁移、不复制。
-- 新工作按当前已批准路径；不新建 per-change 第二份 Spec；不确定先问人类。
-- Spec 布局/迁移另案，不在 v3 process-only 范围内。
-- 一个能力一个权威；不得同时维护两份 active Spec。
+- 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
+- `0001` 为 frozen reference；`0002` 为 active；`sdd-struct-align-01` 为 historical。
+- `docs/specs/` 只做重定向；不保留副本。
+- 新工作 `specs/<feature>`；变更原地更新；evidence 放 `specs/<id>/evidence/<change_id>/`。
 
 ## 3. 命令注意事项
 

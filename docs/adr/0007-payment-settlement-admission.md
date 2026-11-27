@@ -18,7 +18,7 @@
   - [0007-amd1-addendum-t14b1-payment-sigma.md](0007-amd1-addendum-t14b1-payment-sigma.md)——**DRAFT（未批准、未生效）**，其 R-1…R-5 未被任何批准记录接受；不得作为实现/验收依据（C-04 的原子性以本文 §5.9 为准，不由该文件授权）。
   - [0007-amd1-addendum-t14b2-inv44-group.md](0007-amd1-addendum-t14b2-inv44-group.md)——**superseded / withdrawn（2026-11-25）**，已由 `docs/lead/PAY-SETTLE-01/t1.4b2-design.md` Rev 1.3 取代；其 B1/B2/B3 不并入本 ADR。
   - [0007-payment-settlement-admission-amd1-c04-c05-handoff.md](0007-payment-settlement-admission-amd1-c04-c05-handoff.md)——**handoff（契约输入清单，非批准）**；其引用的 D-27/D-28/D-29 输入已在正文实现，文件本身不构成契约。
-- Spec: [SPEC-0002 v1.10](../specs/0002-payment-settlement-admission.md)（v1.10；本 ADR 未修改 SPEC；SPEC 的 `依据` 行已指向本 ADR **Rev 2.3**（PO 2026-11-25 修复））。
+- Spec: [SPEC-0002 v1.10](../../specs/0002-payment-settlement-admission/spec.md)（v1.10；本 ADR 未修改 SPEC；SPEC 的 `依据` 行已指向本 ADR **Rev 2.3**（PO 2026-11-25 修复））。
 - Integration owner: **Director**（人类）；设计 owner/秘书：System Architect；deputy：待指派
 - Related: [architecture-baseline.md](../architecture-baseline.md)（INV-01…16）、[ADR 0005](0005-fulfillment-quantity-split.md)（履约/售后基线）、[ADR 0006](0006-collab-gates.md)（retired）、[ext-review-1123-triage.md](../ext-review-1123-triage.md)
 - Change ID: `PAY-SETTLE-01`

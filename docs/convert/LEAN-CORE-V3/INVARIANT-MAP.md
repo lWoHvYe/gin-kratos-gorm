@@ -1,7 +1,7 @@
 # Invariant Map — v3.0
 
 > 旧宪法/AGENTS/README 是来源材料，不是兼容基线。保留不变量，替换机制；
-> 本轮只改流程；Spec 布局、0001/0002、ADR-0009 原样保留，迁移另案。
+> 单布局已迁移：active Spec 在 `specs/`；`docs/specs/` 只重定向；ADR-0009 被 ADR-0012 取代。
 
 | 旧内容 | 处理 | v3.0 落点 |
 |---|---|---|
@@ -22,8 +22,8 @@
 | L0/L1/L2、QC 五窗口、审计清单 | 退役/非规范 | 仅 `docs/checklists/**` 参考，不作验收 |
 | bugfix 特殊路由 | 不做 | bugfix 只是实现/契约分类（宪法 I / 2） |
 | verification matrix / mutation / state model 强制 | 不进核心 | 非规范试点指南 |
-| 0001/0002 迁移；Spec 双/单布局 | 迁移延后；布局不变 | 0001/0002 原样；现有 `specs/` 规则不变；见 `ADOPTION.md` |
-| `Spec.md`/README 状态表/索引 | 本轮不改 | 保持原样；Spec 权威另案 |
+| 0001/0002 迁移；Spec 双/单布局 | **已迁移为单一布局** | `specs/0001.../spec.md`、`specs/0002.../spec.md`；`docs/specs/` 重定向；见 `ADOPTION.md` |
+| `Spec.md`/README 状态表/索引 | **改为指针/唯一 index** | `Spec.md` 指针；`specs/README` 唯一 index；`docs/specs/README` 重定向 |
 | 以报告/commit 数量衡量 | 不保留 | 以 review 轮次/lead time/escaped blocker 衡量（`PILOT.md`） |
 
 ## 设计原则
@@ -31,5 +31,5 @@
 1. **安全不变量优先于流程精简**：可以删角色/文档，不能删 Fail-Closed、permit/退款、证据、独立审查。
 2. **机制可替换，教训不可丢**：旧角色是机制；旧事故教训是约束。
 3. **旧文本不逐条兼容**：v3.0 是替代文本；冲突以 v3.0 为准，旧文本归档。
-4. **live 状态另案**：0001/0002、ADR-0009、Spec 布局不在本轮改变；迁移另案。
+4. **live 状态已迁移**：0001/0002 在 `specs/`；ADR-0009 由 ADR-0012 取代；`sdd` historical。
 5. **可试错**：v3.0 只跑 2 个 change；指标不改善就回滚。

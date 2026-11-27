@@ -17,7 +17,6 @@
 | 写 ADR/状态机/并发设计 | `docs/checklists/design.md`、`docs/adr/template.md` |
 | 审查 | `docs/checklists/reviewer.md` |
 | 用 Spec Kit | `docs/guides/spec-kit.md` |
-| bugfix | `docs/implementation/bugfix-runbook.md` |
 | 历史 | `docs/archive/**`、`docs/convert/**`、旧 QC 报告：**不默认加载** |
 
 ## 权威

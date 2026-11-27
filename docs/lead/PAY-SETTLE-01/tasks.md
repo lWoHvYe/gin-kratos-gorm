@@ -97,7 +97,7 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 - [x] **T3.3** 准入前拒绝/取消不创建 commitment；准入后失败进持久任务/人工（既有校验；`TestRejectedAdmissionWritesNoCommitment`）
 - [ ] **T3.4** proto/存储：行、商品/运费组成、责任、`UNDETERMINED/168h`
 - [ ] **T3.5** `AdmitRefund`：行层 INV-24 + 组层 + Payment 三层；未离仓整组；已离仓部分
-- [ ] **T3.6** AfterSales/缺货责任→可退运费唯一 Owner；Order 只校验
+- [x] **T3.6** AfterSales/缺货责任→可退运费唯一 Owner；Order 只校验（映射已接；168h hold 用既有 worker）
 - [ ] **T3.7** 测试：行超限、责任运费、168h、未离仓整组、RELEASED 边界、AC-14/31/32 回归
 
 ## Phase 4 — Fail-closed / shadow（Owner: Developer + Architect；依赖: T1/T3）

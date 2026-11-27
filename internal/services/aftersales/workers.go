@@ -17,6 +17,7 @@ import (
 	"gin-kratos-gorm/internal/platform/id"
 	"gin-kratos-gorm/internal/platform/metrics"
 	"gin-kratos-gorm/internal/platform/outbox"
+	"gin-kratos-gorm/internal/platform/refundpolicy"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/status"
@@ -489,14 +490,12 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 	// line-ledger transaction. It is idempotent by after_sale_no, so the
 	// ordinary Refund path and this worker converge on one admission result.
 	if s.orders != nil {
-		amount := row.effectiveAmountCent
-		if amount <= 0 {
-			amount = row.amountCent
+		admissionReq, aerr := s.refundAdmissionRequest(ctx, afterSaleNo, row, groupNo)
+		if aerr != nil {
+			s.releaseRefundTask(ctx, afterSaleNo, owner, aerr)
+			return aerr
 		}
-		if _, err := s.orders.AdmitRefund(ctx, &pb.AdmitRefundRequest{
-			RefundId: afterSaleNo, OrderNo: row.orderNo, GroupNo: groupNo,
-			AmountCent: amount, Source: refundAdmissionSource(row),
-		}); err != nil {
+		if _, err := s.orders.AdmitRefund(ctx, admissionReq); err != nil {
 			if reason, review := refundReviewReason(err); review {
 				// AC-69/AC-72: mirror the review on the task and keep it PENDING;
 				// releaseRefundTask stops the FAILED_PERMANENT promotion for this
@@ -671,6 +670,92 @@ func (s *Service) processRefundTask(ctx context.Context, afterSaleNo string) err
 		return apperr.Internal("append aftersale.completed", err)
 	}
 	return tx.Commit()
+}
+
+// refundAdmissionRequest builds the T3.6 line/responsibility payload for
+// Order.AdmitRefund. after_sale_items already carries line_no and the
+// per-line pending amount; freight is the effective amount not covered by
+// goods lines. A legacy row with no positive line amounts keeps the old
+// amount-only request.
+func (s *Service) refundAdmissionRequest(ctx context.Context, afterSaleNo string, row *afterSaleRow, groupNo string) (*pb.AdmitRefundRequest, error) {
+	amount := row.effectiveAmountCent
+	if amount <= 0 {
+		amount = row.amountCent
+	}
+	lines, err := s.loadRefundLines(ctx, afterSaleNo)
+	if err != nil {
+		return nil, err
+	}
+	return buildRefundAdmissionRequest(afterSaleNo, row.orderNo, groupNo, refundAdmissionSource(row),
+		amount, row.responsibilityParty, row.responsibilityCode, lines)
+}
+
+// loadRefundLines reads the line composition recorded by CreateAfterSale.
+func (s *Service) loadRefundLines(ctx context.Context, afterSaleNo string) ([]*pb.RefundLine, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT i.line_no, i.quantity, i.pending_amount_cent
+		FROM after_sale_items i JOIN after_sales a ON a.id = i.after_sale_id
+		WHERE a.after_sale_no = ? ORDER BY i.line_no, i.id`, afterSaleNo)
+	if err != nil {
+		return nil, apperr.Internal("load after sale refund lines", err)
+	}
+	defer rows.Close()
+	var lines []*pb.RefundLine
+	for rows.Next() {
+		var lineNo, quantity int32
+		var goods int64
+		if err := rows.Scan(&lineNo, &quantity, &goods); err != nil {
+			return nil, apperr.Internal("scan after sale refund line", err)
+		}
+		if goods < 0 {
+			return nil, apperr.Failed("after-sale refund line has a negative pending amount").
+				WithDetails(map[string]any{"after_sale_no": afterSaleNo, "line_no": lineNo, "goods_cent": goods})
+		}
+		if goods == 0 {
+			continue
+		}
+		lines = append(lines, &pb.RefundLine{LineNo: lineNo, Quantity: quantity, GoodsCent: goods})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, apperr.Internal("iterate after sale refund lines", err)
+	}
+	return lines, nil
+}
+
+// buildRefundAdmissionRequest is the pure part of the T3.6 mapping: line goods
+// plus the effective amount's freight remainder. A legacy amount-only row (no
+// positive line amounts) stays amount-only so pre-composition after-sales keep
+// working. UNDETERMINED responsibility may not release freight.
+func buildRefundAdmissionRequest(refundID, orderNo, groupNo, source string, amount int64,
+	responsibility, reason string, lines []*pb.RefundLine) (*pb.AdmitRefundRequest, error) {
+	responsibility = refundpolicy.Normalize(responsibility)
+	reason = refundpolicy.Normalize(reason)
+	req := &pb.AdmitRefundRequest{
+		RefundId: refundID, OrderNo: orderNo, GroupNo: groupNo,
+		AmountCent: amount, Source: source, Responsibility: responsibility, ReasonCode: reason,
+	}
+	if len(lines) == 0 {
+		return req, nil
+	}
+	var goods int64
+	for _, line := range lines {
+		if line.GetGoodsCent() < 0 || line.GetQuantity() < 0 {
+			return nil, apperr.Failed("after-sale refund line is negative").
+				WithDetails(map[string]any{"refund_id": refundID, "line_no": line.GetLineNo()})
+		}
+		goods += line.GetGoodsCent()
+	}
+	freight := amount - goods
+	if freight < 0 {
+		return nil, apperr.Failed("after-sale refund lines exceed the effective amount").
+			WithDetails(map[string]any{"refund_id": refundID, "goods_cent": goods, "amount_cent": amount})
+	}
+	if responsibility == "UNDETERMINED" && freight > 0 {
+		return nil, apperr.Failed("UNDETERMINED responsibility must hold freight").
+			WithDetails(map[string]any{"refund_id": refundID, "freight_cent": freight})
+	}
+	req.Lines = lines
+	req.FreightRefundableCent = freight
+	return req, nil
 }
 
 // processZeroRefundTask completes a zero-amount after-sale through Order's

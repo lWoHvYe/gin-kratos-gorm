@@ -391,6 +391,30 @@ re-review and human merge decision are still required.
 - NB-1/NB-5 测试已在 reviewer 之后补强（仅测试）；NB-2 产品边界仍建议书面确认；`NOT RELEASE`。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T3.6 - AfterSales 退款行/责任映射
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（SCOPED-PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `07291e6`.
+- **映射**：`processRefundTask` 用 `after_sale_items.line_no/pending_amount_cent` 组装
+  `RefundLine`；`freight = effective_amount - Σ goods`；传 `responsibility/reason`；
+  负数 pending fail-closed；responsibility/reason 归一化；`UNDETERMINED + freight>0` 拒绝。
+- **兼容**：pending 全 0 的 legacy 行保持 amount-only；zero 路径未改；shortage/TCC 回归 PASS。
+- **测试**：`TestBuildRefundAdmissionRequest*`（含 lower-case 归一化）；AfterSales 定向
+  `TestAC14|TestAC30|TestAC33|TestFreightResponsibilityDisabled` **2.564s PASS**；`go vet` 0。
+- **未做/NB**：纯运费（所有行 goods=0）仍需产品确认（NB-1）；缺真实 `processRefundTask`
+  断言 `AdmitRefundRequest` 的集成测试（NB-3）；T3.4/T3.5 仍 `[ ]`；AC-60/63 仍未验证。
+- **说明**：工作树 `.dsh/.specify` 的 Spec Kit 1.4.5 自动升级未纳入本提交。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.6 AfterSales→Order 映射 SCOPED-PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `07291e6`..工作树（未提交；HEAD=`07291e6`；`workers.go` `3ea335a4…`、`refund_admission_request_test.go` `cc7260b6…`、plan `2bf321aa…`；`.dsh/.specify` 自动升级排除；`internal/services/order`/api/migrations/docs/specs 未改；pure 0.089s、aftersales 2.074s、order 52.293s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-60/AC-63）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3 / Amd1 §4.4
+- 结论: SCOPED-PASS（T3.6 AfterSales→Order 映射；168h hold 由既有 AfterSales worker；T3.6 可标 [x] 映射范围；T3.4/T3.5 仍 [ ]）；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无; 待办: 无真实 processRefundTask 集成断言（NB-3）；freight-only goods0/freight>0 归入 legacy amount-only（NB-1）；negative pending 被跳过（NB-2）；helper UNDETERMINED 未 normalize（NB-4）；no-lines 早返回绕过 UNDETERMINED 检查（NB-5）；AC-60/63 未验证
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60/AC-63 未验证 -> 未验证（T3.6 映射子集；报告 §0/§9）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.4/T3.5 Phase 2 SCOPED-PASS（Order 侧）
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `5db0f0b`..工作树（未提交；HEAD=`5db0f0b`；`refund_composition.go` `8aa0d0ef…`、`aftersales/responsibility.go` `87237f8d…`、plan `4758182f…`、settled test `7110890c…`；新增 `refundpolicy` `61106c25…`/`31dbba21…`、`t3_5_phase2_integration_test.go` `722a1f75…`；`refund_admission.go` 未改；`tasks.md` T3.4/T3.5 仍 `[ ]`；order 42.730s、policy 0.063s、AfterSales 定向 1.302s、vet 0、boundary 0）

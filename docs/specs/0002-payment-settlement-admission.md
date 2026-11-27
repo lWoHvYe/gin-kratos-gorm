@@ -1078,7 +1078,7 @@ REVIEW_REQUIRED --新 refund_id（旧承诺先按 AC-62 处置）--> 新申请�
 | AC-59 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:28`） | reviewer-r04（T5.0） |
 | AC-60 | 未验证 | 测试 | -（无证据；无 `TestAC60`，仅生产注释 `tcc_precheck.go:97`/`legacy_resolution.go:14`/`refund_admission.go:679`；`ac-coverage.tsv:29`） | reviewer-r04（T5.0）；reviewer-c3（B-1 落表） |
 | AC-61 | 有引用 | 可观测指标 | `docs/ops.md`（runbook/人工重放）；`internal/services/order/ac50_review_audit_fault_test.go:18` | reviewer-r04（T0–T8） |
-| AC-62 | 有引用 | 测试 | `internal/services/order/ac50_review_integration_test.go:102`；`internal/services/order/refund_release_integration_test.go:279` | reviewer-r04（T0–T8） |
+| AC-62 | 已验证 | 测试 | T3.2 ops CLI：`ReleaseRefundCommitment` 只 `RESERVED→RELEASED`、D-24 字段/阈值/双人/过期/金额/幂等/并发/dry-run；`TestReleaseCommitment*` 7 PASS；`REV-PAY-SETTLE-01-T3.2.md`；“仅授权角色”/Payment 对账窗口为 ops 部署控制 NB | reviewer-syntax |
 | AC-63 | 未验证 | 测试 | -（无证据；无 `TestAC63`，仅生产注释；`ac-coverage.tsv:32`） | reviewer-r04（T5.0）；reviewer-c3（B-1 落表） |
 | AC-64 | 未验证 | 测试 | -（无证据；`ac-coverage.tsv:33`） | reviewer-r04（T5.0） |
 | AC-65 | 有引用 | 测试 | `internal/services/order/t17_evidence_integration_test.go:26,83,204,306,371,442`；`internal/services/order/tcc_review_integration_test.go:34,137,228`（MySQL+race @ 3ce0d7d） | reviewer-r04（T0–T8） |

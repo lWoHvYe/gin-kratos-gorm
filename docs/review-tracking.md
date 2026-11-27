@@ -406,6 +406,32 @@ re-review and human merge decision are still required.
 - **说明**：工作树 `.dsh/.specify` 的 Spec Kit 1.4.5 自动升级未纳入本提交。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T3.2 - 人工释放 ops CLI
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（SCOPED-PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `4f7793c`.
+- **服务**：`ReleaseRefundCommitment` 只 `RESERVED→RELEASED`；D-24 字段/阈值/双人复核/过期/
+  金额一致；reason 封闭枚举 + `refund_applications` 状态；写 `refund_commitment_releases` +
+  CAS；同 release_id 幂等（含 authorized_at/expires_at/reviewed_at），同 refund/authorization
+  冲突；`DryRun` 零写入；不碰 permit/订单/组/Payment。
+- **CLI**：`cmd/refund-commitment-release`，默认 dry-run，`-apply` 唯一写开关；exit 2 配置/1 业务。
+- **测试**：9 个 `TestReleaseCommitment*` PASS（成功+幂等+reviewed_at、SETTLED、双人复核、
+  过期/金额/order/group、trigger 变体、授权复用、dry-run、并发）；full 41.502s PASS；vet 0。
+- **AC-62**：有引用 → **已验证**（reviewer 更新 `docs/specs/0002` 验收表）；AC-60/63 仍未验证。
+- **NB**：仅授权角色依赖 ops 主机/DB 凭证/授权流程（部署控制，人类批准 A）；Payment 对账窗口
+  由 ops runbook 在 `-apply` 前核对；`reviewed_at` 幂等已补；permit/订单/组不变与 trigger 变体
+  已补测试。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.2 人工释放 ops CLI SCOPED-PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `4f7793c`..工作树（未提交；HEAD=`4f7793c`；`refund_commitment_release.go` `2ba93949…`、CLI `d3ccfc6d…`、test `b9a4ce24…`、plan `86d714cb…`；`.gitignore`/drop list 测试卫生；7 tests 6.122s、full 63.232s、vet/build 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-62/INV-45/D-24）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3 / Amd1 §4.3/§6.4
+- 结论: SCOPED-PASS（T3.2 ops CLI；“仅授权角色”依赖 ops 部署控制；AC-60/63 仍未验证）；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无; 待办: ops runbook 在 -apply 前核对 Payment 对账窗口（AC-62）；reviewed_at 未参与幂等比较；测试未显式断言 permit/order/group 不变；USER_WITHDRAW/CANCELLED/同 authorization 不同 release 测试缺口；AC-60/63 未验证
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-62 有引用 -> 已验证（T3.2 ops CLI；`TestReleaseCommitment*` 7 PASS；角色/对账窗口部署控制 NB）；AC-60/AC-63 未验证 -> 未验证
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.6 AfterSales→Order 映射 SCOPED-PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `07291e6`..工作树（未提交；HEAD=`07291e6`；`workers.go` `3ea335a4…`、`refund_admission_request_test.go` `cc7260b6…`、plan `2bf321aa…`；`.dsh/.specify` 自动升级排除；`internal/services/order`/api/migrations/docs/specs 未改；pure 0.089s、aftersales 2.074s、order 52.293s、vet 0、boundary 0）

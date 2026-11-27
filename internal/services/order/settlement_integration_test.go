@@ -46,7 +46,7 @@ func orderTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	for _, table := range []string{"order_refund_admissions", "order_refund_commitments",
-		"order_refund_commitment_lines", "refund_applications", "refund_batches",
+		"order_refund_commitment_lines", "refund_commitment_releases", "refund_applications", "refund_batches",
 		"order_shipping_permits", "order_fulfillment_groups", "order_items",
 		"order_allocation_snapshots", "order_allocation_decisions", "order_shortage_cases",
 		"order_reconciliation_diffs", "order_status_logs", "orders", "outbox_events"} {

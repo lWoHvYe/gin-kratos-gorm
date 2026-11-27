@@ -559,6 +559,30 @@ re-review and human merge decision are still required.
   未测 consumer 重试/DLQ 分类。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5.3 - AC-59 3/4 + AC-57 CREATED
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS，部分）;
+  `级别: 实现变更`; `阶段: 合入前`; base `54013a6`.
+- **缺货解决先于上报**：无 case → `EVENT_OUT_OF_ORDER` + Warn，不建案/不写 outbox。
+- **收货先于发货 / AC-57 CREATED**：`confirmReceiptTx` 仅 `SHIPPED/RECEIVED`，其余
+  （含 CREATED）→ `EVENT_OUT_OF_ORDER`，在 receipt/evidence/status 写入前拒绝。
+- **测试**：`TestAC59ShortageResolutionBeforeReportRejected`、
+  `TestAC59ReceiptBeforeShipmentRejected`；order **40.648s**、fulfillment **5.660s PASS**；vet 0。
+- **AC-59 3/4**（库存失败先于支付成功未做）；**AC-57 部分**（仅 CREATED）；AC-60/63 不变；
+  T5.3 仍部分；`NOT RELEASE`。
+- **NB**：无 case 告警仅 Warn（无指标）；未来新 shipment 状态会被守卫判乱序；无 CANCELLED/RECEIVED
+  新专门测试。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5.3 AC-59 第 2/3 分支 + AC-57 CREATED PASS（部分）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `54013a6`..工作树（未提交；HEAD=`54013a6`；shortage/delivery/tests；无 api/migration；order 40.648s、fulfillment 5.660s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-59/AC-57；AC-60/63 不变）；`docs/adr/0007-payment-settlement-admission.md`
+- 结论: PASS（AC-59 3/4；AC-57 部分（仅 CREATED）；AC-60/63 不变；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: shortage 告警/metric；AC-57 其余条款；AC-59 库存失败分支；T5.3
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-59 未验证 -> 未验证（3/4）；AC-57 未验证 -> 未验证（部分 CREATED）；AC-60/63 不变
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5.3 AC-59 第一条 PASS（部分）
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `ec36339`..工作树（未提交；HEAD=`ec36339`；refund_consumer.go/test；无 api/migration；full 100.678s、targeted 2.597s、vet 0、boundary 0）

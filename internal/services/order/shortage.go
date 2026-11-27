@@ -124,7 +124,9 @@ func (s *Service) ChooseShortageResolution(ctx context.Context, req *pb.ChooseSh
 		FROM order_shortage_cases WHERE order_no = ? AND group_no = ?`, orderNo, groupNo).
 		Scan(&status, &restockEta, &deadline)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, apperr.NotFound("shortage case not found")
+		s.log.Warn("shortage resolution before report", "order_no", orderNo, "group_no", groupNo)
+		return nil, apperr.Failed("EVENT_OUT_OF_ORDER: shortage resolution arrived before the shortage report").
+			WithDetails(map[string]any{"order_no": orderNo, "group_no": groupNo})
 	}
 	if err != nil {
 		return nil, apperr.Internal("load shortage case", err)

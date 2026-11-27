@@ -386,6 +386,12 @@ func (s *Service) confirmReceiptTx(ctx context.Context, shipmentNo, source, evid
 	if status == statusCancelled {
 		return false, apperr.Failed("shipment was cancelled")
 	}
+	if status != statusShipped && status != statusReceived {
+		// AC-59/AC-57: a receipt before shipment (notably CREATED) is an
+		// out-of-order event; reject it without writing evidence or status.
+		return false, apperr.Failed("EVENT_OUT_OF_ORDER: receipt arrived before shipment").
+			WithDetails(map[string]any{"shipment_no": shipmentNo, "status": status})
+	}
 	var openDisputes int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM delivery_disputes
 		WHERE shipment_no = ? AND status = ?`, shipmentNo, disputeOpen).Scan(&openDisputes); err != nil {

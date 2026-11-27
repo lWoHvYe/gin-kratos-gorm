@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -452,5 +453,32 @@ func TestAC20DuplicateDeliveredDoesNotShrinkWindow(t *testing.T) {
 	}
 	if receipts != 0 {
 		t.Fatalf("auto confirmed before delivered_at+24h: %d", receipts)
+	}
+}
+
+func TestAC59ReceiptBeforeShipmentRejected(t *testing.T) {
+	db := fulfillmentTestDB(t)
+	if _, err := db.Exec(`INSERT INTO shipments (shipment_no, order_no, status)
+		VALUES ('SHIP-AC59-CREATED','ORD-AC59-CREATED','CREATED')`); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{db: db}
+	if _, err := svc.confirmReceiptTx(context.Background(), "SHIP-AC59-CREATED", receiptUser, "user:1"); err == nil ||
+		!strings.Contains(err.Error(), "EVENT_OUT_OF_ORDER") {
+		t.Fatalf("receipt-before-shipment error = %v", err)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM shipments WHERE shipment_no = 'SHIP-AC59-CREATED'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusCreated {
+		t.Fatalf("shipment status = %s, want CREATED", status)
+	}
+	var receipts int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM shipment_receipts WHERE shipment_no = 'SHIP-AC59-CREATED'`).Scan(&receipts); err != nil {
+		t.Fatal(err)
+	}
+	if receipts != 0 {
+		t.Fatalf("receipt rows = %d, want 0", receipts)
 	}
 }

@@ -330,6 +330,46 @@ re-review and human merge decision are still required.
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 人类批准: SDD-STRUCT-ALIGN-01 - Spec Kit 双布局试点（Spec + 实现 PASS）
+
+- `change_id: SDD-STRUCT-ALIGN-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（Spec PASS + 实现 PASS）;
+  `级别: 契约变更（工具链）`; `阶段: 合入前`.
+- 人类 2026-11-27 批准方案 A（双布局 + 自举试点）+ Spec.md 一行指针；Spec 链接的
+  `docs/adr/0009-spec-kit-dual-layout.md` 同批接受。
+- Spec: `specs/sdd-struct-align-01/spec.md` **Approved**；ADR-0009 **Accepted**；
+  AC-1…AC-6 **已验证**（reviewer 独立实测；AC-1 修正为 `FEATURE_DIR` + `--paths-only`
+  的 `FEATURE_SPEC` 两条断言）。
+- 实现：新增 `specs/README.md`、`Spec.md` 末行一行指针；`docs/specs/0001/0002` 未迁移/未改写；
+  核心模板/脚本/代码未改；无业务行为/AC。
+- 结果：实现 **PASS**；`NOT RELEASE`；合入由人类执行。本条落盘，**未 commit/未 merge**。
+
+### 2026-11-27 审查裁决: SDD-STRUCT-ALIGN-01 - 实现复审 PASS（AC-4/AC-5 已验证）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待合入；作者 `lead` 不作 Reviewed-by）; 级别: 契约变更（工具链）; 阶段: 代码; base..head: `6a66ea5`..工作树（未提交；HEAD=`6a66ea5`；spec sha256 `d8384b192fdd1462ebfe4de2480366bcde1b32d9636615b504fbb70a6c274bb7`、`specs/README.md` `4c9a7f06e46ce483b7a58045ef75acd7ab400019a15351f4bff4b1ea3dd36b57`、`Spec.md` `5866ee3ee29ddfd56c9f88d79311aac8ba41e2ad816fee2f59d3dc82b5731a40`、ADR `87bc3688b35f90ddc0e0992ba15f84fbbd893092f6d842681490c112ceed7e09`；`docs/specs/`/核心模板/脚本 diff 0）
+- Spec 和 ADR: `specs/sdd-struct-align-01/spec.md`；`docs/adr/0009-spec-kit-dual-layout.md`（Proposed）
+- 结论: PASS（实现阶段；AC-4/5 已验证，AC-1/2/3/6 保持已验证）；**可交人类合入**；release_status: NOT RELEASE（PASS 只表示该范围证据满足，不是 Release）
+- 取代: 无
+- 阻断项: 无; 待办: 人类合入；Release 由人类；NOT RELEASE；合入前作者把 Spec header `Status` 从 Draft 更新为 Approved（人类已批准，非阻断）
+- AC 位移: `specs/sdd-struct-align-01/spec.md` AC-4 未验证 -> 已验证（`docs/specs/0001/0002` diff 0；`Spec.md` 仅 +1 行、无删改；报告 §0B）；AC-5 未验证 -> 已验证（`specs/README.md` 28 行覆盖 AC-5；报告 §0B）；AC-1/2/3/6 保持已验证
+
+### 2026-11-27 审查裁决: SDD-STRUCT-ALIGN-01 - Spec 复审 PASS（B1 消解）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 契约变更（工具链）; 阶段: Spec; base..head: `6a66ea5`..工作树（未提交；HEAD=`6a66ea5`；spec sha256 `b2303b5cdc295d7e27461adf9b1261ce2c469784072891748db639a4b66890d3`、ADR `87bc3688b35f90ddc0e0992ba15f84fbbd893092f6d842681490c112ceed7e09`、plan `239d054b5ac4e593f9dd827835e3b139372935e59d9f1cc969e1fca224c99322`、tasks `aef4a686f61958975af4209bcf8388bc85ae33f08bf48d3add48fab44c0a9155`；新文件未跟踪，final sha 以文件 sha256 为准）
+- Spec 和 ADR: `specs/sdd-struct-align-01/spec.md`；`docs/adr/0009-spec-kit-dual-layout.md`（Proposed）
+- 结论: PASS（Spec 阶段；AC-1/2/3/6 已验证，AC-4/5 未验证、实现阶段复审）；**Spec 可交人类批准**；release_status: NOT RELEASE（PASS 只表示该范围证据满足，不是 Release）
+- 取代: 2026-11-27 `审查裁决: SDD-STRUCT-ALIGN-01 - Spec Kit 双布局试点 Spec FAIL（1 阻断）`（仅结论 FAIL -> PASS；原条目保留）
+- 阻断项: 无（B1 消解：FR-001/AC-1 改为 `--json --require-spec` 的 `FEATURE_DIR` + `--paths-only --json` 的 `FEATURE_SPEC`，两条实测 exit 0；NB-1 行号 `check-prerequisites.sh:20/:110-125/:139-169`、`create-new-feature.sh:280/:424-425` 已核；NB-2 AC↔FR 已加；NB-3/NB-4 ADR 已改）；待办: 人类批准后实现 AC-4（`Spec.md` 指针）与 AC-5（`specs/README.md`），代码阶段复审；AC-4/5 不得在 Spec 阶段标已验证
+- AC 位移: `specs/sdd-struct-align-01/spec.md` AC-1 未验证 -> 已验证（两条命令 exit 0；报告 §0A）；AC-2/3/6 保持已验证；AC-4/5 保持未验证（实现阶段）
+
+### 2026-11-27 审查裁决: SDD-STRUCT-ALIGN-01 - Spec Kit 双布局试点 Spec FAIL（1 阻断）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 契约变更（工具链）; 阶段: Spec; base..head: `6a66ea5`..工作树（未提交；HEAD=`6a66ea5`；新文件全部未跟踪：spec sha256 `eb29fe1a1b518743a47e661eb97d4a2181295255ef011edea6027960a18d1520`、ADR `a489df1c24c9cf42d5232b6807447f240ec195f62d8d79ece7ce34bbc59f4d8a`、plan `c9f0797e20addc06c7196a7ac18697687df28dd3bd0d1236b16bb899e4aa6258`、tasks `aef4a686f61958975af4209bcf8388bc85ae33f08bf48d3add48fab44c0a9155`；tracked diff vs base = 0）
+- Spec 和 ADR: `specs/sdd-struct-align-01/spec.md`；`docs/adr/0009-spec-kit-dual-layout.md`（Proposed）
+- 结论: FAIL; 范围: Spec 完整性/ADR/命令实测/边界/AC 状态；AC-2/3/6 已验证，AC-1 未验证（FR-001 `FEATURE_SPEC` 不在 `--json` 输出），AC-4/5 未验证（实现阶段）；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: **B1** FR-001/AC-1 断言 `check-prerequisites.sh --json --require-spec` 的 `FEATURE_SPEC`，但 JSON 模式只输出 `FEATURE_DIR`/`AVAILABLE_DOCS`（`FEATURE_SPEC` 只在 `--paths-only`）；Spec Assumptions 禁改脚本，AC-1 不可达；修正 FR-001/AC-1 后重审。; 待办: NB-1 可达性只给 `common.sh:163-230`（check-prerequisites/create-new-feature 无行号）；NB-2 AC 表原无 AC↔FR 映射（reviewer 已补）；NB-3 ADR 核对仍写“本仓待验证”；NB-4 ADR 背景把 tasks 说成总是要求；人类批准后实现 AC-4/5 并复审
+- AC 位移: `specs/sdd-struct-align-01/spec.md` AC-1 未验证 -> 未验证（FR-001/`--json` 无 `FEATURE_SPEC`；报告 §2）；AC-2 未验证 -> 已验证（`--require-tasks` exit 0，`AVAILABLE_DOCS:["tasks.md"]`；报告 §2）；AC-3 未验证 -> 已验证（缺 plan/tasks/spec/目录 exit 1；报告 §2）；AC-4 未验证 -> 未验证（`Spec.md` 指针待实现；报告 §3）；AC-5 未验证 -> 未验证（`specs/README.md` 未创建；报告 §3）；AC-6 未验证 -> 已验证（resolver 含附录 A；报告 §2）
+
 ### 2026-11-27 人类决定: GOV-C2-TEMPLATE-01 - C-2 以 preset append 加附录 A
 
 - `change_id: GOV-C2-TEMPLATE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;

@@ -35,3 +35,4 @@ Developer 在 ADR 获批前不得开工。
 - 未立项需求池：[docs/po/backlog.md](docs/po/backlog.md)
 - 跨角色裁决与冻结记录（唯一运行状态台账）：[docs/review-tracking.md](docs/review-tracking.md)
 - **协作规则（全员必读）**：[AGENTS.md](AGENTS.md)；原则：[.specify/memory/constitution.md](.specify/memory/constitution.md)
+- **新变更布局（Spec Kit）**：[specs/README.md](specs/README.md)（2026-11-27 起新变更用 `specs/<change_id>/`；现有 `docs/specs/` 不动）

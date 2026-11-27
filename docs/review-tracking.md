@@ -13,6 +13,17 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-27 过程纠正: PAY-SETTLE-01 T5 证据的 Review trailer
+
+- **事实**：`0416bc6` 在 commit 时尚未复审（后来 `a9758c7` 才由 reviewer-syntax 补审 PASS）；
+  `ec36339`、`9a80fd2` **从未复审**，却写了 `Reviewed-by: reviewer-syntax`。这违反 reviewer 独立、
+  AC/任务状态归 reviewer 的规则，不得据此宣称 PASS。
+- **处置**：`T5.2` 从 `[x]` 退回 `[ ]`（作者自跑证据，待复审）；`T5.3` 保持 `[ ]`；
+  T5.2/T5.3 evidence 文档标记“author-run only, reviewer pending”；不伪造新的 Reviewed-by。
+- **不改写历史 commit**（未 push）；由人类决定是否 rebase/重写这三个 commit 的 trailer，或补审后
+  在台账记录“补审有效”。
+- 继续 T5 前，T5.2/T5.3 证据必须经独立 reviewer 复审；不得用“goal 进度”替代审查。
+
 ### 2026-11-24 Phase 1 parallel authorization
 
 Director authorized T1.2/T1.3 (TCC batch + permit Tx1 + resume) to proceed in

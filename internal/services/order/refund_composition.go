@@ -8,6 +8,7 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/refundpolicy"
 )
 
 // refundComposition is the validated line composition of one AdmitRefund
@@ -33,10 +34,14 @@ type refundComposition struct {
 //
 // A group that already has a composition_known=0 commitment cannot be
 // attributed per line; it fails closed with composition lines rather than
-// inventing an attribution. Responsibility/freight-hold semantics (T3.6/168h)
-// are not enforced here yet; the request fields are carried through unchanged.
+// inventing an attribution. The responsibility/reason pair is enforced here;
+// the 168h freight hold itself remains an AfterSales/T3.6 concern.
 func validateRefundComposition(ctx context.Context, q querier, req *pb.AdmitRefundRequest,
 	orderNo, groupNo string) (*refundComposition, error) {
+	responsibility, err := validateRefundResponsibility(req)
+	if err != nil {
+		return nil, err
+	}
 	reqLines := req.GetLines()
 	freight := req.GetFreightRefundableCent()
 	if len(reqLines) == 0 {
@@ -48,6 +53,10 @@ func validateRefundComposition(ctx context.Context, q querier, req *pb.AdmitRefu
 	}
 	if freight < 0 {
 		return nil, apperr.Invalid("freight_refundable_cent must not be negative")
+	}
+	if responsibility == refundpolicy.ResponsibilityUndetermined && freight > 0 {
+		return nil, apperr.Failed("UNDETERMINED responsibility must hold freight; freight_refundable_cent must be 0").
+			WithDetails(map[string]any{"order_no": orderNo, "group_no": groupNo, "freight_refundable_cent": freight})
 	}
 
 	// No prefix exclusion: an existing admission for this refund_id already
@@ -85,8 +94,8 @@ func validateRefundComposition(ctx context.Context, q querier, req *pb.AdmitRefu
 			return nil, apperr.Invalid("refund line_no must be positive").
 				WithDetails(map[string]any{"line_no": lineNo})
 		}
-		if quantity <= 0 || goods < 0 {
-			return nil, apperr.Invalid("refund line quantity must be positive and goods_cent non-negative").
+		if quantity < 0 || goods < 0 {
+			return nil, apperr.Invalid("refund line quantity must not be negative and goods_cent must be non-negative").
 				WithDetails(map[string]any{"line_no": lineNo, "quantity": quantity, "goods_cent": goods})
 		}
 		if _, dup := seen[lineNo]; dup {
@@ -107,7 +116,10 @@ func validateRefundComposition(ctx context.Context, q querier, req *pb.AdmitRefu
 					"committed_goods_cent": comp.LineGoods[lineNo], "quantity": orderLine.Quantity,
 					"committed_quantity": comp.LineQuantity[lineNo]})
 		}
-		if goods > remainingGoods || quantity > remainingQuantity {
+		// quantity=0 models a partial-amount line that does not consume a unit
+		// (for example a post-departure price adjustment); only the amount is
+		// checked. quantity>0 also consumes the line quantity.
+		if goods > remainingGoods || (quantity > 0 && quantity > remainingQuantity) {
 			return nil, apperr.Failed("refund line exceeds the remaining line amount").
 				WithDetails(map[string]any{"line_no": lineNo, "requested_goods_cent": goods,
 					"remaining_goods_cent": remainingGoods, "requested_quantity": quantity,
@@ -148,6 +160,30 @@ func validateRefundComposition(ctx context.Context, q querier, req *pb.AdmitRefu
 	return &refundComposition{
 		Amount: req.GetAmountCent(), Goods: goodsTotal, Freight: freight, Source: source, Lines: out,
 	}, nil
+}
+
+// validateRefundResponsibility enforces the closed responsibility/reason pair
+// shared with AfterSales. An empty responsibility is the legacy call path
+// (T3.6 will populate it); a non-empty value must be a valid pair. Order never
+// infers responsibility from free text.
+func validateRefundResponsibility(req *pb.AdmitRefundRequest) (string, error) {
+	party := refundpolicy.Normalize(req.GetResponsibility())
+	reason := refundpolicy.Normalize(req.GetReasonCode())
+	if party == "" {
+		if reason != "" {
+			return "", apperr.Invalid("reason_code requires responsibility")
+		}
+		return "", nil
+	}
+	if !refundpolicy.ValidResponsibility(party) {
+		return "", apperr.Invalid("responsibility is not a closed enum value").
+			WithDetails(map[string]any{"responsibility": party})
+	}
+	if !refundpolicy.ValidReason(party, reason) {
+		return "", apperr.Invalid("reason_code does not belong to responsibility").
+			WithDetails(map[string]any{"responsibility": party, "reason_code": reason})
+	}
+	return party, nil
 }
 
 // insertRefundCommitmentTx writes the commitment header and, for a composed

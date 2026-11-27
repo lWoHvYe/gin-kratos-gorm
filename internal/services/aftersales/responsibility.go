@@ -10,14 +10,15 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/refundpolicy"
 )
 
 const (
-	partyMerchant     = "MERCHANT_WAREHOUSE"
-	partyCarrier      = "CARRIER"
-	partyCustomer     = "CUSTOMER"
-	partyPlatform     = "PLATFORM"
-	partyUndetermined = "UNDETERMINED"
+	partyMerchant     = refundpolicy.ResponsibilityMerchant
+	partyCarrier      = refundpolicy.ResponsibilityCarrier
+	partyCustomer     = refundpolicy.ResponsibilityCustomer
+	partyPlatform     = refundpolicy.ResponsibilityPlatform
+	partyUndetermined = refundpolicy.ResponsibilityUndetermined
 
 	sourceAgent           = "AGENT"
 	sourceCarrierEvidence = "CARRIER_EVIDENCE"
@@ -31,38 +32,12 @@ const (
 	freightHoldWindow = 168 * time.Hour
 )
 
-var reasonCodes = map[string]map[string]struct{}{
-	partyMerchant: {
-		"OUT_OF_STOCK": {}, "WRONG_ITEM": {}, "MISSING_ITEM": {}, "DAMAGED_PACKAGING": {}, "LATE_DISPATCH": {},
-	},
-	partyCarrier: {
-		"LOST_IN_TRANSIT": {}, "DAMAGED_IN_TRANSIT": {}, "WRONG_DELIVERY": {},
-	},
-	partyCustomer: {
-		"NO_REASON_RETURN": {}, "REFUSED": {}, "ADDRESS_ERROR": {},
-	},
-	partyPlatform: {
-		"SYSTEM_DEFECT": {}, "PRICING_ERROR": {},
-	},
-	partyUndetermined: {"PENDING_REVIEW": {}},
-}
-
 func validParty(party string) bool {
-	switch party {
-	case partyMerchant, partyCarrier, partyCustomer, partyPlatform, partyUndetermined:
-		return true
-	default:
-		return false
-	}
+	return refundpolicy.ValidResponsibility(party)
 }
 
 func validReason(party, code string) bool {
-	codes, ok := reasonCodes[party]
-	if !ok {
-		return false
-	}
-	_, ok = codes[code]
-	return ok
+	return refundpolicy.ValidReason(party, code)
 }
 
 // DetermineResponsibility is the only manual responsibility write path. It

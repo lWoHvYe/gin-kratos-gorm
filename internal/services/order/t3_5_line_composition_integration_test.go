@@ -200,9 +200,18 @@ func TestAdmitRefundLineRemainingIncludesSettled(t *testing.T) {
 	}
 	if _, err := svc.AdmitRefund(context.Background(), &pb.AdmitRefundRequest{
 		RefundId: "R-LC-SETTLED-OK", OrderNo: "ORD-LC-SETTLED", GroupNo: "G1", AmountCent: 1000, Source: "aftersale",
-		Lines: []*pb.RefundLine{{LineNo: 1, Quantity: 1, GoodsCent: 1000}},
+		// quantity=0: amount-only partial that does not consume a unit.
+		Lines: []*pb.RefundLine{{LineNo: 1, Quantity: 0, GoodsCent: 1000}},
 	}); err != nil {
 		t.Fatal(err)
+	}
+	var gotQuantity int64
+	if err := db.QueryRow(`SELECT quantity FROM order_refund_commitment_lines
+		WHERE refund_id = 'R-LC-SETTLED-OK' AND line_no = 1`).Scan(&gotQuantity); err != nil {
+		t.Fatal(err)
+	}
+	if gotQuantity != 0 {
+		t.Fatalf("amount-only line quantity = %d, want 0", gotQuantity)
 	}
 }
 

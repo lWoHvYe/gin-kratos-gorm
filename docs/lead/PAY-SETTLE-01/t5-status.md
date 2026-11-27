@@ -3,7 +3,7 @@
 | 项 | 值 |
 |---|---|
 | change_id | `PAY-SETTLE-01`（T5） |
-| 基线 | `a92c53a` + 本轮 T5 测试（未提交） |
+| 基线 | `0416bc6`（T5 测试已提交）；ADR-0011 已 PASS（`4f...` 待记） |
 | 结论 | AC-60 主要路径可测；AC-63 的 `COMPENSATING→EXPIRED_REFUND` **被未批准契约阻断**；AC-63 不能标已验证 |
 
 ## 1. 已通过（本轮 T5 证据）
@@ -60,7 +60,7 @@ AC-63 要求：撤 permit → `CancelIfCreated` → **INV-44 释放预留** → 
 
 **推荐**：若目标是关闭 SPEC-0002 全量，选 **A**；若本轮要可发布，选 **B** 并把 AC-63 明确 DEFERRED。无论选哪条，AC-63 在裁决前保持**未验证**。
 
-## 5. 本轮工作树（未提交）
+## 5. 本轮工作树（已提交 `0416bc6`）
 
 - `internal/services/order/t5_migration_integration_test.go`
 - `internal/services/order/t5_ac60_ac63_integration_test.go`

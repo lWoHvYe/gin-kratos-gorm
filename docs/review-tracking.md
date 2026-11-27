@@ -438,6 +438,31 @@ re-review and human merge decision are still required.
   “9 tests” 正确。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5 - ADR-0011 + 真实迁移/AC60/63 证据
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;
+  `级别: 实现变更（Spec/代码混合）`; `阶段: 合入前`; base `a92c53a`..`0416bc6`.
+- **ADR-0011**：人类裁决 A；`legacy_24h` + `LEGACY_24H_EXPIRY`；Inventory ack 同事务；
+  Order `refund_release_receipts`；Payment 前必须 RELEASED；失败保持 COMPENSATING；多组/无组人工，
+  有离仓组优先 EXPIRED_FINANCE；consumer-first。
+- **T5 证据**：`TestT5RealMigrationSchemaAndAC60Backfill`（22 个真实迁移 + AC-60 回填）；
+  `TestAC60`（读取/回填/有售后退款/发货）；`TestAC63`（unique/ambiguous/zero/COMPENSATING 前缀）；
+  migration runner 支持 `DELIMITER $$`。T5 tests **7.984s PASS**；vet 0。
+- **AC**：AC-60/63 仍未验证（AC-63 全链路 ack/Payment/EXPIRED_REFUND 未实现；AC-60 无售后自动分配/
+  Inventory HELD/缺货未接线）；T5.2/3/5/6/7 未做；`NOT RELEASE`。
+- **NB 修复**：多组 shipped carve-out、legacy_expired 后缀说明、旧 consumer DLQ、planned tests、
+  迁移归属、t5-status 已提交。下一步 Phase 1（events source + ack 事件）。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 + 证据 PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更（Spec/代码混合）; 阶段: Spec/代码; base..head: `a92c53a..0416bc6`；新增 ADR-0011、T5 plan/status、T5 tests、migration runner；`migrations/api` 0；T5 tests 7.984s、vet 0、boundary 0
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-60/AC-63/INV-46）；`docs/adr/0011-legacy-24h-release-ack.md` Accepted
+- 结论: PASS（ADR-0011 可进入 Phase 1 实现；AC-60/63 仍未验证；T5.2/3/5/6/7 未做；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: NB-1 多组 shipped EXPIRED_FINANCE carve-out；NB-2 legacy_expired source/refund_id 与旧 addendum source 取代；NB-3 旧 consumer DLQ；NB-4 ADR 核对 future tests；NB-5 t5-status “未提交”；NB-6 ADR 新迁移属 Phase 3；AC-60/63/T5.1/2/3/5/6/7
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60/AC-63 未验证 -> 未验证（T5.4 真实迁移/前缀不是 AC 全条；报告 §7）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.4/T3.5/T3.7 收口 PASS（仅测试）
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `4a743ee`..工作树（未提交；HEAD=`4a743ee`；仅新增 `t3_7_refund_admission_integration_test.go`；无生产代码/迁移/契约；3 tests 1.996s、full 69.961s、AfterSales 3.623s、vet 0、boundary 0）

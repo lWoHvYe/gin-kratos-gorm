@@ -8,19 +8,18 @@
 |---|---|
 | 契约/feature 变更 | `specify → clarify（仅必要时）→ plan → tasks → implement → converge` |
 | 实现变更（已有 Spec 覆盖） | 现有 Spec + plan/tasks + tests；不重新 specify |
-| bugfix | 官方 `bug` extension：assess → fix → test；不新建 Spec |
+| bugfix | 不设特殊路由：已批准 Spec 覆盖且无契约主题→实现变更；否则契约变更。`bug` extension 可作工具 |
 | idea/assessment | 官方 assess 流程；不进入实现 |
 
 - 只有 `specify` 是 `plan` 前严格必需的；`clarify`/`checklist`/`analyze` 是可选质量门。
 - 不要求每个变更生成全套 `spec.md/plan.md/tasks.md/research/contracts/quickstart`。
 
-## 2. Spec 持久化
+## 2. Spec 持久化（本轮不改布局）
 
-- 既有 `docs/specs/` flat Spec：按 `docs/specs/README.md` 原地升版，不迁移、不复制。
-- 新 capability：`specs/<feature>/spec.md` 是该 feature 的权威 Spec；后续变更原地更新。
-- 对既有 Spec 的变更：`specs/<change_id>/` 只放 plan/tasks/evidence；不要再生成第二份权威 spec.md。
-- 一个业务能力一个权威位置；`docs/specs/README.md` 的 spec index 记录权威位置。
-- 不用 Spec Kit 的 per-change branch 去复制长期 Spec。
+- `docs/specs/` 与 `specs/` 按现有已批准 README 使用；不迁移、不复制。
+- 新工作按当前已批准路径；不新建 per-change 第二份 Spec；不确定先问人类。
+- Spec 布局/迁移另案，不在 v3 process-only 范围内。
+- 一个能力一个权威；不得同时维护两份 active Spec。
 
 ## 3. 命令注意事项
 
@@ -35,8 +34,7 @@
 
 - 不直接改 `.specify/templates/**`、`.specify/scripts/**` 核心文件。
 - 追加章节用 preset/extension 的 `append`；整体替换用 `overrides/`；不要用 override 冒充 append。
-- 已安装官方 `bugfix` bundle（`bug` v1.0.2 + workflow v1.0.1）；本仓只用 `bug` 的 assess/fix/test，
-  不使用 workflow 的 human gate。
+- 已安装官方 `bug` bundle（`bug` v1.0.2 + workflow v1.0.1）；`bug` 的 assess/fix/test 可作工具，但不构成 bugfix 特殊路由。
 - 社区 preset/extension 未审计；安装前审源码、版本、artifact 预算。
 - `test-first-governance` 等重型 preset 不默认安装（10 模板/65KB/90-85 coverage/BDD-ATDD）。
 

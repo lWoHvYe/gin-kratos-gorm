@@ -5,9 +5,9 @@
 
 ## 0. 过渡边界
 
-- `docs/specs/0001/0002` **冻结**：不迁移、不改链接、不复制；需要改动时只做原地必要修改，单独处理。
-- 新工作用 `specs/<feature>/spec.md` 作为本次变更的权威 Spec；不复制 0001/0002。
-- 本协议不解决 Spec 权威/index；只解决“review 轮次/证据/成本”。
+- `docs/specs/0001/0002` 保持原样；不迁移、不复制；需要修改另行批准。
+- 本轮不改 Spec 布局；新工作按当前已批准 README；Spec 权威/迁移另案。
+- 本协议只解决“review 轮次/证据/成本”。
 
 ## 1. 目标
 
@@ -26,7 +26,7 @@
 - diff（精确 base/head）；
 - 测试日志（绑定 HEAD）；
 - `【测试范围】【未覆盖范围】【取舍】`；
-- 高风险：independent oracle/verification matrix、targeted mutation/race/fault（如适用）。
+- 高风险：按宪法 12 的并发/故障证据；independent oracle/matrix/mutation 是可选辅助，不强制。
 
 reviewer 不读作者自述当证据；不要求作者提供 2,000 行 markdown。
 
@@ -40,7 +40,7 @@ reviewer 不读作者自述当证据；不要求作者提供 2,000 行 markdown�
 
 ## 4. 一次给全 + 有界升级
 
-- reviewer 同一轮列出所有 `BLOCKER/MAJOR`，每条指向 AC/INV/ADR/必备章节/宪法条款；`MINOR/TODO` 不阻断。
+- reviewer 同一轮列出所有 blocking 问题（可附 MAJOR/MINOR 备注），每条指向 AC/INV/ADR/必备章节/宪法条款；非阻断记 `[TODO]`。
 - 作者用“问题→修复→证据”矩阵一次修完；reviewer 只复跑失败项+diff，不重读全文。
 - 不设“2 轮自动 PASS/FAIL”。超过 2 轮仍不收敛时：
   - 分类为：实现错误 / 证据不足 / 设计问题 / 契约缺口 / 环境不可用；
@@ -50,7 +50,7 @@ reviewer 不读作者自述当证据；不要求作者提供 2,000 行 markdown�
 
 ## 5. 风险分级
 
-- **High**（资金、库存、权限、跨服务、迁移、状态机）：独立 oracle + targeted mutation/state model/race/fault；reviewer 必须跑证据；human merge。
+- **High**（资金、库存、履约、权限、跨服务、迁移、状态机）：按宪法 12 的并发/故障证据；independent oracle/mutation/state model 可选辅助；reviewer 跑证据；human merge。
 - **Medium**：测试/契约检查 + reviewer 摘要；human 可抽样。
 - **Low**：lint/tests + reviewer 摘要；human merge。
 - 风险由路径/事件/迁移触发，不由作者自选；作者只能上调。

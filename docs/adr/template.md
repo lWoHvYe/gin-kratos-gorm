@@ -1,10 +1,10 @@
 # ADR-<NNNN>: <title>
 
-- Status: draft | accepted | superseded by ADR-<NNNN>
+- Status: proposed | accepted | superseded by ADR-<NNNN>
 - Date: YYYY-MM-DD
 - Deciders: <human/role>
 - Related Spec: <path>
-- Contract owner: <service/person>
+- Integration owner: <service/person>
 
 ## 背景
 
@@ -57,7 +57,7 @@
 ## 验证
 
 - 每条决策由哪条 AC/INV/测试/模型/可观测指标核对。
-- 高风险：独立 oracle、targeted mutation、stateful property/model、race/fault。
+- 高风险：按宪法 12 的并发/故障证据；independent oracle、targeted mutation、stateful property/model 可作辅助。
 - 没有独立 oracle 的 claim 标“不能证明 intent”，不得写“已验证”。
 
 ## 后果

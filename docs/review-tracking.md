@@ -330,6 +330,29 @@ re-review and human merge decision are still required.
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 人类决定: GOV-C2-TEMPLATE-01 - C-2 以 preset append 加附录 A
+
+- `change_id: GOV-C2-TEMPLATE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;
+  `级别: 治理变更`; `阶段: 落地`.
+- 人类选择 **B（装 PyYAML + preset append）**；user-site `pyyaml 6.0.4` 已安装（经人类批准；
+  只写用户目录，未改 Homebrew 系统包）。
+- `.specify/presets/gin-kratos-spec/`：`preset.yml` 为 Spec Kit 1.4.3 schema 1.0；
+  `spec-template.append.md` 含附录 A 8 项；`specify preset list` 显示 enabled；
+  `resolve-template.sh spec-template` exit 0、145 行 = 核心模板 + 附录 A；override 已删；
+  核心模板未改。
+- 维护：preset append 自动叠加核心模板；宪法附录 A 变化时更新 append 文件
+  （preset description 已注明）。
+- 未 commit/未 merge（本条落盘后由 C-2 提交）。
+
+### 2026-11-27 审查裁决: GOV-C2-TEMPLATE-01 - Spec 模板附录 A 对照 preset append PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 治理变更; 阶段: Spec; base..head: `a0ec6ba`..工作树（未提交；HEAD=`a0ec6ba`；preset.yml sha256 `74d7ceb1bea644daf62c4e97c174b0899b98c0bdf46a93ea22691224d6225828`，append sha256 `31b56a1066085be7c557923bbc1f5642e055215e4fbf8f315d653b7e629854e9`，.registry sha256 `b945dd764b47180c9af7eae6800d51ec93d864d9b7e140722bf2882eb5ec780a`，核心模板 sha256 `3945437fc35cd30a5b2bf7beea680337c3516826d3efa5a6b92c4a7eca1ba28e`，resolver sha256 `829e227096abc8bf0889889ec9f792f503ca5d395b7836a8a7eb739ee75214e7`；宪法/AGENTS 与 base 相同 `414b94a6b9419a01abc7573036de9eceda4c0f75120f9d6bd9cf9b2163b8ba4f`/`05d948fbac7f466d187bb054143f9fff3d44d310295d62e90a06fc7bc804021b`）
+- Spec 和 ADR: 无（`.specify/presets/gin-kratos-spec/{preset.yml,spec-template.append.md}` + `.specify/presets/.registry`；override 已删除；核心模板/宪法/AGENTS 未改）
+- 结论: PASS（**preset append 不影响 PASS**）; 范围: preset append（8 项含 NB-1/2/3 的 EARS/MUST、AC 编号、延期禁止项）；resolver 输出=核心模板+附录段（145 行，附录 A 对照 1 处；`--json` `TEMPLATE_CONTENT` 5324 字符）；无实例名/业务 AC 变更；release_status: NOT RELEASE（PASS 只表示该范围证据满足，不是 Release）
+- 取代: 无
+- 阻断项: 无; 待办: NB-1…NB-5 已消解（append 内容补 EARS/MUST、AC 编号、延期禁止项；override 删除后 NB-4 消失；description 明写“Appendix A 变化时同步本文件”）；preset append 自动叠加核心模板，人类 B 选择的维护风险已由该方式覆盖
+- AC 位移: 无（工具链/治理变更，不涉及 AC 状态）；方案变更: 原 override 方案（sha256 `a546438a75131c57d6e65229e64064eed9c0cad0b8063b4002e5a1bc409c1d8a`）已删除，改为 preset append；final sha: `preset.yml` `74d7ceb1bea644daf62c4e97c174b0899b98c0bdf46a93ea22691224d6225828`、`spec-template.append.md` `31b56a1066085be7c557923bbc1f5642e055215e4fbf8f315d653b7e629854e9`、`.registry` `b945dd764b47180c9af7eae6800d51ec93d864d9b7e140722bf2882eb5ec780a`（preset 文件未跟踪；diff hash 会随条目文字变化，故不作为绑定）；证据: `docs/collab/qc-reports/REV-GOV-C2-TEMPLATE-01.md` §0A
+
 ### 2026-11-27 人类批准: GOV-SPEC-SYNTAX-01 / GOV-CORE-RESTORE-01 - 宪法 v2.2.0 生效
 
 - `Actor: human (Director)`; `Reviewed-by: reviewer-syntax`（final PASS）；`级别: 治理变更`.

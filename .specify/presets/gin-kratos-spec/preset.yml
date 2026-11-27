@@ -1,0 +1,14 @@
+schema_version: "1.0"
+preset:
+  id: gin-kratos-spec
+  name: Gin Kratos Spec Standards
+  version: "0.1.0"
+  description: Append the constitution Appendix A checklist to the Spec template; update this file when Appendix A changes.
+requires:
+  speckit_version: ">=1.4.0"
+provides:
+  templates:
+    - type: template
+      name: spec-template
+      file: spec-template.append.md
+      strategy: append

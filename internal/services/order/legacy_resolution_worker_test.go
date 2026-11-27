@@ -555,3 +555,54 @@ func TestLegacy24hFailedAckKeepsCompensatingAndPaysNothing(t *testing.T) {
 		t.Fatalf("failed ack state = %s, want COMPENSATING", state)
 	}
 }
+
+func TestLegacy24hPaymentFailureKeepsCompensating(t *testing.T) {
+	db := legacyTestDB(t)
+	payments := &fakePaymentPort{
+		captured: 10000,
+		intents: []*pb.Intent{
+			legacyIntent("PAY-LEGACY-PF", "ORD-LEGACY-PF", "SUCCEEDED", 10000, 0),
+		},
+		refundErrs: []error{apperr.Unavailable("payment down", nil)},
+	}
+	svc := legacyService(db)
+	svc.payments = payments
+	svc.fulfillment = &fakeFulfillmentPort{status: probeStatusNoWaybill}
+	seedTccOrder(t, db, "ORD-LEGACY-PF", 10000, 10000, 0, 0, "")
+	seedTccGroup(t, db, "ORD-LEGACY-PF", "G1", 1, 0)
+	seedTccPermit(t, db, "ORD-LEGACY-PF", "G1", permitNone, "")
+	seedLegacyItem(t, db, "ORD-LEGACY-PF", 10000)
+	seedLegacyQueue(t, db, "ORD-LEGACY-PF", legacyResolutionStateOpen)
+	ctx := context.Background()
+	_ = svc.processExpiredLegacyResolution(ctx, "ORD-LEGACY-PF")
+	releaseID := events.RefundReleaseID("pay:PAY-LEGACY-PF:legacy_expired")
+	if err := applyRefundReleaseAck(ctx, svc, events.RefundReleaseCompleted{
+		SchemaVersion: 1, ReleaseID: releaseID, RefundID: "pay:PAY-LEGACY-PF:legacy_expired",
+		OrderNo: "ORD-LEGACY-PF", Status: events.RefundReleaseStatusReleased,
+		ReleasedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.processExpiredLegacyResolution(ctx, "ORD-LEGACY-PF"); err == nil {
+		t.Fatal("payment failure returned success")
+	}
+	state, kind, _, _ := legacyQueueState(t, db, "ORD-LEGACY-PF")
+	if state != legacyResolutionStateCompensating || kind != "" {
+		t.Fatalf("after payment failure = %s/%s, want COMPENSATING", state, kind)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications WHERE refund_id = 'pay:PAY-LEGACY-PF:legacy_expired' AND state = 'PENDING'`); got != 1 {
+		t.Fatalf("application state after failure = %d, want PENDING", got)
+	}
+
+	payments.refundErrs = nil
+	if err := svc.processExpiredLegacyResolution(ctx, "ORD-LEGACY-PF"); err != nil {
+		t.Fatal(err)
+	}
+	state, kind, _, _ = legacyQueueState(t, db, "ORD-LEGACY-PF")
+	if state != "EXPIRED_REFUND" || kind != "EXPIRED_REFUND" {
+		t.Fatalf("after retry = %s/%s, want EXPIRED_REFUND", state, kind)
+	}
+	if len(payments.refundCalls) != 2 {
+		t.Fatalf("payment calls = %d, want 2 (failed + retry)", len(payments.refundCalls))
+	}
+}

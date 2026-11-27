@@ -533,6 +533,18 @@ re-review and human merge decision are still required.
   （ops 可 `ReportGroupShortage`，非永久阻断）；分配在 order 状态检查前会消耗 seq。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 状态变化: PAY-SETTLE-01 T5.2/T5.3 - race + 故障证据
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: -（T5.6 复审待）`;
+  `级别: 实现变更（测试/证据）`; `阶段: T5`; base `f98f662`.
+- **T5.2**：`go test -race ./internal/services/order` → **195.753s PASS**（MySQL；order 全包）。
+  可标 `[x]`（order 范围）；payment/inventory/aftersales 未跑。
+- **T5.3**：AC-50 crash replay、Ship/Cancel race、T17 crash、AC-63 Payment 失败/FAILED ack
+  → **3.895s PASS**；AC-43/47/55/56/59/61、TCC crash/lazy reconcile、DLQ 未跑；保持 `[ ]`。
+- **AC-60/63** 保持已验证；T5.1/T5.5/T5.6/T5.7 未做；`NOT RELEASE`。
+- 证据：`docs/lead/PAY-SETTLE-01/t5.2-t5.3-evidence.md`；新增
+  `TestLegacy24hPaymentFailureKeepsCompensating`。
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 AC-60 收口 PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `4202747`..工作树（未提交；HEAD=`4202747`；proto/migration 0025/allocation/shipping/tests；无 inventory；full 41.902s、proto-guard OK 1002、vet 0、boundary 0）

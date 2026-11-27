@@ -11,6 +11,7 @@ import (
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
 	"gin-kratos-gorm/internal/platform/db"
+	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/metrics"
 )
 
@@ -40,8 +41,9 @@ func (s *Service) expireLegacyResolutions(ctx context.Context) error {
 		s.log.Warn("refresh legacy resolution gauges", "error", err)
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT order_no FROM legacy_payment_resolution
-		WHERE state IN (?, ?) AND expires_at <= NOW(3)
-		ORDER BY expires_at LIMIT 100`, legacyResolutionStateOpen, legacyResolutionStateResolving)
+		WHERE (state IN (?, ?) AND expires_at <= NOW(3)) OR state = ?
+		ORDER BY expires_at LIMIT 100`,
+		legacyResolutionStateOpen, legacyResolutionStateResolving, legacyResolutionStateCompensating)
 	if err != nil {
 		return apperr.Internal("scan expired legacy resolutions", err)
 	}
@@ -70,9 +72,10 @@ func (s *Service) claimLegacyResolution(ctx context.Context, orderNo string) boo
 	res, err := s.db.ExecContext(ctx, `UPDATE legacy_payment_resolution
 		SET lease_owner = ?, lease_until = DATE_ADD(NOW(3), INTERVAL 30 SECOND),
 		    version = version + 1, updated_at = NOW(3)
-		WHERE order_no = ? AND state IN (?, ?) AND expires_at <= NOW(3)
+		WHERE order_no = ? AND ((state IN (?, ?) AND expires_at <= NOW(3)) OR state = ?)
 		  AND (lease_until IS NULL OR lease_until < NOW(3))`,
-		"legacy-worker", orderNo, legacyResolutionStateOpen, legacyResolutionStateResolving)
+		"legacy-worker", orderNo, legacyResolutionStateOpen, legacyResolutionStateResolving,
+		legacyResolutionStateCompensating)
 	if err != nil {
 		return false
 	}
@@ -267,9 +270,135 @@ func (s *Service) compensateLegacyResolution(ctx context.Context, record *orderR
 			}
 		}
 	}
-	// Blocked contract edge: see function comment. Do not write a misleading
-	// release event with another source, and do not call Payment before it.
+	// ADR-0011: after the deterministic prefix, ensure the release request and
+	// PENDING receipt exist. Payment waits for the Inventory ack.
+	receiptState, err := s.legacyReleaseReceiptState(ctx, record.OrderNo)
+	if err != nil {
+		return err
+	}
+	switch receiptState {
+	case refundReleaseReceiptFailed:
+		return errLegacyCompensationBlocked
+	case refundReleaseReceiptPending:
+		return errLegacyCompensationBlocked
+	case refundReleaseReceiptReleased:
+		return s.payLegacyCompensation(ctx, record, intents)
+	}
+	refunds := legacyCapturedRefunds(record, intents)
+	if len(refunds) == 0 {
+		return errLegacyCompensationBlocked
+	}
+	groupNo := ""
+	if len(groups) > 0 {
+		groupNo = groups[0]
+	}
+	if groupNo == "" {
+		return errLegacyCompensationBlocked
+	}
+	groupCount, err := orderGroupCount(ctx, s.db, record.OrderNo)
+	if err != nil {
+		return err
+	}
+	if groupCount != 1 {
+		return errLegacyCompensationBlocked
+	}
+	first := refunds[0]
+	releaseID := events.RefundReleaseID(first.refundID)
+	err = db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		for _, refund := range refunds {
+			if err := ensureLegacyRefundApplicationTx(ctx, tx, record, refund); err != nil {
+				return err
+			}
+		}
+		if err := s.appendRefundReleaseTx(ctx, tx, first.refundID, record.OrderNo, groupNo,
+			events.RefundReleaseSourceLegacy24h); err != nil {
+			return err
+		}
+		return insertRefundReleaseReceiptTx(ctx, tx, releaseID, first.refundID, record.OrderNo)
+	})
+	if err != nil {
+		return err
+	}
 	return errLegacyCompensationBlocked
+}
+
+type legacyCapturedRefund struct {
+	paymentNo string
+	refundID  string
+	amount    int64
+}
+
+func legacyCapturedRefunds(record *orderRecord, intents []*pb.Intent) []legacyCapturedRefund {
+	out := make([]legacyCapturedRefund, 0, len(intents))
+	for _, intent := range intents {
+		if intent.GetCapturedCent()-intent.GetRefundedCent() <= 0 {
+			continue
+		}
+		paymentNo := strings.TrimSpace(intent.GetPaymentNo())
+		if paymentNo == "" {
+			continue
+		}
+		out = append(out, legacyCapturedRefund{
+			paymentNo: paymentNo,
+			refundID:  "pay:" + paymentNo + ":legacy_expired",
+			amount:    intent.GetCapturedCent() - intent.GetRefundedCent(),
+		})
+	}
+	return out
+}
+
+func ensureLegacyRefundApplicationTx(ctx context.Context, tx *sql.Tx, record *orderRecord, refund legacyCapturedRefund) error {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO refund_applications
+		(refund_id, source, order_no, group_no, non_effective_capture, amount_cent, goods_cent,
+		 freight_cent, state, admission_result)
+		VALUES (?, 'legacy_expired', ?, NULL, 1, ?, ?, 0, 'PENDING', '')
+		ON DUPLICATE KEY UPDATE refund_id = refund_id`,
+		refund.refundID, record.OrderNo, refund.amount, refund.amount); err != nil {
+		return apperr.Internal("insert legacy refund application", err)
+	}
+	return nil
+}
+
+func (s *Service) legacyReleaseReceiptState(ctx context.Context, orderNo string) (string, error) {
+	var state string
+	err := s.db.QueryRowContext(ctx, `SELECT state FROM refund_release_receipts
+		WHERE order_no = ? ORDER BY created_at LIMIT 1`, orderNo).Scan(&state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", apperr.Internal("load legacy release receipt", err)
+	}
+	return state, nil
+}
+
+func (s *Service) payLegacyCompensation(ctx context.Context, record *orderRecord, intents []*pb.Intent) error {
+	refunds := legacyCapturedRefunds(record, intents)
+	if len(refunds) == 0 {
+		return errLegacyCompensationBlocked
+	}
+	for _, refund := range refunds {
+		if _, err := s.payments.Refund(ctx, &pb.RefundRequest{
+			PaymentNo: refund.paymentNo, AmountCent: refund.amount,
+			Reason: "legacy_24h_expiry", IdempotencyKey: refund.refundID,
+			NonEffectiveCapture: true,
+		}); err != nil {
+			return apperr.Unavailable("legacy 24h refund", err)
+		}
+	}
+	err := db.WithTx(ctx, s.db, func(tx *sql.Tx) error {
+		for _, refund := range refunds {
+			if _, err := tx.ExecContext(ctx, `UPDATE refund_applications SET state = 'DONE'
+				WHERE refund_id = ? AND state = 'PENDING'`, refund.refundID); err != nil {
+				return apperr.Internal("mark legacy refund application done", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return s.terminalLegacyResolution(ctx, record.OrderNo, "EXPIRED_REFUND", "EXPIRED_REFUND", "UNSHIPPED_GROUPS_AND_REFUND", "")
 }
 
 func (s *Service) terminalLegacyResolution(ctx context.Context, orderNo, state, kind, scope, paymentNo string) error {

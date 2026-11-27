@@ -10,6 +10,7 @@ import (
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
 	"gin-kratos-gorm/internal/platform/apperr"
+	"gin-kratos-gorm/internal/platform/events"
 	"gin-kratos-gorm/internal/platform/metrics"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -102,6 +103,15 @@ func TestLegacyZeroGateCapturedIntentIsNotZero(t *testing.T) {
 	}
 }
 
+func seedLegacyItem(t *testing.T, db *sql.DB, orderNo string, paid int64) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO order_items
+		(order_no,line_no,sku_id,name,quantity,warehouse_id,fulfillment_group_no,line_paid_cent,unit_paid_cent)
+		VALUES (?,1,1,'x',1,1,'G1',?,?)`, orderNo, paid, paid); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLegacyExpiryBranches(t *testing.T) {
 	ctx := context.Background()
 
@@ -178,6 +188,7 @@ func TestLegacyExpiryBranches(t *testing.T) {
 		seedTccOrder(t, db, "ORD-LR-EC", 10000, 10000, 0, 0, "")
 		seedTccGroup(t, db, "ORD-LR-EC", "G1", 1, 0)
 		seedTccPermit(t, db, "ORD-LR-EC", "G1", permitNone, "")
+		seedLegacyItem(t, db, "ORD-LR-EC", 10000)
 		seedLegacyQueue(t, db, "ORD-LR-EC", legacyResolutionStateOpen)
 		err := svc.processExpiredLegacyResolution(ctx, "ORD-LR-EC")
 		if !errors.Is(err, errLegacyCompensationBlocked) {
@@ -452,5 +463,95 @@ func TestLegacyExpiredFinanceOverdueEscalatesWithoutClose(t *testing.T) {
 	}
 	if closed.Valid {
 		t.Fatal("overdue EXPIRED_FINANCE was closed")
+	}
+}
+
+func TestLegacy24hAckThenPaymentAndExpiredRefund(t *testing.T) {
+	db := legacyTestDB(t)
+	payments := &fakePaymentPort{
+		captured: 10000,
+		intents: []*pb.Intent{
+			legacyIntent("PAY-LEGACY-24H", "ORD-LEGACY-24H", "SUCCEEDED", 10000, 0),
+		},
+	}
+	svc := legacyService(db)
+	svc.payments = payments
+	svc.fulfillment = &fakeFulfillmentPort{status: probeStatusNoWaybill}
+	seedTccOrder(t, db, "ORD-LEGACY-24H", 10000, 10000, 0, 0, "")
+	seedTccGroup(t, db, "ORD-LEGACY-24H", "G1", 1, 0)
+	seedTccPermit(t, db, "ORD-LEGACY-24H", "G1", permitNone, "")
+	seedLegacyItem(t, db, "ORD-LEGACY-24H", 10000)
+	seedLegacyQueue(t, db, "ORD-LEGACY-24H", legacyResolutionStateOpen)
+	ctx := context.Background()
+
+	if err := svc.processExpiredLegacyResolution(ctx, "ORD-LEGACY-24H"); !errors.Is(err, errLegacyCompensationBlocked) {
+		t.Fatalf("first compensation = %v, want pending release", err)
+	}
+	if len(payments.refundCalls) != 0 {
+		t.Fatalf("payment before ack: %d", len(payments.refundCalls))
+	}
+	state, _, _, _ := legacyQueueState(t, db, "ORD-LEGACY-24H")
+	if state != legacyResolutionStateCompensating {
+		t.Fatalf("state after release request = %s", state)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_release_receipts WHERE order_no = 'ORD-LEGACY-24H'`); got != 1 {
+		t.Fatalf("receipt rows = %d", got)
+	}
+	releaseID := events.RefundReleaseID("pay:PAY-LEGACY-24H:legacy_expired")
+	if err := applyRefundReleaseAck(ctx, svc, events.RefundReleaseCompleted{
+		SchemaVersion: 1, ReleaseID: releaseID, RefundID: "pay:PAY-LEGACY-24H:legacy_expired",
+		OrderNo: "ORD-LEGACY-24H", Status: events.RefundReleaseStatusReleased,
+		ReleasedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.processExpiredLegacyResolution(ctx, "ORD-LEGACY-24H"); err != nil {
+		t.Fatal(err)
+	}
+	if len(payments.refundCalls) != 1 {
+		t.Fatalf("payment calls = %d, want 1", len(payments.refundCalls))
+	}
+	if payments.refundCalls[0].GetIdempotencyKey() != "pay:PAY-LEGACY-24H:legacy_expired" {
+		t.Fatalf("payment idempotency = %q", payments.refundCalls[0].GetIdempotencyKey())
+	}
+	state, kind, _, _ := legacyQueueState(t, db, "ORD-LEGACY-24H")
+	if state != "EXPIRED_REFUND" || kind != "EXPIRED_REFUND" {
+		t.Fatalf("terminal = %s/%s, want EXPIRED_REFUND", state, kind)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM refund_applications WHERE order_no = 'ORD-LEGACY-24H' AND state = 'DONE'`); got != 1 {
+		t.Fatalf("done applications = %d", got)
+	}
+}
+
+func TestLegacy24hFailedAckKeepsCompensatingAndPaysNothing(t *testing.T) {
+	db := legacyTestDB(t)
+	payments := &fakePaymentPort{captured: 10000, intents: []*pb.Intent{
+		legacyIntent("PAY-LEGACY-FAIL", "ORD-LEGACY-FAIL", "SUCCEEDED", 10000, 0),
+	}}
+	svc := legacyService(db)
+	svc.payments = payments
+	svc.fulfillment = &fakeFulfillmentPort{status: probeStatusNoWaybill}
+	seedTccOrder(t, db, "ORD-LEGACY-FAIL", 10000, 10000, 0, 0, "")
+	seedTccGroup(t, db, "ORD-LEGACY-FAIL", "G1", 1, 0)
+	seedTccPermit(t, db, "ORD-LEGACY-FAIL", "G1", permitNone, "")
+	seedLegacyItem(t, db, "ORD-LEGACY-FAIL", 10000)
+	seedLegacyQueue(t, db, "ORD-LEGACY-FAIL", legacyResolutionStateOpen)
+	ctx := context.Background()
+	_ = svc.processExpiredLegacyResolution(ctx, "ORD-LEGACY-FAIL")
+	releaseID := events.RefundReleaseID("pay:PAY-LEGACY-FAIL:legacy_expired")
+	if err := applyRefundReleaseAck(ctx, svc, events.RefundReleaseCompleted{
+		SchemaVersion: 1, ReleaseID: releaseID, RefundID: "pay:PAY-LEGACY-FAIL:legacy_expired",
+		OrderNo: "ORD-LEGACY-FAIL", Status: events.RefundReleaseStatusFailed,
+		ReleasedAt: time.Now().UTC().Format(time.RFC3339), Error: "inventory failed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = svc.processExpiredLegacyResolution(ctx, "ORD-LEGACY-FAIL")
+	if len(payments.refundCalls) != 0 {
+		t.Fatalf("failed ack still paid: %d", len(payments.refundCalls))
+	}
+	state, _, _, _ := legacyQueueState(t, db, "ORD-LEGACY-FAIL")
+	if state != legacyResolutionStateCompensating {
+		t.Fatalf("failed ack state = %s, want COMPENSATING", state)
 	}
 }

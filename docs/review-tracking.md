@@ -497,6 +497,35 @@ re-review and human merge decision are still required.
   测试缺口；启动接线无集成测试。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5 Phase 3b - AC-63 全链路
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `098e7fe`.
+- **实现**：`compensateLegacyResolution` 写 `refund_applications(legacy_expired)` + release
+  (`legacy_24h`) + PENDING receipt（同事务）；PENDING/FAILED 零 Payment；RELEASED 后
+  `Payment.Refund`（幂等键 `pay:<payment_no>:legacy_expired`、non-effective）→ app DONE →
+  `EXPIRED_REFUND`；Payment 失败保持 COMPENSATING。
+- **worker**：scan/claim 扩展 COMPENSATING；shipped 优先 `EXPIRED_FINANCE`；多组/无组人工。
+- **测试**：`TestLegacy24hAckThenPaymentAndExpiredRefund`（ack 前 0 Payment、ack 后 1、
+  EXPIRED_REFUND、app DONE）、`TestLegacy24hFailedAckKeepsCompensatingAndPaysNothing`；
+  full `TestLegacy|TestT5RealMigration|TestAC60|TestAC63|TestRefundReleaseAck|TestReleaseCommitment`
+  **41.224s PASS**；vet 0。
+- **AC-63**：未验证 → **已验证**（单组自动 + 多组人工 ADR-0011 A）；**AC-60 仍部分**；
+  T5.2/3/5/6/7 未做；`NOT RELEASE`。
+- **NB**：release/receipt 只对应第一个 refund（其余在 applications/Payment）；app DONE 与
+  EXPIRED_REFUND 非同一 tx；Payment 永久错误仍按 Unavailable 重试；FAILED/PENDING 无专用告警；
+  重试重调所有 refund（依赖 Payment 幂等）。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 Phase 3b PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `098e7fe`..工作树（未提交；HEAD=`098e7fe`；worker/test；无 migration/api/inventory；full 41.224s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-63/INV-46）；`docs/adr/0011-legacy-24h-release-ack.md`
+- 结论: PASS（Phase 3b 可合入；AC-63 已验证（单组自动 + 多组人工 ADR-0011 A）；AC-60 仍部分；T5.2/3/5/6/7 未做；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: Payment failure/GetRefundByKey/permanent；app DONE+terminal 非原子；FAILED/PENDING scan 无告警；多组人工文档；Payment failure/multi-group/shipped 测试缺口；AC-60/T5.2/3/5/6/7
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-63 未验证 -> 已验证（单组自动 + 多组人工 ADR-0011 A；`TestLegacy24hAckThenPaymentAndExpiredRefund`/`...FailedAck` + T5 AC-63 prefix）；AC-60 未验证 -> 未验证（部分）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 Phase 3a PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `f27c17c`..工作树（未提交；HEAD=`f27c17c`；migration `0024`、ack consumer、`cmd/order`、2 tests；无 inventory/api；tests 4.146s、vet 0、boundary 0）

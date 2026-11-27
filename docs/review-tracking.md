@@ -330,6 +330,39 @@ re-review and human merge decision are still required.
 - T0 checkpoint remains `e374384` (code) / `c796580` (selfcheck) / `84f5acd`
   (verdict); no status change.
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T2.5/T2.6/T2.7 - 回填工具 + seq 取号 + 测试
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（实现 PASS）;
+  `级别: 实现变更`; `阶段: 合入前`.
+- **T2.5**：`cmd/order-legacy-backfill` + `legacy_backfill.go`；默认 dry-run，`-apply` 唯一写开关；
+  只选 `PAID AND settlement_payment_no=''`；dry-run 分类 unique/zero/ambiguous，apply 复用
+  `ensureLegacyResolution`；重入不重复退款/队列；部分失败报错 exit 1。
+- **T2.6**：`nextLegacyRefundSeq` + `legacyRefundID`；人类裁决 A=独立短事务提交（ADR-0010），
+  调用方持 orders 行锁；rollback 不复用，允许 seq gap；20 并发唯一。
+- **T2.7**：`TestLegacy*` 全量 PASS（含 dry-run/apply/幂等/并发/rollback/部分失败）。
+- 证据：`go test ./internal/services/order -run 'TestLegacy'` → ok 24.361s；
+  `go build ./cmd/order-legacy-backfill`、`go vet` exit 0；边界 diff 0。
+- AC-60/AC-63 **仍未验证**（T2.5/T2.6/T2.7 为子集；T2.8/T3/T5 未做）；`NOT RELEASE`；
+  合入由人类执行。本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T2.5/T2.6/T2.7 复审 PASS（B1 消解；ADR-0010）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待合入；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `45fe958`..工作树（未提交；HEAD=`45fe958`；`refund_seq.go` `8c02a7c2…`、`refund_seq_integration_test.go` `77d4d54e…`、`legacy_backfill_integration_test.go` `dd205dbb…`、`ADR-0010` `c5b6643a…`、plan `77ef33ed…`、tasks `75abf7a1…`；tracked diff 仅 `tasks.md` 3/3 行）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md`（AC-60/AC-63）；`docs/adr/0007-payment-settlement-admission-amd1.md` §6.5（事务范围由 **ADR-0010** 取代）；`docs/adr/0010-legacy-refund-seq-autonomous.md`（Accepted）
+- 结论: PASS（实现阶段；T2.5/T2.6/T2.7；B1 消解；ADR-0010）；**可交人类合入**；T2.8/T3 未做；AC-60/AC-63 仍未验证（子集）；release_status: NOT RELEASE（PASS 只表示该范围证据满足，不是 Release）
+- 取代: 2026-11-27 `审查裁决: PAY-SETTLE-01 - T2.5/T2.6/T2.7 实现复审 FAIL（1 阻断）`（仅结论 FAIL -> PASS；原条目保留）
+- 阻断项: 无（B1 消解：`nextLegacyRefundSeq` 独立短事务 commit、rollback 不复用；`TestLegacyRefundSeqRollbackDoesNotReuse` PASS；ADR-0010 Accepted 取代 Amd1 §6.5 事务范围）；待办: AC-60/63 等 T3.5/T3/T5；T2.8/T3 未做；NB: 0019 注释 stale、ADR-0010 标题/Status、plan“不新开”、测试未持 orders 行锁、CLI exit 2 文档
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60/AC-63 未验证 -> 未验证（T2.5/T2.6/T2.7 子集；报告 §0A/§6）
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T2.5/T2.6/T2.7 实现复审 FAIL（1 阻断）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待裁决；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `45fe958`..工作树（未提交；HEAD=`45fe958`；新文件未跟踪：`legacy_backfill.go` `f686acee…`、`refund_seq.go` `7b5a340a…`、两个测试 `72fd8179…`/`a22bdb41…`、`cmd/.../main.go` `f888d860…`、`t2.5-plan.md` `7721b90e…`；tracked diff 仅 `tasks.md` 3/3 行）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md`（AC-60/AC-63）；`docs/adr/0007-payment-settlement-admission.md` §4.4；`docs/adr/0007-payment-settlement-admission-amd1.md` §6.5/§12.5.5
+- 结论: FAIL; 范围: T2.5/T2.6/T2.7；T2.5/T2.7 测试通过，T2.6 B1（同 tx rollback 复用 seq）；AC-60/AC-63 未验证（T2.5/T2.6/T2.7 子集）；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: **B1** T2.6 `nextLegacyRefundSeq` 在调用方事务内取号；rollback 回滚 `next_seq`，下一次复用同一 seq（实测两次 `seq=1`），与 ADR Amendment 1 §6.5“不得复用/回退”、迁移 `0019:55-58`“never reused or rolled back”冲突；代码注释自行弱化为“committed allocations”（宪法 4/7/20/22）。; 待办: 人类/架构裁决“独立提交取号”vs“修正‘不得复用/回退’为已提交 id 不复用”；加 rollback 测试；NB-1 部分失败、NB-2 零元+已捕获、NB-3 计数、NB-4 exit 2、NB-5 引用；T2.8/T3 未做
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60/AC-63 未验证 -> 未验证（T2.5/T2.6/T2.7 子集；T2.6 B1；报告 §6）
+
 ### 2026-11-27 人类批准: SDD-STRUCT-ALIGN-01 - Spec Kit 双布局试点（Spec + 实现 PASS）
 
 - `change_id: SDD-STRUCT-ALIGN-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（Spec PASS + 实现 PASS）;

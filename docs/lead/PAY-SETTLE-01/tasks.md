@@ -84,9 +84,9 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 - [x] **T2.2** 解析 `ListOrderIntents`：`SUCCEEDED` + `captured==pay_cent` + order 匹配；零元 `zero:<order_no>`
 - [x] **T2.3** 唯一候选 CAS 写回（`''`/NULL）；其他捕获走支付级退款/重复捕获
 - [x] **T2.4** 0/多候选写 `legacy_payment_resolution`（`OPEN/RESOLVING/RESOLVED/EXPIRED_REFUND/EXPIRED_ZERO/EXPIRED_FINANCE/REJECTED`，SLA 24h，Owner/恢复命令；`EXPIRED_*` 映射到订单/组终态）
-- [ ] **T2.5** 回填工具 dry-run/计数/幂等；只处理 PAID；先修生产者后运行
-- [ ] **T2.6** `refund_seq` 取号与并发唯一
-- [ ] **T2.7** 测试：唯一/歧义/零候选/零元/回填重入/并发写回
+- [x] **T2.5** 回填工具 dry-run/计数/幂等；只处理 PAID；先修生产者后运行
+- [x] **T2.6** `refund_seq` 取号与并发唯一
+- [x] **T2.7** 测试：唯一/歧义/零候选/零元/回填重入/并发写回
 
 ## Phase 3 — P-05 / P-06（Owner: Developer；依赖: T0.7、T1.2）
 

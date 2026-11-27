@@ -423,6 +423,30 @@ re-review and human merge decision are still required.
   已补测试。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T3 收口 - T3.4/T3.5/T3.7
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `4a743ee`.
+- **新增测试**（仅测试）：并发同一行只一个 admission/commitment/line；prior known=0 组仍允许
+  整组 amount-only；mixed known=0+1 带 lines fail-closed。
+- **已有证据**：Order full `TestAdmitRefund|TestTccAdmission|TestLegacy|TestReleaseCommitment`
+  **49.365s PASS**；AfterSales `TestAC14|TestAC31|TestAC32|TestAC33|TestFreightResponsibilityDisabled`
+  **1.965s PASS**（含 168h hold timeout）；T3.6 映射/T3.2 release 已 PASS。
+- **任务**：T3.1/T3.2/T3.3/T3.4/T3.5/T3.6/T3.7 全部 `[x]`；T3 收口。
+- **AC**：AC-62 已验证；**AC-60/63 仍未验证**（等 T5/TestAC60/63）；`NOT RELEASE`。
+- **NB-2 校正**：T3.2 `TestReleaseCommitment*` 实际 9 个（reviewer 早期按 7 个计），tasks 的
+  “9 tests” 正确。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.4/T3.5/T3.7 收口 PASS（仅测试）
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `4a743ee`..工作树（未提交；HEAD=`4a743ee`；仅新增 `t3_7_refund_admission_integration_test.go`；无生产代码/迁移/契约；3 tests 1.996s、full 69.961s、AfterSales 3.623s、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-60/63 不升级；T3.4/T3.5/T3.7 无独立 AC）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3 / Amd1
+- 结论: PASS（T3.4/T3.5/T3.7 可标 [x]；AC-60/63 仍未验证；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: AC-60/63 等 T5/TestAC60/TestAC63；NB-1 并发错误文本未断言；NB-2 T3.2 tasks “9 tests” 与 7 不符；AC-60/63 未验证
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60/AC-63 未验证 -> 未验证（T3.4/T3.5/T3.7 收口，不是 AC 验证；报告 §0/§9）
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T3.2 人工释放 ops CLI SCOPED-PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `4f7793c`..工作树（未提交；HEAD=`4f7793c`；`refund_commitment_release.go` `2ba93949…`、CLI `d3ccfc6d…`、test `b9a4ce24…`、plan `86d714cb…`；`.gitignore`/drop list 测试卫生；7 tests 6.122s、full 63.232s、vet/build 0、boundary 0）

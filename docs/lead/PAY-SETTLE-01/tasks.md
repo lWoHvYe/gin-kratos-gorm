@@ -95,10 +95,10 @@ Stop：Addendum 未人类接受前 `90b502c` 不得 PASS；新契约缺口回 Ar
 - [x] **T3.1** permit 不可恢复；禁止 worker 静默释放（既有写路径已满足；`TestRevokedPermitCannotBeRestored`）
 - [x] **T3.2** `FAILED_PERMANENT`/人工放弃：人工授权、审计、幂等、CAS/lease 的 `RESERVED→RELEASED`（只释放额度；ops CLI，9 tests）
 - [x] **T3.3** 准入前拒绝/取消不创建 commitment；准入后失败进持久任务/人工（既有校验；`TestRejectedAdmissionWritesNoCommitment`）
-- [ ] **T3.4** proto/存储：行、商品/运费组成、责任、`UNDETERMINED/168h`
-- [ ] **T3.5** `AdmitRefund`：行层 INV-24 + 组层 + Payment 三层；未离仓整组；已离仓部分
+- [x] **T3.4** proto/存储：行、商品/运费组成、责任、`UNDETERMINED/168h`（Phase 1/2 + 既有 `TestAC31/32`；`REV-PAY-SETTLE-01-T3.7.md`）
+- [x] **T3.5** `AdmitRefund`：行层 INV-24 + 组层 + Payment 三层；未离仓整组；已离仓部分（Phase 1/2 + T3.6 映射；`REV-PAY-SETTLE-01-T3.7.md`）
 - [x] **T3.6** AfterSales/缺货责任→可退运费唯一 Owner；Order 只校验（映射已接；168h hold 用既有 worker）
-- [ ] **T3.7** 测试：行超限、责任运费、168h、未离仓整组、RELEASED 边界、AC-14/31/32 回归
+- [x] **T3.7** 测试：行超限、责任运费、168h、未离仓整组、RELEASED 边界、AC-14/31/32 回归（3 个 T3.7 测试 + 既有；`REV-PAY-SETTLE-01-T3.7.md`）
 
 ## Phase 4 — Fail-closed / shadow（Owner: Developer + Architect；依赖: T1/T3）
 

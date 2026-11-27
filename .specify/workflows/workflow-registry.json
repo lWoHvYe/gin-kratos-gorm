@@ -4,10 +4,18 @@
     "speckit": {
       "name": "Full SDD Cycle",
       "version": "1.0.2",
-      "description": "Runs specify \u2192 plan \u2192 tasks \u2192 implement with review gates",
+      "description": "Runs specify → plan → tasks → implement with review gates",
       "source": "bundled",
       "installed_at": "2026-11-23T14:01:03.374771+00:00",
       "updated_at": "2026-11-23T14:01:03.374784+00:00"
+    },
+    "bugfix": {
+      "name": "Guided Bug Fix",
+      "version": "1.0.1",
+      "description": "Runs bug assess → human review gate → bug fix → bug test on a bug report",
+      "source": "bundle:bugfix",
+      "installed_at": "2026-11-27T17:14:58.964457+00:00",
+      "updated_at": "2026-11-27T17:14:58.964472+00:00"
     }
   }
 }

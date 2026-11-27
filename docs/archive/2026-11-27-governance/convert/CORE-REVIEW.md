@@ -6,7 +6,7 @@
 | 触发 | 人类指示：系统复核；Spec Kit 生成的 Spec 应允许其原生语法，不再强制 EARS |
 | base | `9e81497`；head = 当前工作树（未提交） |
 | 审查 | `reviewer-syntax` 首轮 **FAIL**（1 阻断）→ 作者修复 → **re-review PASS**（SCOPED，`NOT RELEASE`） |
-| 报告 | [REV-GOV-SPEC-SYNTAX-01.md](../collab/qc-reports/REV-GOV-SPEC-SYNTAX-01.md) |
+| 报告 | [REV-GOV-SPEC-SYNTAX-01.md](../../../collab/qc-reports/REV-GOV-SPEC-SYNTAX-01.md) |
 | 状态 | 宪法 v2.2.0（MINOR）；L2/L3 已在 v2.2.0 恢复；**人类已批准 v2.2.0（2026-11-27）；未 commit/未 merge** |
 
 ---
@@ -113,7 +113,7 @@
 | L3 退款/准入 | 宪法 23：II.5 两条 IF/THEN（未完成退款撤 permit；已离仓只退款不回滚）、`REVOKED` permit 不得自行恢复、commitment 规则、Σ 等式、`order.paid` 兼容期两层（兼容期四项+禁 flag；灰度影子期 ADR 切换/owner/收口+生产默认 `OrderSettled`） |
 | L3 DB/错误 | 宪法 26：`database/sql`+条件 `UPDATE`（CAS）、GORM 仅 `catalog/gorm_repo.go`/`cart/gorm_repo.go` 读侧、`apperr`/`fmt.Errorf("%w")`/`docs/contracts.md` 错误映射 |
 
-**审查结果**：SCOPED-PASS（首次）→ NB-11 逐字化 FAIL（1 阻断：把四项兼容要求错误限定到“灰度影子期”）→ 恢复两层结构 → **final PASS**。报告：[REV-GOV-CORE-RESTORE-01.md](../collab/qc-reports/REV-GOV-CORE-RESTORE-01.md)。
+**审查结果**：SCOPED-PASS（首次）→ NB-11 逐字化 FAIL（1 阻断：把四项兼容要求错误限定到“灰度影子期”）→ 恢复两层结构 → **final PASS**。报告：[REV-GOV-CORE-RESTORE-01.md](../../../collab/qc-reports/REV-GOV-CORE-RESTORE-01.md)。
 
 **仍非阻断**：宪法 23 仍是一整段（可读性，不是错误）；“ADR 批准的版本化兼容期”未逐字出现，可由附录 B + 影子期 ADR 要求推出。
 

@@ -6,7 +6,7 @@
 ## 0. 过渡边界
 
 - 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
-- `0001` frozen reference；`0002` active；`sdd` historical；`docs/specs/` 只重定向。
+- `0001` historical reference (QC delta pending)；`0002` active；`sdd` historical；`docs/specs/` 只重定向。
 - 本协议只解决“review 轮次/证据/成本”。
 
 ## 1. 目标

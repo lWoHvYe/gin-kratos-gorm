@@ -1,6 +1,6 @@
 # 项目宪法（历史草案）
 
-> 历史草案（v2.0.0，2026-11-27）。最终生效文本见 [.specify/memory/constitution.md](../../.specify/memory/constitution.md)（v2.2.0）。
+> 历史草案（v2.0.0，2026-11-27）。最终生效文本见 [.specify/memory/constitution.md](../../../../.specify/memory/constitution.md)（v2.2.0）。
 
 ## Core Principles
 

@@ -17,7 +17,7 @@
 ## 2. Spec 持久化
 
 - 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
-- `0001` 为 frozen reference；`0002` 为 active；`sdd-struct-align-01` 为 historical。
+- `0001` 为 historical reference (QC delta pending)；`0002` 为 active；`sdd-struct-align-01` 为 historical。
 - `docs/specs/` 只做重定向；不保留副本。
 - 新工作 `specs/<feature>`；变更原地更新；evidence 放 `specs/<id>/evidence/<change_id>/`。
 

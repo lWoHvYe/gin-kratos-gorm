@@ -5,7 +5,7 @@ Status: **author evidence; independent review pending; NOT RELEASE**.
 | 项 | 值 |
 |---|---|
 | change_id | `LEAN-CORE-01` (parent) / `SPEC-LAYOUT-01` (child; human approved combined) |
-| base..head | `6ee05df..5a8b80c`（后续收口 commit 见历史） |
+| base..head | `6ee05df..b5377a8`（布局+收口） |
 | 级别 | 治理 + 契约 |
 | 阶段 | Spec |
 | Spec/ADR | `specs/README.md`; `docs/adr/0012-spec-single-layout.md` |
@@ -25,7 +25,7 @@ Status: **author evidence; independent review pending; NOT RELEASE**.
 git diff --summary 6ee05df..HEAD        # R098 x2; no code dirs
 git ls-files docs/specs                 # only README
 relative link check (27 changed md)     # 0 broken
-grep '^| AC-' specs/0001.../spec.md     # 38 rows in §17
+grep '^| AC-' specs/0001.../spec.md     # 45 rows in §17
 git grep docs/specs/0001|0002           # only historical segments/pointers
 ```
 

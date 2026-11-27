@@ -96,7 +96,7 @@ pnpm test:e2e
 - Money, inventory, permissions and cross-service recovery need `-race` or
   fault-injection evidence; a happy path is not enough.
 - AC-REF is not AC-VERIFIED; AC 状态见
-  [`SPEC-0002 §15`](specs/0002-payment-settlement-admission.md#15-验收状态表) 与
+  [`SPEC-0002 §15`](specs/0002-payment-settlement-admission/spec.md#15-验收状态表) 与
   [`review-tracking.md`](review-tracking.md)。
 - Include `【测试范围】` and `【未覆盖范围】` in the delivery.
 

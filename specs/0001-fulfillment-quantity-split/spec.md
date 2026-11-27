@@ -1,7 +1,7 @@
 ```yaml
 id: SPEC-0001
 title: 多仓按数量拆行、选仓优先级与承运商签收
-status: approved          # draft | in-review | approved | superseded
+status: historical         # draft | in-review | approved | historical | superseded
 version: 1.5
 updated_at: 2026-11-26
 owner: Product Owner

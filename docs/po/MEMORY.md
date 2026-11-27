@@ -43,5 +43,5 @@
 - 协作规则（全员必读）：`AGENTS.md`；原则：`.specify/memory/constitution.md`
 - 角色契约：`AGENTS.md`
 - 架构基线（INV-01…16）：`docs/architecture-baseline.md`
-- Spec 入口：`Spec.md`；目录与命名规范：`docs/specs/README.md`
+- Spec 入口：`specs/README.md`；旧目录：`docs/specs/README.md`（重定向）
 - 业务缺口（未立项）：`docs/po/backlog.md`；人类决策与冻结记录：`docs/review-tracking.md`

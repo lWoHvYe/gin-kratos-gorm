@@ -15,12 +15,12 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 
 ### 2026-11-28 人类决定: LEAN-CORE-01 / SPEC-LAYOUT-01 - v3 + 单布局
 
-- Actor / Reviewed-by: lead / human (direction; independent review pending); 级别: 治理+契约; 阶段: Spec; base..head: `6ee05df..5a8b80c`（后续收口 commit 见历史）
-- Spec/ADR: `specs/README.md`; `docs/adr/0012-spec-single-layout.md`; `docs/adr/0009-spec-kit-dual-layout.md` 已标 superseded
+- Actor / Reviewed-by: lead / human (direction; independent review pending); 级别: 治理变更（含 Spec 布局）; 阶段: Spec; base..head: `6ee05df..b5377a8`（布局+收口）; 范围: v3 core + 单布局
+- Spec 和 ADR: `specs/README.md`; `docs/adr/0012-spec-single-layout.md`; `docs/adr/0009-spec-kit-dual-layout.md` 已标 superseded
 - 结论: 人类批准合并/单布局；独立 reviewer 对最终 diff FAIL 的 B/M 项正在收口；release_status: NOT RELEASE
 - 取代: ADR-0009 by ADR-0012；`specs/sdd-struct-align-01` historical；`docs/specs` 只重定向
 - 阻断项: independent review pending；0001 QC delta 待复审；0001 §17 为 historical 表；0002 §15 为 active
-- AC 位移: 0001 -> historical reference (QC delta pending)；0002 active；sdd historical
+- AC 位移: 0001 approved/QC pending -> historical reference (QC delta pending; 无 current evidence)；0002 active；sdd historical（证据：`specs/0001.../spec.md` §17、`specs/README.md`）
 
 ### 2026-11-27 过程纠正: PAY-SETTLE-01 T5 证据的 Review trailer
 

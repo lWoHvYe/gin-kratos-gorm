@@ -1113,7 +1113,7 @@ REVIEW_REQUIRED --新 refund_id（旧承诺先按 AC-62 处置）--> 新申请�
 
 ### 15.3 延期清单（owner / expiry / reason）
 
-> 从 `docs/collab/ac-coverage.tsv` 全量迁入 32 行 `DEFERRED`（C-4 归档 tsv 后不丢失）。`AC-22/28/29/30/35/37` 属 **SPEC-0001**，已在 §15.2 补当前值行，SPEC-0001 建表时以其表为准。`REVIEW-AUDIT-01` 为本 Spec D-32 的 DEFERRED 工作项（tsv 未单列，此处补齐）。到期前须由 owner 交付或交人类重新裁决；附录 A v2.1.0 已定义延期清单格式与到期规则；本表是迁移清单。
+> 从 `docs/collab/ac-coverage.tsv` 全量迁入 32 行 `DEFERRED`（C-4 归档 tsv 后不丢失）。`AC-22/28/29/30/35/37` 属 **SPEC-0001**，已在 §15.2 补当前值行，SPEC-0001 §17 仅为历史表；12 个 baseline AC 的当前值以本 Spec §15.2 为准。`REVIEW-AUDIT-01` 为本 Spec D-32 的 DEFERRED 工作项（tsv 未单列，此处补齐）。到期前须由 owner 交付或交人类重新裁决；附录 A v3.0 已定义延期清单格式与到期规则；本表是迁移清单。
 
 | AC | owner | expiry | reason |
 |---|---|---|---|

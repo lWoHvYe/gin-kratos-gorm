@@ -5,10 +5,11 @@ Status: **applied on trial branch** `reform/lean-core`；未合并 main、未生
 | 文件 | 内容 |
 |---|---|
 | `INVARIANT-MAP.md` | 旧规则 → 保留/替换/退役/延后 |
-| `CONSTITUTION.v3.md` | 目标宪法：19 条原则 + 附录 A/B/C |
+| `CONSTITUTION.v3.md` | 目标宪法：20 条原则 + 附录 A/B/C |
 | `AGENTS.v3.md` | 目标流程：3 角色、契约/实现、审查、证据 |
 | `ADOPTION.md` | 单布局迁移、唯一 index、sdd historical、回滚 |
 | `PILOT.md` | 两个变更的试点与回滚 |
+| `RETRO-2026-11-28.md` | 本轮复盘、根因、风险、防复发规则 |
 
 ## 评审标准
 

@@ -17,7 +17,7 @@
 | 人类批准 Spec/ADR/合入/Release | 保留 | 宪法 IV / 16–17 |
 | 不伪造 trailer；不用 hotfix/新 change_id 绕过 FAIL | 保留 | 宪法 III / 15 |
 | 已批准 Spec/ADR 不静默改写；新 ADR 取代 | 保留 | 宪法 I / 3 |
-| 38 条原则/6 角色/QC/PO/Architect/Reviewer | 替换 | 19 条原则 + 作者/审查者/人类 |
+| 38 条原则/6 角色/QC/PO/Architect/Reviewer | 替换 | 20 条原则 + 作者/审查者/人类 |
 | pair 线程/MEMORY/gates/tsv/多份 QC 报告 | 退役 | 不进入 v3.0 |
 | L0/L1/L2、QC 五窗口、审计清单 | 退役/非规范 | 仅 `docs/checklists/**` 参考，不作验收 |
 | bugfix 特殊路由 | 不做 | bugfix 只是实现/契约分类（宪法 I / 2） |

@@ -5460,9 +5460,13 @@ type AdmitRefundRequest struct {
 	FreightRefundableCent int64 `protobuf:"varint,9,opt,name=freight_refundable_cent,json=freightRefundableCent,proto3" json:"freight_refundable_cent,omitempty"`
 	// batch_id links the request to a TCC/compensation batch; empty for
 	// non-batch (ordinary after-sales) requests.
-	BatchId       string `protobuf:"bytes,10,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	BatchId string `protobuf:"bytes,10,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	// client_request_id is the caller's idempotency key for a historical refund
+	// with no after-sale number. Order allocates legacy:<order_no>:<seq> once
+	// per (order_no, client_request_id); a retry returns the same refund_id.
+	ClientRequestId string `protobuf:"bytes,11,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *AdmitRefundRequest) Reset() {
@@ -5561,6 +5565,13 @@ func (x *AdmitRefundRequest) GetFreightRefundableCent() int64 {
 func (x *AdmitRefundRequest) GetBatchId() string {
 	if x != nil {
 		return x.BatchId
+	}
+	return ""
+}
+
+func (x *AdmitRefundRequest) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
 	}
 	return ""
 }
@@ -11203,13 +11214,18 @@ type CancelIfCreatedReply struct {
 	// CANCELLED | NO_WAYBILL | ALREADY_SHIPPED | RECEIVED | TRANSIENT_ERROR
 	// CANCELLED       = a real shipment row was CREATED->CANCELLED, or was already CANCELLED.
 	// NO_WAYBILL      = this (order_no, group_no[, shipment_no]) has no shipment row at all;
-	//                   nothing was cancelled and nothing was rolled back. A CONSUMED permit
-	//                   with a whole-group request maps to REVIEW_REQUIRED (manual review).
+	//
+	//	nothing was cancelled and nothing was rolled back. A CONSUMED permit
+	//	with a whole-group request maps to REVIEW_REQUIRED (manual review).
+	//
 	// ALREADY_SHIPPED = the parcel left the warehouse (SHIPPED, or EXCEPTION with shipped_at);
-	//                   never cancelled.
+	//
+	//	never cancelled.
+	//
 	// RECEIVED        = the parcel was received; never cancelled.
 	// TRANSIENT_ERROR = ambiguous/unknown (incl. EXCEPTION without shipped_at); retry/manual,
-	//                   never treated as cancelled.
+	//
+	//	never treated as cancelled.
 	Status        string `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -17528,7 +17544,7 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"\aline_no\x18\x01 \x01(\x05R\x06lineNo\x12\x1a\n" +
 	"\bquantity\x18\x02 \x01(\x05R\bquantity\x12\x1d\n" +
 	"\n" +
-	"goods_cent\x18\x03 \x01(\x03R\tgoodsCent\"\xe7\x02\n" +
+	"goods_cent\x18\x03 \x01(\x03R\tgoodsCent\"\x93\x03\n" +
 	"\x12AdmitRefundRequest\x12\x1b\n" +
 	"\trefund_id\x18\x01 \x01(\tR\brefundId\x12\x19\n" +
 	"\border_no\x18\x02 \x01(\tR\aorderNo\x12\x19\n" +
@@ -17542,7 +17558,8 @@ const file_mall_v1_mall_proto_rawDesc = "" +
 	"reasonCode\x126\n" +
 	"\x17freight_refundable_cent\x18\t \x01(\x03R\x15freightRefundableCent\x12\x19\n" +
 	"\bbatch_id\x18\n" +
-	" \x01(\tR\abatchId\"\xf5\x01\n" +
+	" \x01(\tR\abatchId\x12*\n" +
+	"\x11client_request_id\x18\v \x01(\tR\x0fclientRequestId\"\xf5\x01\n" +
 	"\x10AdmitRefundReply\x12\x1b\n" +
 	"\trefund_id\x18\x01 \x01(\tR\brefundId\x12\x16\n" +
 	"\x06result\x18\x02 \x01(\tR\x06result\x12\x14\n" +

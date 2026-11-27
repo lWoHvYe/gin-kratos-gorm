@@ -517,6 +517,31 @@ re-review and human merge decision are still required.
   重试重调所有 refund（依赖 Payment 幂等）。
 - 本条落盘后由本提交记录，**未 merge**。
 
+### 2026-11-27 人类决定: PAY-SETTLE-01 T5 - AC-60 收口
+
+- `change_id: PAY-SETTLE-01`; `Actor: lead`; `Reviewed-by: reviewer-syntax`（PASS）;
+  `级别: 实现变更`; `阶段: 合入前`; base `4202747`.
+- **proto**：`AdmitRefundRequest.client_request_id=11`（additive；只重生成 `mall.pb.go`）。
+- **迁移 0025**：`legacy_refund_allocations(order_no, request_id, refund_id)`；
+  `AdmitRefund` 空 refund_id 时按 request_id 幂等分配 `legacy:<order_no>:<seq>`。
+- **发货**：`checkOrderReady` 读行状态；HELD→Confirm；CONFIRMED→放行；MISSING/确认失败→
+  shortage/refund 错误，不消费 permit。
+- **测试**：自动分配幂等、HELD/MISSING 发货；full **61.813s/41.902s PASS**；proto-guard OK；
+  vet 0；`internal/services/inventory` 0 改动。
+- **AC-60**：未验证 → **已验证**；**AC-63 保持已验证**；T5.2/3/5/6/7 未做；`NOT RELEASE`。
+- **NB**：无并发 loser/空 request_id/CONFIRMED/Confirm 失败专门测试；D-11 确认失败上限未实现
+  （ops 可 `ReportGroupShortage`，非永久阻断）；分配在 order 状态检查前会消耗 seq。
+- 本条落盘后由本提交记录，**未 merge**。
+
+### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 AC-60 收口 PASS
+
+- Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `4202747`..工作树（未提交；HEAD=`4202747`；proto/migration 0025/allocation/shipping/tests；无 inventory；full 41.902s、proto-guard OK 1002、vet 0、boundary 0）
+- Spec 和 ADR: `docs/specs/0002-payment-settlement-admission.md` v1.11（AC-60/AC-63/INV-46）；`docs/adr/0011-legacy-24h-release-ack.md`
+- 结论: PASS（AC-60 已验证；AC-63 保持已验证；T5.2/3/5/6/7 未做；NOT RELEASE）
+- 取代: 无
+- 阻断项: 无; 待办: 并发 allocation/空 request/CONFIRMED/confirm-failure 测试；D-11 上限；分配先于状态检查；无 lines 兼容测试；AC-63；T5.2/3/5/6/7
+- AC 位移: `docs/specs/0002-payment-settlement-admission.md` AC-60 未验证 -> 已验证（无售后自动分配/发货 HELD/MISSING + T5；CONFIRMED 代码路径；D-11 NB）；AC-63 已验证 -> 已验证
+
 ### 2026-11-27 审查裁决: PAY-SETTLE-01 - T5 ADR-0011 Phase 3b PASS
 
 - Actor / Reviewed-by: `reviewer-syntax`（独立 subagent，与作者 `lead` 不同 actor） / `human`（待批准；作者 `lead` 不作 Reviewed-by）; 级别: 实现变更; 阶段: 代码; base..head: `098e7fe`..工作树（未提交；HEAD=`098e7fe`；worker/test；无 migration/api/inventory；full 41.224s、vet 0、boundary 0）

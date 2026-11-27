@@ -314,10 +314,9 @@ func loadOrderStatus(ctx context.Context, q querier, orderNo string) (string, er
 // and is idempotent by refund_id. CONSUMED permits take the two-phase
 // PENDING_REMOTE -> CancelIfCreated -> Tx2 path.
 func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (*pb.AdmitRefundReply, error) {
-	refundID := strings.TrimSpace(req.GetRefundId())
 	orderNo := strings.TrimSpace(req.GetOrderNo())
-	if refundID == "" || orderNo == "" {
-		return nil, apperr.Invalid("refund_id and order_no are required")
+	if orderNo == "" {
+		return nil, apperr.Invalid("order_no is required")
 	}
 	if req.GetAmountCent() < 0 {
 		return nil, apperr.Invalid("amount_cent must not be negative")
@@ -330,6 +329,13 @@ func (s *Service) AdmitRefund(ctx context.Context, req *pb.AdmitRefundRequest) (
 	}
 	if record == nil {
 		return nil, apperr.NotFound("order not found")
+	}
+	refundID := strings.TrimSpace(req.GetRefundId())
+	if refundID == "" {
+		refundID, err = s.allocateLegacyRefundID(ctx, orderNo, req.GetClientRequestId())
+		if err != nil {
+			return nil, err
+		}
 	}
 	if record.Status != statusPaid && record.Status != statusAllocated && record.Status != statusShipped && record.Status != statusCompleted {
 		return nil, apperr.Failed("order cannot accept refunds in status " + record.Status)

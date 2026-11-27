@@ -543,6 +543,10 @@ message AdmitRefundRequest {
   // batch_id links the request to a TCC/compensation batch; empty for
   // non-batch (ordinary after-sales) requests.
   string batch_id = 10;
+  // client_request_id is the caller's idempotency key for a historical refund
+  // with no after-sale number. Order allocates legacy:<order_no>:<seq> once
+  // per (order_no, client_request_id); a retry returns the same refund_id.
+  string client_request_id = 11;
 }
 message AdmitRefundReply {
   string refund_id = 1;

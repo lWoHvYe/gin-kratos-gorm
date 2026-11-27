@@ -853,8 +853,33 @@ func (s *Service) checkOrderReady(ctx context.Context, orderNo string, items []*
 	if err != nil {
 		return apperr.Unavailable("inventory readiness check failed", err)
 	}
-	if !reply.GetReady() {
-		return apperr.Failed("inventory is not ready for settlement")
+	if len(reply.GetLines()) == 0 {
+		if !reply.GetReady() {
+			return apperr.Failed("inventory is not ready for settlement")
+		}
+		return nil
+	}
+	// AC-60: historical orders may start from HELD reservations. Confirm HELD
+	// before requesting the shipping permit; MISSING/other states are a
+	// shortage/refund decision, never a silent pass or a permanent block.
+	for _, line := range reply.GetLines() {
+		switch line.GetStatus() {
+		case "CONFIRMED":
+			continue
+		case "HELD":
+			if _, cerr := s.inventory.Confirm(ctx, &pb.ReserveRequest{
+				OrderNo: orderNo, SkuId: line.GetSkuId(), WarehouseId: line.GetWarehouseId(),
+				Quantity: line.GetQuantity(),
+			}); cerr != nil {
+				return apperr.Failed("inventory confirmation failed; shortage/refund required").
+					WithDetails(map[string]any{"order_no": orderNo, "sku_id": line.GetSkuId(),
+						"warehouse_id": line.GetWarehouseId(), "status": line.GetStatus()})
+			}
+		default:
+			return apperr.Failed("inventory cannot be confirmed; shortage/refund required").
+				WithDetails(map[string]any{"order_no": orderNo, "sku_id": line.GetSkuId(),
+					"warehouse_id": line.GetWarehouseId(), "status": line.GetStatus()})
+		}
 	}
 	return nil
 }

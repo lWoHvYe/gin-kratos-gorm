@@ -75,6 +75,7 @@ func TestT5RealMigrationSchemaAndAC60Backfill(t *testing.T) {
 		{"refund_commitment_releases", "authorization_id"},
 		{"legacy_payment_resolution", "expires_at"},
 		{"order_refund_sequences", "next_seq"},
+		{"legacy_refund_allocations", "request_id"},
 	} {
 		if got := countRows(t, db, `SELECT COUNT(*) FROM information_schema.columns
 			WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`, column.table, column.name); got != 1 {

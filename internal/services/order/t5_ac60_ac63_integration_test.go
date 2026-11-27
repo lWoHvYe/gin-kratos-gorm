@@ -3,9 +3,12 @@ package order
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	pb "gin-kratos-gorm/api/gen/mall/v1"
+
+	"google.golang.org/grpc"
 )
 
 func seedAC60Order(t *testing.T, db *sql.DB, orderNo string, pay int64, settle string) {
@@ -157,5 +160,108 @@ func TestAC63LegacyResolutionAndQueue(t *testing.T) {
 		if len(svc.payments.(*fakePaymentPort).refundCalls) != 0 {
 			t.Fatal("compensation called Payment before release")
 		}
+	})
+}
+
+func TestAC60LegacyRefundAllocationIdempotent(t *testing.T) {
+	db := legacyTestDB(t)
+	seedAC60Order(t, db, "ORD-AC60-ALLOC", 10000, "")
+	payments := &fakePaymentPort{captured: 10000, intents: []*pb.Intent{
+		legacyIntent("PAY-AC60-ALLOC", "ORD-AC60-ALLOC", "SUCCEEDED", 10000, 0),
+	}}
+	svc := legacyService(db)
+	svc.payments = payments
+	ctx := context.Background()
+	req := &pb.AdmitRefundRequest{
+		OrderNo: "ORD-AC60-ALLOC", GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
+		ClientRequestId: "REQ-AC60-1",
+	}
+	if _, err := svc.AdmitRefund(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	var refundID string
+	if err := db.QueryRow(`SELECT refund_id FROM order_refund_admissions WHERE order_no = 'ORD-AC60-ALLOC'`).Scan(&refundID); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(refundID, "legacy:ORD-AC60-ALLOC:") {
+		t.Fatalf("allocated refund_id = %q", refundID)
+	}
+	if _, err := svc.AdmitRefund(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM order_refund_admissions WHERE order_no = 'ORD-AC60-ALLOC'`); got != 1 {
+		t.Fatalf("admissions = %d, want 1", got)
+	}
+	if got := countRows(t, db, `SELECT COUNT(*) FROM legacy_refund_allocations WHERE order_no = 'ORD-AC60-ALLOC'`); got != 1 {
+		t.Fatalf("allocations = %d, want 1", got)
+	}
+	var again string
+	if err := db.QueryRow(`SELECT refund_id FROM legacy_refund_allocations WHERE order_no = 'ORD-AC60-ALLOC' AND request_id = 'REQ-AC60-1'`).Scan(&again); err != nil {
+		t.Fatal(err)
+	}
+	if again != refundID {
+		t.Fatalf("retry allocated %q, want %q", again, refundID)
+	}
+}
+
+type ac60Inventory struct {
+	pb.InventoryServiceClient
+	lines        []*pb.CheckOrderReadyLineStatus
+	confirmCalls []*pb.ReserveRequest
+}
+
+func (f *ac60Inventory) CheckOrderReady(context.Context, *pb.CheckOrderReadyRequest, ...grpc.CallOption) (*pb.CheckOrderReadyReply, error) {
+	return &pb.CheckOrderReadyReply{Ready: false, Lines: f.lines}, nil
+}
+
+func (f *ac60Inventory) Confirm(_ context.Context, in *pb.ReserveRequest, _ ...grpc.CallOption) (*pb.Empty, error) {
+	f.confirmCalls = append(f.confirmCalls, in)
+	return &pb.Empty{}, nil
+}
+
+func TestAC60ShippingConfirmsHeldAndBlocksMissing(t *testing.T) {
+	ctx := context.Background()
+	t.Run("HELD is confirmed before the permit", func(t *testing.T) {
+		db := legacyTestDB(t)
+		seedAC60Order(t, db, "ORD-AC60-HELD", 10000, "")
+		svc := legacyService(db)
+		svc.payments = &fakePaymentPort{intents: []*pb.Intent{
+			legacyIntent("PAY-AC60-HELD", "ORD-AC60-HELD", "SUCCEEDED", 10000, 0),
+		}}
+		inventory := &ac60Inventory{lines: []*pb.CheckOrderReadyLineStatus{{
+			LineNo: 1, SkuId: 1, WarehouseId: 1, Quantity: 1, Status: "HELD",
+		}}}
+		svc.inventory = inventory
+		if _, err := svc.AuthorizeShipment(ctx, &pb.ShipmentPermitRequest{
+			OrderNo: "ORD-AC60-HELD", ShipmentNo: "SHIP-AC60-HELD", FulfillmentGroupNo: "G1",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if len(inventory.confirmCalls) != 1 || inventory.confirmCalls[0].GetOrderNo() != "ORD-AC60-HELD" {
+			t.Fatalf("confirm calls = %+v", inventory.confirmCalls)
+		}
+		assertPermitState(t, db, "ORD-AC60-HELD", "G1", permitConsumed)
+	})
+
+	t.Run("MISSING fails closed and keeps the permit", func(t *testing.T) {
+		db := legacyTestDB(t)
+		seedAC60Order(t, db, "ORD-AC60-MISS", 10000, "")
+		svc := legacyService(db)
+		svc.payments = &fakePaymentPort{intents: []*pb.Intent{
+			legacyIntent("PAY-AC60-MISS", "ORD-AC60-MISS", "SUCCEEDED", 10000, 0),
+		}}
+		inventory := &ac60Inventory{lines: []*pb.CheckOrderReadyLineStatus{{
+			LineNo: 1, SkuId: 1, WarehouseId: 1, Quantity: 1, Status: "MISSING",
+		}}}
+		svc.inventory = inventory
+		if _, err := svc.AuthorizeShipment(ctx, &pb.ShipmentPermitRequest{
+			OrderNo: "ORD-AC60-MISS", ShipmentNo: "SHIP-AC60-MISS", FulfillmentGroupNo: "G1",
+		}); err == nil {
+			t.Fatal("missing reservation was accepted")
+		}
+		if len(inventory.confirmCalls) != 0 {
+			t.Fatalf("missing confirm calls = %d", len(inventory.confirmCalls))
+		}
+		assertPermitState(t, db, "ORD-AC60-MISS", "G1", permitNone)
 	})
 }

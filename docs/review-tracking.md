@@ -13,6 +13,15 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-28 实现交付: AC-27A-STATE-01 - PreShipAdmission 只认有效 PRE（待代码审查）
+
+- Actor / Reviewed-by: lead（作者） / pending（待独立代码审查）; 级别: 实现变更; 阶段: 代码; base..head: `dee75b0..16e472e`
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md` v1.6 AC-27A；`docs/adr/0005-fulfillment-quantity-split.md` Rev 1.3 §21；证据 `specs/0001-fulfillment-quantity-split/evidence/AC-27A-STATE-01/evidence.md`
+- 结论: 实现完成，待代码阶段独立审查；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无（待审）; 待办: 代码审查；存量 `result=PRE,state≠result` 审计归 §16.2 `AC-27-NOWB-01`
+- AC 位移: 无（待审查者裁决）
+
 ### 2026-11-28 状态变化: PAY-SETTLE-01 - SPEC-0001 v1.6 批准后标回 historical
 
 - Actor / Reviewed-by: lead（作者，按人类 2026-11-28 授权） / human（授权，非独立审查）; 级别: 契约变更; 阶段: Spec; base..head: `f1f7af1`（批准提交）..工作树

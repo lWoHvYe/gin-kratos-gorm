@@ -15,7 +15,7 @@
 | 角色 | 是谁 | 做 | 不做 |
 |---|---|---|---|
 | 作者 | 主会话 | 写 Spec/ADR/plan/tasks；实现；交证据；记录人类决定 | 审自己；改写审查者裁决；合入 |
-| 审查者 | 独立 subagent（有运行时；不能复跑时写明原因/未覆盖并取得人类书面豁免） | 审 Spec/ADR/代码；写裁决；更新验收表 | 改代码；改 Spec/ADR 正文（验收表除外）；给补丁建议 |
+| 审查者 | 独立 subagent（代码阶段有运行时；该阶段不能复跑时写明原因/未覆盖并取得人类书面豁免） | 审 Spec/ADR/代码；写裁决；更新验收表 | 改代码；改 Spec/ADR 正文（验收表除外）；给补丁建议 |
 | 人类 | 人 | 批准 Spec/ADR；合入；Release；回答业务裁决题 | 逐条核对文字/语法 |
 
 - 作者和审查者都先读宪法；本文件只把原则落成操作。
@@ -74,7 +74,7 @@ base: <sha>; head: <sha>; 阶段: Spec | 代码
 3. AC 位移：受影响 AC 的旧/新状态、检查类型、证据路径。代码阶段标“已验证”必须有仓库内、绑定已提交 HEAD 的证据和独立 oracle；Spec 阶段审草案，不要求已提交 HEAD；否则只能标“有引用”或“未验证”。
 4. 能写台账就按 AGENTS §4 写入 docs/review-tracking.md 并更新 Spec 验收表；不能写就输出同格式条目。
 5. 写明 review_scope、release_status、spec_version/adr_revision、verification、受影响 INV、baseline_impact；资金/库存/履约/权限/跨服务/迁移/状态机必须逐条列 INV；这些高风险阻断未解决时不得 PASS。
-6. 不能复跑时写明原因/未覆盖，并引用台账里的人类书面豁免；没有豁免不得 PASS。
+6. 代码阶段不能复跑时写明原因/未覆盖，并引用台账里的人类书面豁免；没有豁免不得代码阶段 PASS。
 
 一次给全所有 blocking 问题；只追 blocker；作者修完后只复跑失败项+diff；不给补丁；发现设计缺口就停代码，回 Spec/ADR。
 ```
@@ -108,7 +108,7 @@ base: <sha>; head: <sha>; 阶段: Spec | 代码
 
 每次代码交付满足宪法 11–15，并带对应 AC：
 
-- 证据：diff、测试日志（绑定 `git rev-parse HEAD`）、【测试范围】【未覆盖范围】【取舍】；代码阶段“已验证”必须在仓库内且绑定已提交 HEAD。
+- 证据：diff、测试日志（绑定 `git rev-parse HEAD`）、【测试范围】【未覆盖范围】【取舍】；代码阶段“已验证”必须在仓库内、绑定已提交 HEAD，并附独立 oracle。
 - 证据放 `specs/<id>/evidence/<change_id>/`；在途可沿用 `docs/implementation/**`；治理变更放 `docs/collab/qc-reports/`。
 - 台账写精确路径和 HEAD；AC 位移写路径。
 - 高风险按宪法 12 附并发/故障证据；不适用须人类书面豁免。

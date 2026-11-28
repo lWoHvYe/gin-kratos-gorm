@@ -13,6 +13,25 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-28 审查裁决: GOV-V3-HARDEN-01 - 上轮 FAIL 修复复核（SCOPED-PASS）
+
+- Actor / Reviewed-by: lead（作者） / reviewer-v31（独立 reviewer，未参与写作）; 级别: 治理变更; 阶段: Spec; base..head: `6eb1933..52e4b90 + 工作树（4 文件）`
+- Spec 和 ADR: 无（治理变更）；`AGENTS.md`; `.specify/memory/constitution.md`
+- 结论: SCOPED-PASS; 范围: B1/B2/M1/M2/M3/m4/m6 修复复核；不含代码/测试/Spec AC; release_status: NOT RELEASE
+- 取代: 无（补记 2026-11-28 人类决定: GOV-V3-HARDEN-01 的 independent review 状态：FAIL -> SCOPED-PASS）
+- 阻断项: 无（B1/B2/M1-M3/m4/m6 已修）; 待办: m3/m7 非阻断遗留；v3.1.0 未做全量代码/AC 复核
+- AC 位移: 无（治理变更，未改 AC 状态/§15/§17）
+
+### 2026-11-28 人类决定: GOV-V3-HARDEN-01 - v3.1.0 核心加固
+
+- Actor / Reviewed-by: lead (author, recording human direction) / reviewer-v31 (independent; FAIL -> SCOPED-PASS; see review entry above); 级别: 治理变更; 阶段: Spec; base..head: `6eb1933..52e4b90 + 工作树`
+- Spec 和 ADR: `AGENTS.md`; `.specify/memory/constitution.md`
+- 结论: 批准（人类方向）；独立 review FAIL；release_status: NOT RELEASE
+- 取代: 无（历史提案：`docs/archive/2026-11-28-v3/GOV-V3-HARDEN-01.md`）
+- 阻断项: B1/B2/M1-M3（复审见同日 SCOPED-PASS 条目）
+- 收益/停止条件: 已验证 evidence 可绑定 committed HEAD；若 Spec 审查被要求豁免或证据不可绑定，停止扩规则
+- AC 位移: 无
+
 ### 2026-11-28 审查裁决: DOC-CONSISTENCY-01 - B4 证据复核（PASS）
 
 - Actor / Reviewed-by: `lead`（作者，工作树未提交） / `rev-doc-cleanup`（独立 reviewer，未参与写作）; 级别: 治理变更; 阶段: Spec; base..head: `db27510..工作树（未提交；HEAD=db27510）`
@@ -39,15 +58,6 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 - 取代: 无
 - 阻断项: B1 声明治理变更/无 Spec，却改写已批准 SPEC-0002 v1.11 与 SPEC-0001 v1.5 正文（0002 新增注还称 active 正文为“历史正文”），未升版/重批且混入契约与工具文档（宪法 3/4/20；0001 冻结规则；AGENTS §2.1）；B2 新增注释使 0001/0002 行号 +2，`0002:90`、`0001:622-625` 等 ADR/plan 锚点漂移（附录 A 可达性、宪法 11）；B3 作者改写台账 AC 位移/状态行且未新增本 change 条目（宪法 10/15、AGENTS §4）；B4 无 DOC-CONSISTENCY-01 独立证据，EVID 仍是 LEAN-CORE-01/SPEC-LAYOUT-01 的 `6ee05df..b5377a8`（AGENTS §5、宪法 11）；B5 0001 运行状态在 README/正文/台账/EVID 四处不一致（宪法 5）; 待办: 作者按 B1–B5 一次修复；人类批准前补 v3.0 的 PATCH 分类/版本与收益/停止条件；B4 补绑定 `db27510..最终 head` 的证据；0001 状态与 `Spec.md:5` 的 QC 残留一并收口
 - AC 位移: 无（治理变更，未改 AC 状态/§15/§17 验收表；状态表述不一致见 B5）
-
-### 2026-11-28 人类决定: GOV-V3-HARDEN-01 - v3.1.0 核心加固
-
-- Actor / Reviewed-by: lead / human (direction; consistency check); 级别: 治理变更; 阶段: Spec; base..head: working tree (`v3.1.0`)
-- Spec 和 ADR: `AGENTS.md`; `.specify/memory/constitution.md`
-- 结论: 人类方向；作者自洽检查；release_status: NOT RELEASE
-- 取代: `docs/archive/2026-11-28-v3/GOV-V3-HARDEN-01.md`（草案归档）
-- 阻断项: 无（独立 review 不作为 gate；后续可复核）
-- AC 位移: 无
 
 ### 2026-11-28 人类决定: LEAN-CORE-01 / SPEC-LAYOUT-01 - v3 + 单布局
 

@@ -211,3 +211,85 @@ func TestOpsReplayTCCRearmPostConvergence(t *testing.T) {
 		t.Fatalf("payment batches = %d, want 1", got)
 	}
 }
+
+// NOWB-01 terminal ① (test-only): after ops registers real S6 evidence (the
+// waybill was cancelled) and re-arms the review row per the manual runbook, the
+// existing AdmitRefund path must converge to PRE, the read model must close the
+// group (effective CANCELLED) and orders.status must stay untouched. No
+// production code is added: the re-arm is the documented manual ops step.
+func TestOpsReplayNowbRearmConvergesToPre(t *testing.T) {
+	db := orderTestDB(t)
+	payments := &fakePaymentPort{captured: 10000}
+	ff := &fakeFulfillmentPort{status: probeStatusNoWaybill}
+	svc := ac50Service(db, payments, ff)
+	ctx := context.Background()
+	const orderNo, refundID = "ORD-OPSN-PRE", "R-OPSN-PRE"
+	ac50SeedOrder(t, db, orderNo, 10000)
+	ac50SeedGroup(t, db, orderNo, statusAllocated, 0)
+	ac50SeedPermit(t, db, orderNo, permitConsumed)
+	var statusBefore string
+	if err := db.QueryRow(`SELECT status FROM orders WHERE order_no = ?`, orderNo).Scan(&statusBefore); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. CONSUMED + no waybill -> REVIEW_REQUIRED persisted, group stays open.
+	_, reviewErr := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: refundID, OrderNo: orderNo, GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
+	})
+	ac50RequireReviewConflict(t, reviewErr, refundID)
+	if result, state, _ := ac50Admission(t, db, refundID); result != refundReviewRequired || state != refundPending {
+		t.Fatalf("admission = %s/%s, want REVIEW_REQUIRED/PENDING_REMOTE", result, state)
+	}
+	groups, err := loadFulfillmentGroups(ctx, db, orderNo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if groupIsClosed(groupedByNo(t, groups, "G1")) {
+		t.Fatal("reviewed group must stay open before re-arm")
+	}
+
+	// 2. Manual ops re-arm (runbook): clear only the review marker, keep the
+	//    same refund_id and audit row.
+	if _, err := db.Exec(`UPDATE order_refund_admissions
+		SET result = ?, version = version + 1, updated_at = NOW(3)
+		WHERE refund_id = ? AND result = ? AND state = ?`,
+		refundPending, refundID, refundReviewRequired, refundPending); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Real S6 evidence: Fulfillment confirms the waybill was cancelled, then
+	//    the existing admission path re-drives the same refund_id to PRE.
+	ff.setStatus("CANCELLED")
+	reply, err := svc.AdmitRefund(ctx, &pb.AdmitRefundRequest{
+		RefundId: refundID, OrderNo: orderNo, GroupNo: "G1", AmountCent: 10000, Source: "aftersale",
+	})
+	if err != nil {
+		t.Fatalf("re-drive after re-arm: %v", err)
+	}
+	if reply.GetResult() != refundResultPre || reply.GetState() != refundResultPre {
+		t.Fatalf("re-drive = %s/%s, want PRE/PRE", reply.GetResult(), reply.GetState())
+	}
+
+	// 4. Convergence: the read model closes the group; lifecycle is untouched.
+	groups, err = loadFulfillmentGroups(ctx, db, orderNo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := groupedByNo(t, groups, "G1")
+	if !groupIsClosed(group) {
+		t.Fatal("group must be closed after PRE convergence")
+	}
+	if got := effectiveGroupStatus(group); got != statusCancelled {
+		t.Fatalf("effectiveGroupStatus = %s, want CANCELLED", got)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM orders WHERE order_no = ?`, orderNo).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != statusBefore {
+		t.Fatalf("orders.status = %s, want unchanged %s (no refund write)", status, statusBefore)
+	}
+	if got := len(payments.refundCalls); got != 0 {
+		t.Fatalf("Payment.Refund calls = %d, want 0", got)
+	}
+}

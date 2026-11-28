@@ -17,9 +17,10 @@
 ## 2. Spec 持久化
 
 - 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
-- `0001` 为 historical reference (QC delta pending)；`0002` 为 active；`sdd-struct-align-01` 为 historical。
+- `0001` 为 historical reference（复审状态见台账）；`0002` 为 active；`sdd-struct-align-01` 为 historical。
 - `docs/specs/` 只做重定向；不保留副本。
 - 新工作 `specs/<feature>`；变更原地更新；evidence 放 `specs/<id>/evidence/<change_id>/`。
+- Spec Kit 模板中的 `[###-feature-name]` 只是占位；active Spec 以 `specs/<id>/spec.md` 为准，`<id>` 可为 `NNNN-slug` 或 change_id，不要求数字前缀。
 
 ## 3. 命令注意事项
 

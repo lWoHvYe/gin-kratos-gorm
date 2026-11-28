@@ -13,6 +13,33 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-28 审查裁决: DOC-CONSISTENCY-01 - B4 证据复核（PASS）
+
+- Actor / Reviewed-by: `lead`（作者，工作树未提交） / `rev-doc-cleanup`（独立 reviewer，未参与写作）; 级别: 治理变更; 阶段: Spec; base..head: `db27510..工作树（未提交；HEAD=db27510）`
+- Spec 和 ADR: 无（治理变更）；B4 证据：`docs/collab/qc-reports/EVID-2026-11-28-DOC-CONSISTENCY.md`（未跟踪，提交时必须纳入并回填最终 head）
+- 结论: PASS; 范围: 仅 B4 证据（grep 已收窄至 5 个改动文件，0 命中；review-tracking 4 处例外已显式列出：本轮 review 条目 1、旧 2026-11-28 条目 2、历史段 1；`git status --short` 6 M + 1 ??）；B1/B2/B3 已消解，B5 出范围; release_status: NOT RELEASE
+- 取代: 2026-11-28 审查裁决: DOC-CONSISTENCY-01 - 证据复跑（FAIL）
+- 阻断项: 无（B4 已消解）; 待办: 提交时纳入 EVID 并回填最终 head；`SPEC-INDEX-01` 待登记
+- AC 位移: 无（治理变更，未改 AC 状态/§15/§17 验收表）
+
+### 2026-11-28 审查裁决: DOC-CONSISTENCY-01 - 证据复跑（FAIL）
+
+- Actor / Reviewed-by: `lead`（作者，工作树未提交） / `rev-doc-cleanup`（独立 reviewer，未参与写作）; 级别: 治理变更; 阶段: Spec; base..head: `db27510..工作树（未提交；HEAD=db27510）`
+- Spec 和 ADR: 无（治理变更）；复跑 B1–B5；本轮 diff：`.specify/memory/constitution.md`、`AGENTS.md`、`docs/guides/review-protocol.md`、`docs/guides/spec-kit.md`、`docs/collab/qc-reports/REV-2026-11-28-SPEC-LAYOUT.md`、`docs/review-tracking.md`；新增 `docs/collab/qc-reports/EVID-2026-11-28-DOC-CONSISTENCY.md`（未跟踪）
+- 结论: FAIL; 范围: B1/B2/B3 已消解；B5 按作者声明留 `SPEC-INDEX-01`；B4 证据仍有可复现性/准确性问题; release_status: NOT RELEASE
+- 取代: 2026-11-28 审查裁决: DOC-CONSISTENCY-01 - 文档术语/状态一致性收口（FAIL）
+- 阻断项: B4（残余）EVID 的验证命令/结果与工作树不符：`grep -rn "QC delta" <上述改动文件> # 0` 实际在 `docs/review-tracking.md` 旧 2026-11-28 条目与历史段命中 3 处（旧条目为历史保留，但报告未声明例外/未收窄命令）；`git status --short # 仅 6 个 M` 实际还有未跟踪的 `EVID-2026-11-28-DOC-CONSISTENCY.md`（`??`），证据文件未纳入提交前的 diff。违反 AGENTS §5、宪法 11/15。; 待办: 修正 EVID 的 grep 范围/结果与 `git status` 结果，声明 review-tracking 历史条目例外；将 EVID 纳入提交并回填最终 head；在台账登记 `SPEC-INDEX-01`
+- AC 位移: 无（治理变更，未改 AC 状态/§15/§17 验收表）
+
+### 2026-11-28 审查裁决: DOC-CONSISTENCY-01 - 文档术语/状态一致性收口（FAIL）
+
+- Actor / Reviewed-by: `lead`（作者，工作树未提交） / `rev-doc-cleanup`（独立 reviewer，未参与写作）; 级别: 治理变更; 阶段: Spec; base..head: `db27510..工作树（未提交；HEAD=db27510）`
+- Spec 和 ADR: 无（治理变更）；被改 9 文件：`.specify/memory/constitution.md`、`AGENTS.md`、`docs/guides/review-protocol.md`、`docs/guides/spec-kit.md`、`docs/review-tracking.md`、`docs/collab/qc-reports/REV-2026-11-28-SPEC-LAYOUT.md`、`specs/README.md`、`specs/0001-fulfillment-quantity-split/spec.md`、`specs/0002-payment-settlement-admission/spec.md`
+- 结论: FAIL; 范围: 上述 9 文件静态 diff（无代码/运行时测试/plan/pilot 指标）; release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: B1 声明治理变更/无 Spec，却改写已批准 SPEC-0002 v1.11 与 SPEC-0001 v1.5 正文（0002 新增注还称 active 正文为“历史正文”），未升版/重批且混入契约与工具文档（宪法 3/4/20；0001 冻结规则；AGENTS §2.1）；B2 新增注释使 0001/0002 行号 +2，`0002:90`、`0001:622-625` 等 ADR/plan 锚点漂移（附录 A 可达性、宪法 11）；B3 作者改写台账 AC 位移/状态行且未新增本 change 条目（宪法 10/15、AGENTS §4）；B4 无 DOC-CONSISTENCY-01 独立证据，EVID 仍是 LEAN-CORE-01/SPEC-LAYOUT-01 的 `6ee05df..b5377a8`（AGENTS §5、宪法 11）；B5 0001 运行状态在 README/正文/台账/EVID 四处不一致（宪法 5）; 待办: 作者按 B1–B5 一次修复；人类批准前补 v3.0 的 PATCH 分类/版本与收益/停止条件；B4 补绑定 `db27510..最终 head` 的证据；0001 状态与 `Spec.md:5` 的 QC 残留一并收口
+- AC 位移: 无（治理变更，未改 AC 状态/§15/§17 验收表；状态表述不一致见 B5）
+
 ### 2026-11-28 人类决定: LEAN-CORE-01 / SPEC-LAYOUT-01 - v3 + 单布局
 
 - Actor / Reviewed-by: lead / human (direction; independent review pending); 级别: 治理变更（含 Spec 布局）; 阶段: Spec; base..head: `6ee05df..b5377a8`（布局+收口）; 范围: v3 core + 单布局

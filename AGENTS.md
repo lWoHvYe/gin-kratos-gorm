@@ -1,6 +1,6 @@
-# AGENTS.md v3.0
+# AGENTS.md v3.0.1
 
-> 2026-11-28 v3.0 已合并到 main（人类方向）；独立 review pending。只写操作细节，冲突以宪法 v3.0 为准。
+> 2026-11-28 v3.0.1 PATCH（工作树，待人类合入；任务书读 AGENTS + QC 术语改为台账口径；无新规则）；独立 review pending。只写操作细节，冲突以宪法 v3.0.1 为准。
 
 ## 0. 读取层级
 
@@ -52,7 +52,7 @@
 ### 2.3 Spec 布局
 
 - 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
-- `0001` 为 historical reference（QC delta 待复审；不再新增/改 AC；§17 表为历史状态）；`0002` 为 active。
+- `0001` 为 historical reference（复审状态见 `docs/review-tracking.md`；不再新增/改 AC；§17 表为历史状态）；`0002` 为 active。
 - `docs/specs/` 只做重定向；`specs/sdd-struct-align-01` 为 historical，不进入当前 index。
 - 新工作 `specs/<feature>`；变更原地更新；evidence 放 `specs/<id>/evidence/<change_id>/`。
 - 不得同时维护同一能力的两份 active Spec。
@@ -62,7 +62,7 @@
 作者启动审查者时只用下面这段，不得增删。
 
 ```text
-你是独立审查者。先读 .specify/memory/constitution.md，再读 Spec 和它链接的 ADR。
+你是独立审查者。先读 .specify/memory/constitution.md 与 AGENTS.md，再读 Spec 和它链接的 ADR。
 change_id: <编号>; 级别: 契约变更 | 实现变更 | 治理变更; Spec/ADR: <路径，治理变更写"无">
 声称受影响的其他 Spec 的 AC: <编号，没有写"无">
 base: <sha>; head: <sha>; 阶段: Spec | 代码

@@ -1,4 +1,4 @@
-# REV-2026-11-28 — v3 / Spec 单布局交付证据
+# EVID-2026-11-28 — v3 / Spec 单布局交付证据（作者证据，不是 Reviewer 裁决）
 
 Status: **author evidence; independent review pending; NOT RELEASE**.
 
@@ -9,7 +9,7 @@ Status: **author evidence; independent review pending; NOT RELEASE**.
 | 级别 | 治理 + 契约 |
 | 阶段 | Spec |
 | Spec/ADR | `specs/README.md`; `docs/adr/0012-spec-single-layout.md` |
-| 未覆盖 | 无业务代码/运行时测试；无 pilot 指标；0001 QC delta 未复审 |
+| 未覆盖 | 无业务代码/运行时测试；无 pilot 指标；0001 reviewer delta 未复审 |
 
 ## 交付
 
@@ -17,7 +17,7 @@ Status: **author evidence; independent review pending; NOT RELEASE**.
 - `docs/specs` 只剩重定向 README；`Spec.md` 只指针；`specs/README` 唯一 active index；
 - `sdd-struct-align-01` historical，不在 index；
 - ADR-0009 header `Superseded by ADR-0012`；ADR-0012 Accepted；
-- 0001 改标 historical reference（QC delta pending），补 §17 历史验收表；0002 active，状态以 §15 为准。
+- 0001 改标 historical reference（reviewer delta pending），补 §17 历史验收表；0002 active，状态以 §15 为准。
 
 ## 验证命令 / 结果
 
@@ -39,7 +39,7 @@ git grep docs/specs/0001|0002           # only historical segments/pointers
 
 - 未跑 Go/集成测试（无代码改动）；
 - 未跑 pilot 指标；
-- 未完成 0001 QC delta 复审；未把 0001 冒充 frozen/已验证。
+- 未完成 0001 reviewer delta 复审；未把 0001 冒充 frozen/已验证。
 
 ## 【取舍】
 

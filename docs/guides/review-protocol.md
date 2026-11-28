@@ -2,11 +2,12 @@
 
 > 性质：非规范操作协议，冲突以宪法/AGENTS 为准。用于一个非 T5、非 legacy 迁移的变更试点；
 > 不新增角色/批准点，不替代 Spec/ADR/台账。
+> 本协议是 review 试点，不用于 v3 pilot；§5 的风险分级仅为试点辅助，不替代宪法 12/AGENTS。
 
 ## 0. 过渡边界
 
 - 所有 active Spec 在 `specs/<id>/spec.md`；`specs/README.md` 是唯一 index。
-- `0001` historical reference (QC delta pending)；`0002` active；`sdd` historical；`docs/specs/` 只重定向。
+- `0001` historical reference（复审状态见台账）；`0002` active；`sdd` historical；`docs/specs/` 只重定向。
 - 本协议只解决“review 轮次/证据/成本”。
 
 ## 1. 目标

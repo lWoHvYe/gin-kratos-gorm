@@ -13,6 +13,17 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-28 审查裁决: AC-27A-STATE-01 - 有效 PRE 关闭谓词对齐（SCOPED-PASS）
+
+- Actor / Reviewed-by: `reviewer-ac27a`（独立 subagent，未参与写作） / `pending（人类合入）`; 级别: 实现变更; 阶段: 代码; base..head: `dee75b0..9585a06`（实际 HEAD `9585a06`；被审实现提交 `16e472e`；证据提交 `9585a06`）
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md` v1.6（2026-11-28 批准）AC-27A 第 5/6 条与 IF；`docs/adr/0005-fulfillment-quantity-split.md` Revision 1.3 §21；交叉参照 `specs/0002-payment-settlement-admission/spec.md` v1.11 AC-50/AC-69/AC-71
+- 结论: SCOPED-PASS; 范围: **只审 AC-27A 第 5 条“有效 PRE = `result = PRE_SHIP_REVOKED` 且 `state = result`”与第 6 条未关闭面的读模型派生实现**（`internal/services/order/fulfillment_groups.go:93-129` 的 EXISTS 增加 `a.state = a.result`；`internal/services/order/settlement.go:65-96` 注释对齐）；不含 AC-27A 全量验证、AC-27/AC-50/69/71 的重新认证、其它 §16.2 前置项；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无（本范围）。**未覆盖（不阻断本谓词 SCOPED-PASS，但阻断 AC-27A 全量“已验证”）**：AC-27A IF 的“保持未关闭并告警”在本实现中只有“未关闭”，无读模型/告警路径；迟到 `SHIPPED/RECEIVED` 重新打开/告警端到端；DLQ/AfterSales 租约丢失的 AC-61 人工重放窗口；AC-27 EARS-1/EARS-2 全量收敛；`AC-50-FIX-01`/`AC-27-NOWB-01`/`AC-27-LIVE-01`/`SPEC-0002-REF-SYNC-01` 仍开（§16.2）；`make verify` 全套（arch/dtm-contract/migrations-check/proto-guard）与其它包集成测试未跑；NATS 依赖用例（未设 `TEST_NATS_URL`）按既有 SKIP 逻辑跳过，不计 PASS；待办: 上述残余按 §16.2 owner/expiry 跟踪；AC-27A 保持 AC-REF，不得据此标“已验证”。
+- AC 位移: SPEC-0001 **AC-27A 有引用 -> 有引用**（0001 §17 仍 historical，按宪法 5 不改；当前回归状态按本台账/0002 §15.2；检查类型: 测试；证据 `internal/services/order/ac27a_closure_integration_test.go:20-151,158-220`、`specs/0001-fulfillment-quantity-split/evidence/AC-27A-STATE-01/evidence.md`）；SPEC-0002 **AC-50/AC-69/AC-71 已验证 -> 已验证（无位移）**（本变更只改读模型派生，不触写路径；复跑相关 race 用例 PASS，不重新认证原验收）；SPEC-0001 **AC-27 有引用 -> 有引用**（§16.3 四项未全关；0002 §15.2 已更新证据行）。
+- 验证: 2026-11-28，HEAD `9585a06`，MySQL 8（容器 `mysql-unicorn`，`TEST_MYSQL_DSN=...mall_integration_test`），`GOFLAGS=-mod=readonly`，仓库本地 `GOCACHE/GOMODCACHE`：`go build ./...` PASS；`go vet ./internal/services/order` PASS；`go test ./internal/services/order -run 'TestAC27|TestGroupRefundStateProjection|TestMultiGroupShadow' -count=1` PASS（含新增负例 `pre_ship_revoked_with_mismatched_state_stays_open`）；`go test ./internal/services/order -count=1` PASS 232.865s；`go test -race -p 1 ./internal/services/order -run 'TestAC27A|TestAC50Review|TestTCCReview|TestGroupRefundStateProjection|TestMultiGroupShadow' -count=1` PASS 27.015s。独立 oracle：AC-27A 正文“有效 PRE”谓词 + 直接种子 `order_refund_admissions` 行断言 `PreShipAdmission/groupIsClosed/effectiveGroupStatus`，以及真实 `AdmitRefund` 写路径正例；非作者自述。
+- 受影响 INV / baseline_impact: INV-01（关闭不写 `orders.status`；正例复跑）、INV-38（S2 组级隔离投影）、INV-44（`reservation_state` 不作输入，释放归 Inventory）、INV-45（`CONSUMED` 不降级、`REVOKED` 终态；只读）、INV-51（`REVIEW_REQUIRED`/`PENDING_REMOTE` 不关闭）；无 schema/迁移/写路径/跨服务协议/资金/权限变更。baseline_impact: 仅 `result=PRE` 且 `state≠result` 的异常/存量行由“已关闭”变为“未关闭”（fail-closed），当前写路径不产生该组合（`refund_admission.go:523/551/557/952` 终态写均为 `result=state=PRE`）；无新增并发窗口（只读 EXISTS），以负例等价覆盖宪法 12。
+
 ### 2026-11-28 实现交付: AC-27A-STATE-01 - PreShipAdmission 只认有效 PRE（待代码审查）
 
 - Actor / Reviewed-by: lead（作者） / pending（待独立代码审查）; 级别: 实现变更; 阶段: 代码; base..head: `dee75b0..16e472e`

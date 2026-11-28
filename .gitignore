@@ -69,6 +69,11 @@ Thumbs.db
 # .dsh/skills is tracked as well; ignore only per-checkout runtime state.
 .dsh/skills/**/.state/
 
+# Spec Kit transient state (moved from .specify/.gitignore)
+.specify/.workflow-install.lock
+.specify/presets/.cache/
+.specify/extensions/.cache/
+
 # Frontend
 /.pnpm-store/
 frontend/node_modules/

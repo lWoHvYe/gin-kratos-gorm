@@ -11,7 +11,7 @@
 | DSH 集成 | `.dsh/skills/speckit-*`、`.specify/integrations/dsh.manifest.json`、`.specify/integration.json` | Spec Kit integration | 会重生成 skills |
 | 项目定制 | `.specify/presets/gin-kratos-spec/**`、本仓 core 文件 | 本项目 | 必须保留/重放 |
 
-当前 `specify integration status` 会报 **5 个 managed template 已修改**；这是本项目的刻意定制，不是故障。
+当前 `specify integration status` 会报 **4 个 managed template 已修改**；这是本项目的刻意定制，不是故障。`.specify/.gitignore` 已恢复上游；transient 规则（workflow lock/caches）在根 `.gitignore`，不属于 managed delta。
 
 ## 2. 升级前（必须）
 
@@ -79,6 +79,8 @@ specify integration upgrade dsh --force
 | `.specify/presets/gin-kratos-spec/plan-template.append.md` | 增加 **ADR Constraints** 表 + 冲突停止 | 优先走 preset update |
 | `.specify/presets/gin-kratos-spec/tasks-template.append.md` | 增加 **ADR Traceability**；声明 research/data-model/contracts 非规范 | 优先走 preset update |
 | `.specify/presets/gin-kratos-spec/preset.yml` | 版本 0.2.0；新增 plan/tasks append | 随 preset 更新 |
+
+> `.specify/.gitignore` 已恢复上游；本仓 transient 规则（`.workflow-install.lock`、`presets/.cache/`、`extensions/.cache/`）在根 `.gitignore`，升级时不需要重放。
 
 原则：**能放 preset 的放 preset，核心模板改动越少越好**；每次升级后重放并重新跑 `git diff`。
 

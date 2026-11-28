@@ -24,6 +24,15 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 - 验证: 2026-11-28，HEAD `f225f12`，工作树；静态审查 + `git diff`/`git show`/`git grep`/`git hash-object` + migrations/schema/代码行号核对；未跑测试（Spec 阶段不要求）、未复跑 D1–D11（代码阶段才要求）；独立 oracle：已批准 Spec 文本（0001 v1.6 §16.2/§16.3、0002 v1.11 S20/AC-62）、migrations/代码事实、台账人类决定；非作者自述。
 - 受影响 INV / baseline_impact: INV-01（`orders.status` 不由退款/关闭写）、INV-38（组级隔离/组关闭）、INV-42（退款申请不丢失）、INV-43（先准入后打款）、INV-44（`reservation_state` 不作关闭输入；释放归 Inventory）、INV-45（permit 终态/承诺释放纪律）、INV-51（`REVIEW_REQUIRED` 有界、自动不收敛、唯一人工 re-arm）；权限/跨服务/迁移/状态机：权限=AC-62/D-24（无独立 INV 编号，ADR 应写明）；跨服务=Order/AfterSales/Fulfillment（无新协议，integration owner 见 ADR §12）；迁移=无（ADR 硬边界）；状态机=S20 admission（REVIEW_REQUIRED→PENDING_REMOTE 仅人工 re-arm）、S15 承诺（RESERVED→RELEASED 仅授权）、`refund_batches`（MANUAL_HOLD→ADMITTING）、task（PENDING→FAILED_PERMANENT 仅人工）。baseline_impact: 若按本提案接受，将改变 AC-27/27A/61/62 的证据基础与人工处置口径（资金/履约/权限/跨服务高风险），并可能以过宽“规范入口”改写 AC-61/AC-62 的验收范围；本审查不改代码/schema/AC 状态；当前无代码阶段 PASS，release_status NOT RELEASE。
 
+### 2026-11-28 人类决定: PAY-OPS-REPLAY-01 - 两次 FAIL 分类为“设计问题/契约缺口”，重置重写
+
+- Actor / Reviewed-by: lead（作者，记录人类方向） / 无（人类分类，非审查）; 级别: 契约变更; 阶段: Spec; base..head: `f225f12..工作树`（两份草案已回退）
+- Spec 和 ADR: `docs/adr/0007-amd1-addendum-ops-manual.md`（0.1 DRAFT 保留）；`specs/0002-payment-settlement-admission/spec.md` v1.11（未改）
+- 结论: 分类：**设计问题/契约缺口**；重置为**新 ADR 重写**，范围只到 `AC-27-NOWB-01` 终态①/②（S6 组证明、re-arm、abandon/release 两步）；LIVE 另立；登记范围不再包 AC-61/62 整体；先写“replay 只修组投影、不能驱动准入”的能力边界。release_status: NOT RELEASE
+- 取代: 本日 DRAFT 1.0 与 DRAFT 1.1 两次提案（均未提交、不生效）
+- 阻断项: 无（当前无 live 改动）; 待办: 新 ADR 草案 + 能力边界；两条 FAIL 记录保留供重置引用
+- AC 位移: 无（AC-27/27A/61/62 状态不变）
+
 ### 2026-11-28 审查裁决: PAY-OPS-REPLAY-01 - ops-manual ADR DRAFT 1.0 正式化提案（FAIL）
 
 - Actor / Reviewed-by: `reviewer-opsman`（独立 subagent，未参与写作） / `pending（人类批准）`; 级别: 契约变更; 阶段: Spec; base..head: `cd34f70..工作树`（实际 HEAD `d0c265c`；被审 `docs/adr/0007-amd1-addendum-ops-manual.md` 工作树 blob `28ea223`，HEAD blob `4e8c218`；工作树仅此文件修改）

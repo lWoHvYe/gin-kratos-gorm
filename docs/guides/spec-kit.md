@@ -31,6 +31,13 @@
 - `converge`：append-only；只在 implement 后使用，最多 2 轮；仍 append 就停，回 plan/Spec。
 - `speckit-implement` 没有阶段参数；分批靠操作者。
 
+## 3.1 ADR 桥接（非规范）
+
+- Spec Kit 不读 ADR；`plan` 必须输出 **ADR Constraints** 表，`tasks` 每条带 `ADR: §X`。
+- `implement` 只读 tasks；不在 tasks 里的 ADR 约束等于没写。
+- 本仓用 preset append 提供这两段；不要改核心模板，也不要把“obey ADR”只写在命令附言里。
+- `research.md` / `data-model.md` / `contracts/` 是可选辅助，不是规范输入。
+
 ## 4. 模板与扩展
 
 - 不直接改 `.specify/templates/**`、`.specify/scripts/**` 核心文件。

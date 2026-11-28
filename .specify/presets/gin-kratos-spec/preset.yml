@@ -2,8 +2,8 @@ schema_version: "1.0"
 preset:
   id: gin-kratos-spec
   name: Gin Kratos Spec Standards
-  version: "0.1.1"
-  description: Append the constitution Appendix A checklist to the Spec template; includes historical status and v3 exception reference.
+  version: "0.2.0"
+  description: Append the constitution Appendix A checklist to the Spec template and ADR constraints/traceability to plan/tasks; includes historical status and v3 exception reference.
 requires:
   speckit_version: ">=1.4.0"
 provides:
@@ -11,4 +11,12 @@ provides:
     - type: template
       name: spec-template
       file: spec-template.append.md
+      strategy: append
+    - type: template
+      name: plan-template
+      file: plan-template.append.md
+      strategy: append
+    - type: template
+      name: tasks-template
+      file: tasks-template.append.md
       strategy: append

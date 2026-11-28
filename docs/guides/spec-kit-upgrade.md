@@ -1,7 +1,7 @@
 # Spec Kit / DSH 集成升级与模板维护
 
 > 按需读，非规范。适用于升级 `specify` CLI、DSH 集成、bundle，或重新生成模板时。
-> 当前基线：`specify 1.4.5`；DSH integration `1.4.5`；preset `gin-kratos-spec 0.1.1`；bugfix bundle `1.0.3`。
+> 当前基线：`specify 1.4.5`；DSH integration `1.4.5`；preset `gin-kratos-spec 0.2.0`；bugfix bundle `1.0.3`。
 
 ## 1. 先理解三层，不要混
 
@@ -76,7 +76,9 @@ specify integration upgrade dsh --force
 | `.specify/templates/tasks-template.md` | 行为变更测试/证据任务不再标 OPTIONAL | 手工合并 |
 | `.specify/templates/checklist-template.md` | checklist 改为 author self-check，不作 reviewer gate | 手工合并 |
 | `.specify/presets/gin-kratos-spec/spec-template.append.md` | 状态加 historical；豁免引用 v3 第 17 条 | 优先走 preset update |
-| `.specify/presets/gin-kratos-spec/preset.yml` | 版本 0.1.1 | 随 preset 更新 |
+| `.specify/presets/gin-kratos-spec/plan-template.append.md` | 增加 **ADR Constraints** 表 + 冲突停止 | 优先走 preset update |
+| `.specify/presets/gin-kratos-spec/tasks-template.append.md` | 增加 **ADR Traceability**；声明 research/data-model/contracts 非规范 | 优先走 preset update |
+| `.specify/presets/gin-kratos-spec/preset.yml` | 版本 0.2.0；新增 plan/tasks append | 随 preset 更新 |
 
 原则：**能放 preset 的放 preset，核心模板改动越少越好**；每次升级后重放并重新跑 `git diff`。
 
@@ -101,6 +103,8 @@ specify bundle validate
 ```sh
 specify integration status          # 期望只剩已知 delta；不应有 missing/manifest error
 specify preset resolve spec-template
+specify preset resolve plan-template
+specify preset resolve tasks-template
 specify preset list
 specify bundle validate
 git diff --check

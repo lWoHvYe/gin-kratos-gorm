@@ -1101,7 +1101,7 @@ REVIEW_REQUIRED --新 refund_id（旧承诺先按 AC-62 处置）--> 新申请�
 | AC-14 | 已验证 | 测试 | `internal/services/aftersales/settlement_integration_test.go:875` TestAC14FreightRefundSixScenarios（MySQL 8.4.13 @ 9322e75） | reviewer-r04（R0.3-R2） |
 | AC-21 | 有引用 | 测试 | `internal/services/fulfillment/delivery_integration_test.go:397` TestAC21AutoConfirmT7（MySQL 8.4.13 @ 9322e75） | reviewer-r04（R0.3-R2） |
 | AC-25 | 有引用 | 测试 | `internal/services/order/settlement_integration_test.go:355` TestAC25RefundProjectionKeepsLifecycle（MySQL+race @ 9322e75） | reviewer-r04（R0.3-R2） |
-| AC-27 | 有引用 | 测试 / 可观测指标 | `internal/services/order/ops_replay_convergence_test.go:42,129,179`；`internal/services/order/ac27a_closure_integration_test.go:20,158-220`；`docs/ops.md:941-1210`；`scripts/drill-ops-replay.sh` | reviewer-r04（R0.3-R2）；human 裁决 6；reviewer-c3（B-3 落表）；reviewer-ac27a（2026-11-28 仅复跑 AC-27A-STATE-01 谓词，AC-27 状态仍 有引用） |
+| AC-27 | 有引用 | 测试 / 可观测指标 | `internal/services/order/ops_replay_convergence_test.go:55,145,182,220-295`；`internal/services/order/ac27a_closure_integration_test.go:20,158-220`；`docs/ops.md:941-1210`；`scripts/drill-ops-replay.sh` | reviewer-r04（R0.3-R2）；human 裁决 6；reviewer-c3（B-3 落表）；reviewer-ac27a（2026-11-28 仅复跑 AC-27A-STATE-01 谓词）；reviewer-ac27ops（2026-11-28 新增 NOWB 终态① 收敛用例；AC-27 仍 有引用，LIVE 为复跑，终态②/AC-62 未覆盖） |
 | AC-31 | 有引用 | 测试 | `internal/services/aftersales/settlement_integration_test.go:1101` TestAC31FreightHoldTimeout（MySQL 8.4.13 @ 9322e75） | reviewer-r04（R0.3-R2） |
 | AC-32 | 有引用 | 测试 | `internal/services/aftersales/settlement_integration_test.go:1102` TestAC32FreightHoldTimeoutDefaultsToMerchant（MySQL 8.4.13 @ 9322e75） | reviewer-r04（R0.3-R2） |
 | AC-22 | 未验证 | 测试 | -（DEFERRED；见 §15.3 延期清单，expiry 2026-12-15） | reviewer-syntax（本次补行；未验收） |

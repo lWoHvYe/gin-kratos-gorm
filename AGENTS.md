@@ -1,6 +1,6 @@
-# AGENTS.md v3.0.1
+# AGENTS.md v3.1.0
 
-> 2026-11-28 v3.0.1 PATCH（工作树，待人类合入；任务书读 AGENTS + QC 术语改为台账口径；无新规则）；独立 review pending。只写操作细节，冲突以宪法 v3.0.1 为准。
+> 2026-11-28 v3.1.0（人类方向）；只写操作细节，冲突以宪法 v3.1.0 为准。
 
 ## 0. 读取层级
 
@@ -46,6 +46,7 @@
 - 行为已被批准 Spec 覆盖、且不触及契约主题：走 2.1 第 4–6 步；不新建 Spec/ADR。
 - 无法归入或触及契约主题：按契约变更。
 - **bugfix 不设特殊路由**：满足上述条件就是实现变更；否则是契约变更。用现有工具修，不新建 Spec。
+- Spec 与代码冲突且无法归入实现变更：停止实现，交人类裁决（宪法 16）；不得由实现变更吸收。
 - 同一时间只推进一个 change_id；并行需人类批准。
 - 实现工具不得无人值守连续执行；`speckit-implement` 按阶段分批。
 
@@ -68,11 +69,13 @@ change_id: <编号>; 级别: 契约变更 | 实现变更 | 治理变更; Spec/AD
 base: <sha>; head: <sha>; 阶段: Spec | 代码
 只依据 Spec/ADR/宪法，以及 base/head 之间的代码、plan、测试日志判断，不依据作者自述；其他输入只作问题提案（宪法 7），不作证据。
 输出:
-1. 裁决 PASS / SCOPED-PASS / FAIL，写明范围。
+1. 裁决 PASS / SCOPED-PASS / FAIL；范围由审查者确定并写明，作者声明只是输入；列出未覆盖 AC/路径。
 2. 逐条问题，指向被违反的 AC/INV/ADR/必备章节/宪法条款；摘不到的记 [TODO]。
-3. AC 位移：受影响 AC 的旧/新状态、检查类型、证据路径。
+3. AC 位移：受影响 AC 的旧/新状态、检查类型、证据路径。代码阶段标“已验证”必须有仓库内、绑定已提交 HEAD 的证据和独立 oracle；Spec 阶段审草案，不要求已提交 HEAD；否则只能标“有引用”或“未验证”。
 4. 能写台账就按 AGENTS §4 写入 docs/review-tracking.md 并更新 Spec 验收表；不能写就输出同格式条目。
-5. 写明 review_scope、release_status、spec_version/adr_revision、verification、受影响 INV、baseline_impact；资金/库存/履约/权限/跨服务/迁移必须逐条列 INV。
+5. 写明 review_scope、release_status、spec_version/adr_revision、verification、受影响 INV、baseline_impact；资金/库存/履约/权限/跨服务/迁移/状态机必须逐条列 INV；这些高风险阻断未解决时不得 PASS。
+6. 不能复跑时写明原因/未覆盖，并引用台账里的人类书面豁免；没有豁免不得 PASS。
+
 一次给全所有 blocking 问题；只追 blocker；作者修完后只复跑失败项+diff；不给补丁；发现设计缺口就停代码，回 Spec/ADR。
 ```
 
@@ -105,7 +108,7 @@ base: <sha>; head: <sha>; 阶段: Spec | 代码
 
 每次代码交付满足宪法 11–15，并带对应 AC：
 
-- 证据：diff、测试日志（绑定 `git rev-parse HEAD`）、【测试范围】【未覆盖范围】【取舍】。
+- 证据：diff、测试日志（绑定 `git rev-parse HEAD`）、【测试范围】【未覆盖范围】【取舍】；代码阶段“已验证”必须在仓库内且绑定已提交 HEAD。
 - 证据放 `specs/<id>/evidence/<change_id>/`；在途可沿用 `docs/implementation/**`；治理变更放 `docs/collab/qc-reports/`。
 - 台账写精确路径和 HEAD；AC 位移写路径。
 - 高风险按宪法 12 附并发/故障证据；不适用须人类书面豁免。

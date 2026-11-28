@@ -15,7 +15,7 @@
 | 每次 | `.specify/memory/constitution.md`、`AGENTS.md`、当前 Spec/ADR |
 | 写 Spec/plan/code 前 | `docs/checklists/author.md` |
 | 写 ADR/状态机/并发设计 | `docs/checklists/design.md`、`docs/adr/template.md` |
-| 审查 | `docs/checklists/reviewer.md` |
+| 审查 | `AGENTS.md` §3 任务书（唯一审查输入）；旧 reviewer checklist 在 `docs/archive/2026-11-28-v3/checklists/reviewer.md`，不默认读 |
 | 用 Spec Kit | `docs/guides/spec-kit.md` |
 | 历史 | `docs/archive/**`、旧 convert 草案、旧 QC 报告：**不默认加载**；`docs/archive/2026-11-28-v3/**` 是历史设计包，按需读 |
 

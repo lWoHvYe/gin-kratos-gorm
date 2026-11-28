@@ -27,7 +27,7 @@
 - diff（精确 base/head）；
 - 测试日志（绑定 HEAD）；
 - `【测试范围】【未覆盖范围】【取舍】`；
-- 高风险：按宪法 12 的并发/故障证据；independent oracle/matrix/mutation 是可选辅助，不强制。
+- 高风险：按宪法 12 的并发/故障证据；标“已验证”的 claim 必须有独立 oracle（宪法 11/13）；matrix/mutation 是可选辅助。
 
 reviewer 不读作者自述当证据；不要求作者提供 2,000 行 markdown。
 
@@ -51,7 +51,7 @@ reviewer 不读作者自述当证据；不要求作者提供 2,000 行 markdown�
 
 ## 5. 风险分级
 
-- **High**（资金、库存、履约、权限、跨服务、迁移、状态机）：按宪法 12 的并发/故障证据；independent oracle/mutation/state model 可选辅助；reviewer 跑证据；human merge。
+- **High**（资金、库存、履约、权限、跨服务、迁移、状态机）：按宪法 12 的并发/故障证据；标“已验证”必须有独立 oracle（宪法 11/13）；mutation/state model 可选辅助；reviewer 跑证据；human merge。
 - **Medium**：测试/契约检查 + reviewer 摘要；human 可抽样。
 - **Low**：lint/tests + reviewer 摘要；human merge。
 - 风险由路径/事件/迁移触发，不由作者自选；作者只能上调。

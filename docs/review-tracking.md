@@ -13,6 +13,15 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-28 状态变化: PAY-SETTLE-01 - SPEC-0001 v1.6 批准后标回 historical
+
+- Actor / Reviewed-by: lead（作者，按人类 2026-11-28 授权） / human（授权，非独立审查）; 级别: 契约变更; 阶段: Spec; base..head: `f1f7af1`（批准提交）..工作树
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md`（YAML `status: approved -> historical`；§17 注同步）；`specs/README.md` 索引 v1.5 -> v1.6
+- 结论: 状态变化：approved -> historical（0001 不恢复 active；AC 状态不变）；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无; 待办: 实现阶段项见 §16.2（`AC-27A-STATE-01`、`SPEC-0002-REF-SYNC-01`、`AC-50-FIX-01`、`AC-27-NOWB-01`、`AC-27-LIVE-01`）
+- AC 位移: 无（§17 表仍全 historical）
+
 ### 2026-11-28 人类批准: PAY-SETTLE-01 - SPEC-0001 v1.6 与 ADR-0005 Amendment 3（同批）
 
 - Actor / Reviewed-by: lead（作者，记录人类批准） / reviewer-spec0001（第 3 轮 SCOPED-PASS）; 级别: 契约变更; 阶段: Spec; base..head: `f7430f1..工作树`（被审 spec blob `e24a7c0`、ADR blob `7944260`；批准提交只加批准元数据，规范正文不变）

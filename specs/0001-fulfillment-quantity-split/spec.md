@@ -1,7 +1,7 @@
 ```yaml
 id: SPEC-0001
 title: 多仓按数量拆行、选仓优先级与承运商签收
-status: approved           # draft | in-review | approved | historical | superseded
+status: historical         # draft | in-review | approved | historical | superseded
 version: 1.6
 updated_at: 2026-11-28
 owner: Product Owner
@@ -19,7 +19,7 @@ adr: [0005]               # Architect 出稿后回填
 |---|---|
 | 版本 | v1.6（已批准 2026-11-28：QC delta 复审 B-1/B-2/B-3 修复；v1.5 已批准） |
 | 日期 | 2026-11-28（v1.6：ADR-0005 Amendment 3 追认；AC-27A 与 SPEC-0002 v1.11 的 `state = result` 谓词对齐；AC-50 引用升 v1.11） |
-| 状态 | **已批准 v1.6（2026-11-28）**：QC delta 复审 B-1/B-2/B-3 关闭（§16.5）；按人类授权，批准后标回 `historical`（见 §16.5 末条）。 |
+| 状态 | **已批准 v1.6（2026-11-28；historical reference）**：QC delta 复审 B-1/B-2/B-3 关闭（§16.5）；按人类授权已于 2026-11-28 标回 `historical`；行为/AC 定义保留，不作为 current release evidence。见 §17 验收状态表。 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件，不接收口头补充） |
 | 冻结规则 | v1.6 后任何业务口径变更必须升版为 v1.7 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
@@ -898,13 +898,13 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | **B-3** `result` 枚举/AC-50 版本引用 | **关闭**：注改为 `PRE/POST/REVIEW_REQUIRED`；§16.3 引用 v1.11；`AC50-OUTCOME-SPEC-SYNC` 关闭。 | AC-27A 注、§16.3、§16.2 |
 
 - **不做**：不新增/删除/重编号 AC；不改 INV；不改 §17 表；不改 SPEC-0002 正文（引用同步登记 `SPEC-0002-REF-SYNC-01`）。
-- **关闭后**：v1.6 经独立审查 PASS + 人类批准后提交为 `approved`，随后单独一次状态变更标回 `historical`；本版不声称 Release/AC-VERIFIED。
+- **批准与状态**：v1.6 与 ADR-0005 Amendment 3 于 2026-11-28 同批批准；随后单独一次状态变更标回 `historical`（本版不声称 Release/AC-VERIFIED）。
 
 ## 17. 验收状态表（historical reference）
 
 > 本表只登记 0001 的 historical 生命周期；全部 AC 不再作为 current evidence。
 > 12 个 baseline AC 的当前回归状态只在 `specs/0002-payment-settlement-admission/spec.md §15.2`。
-> `historical` 不等于已验证/可发布；0001 的 QC delta 已按 v1.6 修订（§16.5），待第 2 轮独立复审；本表不因 v1.6 改状态。
+> `historical` 不等于已验证/可发布；0001 的 QC delta 已按 v1.6 修订，并经第 3 轮独立复审 SCOPED-PASS（2026-11-28）；本表不因 v1.6 改状态。
 
 | AC 编号 | 状态 | 检查类型 | 证据路径 | 审查者 |
 |---|---|---|---|---|

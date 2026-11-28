@@ -72,7 +72,7 @@ func shipmentStatus(status string) string {
 //  3. Status SHIPPED/RECEIVED    -> open (departure guard; before any refund fact)
 //  4. permit REVOKED             -> closed (S5 terminal state, INV-45)
 //  5. permit CONSUMED and PreShipAdmission -> closed (RefundAdmission
-//     result=PRE_SHIP_REVOKED; AC-27A clause 5)
+//     result=state=PRE_SHIP_REVOKED; AC-27A clause 5 "valid PRE")
 //  6. otherwise                  -> open (NONE, PENDING_REMOTE, POST_SHIP_ALLOWED,
 //     missing/unverifiable admission)
 //

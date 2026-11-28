@@ -150,9 +150,11 @@ func TestAC27AConsumedPreAdmissionClosesFromRealRows(t *testing.T) {
 	}
 }
 
-// AC-27A: only result=PRE_SHIP_REVOKED closes a pre-ship group. REVIEW_REQUIRED,
-// a PENDING_REMOTE placeholder, POST_SHIP_ALLOWED and a missing row stay open;
-// a late SHIPPED status wins over the PRE audit row.
+// AC-27A: only a *valid* PRE closes a pre-ship group: result=PRE_SHIP_REVOKED
+// with state=result (SPEC-0001 v1.6). REVIEW_REQUIRED, a PENDING_REMOTE
+// placeholder, POST_SHIP_ALLOWED, a missing row and a PRE row whose state did
+// not land on the result all stay open; a late SHIPPED status wins over the PRE
+// audit row.
 func TestAC27AAdmissionResultDerivation(t *testing.T) {
 	db := orderTestDB(t)
 	ctx := context.Background()
@@ -166,6 +168,7 @@ func TestAC27AAdmissionResultDerivation(t *testing.T) {
 		wantClosed    bool
 	}{
 		{"pre_ship_revoked closes", statusAllocated, permitConsumed, refundResultPre, refundResultPre, true, true},
+		{"pre_ship_revoked with mismatched state stays open", statusAllocated, permitConsumed, refundResultPre, refundPending, false, false},
 		{"pre_ship_revoked without consumed permit stays open", statusAllocated, permitNone, refundResultPre, refundResultPre, true, false},
 		{"review_required stays open", statusAllocated, permitConsumed, refundReviewRequired, refundPending, false, false},
 		{"pending_remote placeholder stays open", statusAllocated, permitConsumed, refundResultPost, refundPending, false, false},

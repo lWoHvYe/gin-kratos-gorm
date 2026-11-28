@@ -26,9 +26,10 @@ type fulfillmentGroup struct {
 	FreightShareCent int64
 	// PreShipAdmission is a derived, read-only fact (not a persisted column):
 	// the group has an order_refund_admissions row with
-	// result=PRE_SHIP_REVOKED. SPEC-0001 v1.5 AC-27A clause 5 uses the
-	// Order-owned RefundAdmission result as the "pre-ship refund admitted, the
-	// group can never produce a parcel" fact; refund_state is not an input.
+	// result=PRE_SHIP_REVOKED AND state=result (SPEC-0001 v1.6 AC-27A clause 5
+	// "valid PRE"; SPEC-0002 v1.11 S20/AC-69 success predicate). The Order-owned
+	// RefundAdmission is the "pre-ship refund admitted, the group can never
+	// produce a parcel" fact; refund_state is not an input.
 	PreShipAdmission bool
 }
 
@@ -91,15 +92,19 @@ func loadFulfillmentGroupsTx(ctx context.Context, tx *sql.Tx, orderNo string) ([
 
 func loadFulfillmentGroups(ctx context.Context, q querier, orderNo string) ([]*fulfillmentGroup, error) {
 	// The closure predicate (settlement.go groupIsClosed) needs the group's
-	// Order-owned pre-ship RefundAdmission result. It is read as EXISTS in the
-	// same statement so a group with several admission rows (e.g. an earlier
-	// PRE audit kept after a late POST re-admission) cannot multiply rows. No
+	// Order-owned valid pre-ship RefundAdmission: result=PRE_SHIP_REVOKED AND
+	// state=result (SPEC-0001 v1.6 AC-27A clause 5). A row whose state did not
+	// land on the result (legacy/manual/partial write) must stay open
+	// (fail-closed), matching SPEC-0002 AC-69. It is read as EXISTS in the same
+	// statement so a group with several admission rows (e.g. an earlier PRE
+	// audit kept after a late POST re-admission) cannot multiply rows. No
 	// schema change: 0016 already indexes (order_no, group_no).
 	rows, err := q.QueryContext(ctx, `SELECT g.group_no, g.order_no, g.seq, g.warehouse_id, g.status,
 		g.refund_state, g.reservation_state, COALESCE(p.state, 'NONE'), g.freight_cent, g.freight_share_cent,
 		EXISTS(
 			SELECT 1 FROM order_refund_admissions a
-			WHERE a.order_no = g.order_no AND a.group_no = g.group_no AND a.result = ?
+			WHERE a.order_no = g.order_no AND a.group_no = g.group_no
+			  AND a.result = ? AND a.state = a.result
 		)
 		FROM order_fulfillment_groups g
 		LEFT JOIN order_shipping_permits p

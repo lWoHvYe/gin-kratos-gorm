@@ -1,13 +1,13 @@
 # ADR 0005: 多仓按数量拆行、选仓优先级与承运商签收
 
-- Status: **accepted**（甲方 2026-11-22 批准；Developer 可开工）
+- Status: **accepted**（甲方 2026-11-22 批准；Developer 可开工）；**Amendment 3 accepted（2026-11-28）**
 - Date: 2026-11-22
-- Approved: 2026-11-22（甲方/人类指挥官批准 ADR 0005；后续 Amendment 1/2 见 Revision）
-- Revision: **1.2 / Amendment 2**（2026-11-22；回写 T-001 / SPEC-0001 v1.2，P-01…P-18 全部 closed）
+- Approved: 2026-11-22（甲方/人类指挥官批准 ADR 0005；后续 Amendment 1/2 见 Revision；Amendment 3 于 2026-11-28 批准）
+- Revision: **1.3 / Amendment 3**（2026-11-28 批准；追认 SPEC-0001 v1.5 的 S1/S2/S3 口径）；Previous **1.2 / Amendment 2**（2026-11-22；回写 T-001 / SPEC-0001 v1.2，P-01…P-18 全部 closed）
 - Previous: **1.1 / Amendment 1**（吸收 SPEC-0001 v1.1，回应[偏差登记](../implementation/adr-0005-deviation-register.md) A/B/C）
-- Review: **二次审计 2026-11-22（§19）**；19.1 的硬伤已入正文，19.2 的 P-01…P-18 已按 SPEC v1.2 全部 closed
-- Normative: **§18、§20 是增量契约；§19.2 已全部 closed，无未决项。与前文冲突时以 §18/§20 为准。**
-- Spec: [SPEC-0001 v1.5（当前）](../../specs/0001-fulfillment-quantity-split/spec.md)（决策时为 v1.3）
+- Review: **二次审计 2026-11-22（§19）**；19.1 的硬伤已入正文，19.2 的 P-01…P-18 已按 SPEC v1.2 全部 closed；Amendment 3 经独立复审 SCOPED-PASS（2026-11-28）
+- Normative: **§18、§20、§21 是增量契约；§19.2 已全部 closed，无未决项。与前文冲突时以 §18/§20/§21 为准。**
+- Spec: [SPEC-0001 v1.6（已批准 2026-11-28）](../../specs/0001-fulfillment-quantity-split/spec.md)（决策时为 v1.3；Amendment 3 依据 v1.5）
 - Amends: [ADR 0002](0002-cross-warehouse-split-orders.md) 的 v1「行级拆分」范围；**废止基线 INV-10**
 - Related: [architecture-baseline.md](../architecture-baseline.md)、[ADR 0003](0003-c-production-rollout.md)、[ADR 0004](0004-p3-0-contract-and-production-scope.md)
 - Owners: Order / Pricing / Inventory / Fulfillment / AfterSales / Payment / Gateway+Admin BFF
@@ -1083,6 +1083,7 @@ ALTER TABLE after_sales
 | 甲方/PO | 裁决 B-01、B-05 成立且未完成；B-03 由 SPEC v1.2 §6.5.2/6.5.3 定义 | 2026-11-22 |
 | System Architect | 回写 **Amendment 1（§18）**，补齐 B-01…B-08 / C-01…C-03 | 2026-11-22 |
 | Developer | **可开工**；按 §13 阶段 A→F，且遵守 §12.2 否决清单 | — |
+| 甲方/人类（指挥） | **批准 ADR-0005 Amendment 3（Revision 1.3，2026-11-28）**：追认 SPEC-0001 v1.5 的 S1 触发点/S2 聚合/S3 写者，与 SPEC-0001 v1.6 同批批准 | 2026-11-28 |
 
 已完成：回填 `docs/specs/0001-fulfillment-quantity-split.md` 的 `adr: [0005]`，并登记 `docs/specs/README.md` 关联 ADR。
 
@@ -1570,3 +1571,56 @@ AC-31…33 验证映射：
 | §19.2 | P-01…P-18 全部 closed | 全部 |
 
 > 本 Amendment 以本节记录对已接受结论的修改；正文已同步为修改后口径，§18/§20 为增量契约。本 ADR 已无未决标记；后续变更走新的线程/ Amendment。
+
+---
+
+## 21. Amendment 3 — 履约投影与组关闭口径对齐（2026-11-28 批准）
+
+> **触发**：2026-11-28 独立复审（`reviewer-spec0001`）对 SPEC-0001 v1.4→v1.5 delta 判 FAIL B-1：
+> v1.5（2026-11-26 人类授权）修改了 S1 触发点、S2 聚合法与 S3 写者，本 ADR 未同步，属“已接受 ADR 被静默改写”
+> （宪法 3）。本 Amendment 以代码事实追认 v1.5 口径，不改变业务目的；SPEC 侧由 SPEC-0001 v1.6 同步 AC-27A。
+
+### 21.1 决策
+
+- **D-A3-1（S1 触发点）**：§3.1 的 `PAID --首组发货--> ALLOCATED` 修正为
+  `PAID --首组运单创建（shop.shipment.created.v1）--> ALLOCATED`；`shipment.shipped.v1` 仍驱动 `SHIPPED`，
+  `shipment.received.v1` 仍驱动 `COMPLETED`（全部收货）。
+  依据：`internal/services/order/consumer.go:58`（created→ALLOCATED）、`:59`（shipped→SHIPPED）；SPEC-0001 v1.5 §7.1。
+- **D-A3-2（S2 聚合）**：§3.2.1 的“G2 退款（未发）、G1 已发 → `PARTIALLY_SHIPPED`”修正为：
+  已关闭组（AC-27A）从剩余组排除；仅剩 G1 且 G1 已发未收 → `SHIPPED`；G1 已收 → `RECEIVED`；
+  仍有其他未关闭组（如 3 组订单的 G3）→ 按剩余组聚合（如 `PARTIALLY_SHIPPED`）；全部组关闭 → `UNSHIPPED`。
+  依据：`internal/services/order/settlement.go:108-131`（`shipmentStatusForGroups` 先以 `groupIsClosed` 排除已关闭组，
+  再按 `shipped==remaining` 判定）、`:82-99`（`groupIsClosed`）；SPEC-0001 v1.5 AC-27。
+- **D-A3-3（S3 写者）**：§2.1 的 S3 写入口删除“退款撤许可”；退款撤许可只写 S5（许可 `REVOKED`）与 S4
+  （`refund_state=REFUNDING`），不写 S3；持久化 S3 `CANCELLED` 仅由整单取消写入；读模型可把 AC-27A 关闭组
+  派生展示为 `CANCELLED`，但不得回写。
+  依据：`internal/services/order/settlement.go:413-459`（`BlockShipmentForRefund` 只 UPDATE
+  `order_shipping_permits` 与 `order_fulfillment_groups.refund_state`）；SPEC-0001 v1.5 §4.1 S3/§16 V15-6。
+
+### 21.2 否决的备选
+
+- **回退 SPEC-0001 到本 ADR 1.2 口径**（首组发货触发、含“退款撤许可”写 S3、不过滤已关闭组）：会推翻 AC-27
+  “已退款/已关闭组不卡订单”的目的，且与 `consumer.go`/`settlement.go` 现有实现相反；否决。
+- **新写 ADR 取代 ADR-0005**：本修订只涉及三处条款，同一能力应原地 Amendment；否决。
+
+### 21.3 影响与核对
+
+| 项 | 影响 | 核对 |
+|---|---|---|
+| S1 | `ALLOCATED` 触发点由“首组发货”改为“首组运单创建” | SPEC-0001 v1.6 §7.1；`consumer.go:58-59` |
+| S2 | 已关闭组不计入剩余组；2 组场景 G1 已发 → `SHIPPED` | SPEC-0001 v1.6 AC-27；`settlement.go:108-131` |
+| S3 | 写者删除“退款撤许可”；`CANCELLED` 仅整单取消 | SPEC-0001 v1.6 §4.1 S3、AC-27A；`settlement.go:413-459` |
+| AC-27 / AC-27A | 口径由 SPEC-0001 v1.6 定义；本 ADR 只对齐机制 | v1.6 AC-27/AC-27A |
+| INV-06 / INV-26 / INV-38 | 适用口径不变 | SPEC-0001 §6.6.1/§7.5 |
+| INV-45 | 许可终态不变；`REVOKED` 仍终态，`CONSUMED` 不降级 | SPEC-0002 AC-50/AC-62 |
+
+### 21.4 崩溃窗口与恢复
+
+本 Amendment 不新增写路径，只修正读模型聚合与写者归属声明；ADR 附录 B 的 5 个崩溃窗口（本地提交后、
+RPC 成功后、重复/乱序、取消/确认竞态、外部重放缺失）恢复所有者不变，仍由 SPEC-0001 §7.5 与 ADR-0007 Rev 2.3 定义。
+
+### 21.5 取代与版本
+
+- **取代**：本 ADR Revision 1.2 的 §2.1 S3 行、§3.1 图与规则、§3.2.1 的“G2 退款（未发）、G1 已发”行；不取代其他 ADR。
+- **版本**：Revision 1.3 / Amendment 3（**accepted 2026-11-28**）；与 SPEC-0001 v1.6 同批批准，§17 已追加批准行。
+- **不涉及**：不改 SPEC-0001 正文（v1.6 由 PO 单独修订）、不改 SPEC-0002、不改代码/迁移。

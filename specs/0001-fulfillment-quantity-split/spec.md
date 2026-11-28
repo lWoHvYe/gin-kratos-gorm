@@ -1,12 +1,12 @@
 ```yaml
 id: SPEC-0001
 title: 多仓按数量拆行、选仓优先级与承运商签收
-status: historical         # draft | in-review | approved | historical | superseded
-version: 1.5
-updated_at: 2026-11-26
+status: approved           # draft | in-review | approved | historical | superseded
+version: 1.6
+updated_at: 2026-11-28
 owner: Product Owner
 approved_by: Director
-approved_at: 2026-11-26
+approved_at: 2026-11-28
 domain: fulfillment
 supersedes: []
 superseded_by: null
@@ -17,13 +17,13 @@ adr: [0005]               # Architect 出稿后回填
 
 | 项 | 值 |
 |---|---|
-| 版本 | v1.5（已批准；QC delta 复核整改中；historical reference） |
-| 日期 | 2026-11-26（v1.5：AC-27 读模型口径 + AC-27A 关闭谓词 + AC-50 `CONSUMED+无运单` 裁决） |
-| 状态 | **已批准 v1.5（historical reference；QC delta 复核整改中）**：行为/AC 定义保留；不再新增/改 AC；不作为 current release evidence。见 §17 验收状态表。 |
+| 版本 | v1.6（已批准 2026-11-28：QC delta 复审 B-1/B-2/B-3 修复；v1.5 已批准） |
+| 日期 | 2026-11-28（v1.6：ADR-0005 Amendment 3 追认；AC-27A 与 SPEC-0002 v1.11 的 `state = result` 谓词对齐；AC-50 引用升 v1.11） |
+| 状态 | **已批准 v1.6（2026-11-28）**：QC delta 复审 B-1/B-2/B-3 关闭（§16.5）；按人类授权，批准后标回 `historical`（见 §16.5 末条）。 |
 | 作者 | Product Owner |
 | 下游 | System Architect（只接收本文件，不接收口头补充） |
-| 冻结规则 | v1.5 后任何业务口径变更必须升版为 v1.6 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
-| 依据 | `AGENTS.md`、ADR [0002](../../docs/adr/0002-cross-warehouse-split-orders.md)、[architecture-baseline.md](../../docs/architecture-baseline.md)（INV-01…INV-16）、[SPEC-0002](../0002-payment-settlement-admission/spec.md) v1.11（AC-50/INV-45）、[QC-PAY-SETTLE-01-R0.3-AC27](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15-R2](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15-R2.md) |
+| 冻结规则 | v1.6 后任何业务口径变更必须升版为 v1.7 并注明影响的不变量与 AC；禁止在本文件上静默改写 |
+| 依据 | `AGENTS.md`、ADR [0005](../../docs/adr/0005-fulfillment-quantity-split.md)（Revision 1.3 / Amendment 3）、[architecture-baseline.md](../../docs/architecture-baseline.md)（INV-01…INV-16）、[SPEC-0002](../0002-payment-settlement-admission/spec.md) v1.11（AC-50/AC-69…72/INV-45/INV-51）、[QC-PAY-SETTLE-01-R0.3-AC27](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-R0.3-AC27.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15.md)、[QC-PAY-SETTLE-01-SPEC-0001-V15-R2](../../docs/collab/qc-reports/QC-PAY-SETTLE-01-SPEC-0001-V15-R2.md) |
 
 > 本文件只定义业务边界、状态所有权、业务不变量与验收标准。任何实现方式、数据结构、接口形态、算法选择均不在本文件范围内，Architect 需要自行设计并接受本文件的验收。
 
@@ -619,9 +619,9 @@ Then 生命周期 ALLOCATED、履约投影 PARTIALLY_SHIPPED、G1 SHIPPED、G2 A
   2. 组持久化状态 = `CANCELLED` → 已关闭（持久化 `CANCELLED` 只由整单取消写入；退款撤许可只改 S5，不写 S3）；
   3. 组持久化状态 ∈ {`SHIPPED`,`RECEIVED`} → 未关闭（离仓守卫；先于任何许可/退款事实）；
   4. 许可 = `REVOKED` → 已关闭（AC-50 `NONE→REVOKED` 终态，INV-45；`refund_state`（S4；SPEC-0002 S9）不参与，`NONE/REFUNDING/REFUNDED` 均不改变此结论）；
-  5. 许可 = `CONSUMED` 且组退款准入结果 = `PRE_SHIP_REVOKED` → 已关闭（`refund_state` 不参与）；组退款准入结果是唯一持久载体（见本节末“证据载体与前置缺陷”），不得以运单事实或 `state` 代替；
-  6. 其他（含许可 `NONE`、组退款准入尚未收敛（`state=PENDING_REMOTE`）、`POST_SHIP_ALLOWED`、准入结果缺失/不可核验）→ 未关闭。
-- IF 许可 = `CONSUMED` 且组退款准入结果不是 `PRE_SHIP_REVOKED`（含缺失、`state=PENDING_REMOTE`、取消/探测结果未知），
+  5. 许可 = `CONSUMED` 且组退款准入结果 = `PRE_SHIP_REVOKED` 且 `state = result`（准入成功谓词见 SPEC-0002 v1.11 S20/AC-69）→ 已关闭（`refund_state` 不参与）；组退款准入结果是唯一持久载体（见本节末“证据载体与前置缺陷”），不得以运单事实代替，也不得只凭 `result` 或只凭 `state` 判定；
+  6. 其他（含许可 `NONE`、组退款准入尚未收敛（`state=PENDING_REMOTE`）、`POST_SHIP_ALLOWED`、`result=REVIEW_REQUIRED`、`state ≠ result`、准入结果缺失/不可核验）→ 未关闭。
+- IF 许可 = `CONSUMED` 且组退款准入结果不是有效 PRE（有效 PRE = `result = PRE_SHIP_REVOKED` 且 `state = result`；含缺失、`state=PENDING_REMOTE`、`state ≠ result`、`REVIEW_REQUIRED`、取消/探测结果未知），
   THEN THE SYSTEM SHALL 保持该组未关闭并告警；不得要求 Order 读取/反推运单事实，不得在 AC-27A 读模型路径输出 AC-50 的写路径错误码。
 - IF 已关闭组随后出现 `SHIPPED/RECEIVED` 事实（含迟到/重复事件），THEN THE SYSTEM SHALL 先按第 3 条离仓守卫处理：
   仅当该事实由 Order 的 S3 组投影收到 `shipment.shipped`/`shipment.received` 事件确认真实离仓时，
@@ -642,7 +642,7 @@ Then 生命周期 ALLOCATED、履约投影 PARTIALLY_SHIPPED、G1 SHIPPED、G2 A
 - WHEN 组已关闭，THE SYSTEM SHALL 只把它从 S2 履约投影的“剩余组”中排除，并保留 `orders.status`
   的既有生命周期值；不得因关闭写入退款态。
 
-> **证据载体与前置缺陷（AC-27A 注，不是新 AC）**：组退款准入结果的唯一持久载体见 §16 V15-2（`order_refund_admissions.result`）；AC-27A 正文只使用业务事实。`result` 只允许 `PRE_SHIP_REVOKED`/`POST_SHIP_ALLOWED`，`state=PENDING_REMOTE` 是中间态、不等同于 PRE。`CONSUMED+无运单` 的写路径规则与修复前置见 §16.2 `AC-50-FIX-01`；未修前 AC-27 不得 AC-VERIFIED；存量无法证明由 AC-50 合法分支写入的 PRE 按 §16.2 `AC-27-NOWB-01` 一次性审计，审计结论未出前台账不得把该组标为已关闭/AC-VERIFIED，读模型告警。
+> **证据载体与前置缺陷（AC-27A 注，不是新 AC）**：组退款准入结果的唯一持久载体见 §16 V15-2（`order_refund_admissions.result`）；AC-27A 正文只使用业务事实。`result` 取值 `PRE_SHIP_REVOKED`/`POST_SHIP_ALLOWED`/`REVIEW_REQUIRED`，未决时保持列默认 `PENDING_REMOTE`（非准入结果、非终态）；仅 `state = result` 且 `result ∈ {PRE_SHIP_REVOKED, POST_SHIP_ALLOWED}` 才是准入成功终态；`REVIEW_REQUIRED`（`state=PENDING_REMOTE`）是复核标记、非准入结果，永不参与关闭；`state=PENDING_REMOTE` 是中间态、不等同于 PRE。准入成功谓词以 SPEC-0002 v1.11 S20/AC-69 为准（更晚批准者，见 SPEC-0002 §11.6）。`CONSUMED+无运单` 的写路径规则与修复前置见 §16.2 `AC-50-FIX-01`；未修前 AC-27 不得 AC-VERIFIED；存量无法证明由 AC-50 合法分支写入的 PRE 按 §16.2 `AC-27-NOWB-01` 一次性审计，审计结论未出前台账不得把该组标为已关闭/AC-VERIFIED，读模型告警。
 
 ### 知情与展示
 
@@ -762,6 +762,7 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | **v1.3（冻结）** | 2026-11-23 | 限定 §6.6“已支付订单不得预留已释放”的适用对象为仍计划履约的组；新增 §6.6.1 组退款库存处置；AC-27 追加解释；修正 §7.1“已支付未发货可取消”的既有漂移；§7.5 增加 G2 退款备注。影响：INV-06 适用口径、INV-26/AC-27 组退款边界、§7.1/§7.5 状态投影；不删除/重编号任何 AC |
 | **v1.4（冻结）** | 2026-11-24 | 基线迁移：AC-27 由行首 Gherkin 步骤改为 EARS，业务语义不变；只覆盖 `refund_state=REFUNDED`（不把 `REFUNDING` 写进“已完成”）；不新增/删除/重编号 AC；登记 AC-27 台账复核。影响：仅 AC-27 语法；不改变 INV-01/06/26/38 与 §6.6/§6.6.1 |
 | **v1.5（已批准；QC delta 整改中）** | 2026-11-26 | 按 Director 2026-11-26 授权，澄清 AC-27 与 §6.6.1/AC-25 的冲突并裁决 AC-50 偏差：① AC-27 EARS-1 的“订单投影/推进/不得停留”限定为 S2 读模型 `shipment_status`，持久化 `orders.status` 不因组退款完成写入；② 新增 AC-27A 关闭谓词（`CANCELLED` / `permit=REVOKED` / `CONSUMED+组退款准入 PRE_SHIP_REVOKED`；post-ship 守卫优先；`refund_state`/`reservation_state`/运单事实不参与；pre-ship `REFUNDING` 可关闭但≠退款完成）；③ AC-50 `CONSUMED+无运单` 保持 `REFUND_ADMISSION_CONFLICT`+告警，写路径前置缺陷 `AC-50-FIX-01` 见 §16.2；④ 修正 §7.5:405/:409（v1.4 行号）与 §4.2/§6.6.1/§6.7/§7.1 读模型口径、§9 AC-27/AC-27A。影响：AC-27/§7.5 读模型口径；不改变 INV-01/AC-25/AC-26；不删除/重编号 AC；AC-50 仍按 SPEC-0002 v1.10。QC-PAY-SETTLE-01-SPEC-0001-V15 与 R2 复核后按 B-1/B-2/B-3、M-1…M-9、N-1…N-4 整改，见 §16.1 |
+| **v1.6（DRAFT）** | 2026-11-28 | 只关闭 QC delta 复审 FAIL 的 B-1/B-2/B-3（§16.5）：① B-2 AC-27A 第 5/6 条与 IF 增加 `state = result`，准入成功谓词指向 SPEC-0002 v1.11 S20/AC-69；② B-3 AC-27A 注 `result` 取值改为 `PRE/POST/REVIEW_REQUIRED`，§16.3 的 AC-50 引用升 v1.11，关闭 `AC50-OUTCOME-SPEC-SYNC`；③ B-1 由 `ADR-0005` Amendment 3 追认 v1.5 的 S1/S2/S3 口径（本 Spec 不改 S1/S2/S3 正文）。登记 `AC-27A-STATE-01`（实现对齐 `state` 条件）与 `SPEC-0002-REF-SYNC-01`（0002 引用同步）。影响：仅 AC-27A 谓词与引用；不改 INV/§17 表；不新增/删除/重编号 AC。人类 2026-11-28 授权 historical 期内临时回到 approved 流程 |
 
 ---
 
@@ -782,10 +783,13 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | 甲方（Director） | Director 2026-11-26 授权 PO 升版，QC delta 复核后实现：v1.5 仅澄清 AC-27/§7.5 读模型口径、新增 AC-27A 关闭谓词、裁决 AC-50 `CONSUMED+无运单` 偏差；不改变 INV-01/AC-25/AC-26，不删除/重编号 AC | 2026-11-26 |
 | Product Owner | 原地升版 v1.5：按上述授权改写 AC-27、新增 AC-27A、修正 §4.2/§6.6.1/§6.7/§7.1/§7.5、更新 YAML/变更记录/批准记录/裁决记录；未改 SPEC-0002/ADR/代码/台账 | 2026-11-26 |
 | Product Owner | 按 QC-PAY-SETTLE-01-SPEC-0001-V15 与 R2 修订 v1.5：关闭 B-1 读写路径拆分、B-2 `CANCELLED`、B-3 证据载体/前置缺陷、M-1…M-9、N-1…N-4；未改 SPEC-0002/ADR/代码/台账；未 commit；待 QC delta 复审 | 2026-11-26 |
+| 人类（Director） | 2026-11-28 授权：0001 在 historical 期内临时回到 approved 流程，仅修 QC delta 复审 FAIL 的 B-1/B-2/B-3（AC-27A `state = result`、ADR-0005 Amendment 3、AC-50 v1.11 引用）；批准后标回 `historical` | 2026-11-28 |
+| Product Owner | v1.6 DRAFT：§16.5 关闭矩阵、AC-27A 第 5/6 条与注、§16.2/§16.3/§13；未改 SPEC-0002/代码/台账；未 commit；待第 2 轮独立复审 | 2026-11-28 |
+| 人类（Director） | **批准 SPEC-0001 v1.6 与 ADR-0005 Amendment 3（同批，2026-11-28）**：QC delta 复审 B-1/B-2/B-3 关闭（第 3 轮 SCOPED-PASS）；按授权批准后标回 `historical` | 2026-11-28 |
 | System Architect | 已接收，产出 ADR-0005（accepted） | 2026-11-22 |
 | Developer | 实施中；偏差与待回写项见 [adr-0005-deviation-register.md](../../docs/implementation/adr-0005-deviation-register.md) | 2026-11-22 |
 
-交接顺序不可颠倒：`Spec.md`（本文件，v1.5 已批准；QC delta 复核后实现）→ `ADR.md`（Architect）→ 代码与测试（Developer）→ 对照本文件第 4/5/8/9 节审查（Reviewer）。
+交接顺序不可颠倒：`Spec.md`（本文件，v1.6 DRAFT 待复审；v1.5 已批准）→ `ADR.md`（Architect）→ 代码与测试（Developer）→ 对照本文件第 4/5/8/9 节审查（Reviewer）。
 
 ---
 
@@ -864,27 +868,43 @@ Then 组号按 `warehouse_id` 升序；重复预览组号一致；调整仓库�
 | **AC-27-LIVE-01** | `aftersale.completed` DLQ / AfterSales durable task 租约丢失导致 `PENDING_REMOTE` 永久不收敛 | **阻断**：保持未关闭并告警；提供 AC-61 人工重放入口。**终态**：重放收敛→PRE/关闭；重放仍冲突→转 `AC-27-NOWB-01` 人工队列，不得写 PRE/关闭/打款。 | ops（重放）/Developer（AfterSales durable task 重试） | 2026-12-31 |
 | **INV-44-MULTI-01** | 2 组订单当前不产生组级释放请求（`refund_release.go:182-186`）；Order 不可观测释放 | `[DEFERRED]` P1/manual 已知缺口；AC-27/27A PASS 不蕴含 INV-44 完成，不得用 Order fixture `RELEASED` 冒充；释放证据归 Inventory | Lead/Reviewer（台账） | 2026-12-31 |
 | **EARS-25/26-01** | AC-25/AC-26 仍为行首 Gherkin；本轮未修订 | `[DEFERRED]` EARS 迁移债；不影响 v1.5 的 AC-27/27A 判定 | PO | 2026-12-31 |
+| **AC50-OUTCOME-SPEC-SYNC** | 0001 AC-27A 注的 `result` 枚举与 §16.3 的 AC-50 版本引用未同步 SPEC-0002 v1.11/ADR 0.5（0002 §11.6 已登记该同步债）。 | **关闭（v1.6，2026-11-28）**：注已改为 `PRE/POST/REVIEW_REQUIRED`，成功谓词指向 S20/AC-69；§16.3 引用 v1.11。 | PO | 已关闭 2026-11-28 |
+| **AC-27A-STATE-01** | AC-27A 关闭谓词的实现只判 `result=PRE_SHIP_REVOKED`（`internal/services/order/fulfillment_groups.go:105-118` 的 EXISTS 未含 `state = result`）；v1.6 起谓词含 `state = result`。 | **阻断**：未修前 AC-27A 不得 AC-VERIFIED；修复只加 `a.state = a.result` 条件，不改 schema/迁移；存量 `result=PRE` 且 `state≠result` 的行按 `AC-27-NOWB-01` 审计口径处置。 | Developer | 2026-12-31 |
+| **SPEC-0002-REF-SYNC-01** | SPEC-0002 v1.11 §依据与 §11.2 仍以 0001 v1.5（`4215b3c`）为基准并称“文本不变”；v1.6 已改 AC-27A 正文。 | 不阻断 v1.6；由 SPEC-0002 下次升版（owner PO）把引用指向 v1.6——不得在 0002 原地改写已批准正文。 | PO | 2026-12-31 |
 
 > 注：以上前置缺陷/残余风险的 expiry `2026-12-31` 与 WIP waiver 到期同日；任何延期需重新裁决，Lead 在台账注明，不得默认续期。
 
 ### 16.3 交付绑定与 SPEC-0002 同步
 
-- **v1.5 字节绑定**：v1.5 为工作树改动；Lead 必须在实现前单独 commit SPEC v1.5（`change_id`/`Actor`/`Reviewed-by`/`Tier` trailer）或在工作树/tasks 记录被审 blob；Reviewer 必须记录精确 base/head/blob。不得把 SPEC v1.5 与 ADR r0.4 r3 或其他 actor 的文档混在同一 change_id（M-9）。
-- **SPEC-0002 同步**：本 Spec 不改 SPEC-0002；其**全部** `v1.4` 引用（含 §依据、§11、§13/§14 等）需由 SPEC-0002 owner 在下次升版同步为 v1.5。AC-50 仍按 SPEC-0002 v1.10 执行。
-- **AC-27 收口前提**：`AC-50-FIX-01`、`AC-27-NOWB-01`、`AC-27-LIVE-01` 未关闭前，不得声称 AC-27 EARS-1/EARS-2 收敛，不得标 AC-VERIFIED；本 Spec 不声称 Release PASS/merge。
+- **v1.6 字节绑定**：v1.6 为工作树 DRAFT，评审通过后单独 commit（`change_id`/`Actor`/`Reviewed-by`/`Tier` trailer）；Reviewer 记录精确 base/head/blob：**v1.6 base = `f7430f1:specs/0001-fulfillment-quantity-split/spec.md`（blob `dc0e950`，即 v1.5 正文 + `status: historical`/§17 历史表）**；v1.5 delta 的原始落盘为 `4215b3c:docs/specs/0001-fulfillment-quantity-split.md`（blob `d08bf87`），仅作 v1.5 审计引用，不作 v1.6 base。不得把 SPEC v1.6 与 ADR Amendment 3 之外的其他 actor 文档混在同一 change_id。
+- **SPEC-0002 同步**：本 Spec 不改 SPEC-0002；**AC-50 按 SPEC-0002 v1.11（含 AC-69…72/`REVIEW_REQUIRED`）执行**。0002 的 `v1.5`/`4215b3c` 引用与 §11.2“0001 v1.5 文本不变”需由 0002 下次升版同步到 v1.6（`SPEC-0002-REF-SYNC-01`，§16.2；不得原地改写 0002 已批准正文）。
+- **AC-27 收口前提**：`AC-50-FIX-01`、`AC-27-NOWB-01`、`AC-27-LIVE-01`、`AC-27A-STATE-01` 未关闭前，不得声称 AC-27 EARS-1/EARS-2 收敛，不得标 AC-VERIFIED；本 Spec 不声称 Release PASS/merge。
 
 ### 16.4 下游影响（声明，不代写）
 
 - Architect：ADR-0007 Amd1 Addendum R0.3 的 R-2（在退款完成投影中写 `orders.status`）与 v1.5 的读模型口径冲突，必须撤销/改写；R-1 的关闭谓词必须按 AC-27A 对齐（含 `CONSUMED+无运单` 写路径拆分）；R-4 的“pre-ship `REFUNDING` 关闭”由 AC-27A 正式授权，但不得把 `REFUNDING` 展示为退款完成；ADR Rev 2.3 §5.3 `CancelIfCreatedReply` 需先做 additive amendment，ADR r03 的 `Spec-Ref` 在 v1.5 生效后改为 v1.5。
 - Developer：在 `AC-50-FIX-01`、`AC-27-NOWB-01`、`AC-27-LIVE-01` 未关闭前，不得声称 AC-27 EARS-1/EARS-2 收敛；AC-50 修正覆盖正金额/TCC/`system_zero`/legacy，且需 Lead 拆独立 `change_id` 走 L2（跨 Fulfillment/Order，超 R0.3-R1c `allowed_paths`）。
 - Reviewer：AC-27/AC-27A 必须分别登记 `ac-coverage.tsv` 行与证据；AC-REF ≠ AC-VERIFIED；记录精确 base/head/blob。
-- SPEC-0002 owner：全部 `v1.4` 引用同步为 v1.5；AC-50 仍按 v1.10 执行。
+- SPEC-0002 owner：按 §16.2 `SPEC-0002-REF-SYNC-01` 在 0002 下次升版把 0001 引用指向 v1.6；AC-50 按 v1.11 执行。
+
+### 16.5 v1.6 修订（QC delta 复审 FAIL 的 B-1/B-2/B-3 关闭矩阵）
+
+> 依据：2026-11-28 独立复审（`reviewer-spec0001`，`44a9ae9..4215b3c`）判 FAIL，见 `docs/review-tracking.md` 同日条目。本版由人类 2026-11-28 授权，在 historical 期内临时回到 approved 流程只修这三项；不新增业务能力、不改其他 AC。
+
+| 复审 ID | 结论（v1.6） | 落点 |
+|---|---|---|
+| **B-1** ADR-0005 未同步 | **关闭**：ADR-0005 §21 Amendment 3（Revision 1.3，2026-11-28 同批批准）追认 v1.5 的 S1 触发点、S2 聚合、S3 写者；依据 `consumer.go:58`、`settlement.go:82-131`、`settlement.go:413-459`。 | `docs/adr/0005-fulfillment-quantity-split.md` §21 |
+| **B-2** AC-27A 只判 `result` | **关闭（Spec 侧）**：第 5/6 条与 IF 增加 `state = result`；成功谓词指向 SPEC-0002 v1.11 S20/AC-69；实现对齐登记 `AC-27A-STATE-01`。 | AC-27A 第 5/6 条、§16.2 |
+| **B-3** `result` 枚举/AC-50 版本引用 | **关闭**：注改为 `PRE/POST/REVIEW_REQUIRED`；§16.3 引用 v1.11；`AC50-OUTCOME-SPEC-SYNC` 关闭。 | AC-27A 注、§16.3、§16.2 |
+
+- **不做**：不新增/删除/重编号 AC；不改 INV；不改 §17 表；不改 SPEC-0002 正文（引用同步登记 `SPEC-0002-REF-SYNC-01`）。
+- **关闭后**：v1.6 经独立审查 PASS + 人类批准后提交为 `approved`，随后单独一次状态变更标回 `historical`；本版不声称 Release/AC-VERIFIED。
 
 ## 17. 验收状态表（historical reference）
 
 > 本表只登记 0001 的 historical 生命周期；全部 AC 不再作为 current evidence。
 > 12 个 baseline AC 的当前回归状态只在 `specs/0002-payment-settlement-admission/spec.md §15.2`。
-> `historical` 不等于已验证/可发布；0001 的 QC delta 仍待复审。
+> `historical` 不等于已验证/可发布；0001 的 QC delta 已按 v1.6 修订（§16.5），待第 2 轮独立复审；本表不因 v1.6 改状态。
 
 | AC 编号 | 状态 | 检查类型 | 证据路径 | 审查者 |
 |---|---|---|---|---|

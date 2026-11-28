@@ -13,6 +13,51 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-28 人类批准: PAY-SETTLE-01 - SPEC-0001 v1.6 与 ADR-0005 Amendment 3（同批）
+
+- Actor / Reviewed-by: lead（作者，记录人类批准） / reviewer-spec0001（第 3 轮 SCOPED-PASS）; 级别: 契约变更; 阶段: Spec; base..head: `f7430f1..工作树`（被审 spec blob `e24a7c0`、ADR blob `7944260`；批准提交只加批准元数据，规范正文不变）
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md` v1.6（approved）；`docs/adr/0005-fulfillment-quantity-split.md` Revision 1.3 / Amendment 3（accepted）
+- 结论: 批准（Spec + 链接 ADR 同批）；B-1/B-2/B-3 关闭；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无（Spec/ADR 范围）；`AC-27A-STATE-01`、`SPEC-0002-REF-SYNC-01`、`AC-50-FIX-01`、`AC-27-NOWB-01`、`AC-27-LIVE-01` 仍为后续阶段项; 待办: 提交后标回 `historical` 并同步 `specs/README.md` 索引
+- AC 位移: 无（批准不产生 AC-VERIFIED；0001 §17 仍 historical）
+
+### 2026-11-28 审查裁决: PAY-SETTLE-01 - SPEC-0001 v1.6/ADR-0005 Amd3 第 3 轮复审（SCOPED-PASS）
+
+- Actor / Reviewed-by: `reviewer-spec0001`（独立 subagent，未参与写作） / `pending（人类批准）`; 级别: 契约变更; 阶段: Spec; base..head: `f7430f1..工作树`（实际 HEAD `a8fc358`；spec blob `e24a7c0`；ADR blob `7944260`；实际 spec base `f7430f1:specs/0001-fulfillment-quantity-split/spec.md` blob `dc0e950`）
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md` v1.6 DRAFT；`docs/adr/0005-fulfillment-quantity-split.md` §21 Amendment 3 DRAFT（当前生效仍为 Revision 1.2）；交叉参照 `specs/0002-payment-settlement-admission/spec.md` v1.11
+- 结论: SCOPED-PASS; 范围: **只复核第 2 轮 FAIL 的 B-4/B-5/B-6 修复**；B-1/B-2/B-3 内容不重开；B-4（AC-27A IF 有效 PRE 定义）、B-5（§16.3 base 改 `f7430f1:specs/...` `dc0e950`）、B-6（ADR `Normative` 条件化 + §16.5 B-1 改“DRAFT 修复完成/待批准生效”）均已修；release_status: NOT RELEASE
+- 取代: 2026-11-28 审查裁决: PAY-SETTLE-01 - SPEC-0001 v1.6/ADR-0005 Amd3 第 2 轮复审（FAIL）的 **B-4/B-5/B-6 阻断**（第 2 轮的 B-1/B-2/B-3 内容结论保留；不替代人类批准）
+- 阻断项: 无（**仅本 SCOPED-PASS 范围内的 B-4/B-5/B-6** 已修）；代码阶段 `AC-27A-STATE-01` 仍阻断 AC-VERIFIED（不在本 Spec 范围）；待办: ①人类批准 v1.6 + ADR-0005 Amendment 3（B-1 在批准前仍以 Revision 1.2 为准，ADR `Normative` 已写明）；②`AC-27A-STATE-01` 未修前 AC-27A 不得 AC-VERIFIED（`internal/services/order/fulfillment_groups.go:105-118` 未含 `state = result`）；③`SPEC-0002-REF-SYNC-01` 由 0002 下次升版同步 v1.6 引用（不得原地改 0002）；④`AC-50-FIX-01`/`AC-27-NOWB-01`/`AC-27-LIVE-01` 仍开；⑤`AC-27A-STATE-01`/`SPEC-0002-REF-SYNC-01` 的 expiry 2026-12-31；⑥非阻断：§17 注仍写“待第 2 轮独立复审”，可在提交时改为“第 3 轮/待独立复审”；`specs/README.md` 索引在提交时同步 v1.6 状态
+- AC 位移: 无状态迁移（SCOPED-PASS；不新增“已验证”）；SPEC-0001 AC-27 仍 historical（0001 §17），0002 §15.2:1104 有引用；SPEC-0001 AC-27A 仍 historical/有引用（v1.6 文本已改为“有效 PRE = `result=PRE` 且 `state=result`”；`AC-27A-STATE-01` 未修前不得 AC-VERIFIED）；SPEC-0002 AC-25（§15.2:1103 有引用）、AC-48（§15.1:1067 未验证）无位移；AC-50/62/69…71/72 后端（§15.1:1069/1081/1088-1091）仅照录 0002 原状态（本次 Spec 审查未复跑、不重新认证）
+
+### 2026-11-28 人类决定: PAY-SETTLE-01 - 第 2 轮 FAIL 分类为“实现错误”（授权修复）
+
+- Actor / Reviewed-by: lead（作者，记录人类方向） / 无（人类分类，非审查）; 级别: 契约变更; 阶段: Spec; base..head: `f7430f1..工作树`（v1.6 DRAFT；HEAD `a8fc358`）
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md` v1.6 DRAFT；`docs/adr/0005-fulfillment-quantity-split.md` §21 Amendment 3 DRAFT
+- 结论: 分类：实现错误（作者起草/绑定错误），非设计问题（语义 `state = result` 与 ADR 路由已定）；授权一次修 B-4/B-5/B-6 后交第 3 轮，只复跑这三项 + diff; release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: B-4/B-5/B-6（本轮修复）; 待办: 第 3 轮复审；B-1/B-2/B-3 内容不重开；`AC-27A-STATE-01`/`SPEC-0002-REF-SYNC-01` 仍为代码/文档阶段项
+- AC 位移: 无（FAIL 不产生 AC 状态迁移）
+
+### 2026-11-28 审查裁决: PAY-SETTLE-01 - SPEC-0001 v1.6/ADR-0005 Amd3 第 2 轮复审（FAIL）
+
+- Actor / Reviewed-by: `reviewer-spec0001`（独立 subagent，未参与写作） / `pending（人类批准）`; 级别: 契约变更; 阶段: Spec; base..head: `f7430f1..工作树`（实际 HEAD `a8fc358`；spec blob `67b75d7`；ADR blob `c0d8db1`；实际 spec base `f7430f1:specs/0001-fulfillment-quantity-split/spec.md` blob `dc0e950`）
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md` v1.6 DRAFT；`docs/adr/0005-fulfillment-quantity-split.md` §21 Amendment 3 DRAFT；交叉参照 `specs/0002-payment-settlement-admission/spec.md` v1.11
+- 结论: FAIL; 范围: 第 2 轮只复核上轮 B-1/B-2/B-3 的修复 + v1.6/ADR §21 的 diff；B-1/B-2/B-3 内容已闭合（B-1 待 ADR Amendment 3 人类批准后生效），但新增 B-4/B-5/B-6 阻断；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: **B-1** 内容闭合（ADR-0005 §21 DRAFT 准确追认 S1/S2/S3；待人类批准生效）；**B-2** 内容闭合（AC-27A 第 5/6 条含 `state = result`；实现缺口登记 `AC-27A-STATE-01`）；**B-3** 内容闭合（注含 `REVIEW_REQUIRED`；§16.3 引 v1.11；`AC50-OUTCOME-SPEC-SYNC` 关闭）。**B-4（新）** AC-27A 的 IF 条件为“`result` 不是 PRE”，但括注列了 `state ≠ result`；`result=PRE, state≠result` 时 IF 不触发，step 6 只判未关闭、无显式告警，AC 对“是否告警”不可独立判定（附录 A；B-2 的残余）。**B-5（新）** §16.3 的 base 写成 `4215b3c:docs/specs/...` `d08bf87`，实际 v1.6 base 是 `f7430f1:specs/...` `dc0e950`；从 `d08bf87` 起的 diff 会包含 §17 表/状态，不能证明“仅 B-1/B-2/B-3”（宪法 11、AGENTS §5）。**B-6（新）** ADR-0005 header 的 `Normative` 把 DRAFT §21 作为冲突优先，`Revision` 又说当前生效仍为 1.2；v1.6 §16.5 在 Amendment 3 批准前称 B-1“关闭”（宪法 3/16、AGENTS §4）。HIGH RISK 未解决; 待办: 作者一次修 B-4/B-5/B-6：AC-27A IF 条件与括注一致；§16.3 base 改为实际 blob；ADR header/§16.5 的 B-1 状态改为“DRAFT/待批准”；修后只复跑 B-4/B-5/B-6 + diff；未修前不得进入代码、不得 AC-VERIFIED
+- AC 位移: 无状态迁移（FAIL）；SPEC-0001 AC-27 仍 historical（0001 §17），0002 §15.2:1104 有引用；SPEC-0001 AC-27A 仍 historical/有引用（0002 §15.2 同 AC-27 行；v1.6 文本加 `state = result`，但 `AC-27A-STATE-01` 未修前不得 AC-VERIFIED）；SPEC-0002 AC-25（§15.2:1103 有引用）、AC-48（§15.1:1067 未验证）无位移；AC-50/62/69…71/72 后端（§15.1:1069/1081/1088-1091）仅照录 0002 原状态（本次 Spec 审查未复跑、不重新认证）
+
+### 2026-11-28 人类决定: PAY-SETTLE-01 - 授权 SPEC-0001 v1.6 在 historical 期内临时修 AC-27A
+
+- Actor / Reviewed-by: lead（作者，记录人类方向） / 无（人类方向，尚无独立审查）; 级别: 契约变更; 阶段: Spec; base..head: `44a9ae9..4215b3c`（被审 v1.5 delta）+ 工作树 v1.6 DRAFT
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md` v1.6 DRAFT；`docs/adr/0005-fulfillment-quantity-split.md` Amendment 3（Revision 1.3，DRAFT）
+- 结论: 批准（方向）：0001 在 historical 期内临时回到 approved 流程，仅修 QC delta 复审 FAIL 的 B-1/B-2/B-3；批准并第 2 轮复审 PASS 后标回 `historical`; release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: B-1/B-2/B-3 待第 2 轮独立复审（本轮 DRAFT 已按 §16.5 修复）; 待办: v1.6 + ADR §21 审查；`AC-27A-STATE-01`（实现加 `state = result`）、`SPEC-0002-REF-SYNC-01`（0002 引用同步）
+- AC 位移: 无（v1.6 DRAFT 未批准，AC 状态不改；0001 §17 historical 不变）
+
 ### 2026-11-28 审查裁决: PAY-SETTLE-01 - SPEC-0001 v1.5 QC delta 复审（FAIL）
 
 - Actor / Reviewed-by: `reviewer-spec0001`（独立 subagent，未参与写作） / `pending（人类批准）`; 级别: 契约变更; 阶段: Spec; base..head: `44a9ae9..4215b3c`（被审 blob `d08bf87`；当前 HEAD `f7430f1`，0001 已迁 `specs/` 且 §17 标 historical）

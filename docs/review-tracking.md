@@ -24,6 +24,15 @@ old table still described P2#10 as rejected and Phase 7 as not started.
 - 验证: 2026-11-28，HEAD `9585a06`，MySQL 8（容器 `mysql-unicorn`，`TEST_MYSQL_DSN=...mall_integration_test`），`GOFLAGS=-mod=readonly`，仓库本地 `GOCACHE/GOMODCACHE`：`go build ./...` PASS；`go vet ./internal/services/order` PASS；`go test ./internal/services/order -run 'TestAC27|TestGroupRefundStateProjection|TestMultiGroupShadow' -count=1` PASS（含新增负例 `pre_ship_revoked_with_mismatched_state_stays_open`）；`go test ./internal/services/order -count=1` PASS 232.865s；`go test -race -p 1 ./internal/services/order -run 'TestAC27A|TestAC50Review|TestTCCReview|TestGroupRefundStateProjection|TestMultiGroupShadow' -count=1` PASS 27.015s。独立 oracle：AC-27A 正文“有效 PRE”谓词 + 直接种子 `order_refund_admissions` 行断言 `PreShipAdmission/groupIsClosed/effectiveGroupStatus`，以及真实 `AdmitRefund` 写路径正例；非作者自述。
 - 受影响 INV / baseline_impact: INV-01（关闭不写 `orders.status`；正例复跑）、INV-38（S2 组级隔离投影）、INV-44（`reservation_state` 不作输入，释放归 Inventory）、INV-45（`CONSUMED` 不降级、`REVOKED` 终态；只读）、INV-51（`REVIEW_REQUIRED`/`PENDING_REMOTE` 不关闭）；无 schema/迁移/写路径/跨服务协议/资金/权限变更。baseline_impact: 仅 `result=PRE` 且 `state≠result` 的异常/存量行由“已关闭”变为“未关闭”（fail-closed），当前写路径不产生该组合（`refund_admission.go:523/551/557/952` 终态写均为 `result=state=PRE`）；无新增并发窗口（只读 EXISTS），以负例等价覆盖宪法 12。
 
+### 2026-11-28 实现交付: AC-27-OPS-CONV-01 - NOWB re-arm 收敛断言（test-only，待审）
+
+- Actor / Reviewed-by: lead（作者） / pending（待独立代码审查）; 级别: 实现变更（test-only）; 阶段: 代码; base..head: `cd34f70..8040776`
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md` v1.6 AC-27A / §16.2；`specs/0002-…/spec.md` v1.11 AC-50/69/71；证据 `specs/0001-fulfillment-quantity-split/evidence/AC-27-OPS-CONV-01/evidence.md`
+- 结论: 实现完成，待代码阶段独立审查；`AC-27-NOWB-01`/`AC-27-LIVE-01` 是否可关闭由审查者裁决；release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: 无（待审）; 待办: 代码审查；AC-62/NOWB 终态 ② 与工具入口（人类已waive）不在本 change
+- AC 位移: 无（作者不自标；待审查者）
+
 ### 2026-11-28 实现交付: AC-27A-STATE-01 - PreShipAdmission 只认有效 PRE（待代码审查）
 
 - Actor / Reviewed-by: lead（作者） / pending（待独立代码审查）; 级别: 实现变更; 阶段: 代码; base..head: `dee75b0..16e472e`

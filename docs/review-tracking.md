@@ -13,6 +13,15 @@ and the stated verification exist; `partial` means a safe subset shipped and a
 named gap remains. This file was rewritten after a 2026-11-21 audit because the
 old table still described P2#10 as rejected and Phase 7 as not started.
 
+### 2026-11-28 审查裁决: PAY-SETTLE-01 - SPEC-0001 v1.5 QC delta 复审（FAIL）
+
+- Actor / Reviewed-by: `reviewer-spec0001`（独立 subagent，未参与写作） / `pending（人类批准）`; 级别: 契约变更; 阶段: Spec; base..head: `44a9ae9..4215b3c`（被审 blob `d08bf87`；当前 HEAD `f7430f1`，0001 已迁 `specs/` 且 §17 标 historical）
+- Spec 和 ADR: `specs/0001-fulfillment-quantity-split/spec.md`（被审正文 `4215b3c:docs/specs/0001-fulfillment-quantity-split.md`，blob `d08bf87`）；`docs/adr/0005-fulfillment-quantity-split.md` v1.2（accepted）；`docs/adr/0007-payment-settlement-admission.md` Rev 2.3；`docs/adr/0007-amd1-addendum-ac50-nowaybill.md` 0.5（accepted）；交叉参照 `specs/0002-payment-settlement-admission/spec.md` v1.11
+- 结论: FAIL; 范围: 仅 SPEC-0001 v1.4→v1.5 delta（§4.1/§4.2/§6.6.1/§6.7/§7.1/§7.2/§7.5/§9 AC-27/AC-27A/§13/§14/§16）及其对 ADR-0005、ADR-0007 Rev 2.3/0.5、SPEC-0002 v1.11 的交叉影响；不含 R0.4 实现/代码、ADR 正文修订、0002 AC 代码复跑、0001 §17 historical 迁移; release_status: NOT RELEASE
+- 取代: 无
+- 阻断项: **B-1** 违反已接受 ADR-0005 §2.1/§3.1/§3.2.1：delta 把 `PAID→ALLOCATED` 触发改为“首组运单创建”（原“首组发货”）、把“G2 退款（未发）+G1 已发”的 S2 从 `PARTIALLY_SHIPPED` 改为 `SHIPPED`、把 S3 写者“退款撤许可”移除；§16.4 未要求 ADR-0005 升版/新 ADR（宪法 3、附录 A）。**B-2** AC-27A 第 5 条仅以 `result=PRE_SHIP_REVOKED` 关闭，未要求 `state=result`；与 SPEC-0002 v1.11 AC-69/S20（成功当且仅当 `state=result`，不得据 `result` 单独判定）、§11.2“且 state 已终态”冲突；base..head 内 `refund_admission.go` Tx1 已存在 `result=POST,state=PENDING_REMOTE` 的分离态，状态机/资金门禁（INV-45/INV-51）。**B-3** AC-27A 注“`result` 只允许 PRE/POST”及 §16.3/§13“AC-50 仍按 v1.10”与 v1.11 AC-69/INV-51 的持久值 `REVIEW_REQUIRED` 冲突；0002 §11.6/ADR 0.5 已登记 `AC50-OUTCOME-SPEC-SYNC`（PO/2026-12-31），但 delta 自身未载入该同步项且未引用 0.5。HIGH RISK 未解决; 待办: 作者一次修复 B-1/B-2/B-3：ADR-0005 升版或新 ADR；AC-27A 与 AC-69 的 `state=result` 对齐；v1.10→v1.11 引用与 `result` 枚举同步（或在 §16.2 登记 `AC50-OUTCOME-SPEC-SYNC` 并在台账登记）；修复后只复跑失败项+diff；修复前不得进入代码
+- AC 位移: 无状态迁移（FAIL）；SPEC-0001 AC-27 v1.4 -> v1.5（text/读模型口径；0001 §17 historical；0002 §15.2:1104 有引用；证据 `internal/services/order/ac27a_closure_integration_test.go:20,156`）；SPEC-0001 AC-27A 新增（0001 §17 historical；0002 §15.2 同 AC-27 行“有引用”，为 R0.3-R1c 后续测试、非本 delta 绑定）；SPEC-0002 AC-25（§15.2:1103 有引用）、AC-48（§15.1:1067 未验证）无位移；AC-50/AC-62/AC-69…71/AC-72 后端（§15.1:1069/1081/1088-1091）仅照录 0002 表原状态（表内记“已验证”；本次 Spec 审查未复跑、不重新认证、不构成本 delta 的独立 oracle）；§15.2 AC-14/21/25/27/31/32 与 AC-22/28/29/30/35/37 状态照录
+
 ### 2026-11-28 审查裁决: GOV-V3-HARDEN-01 - 上轮 FAIL 修复复核（SCOPED-PASS）
 
 - Actor / Reviewed-by: lead（作者） / reviewer-v31（独立 reviewer，未参与写作）; 级别: 治理变更; 阶段: Spec; base..head: `6eb1933..52e4b90 + 工作树（4 文件）`
